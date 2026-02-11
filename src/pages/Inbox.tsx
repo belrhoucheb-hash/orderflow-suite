@@ -93,10 +93,46 @@ function formatTime(dateStr: string | null) {
   return d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
 }
 
-function SourcePanel({ selected }: { selected: OrderDraft }) {
+function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onParseResult: (data: Partial<FormState>) => void }) {
   const [activeTab, setActiveTab] = useState<"email" | "attachment">("email");
+  const [isParsing, setIsParsing] = useState(false);
+  const { toast } = useToast();
   const attachments = (selected.attachments || []) as { name: string; url: string; type: string }[];
   const hasAttachments = attachments.length > 0;
+  const hasPdf = attachments.some((a) => a.type === "application/pdf");
+
+  const handleParseWithAI = async () => {
+    setIsParsing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("parse-order", {
+        body: {
+          emailBody: selected.source_email_body || "",
+          pdfText: `[PDF bijlage: ${attachments.filter(a => a.type === "application/pdf").map(a => a.name).join(", ")}]`,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const ext = data.extracted;
+      onParseResult({
+        transportType: ext.transport_type || "direct",
+        pickupAddress: ext.pickup_address || "",
+        deliveryAddress: ext.delivery_address || "",
+        quantity: ext.quantity || 0,
+        unit: ext.unit || "Pallets",
+        weight: ext.weight_kg?.toString() || "",
+        dimensions: ext.dimensions || "",
+        requirements: ext.requirements || [],
+        perUnit: ext.is_weight_per_unit || false,
+      });
+      toast({ title: "AI Extractie voltooid", description: `Confidence: ${ext.confidence_score}%` });
+    } catch (e: any) {
+      console.error("Parse error:", e);
+      toast({ title: "Fout bij AI extractie", description: e.message || "Probeer het opnieuw", variant: "destructive" });
+    } finally {
+      setIsParsing(false);
+    }
+  };
 
   return (
     <div className="w-[45%] border-r border-border/40 flex flex-col overflow-hidden">
@@ -114,31 +150,45 @@ function SourcePanel({ selected }: { selected: OrderDraft }) {
           </div>
         </div>
 
-        {/* Segmented Control Tabs */}
-        <div className="inline-flex rounded-full bg-muted/60 p-0.5 border border-border/40">
-          <button
-            onClick={() => setActiveTab("email")}
-            className={cn(
-              "px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-150",
-              activeTab === "email"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
+        <div className="flex items-center gap-2">
+          {/* Segmented Control Tabs */}
+          <div className="inline-flex rounded-full bg-muted/60 p-0.5 border border-border/40">
+            <button
+              onClick={() => setActiveTab("email")}
+              className={cn(
+                "px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-150",
+                activeTab === "email"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              E-mail Body
+            </button>
+            <button
+              onClick={() => setActiveTab("attachment")}
+              className={cn(
+                "px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-150 flex items-center gap-1",
+                activeTab === "attachment"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Paperclip className="h-3 w-3" />
+              Bijlage {hasAttachments && `(${attachments.length})`}
+            </button>
+          </div>
+
+          {/* AI Parse Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-[10px] gap-1 ml-auto"
+            onClick={handleParseWithAI}
+            disabled={isParsing}
           >
-            E-mail Body
-          </button>
-          <button
-            onClick={() => setActiveTab("attachment")}
-            className={cn(
-              "px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-150 flex items-center gap-1",
-              activeTab === "attachment"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Paperclip className="h-3 w-3" />
-            Bijlage {hasAttachments && `(${attachments.length})`}
-          </button>
+            {isParsing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {isParsing ? "Analyseren..." : "AI Extractie"}
+          </Button>
         </div>
       </div>
 
@@ -406,7 +456,13 @@ export default function Inbox() {
           {/* Split Content */}
           <div className="flex-1 flex overflow-hidden">
             {/* Panel A: Source Email */}
-            <SourcePanel selected={selected} />
+            <SourcePanel selected={selected} onParseResult={(data) => {
+              if (!selected) return;
+              setFormData((prev) => ({
+                ...prev,
+                [selected.id]: { ...prev[selected.id], ...data },
+              }));
+            }} />
 
             {/* Panel B: Extracted Data Form */}
             <div className="flex-1 flex flex-col overflow-hidden">
