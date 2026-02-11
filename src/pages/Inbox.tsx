@@ -104,10 +104,13 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
   const handleParseWithAI = async () => {
     setIsParsing(true);
     try {
+      const pdfAttachments = attachments.filter(a => a.type === "application/pdf");
+      const pdfUrls = pdfAttachments.map(a => a.url).filter(u => u && u !== "#");
+
       const { data, error } = await supabase.functions.invoke("parse-order", {
         body: {
           emailBody: selected.source_email_body || "",
-          pdfText: `[PDF bijlage: ${attachments.filter(a => a.type === "application/pdf").map(a => a.name).join(", ")}]`,
+          pdfUrls: pdfUrls.length > 0 ? pdfUrls : undefined,
         },
       });
       if (error) throw error;
