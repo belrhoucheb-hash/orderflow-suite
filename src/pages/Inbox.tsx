@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -261,6 +261,34 @@ export default function Inbox() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [formData, setFormData] = useState<Record<string, FormState>>({});
   const [search, setSearch] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportEmail = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const formPayload = new FormData();
+      formPayload.append("file", file);
+
+      const { data, error } = await supabase.functions.invoke("import-email", {
+        body: formPayload,
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({
+        title: "E-mail geïmporteerd",
+        description: `Draft order #${data.order_number} aangemaakt met ${data.attachments_uploaded} bijlage(n)`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
+    } catch (e: any) {
+      console.error("Import error:", e);
+      toast({ title: "Import mislukt", description: e.message || "Probeer het opnieuw", variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const { data: drafts = [], isLoading } = useQuery({
     queryKey: ["draft-orders"],
@@ -386,6 +414,28 @@ export default function Inbox() {
               <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-bold bg-primary/10 text-primary border-0">
                 {drafts.length}
               </Badge>
+            </div>
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".eml,.msg"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImportEmail(file);
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px] gap-1"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+              >
+                {isImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                {isImporting ? "Importeren..." : "Import .eml"}
+              </Button>
             </div>
           </div>
           <div className="relative">
