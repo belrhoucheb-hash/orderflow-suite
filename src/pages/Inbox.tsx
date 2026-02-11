@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,101 +11,62 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-interface DraftEmail {
+interface OrderDraft {
   id: string;
-  draftId: string;
-  client: string;
-  subject: string;
-  time: string;
-  confidence: number;
-  from: string;
-  to: string;
-  body: string;
-  extracted: {
-    transportType: string;
-    pickupAddress: string;
-    deliveryAddress: string;
-    quantity: number;
-    unit: string;
-    weight: string;
-    dimensions: string;
-    requirements: string[];
-    perUnit?: boolean;
+  order_number: number;
+  status: string;
+  source_email_from: string | null;
+  source_email_subject: string | null;
+  source_email_body: string | null;
+  confidence_score: number | null;
+  transport_type: string | null;
+  pickup_address: string | null;
+  delivery_address: string | null;
+  quantity: number | null;
+  unit: string | null;
+  weight_kg: number | null;
+  is_weight_per_unit: boolean;
+  dimensions: string | null;
+  requirements: string[] | null;
+  client_name: string | null;
+  received_at: string | null;
+  created_at: string;
+}
+
+interface FormState {
+  transportType: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  quantity: number;
+  unit: string;
+  weight: string;
+  dimensions: string;
+  requirements: string[];
+  perUnit: boolean;
+}
+
+function orderToForm(order: OrderDraft): FormState {
+  return {
+    transportType: order.transport_type?.toLowerCase().replace("_", "-") || "direct",
+    pickupAddress: order.pickup_address || "",
+    deliveryAddress: order.delivery_address || "",
+    quantity: order.quantity || 0,
+    unit: order.unit || "Pallets",
+    weight: order.weight_kg?.toString() || "",
+    dimensions: order.dimensions || "",
+    requirements: order.requirements || [],
+    perUnit: order.is_weight_per_unit,
   };
 }
 
-const initialDrafts: DraftEmail[] = [
-  {
-    id: "1",
-    draftId: "DRAFT-1024",
-    client: "Van Dijk Logistics",
-    subject: "Ophalen europallets Breda → Schiphol",
-    time: "09:14",
-    confidence: 92,
-    from: "m.vandijk@vandijklogistics.nl",
-    to: "planning@royaltycargo.nl",
-    body: "Hoi planner, graag 3 europallets ophalen bij Jansen in Breda, moet naar Schiphol voor vlucht KL882. Let op: ADR goederen! Gewicht is ca. 1200 kg, afmetingen 120x80x150 per pallet. Groeten, Marco",
-    extracted: {
-      transportType: "warehouse-air",
-      pickupAddress: "Jansen BV, Industrieweg 12, 4811 AA Breda",
-      deliveryAddress: "Schiphol Cargo, Anchoragelaan 48, 1118 LD Schiphol",
-      quantity: 3,
-      unit: "pallets",
-      weight: "1200",
-      dimensions: "120x80x150",
-      requirements: ["adr"],
-    },
-  },
-  {
-    id: "2",
-    draftId: "DRAFT-1025",
-    client: "Rotterdam Fresh BV",
-    subject: "Koeltransport Rotterdam → Venlo",
-    time: "08:42",
-    confidence: 78,
-    from: "orders@rotterdamfresh.nl",
-    to: "planning@royaltycargo.nl",
-    body: "Beste, wij hebben een zending van 8 colli diepvriesproducten die van ons DC in Rotterdam naar Venlo moeten. Temperatuur moet onder -18°C blijven. Laadklep vereist. Graag morgen ophalen. Met vriendelijke groet, Lisa de Vries",
-    extracted: {
-      transportType: "direct",
-      pickupAddress: "Rotterdam Fresh DC, Maasvlakteweg 90, 3199 KA Rotterdam",
-      deliveryAddress: "Fresh Warehouse Venlo, Tradeport 120, 5928 RC Venlo",
-      quantity: 8,
-      unit: "colli",
-      weight: "",
-      dimensions: "",
-      requirements: ["koeling", "laadklep"],
-    },
-  },
-  {
-    id: "3",
-    draftId: "DRAFT-1026",
-    client: "Amstel Export",
-    subject: "Doos naar Duitsland - douane",
-    time: "07:55",
-    confidence: 61,
-    from: "shipping@amstelexport.nl",
-    to: "planning@royaltycargo.nl",
-    body: "Hi, 1 doos met monsters naar klant in Düsseldorf. Moet via douane want het gaat om food samples. Gewicht 25 kg. Kan het vandaag nog weg? Dank, Ahmed",
-    extracted: {
-      transportType: "direct",
-      pickupAddress: "Amstel Export, Herengracht 401, 1017 BP Amsterdam",
-      deliveryAddress: "Düsseldorf, Duitsland",
-      quantity: 1,
-      unit: "box",
-      weight: "25",
-      dimensions: "",
-      requirements: ["douane"],
-    },
-  },
-];
-
 const requirementOptions = [
-  { id: "koeling", label: "Koeling", icon: ThermometerSnowflake },
-  { id: "adr", label: "ADR", icon: AlertTriangle },
-  { id: "laadklep", label: "Laadklep", icon: Truck },
-  { id: "douane", label: "Douane", icon: FileCheck },
+  { id: "Koeling", label: "Koeling", icon: ThermometerSnowflake },
+  { id: "ADR", label: "ADR", icon: AlertTriangle },
+  { id: "Laadklep", label: "Laadklep", icon: Truck },
+  { id: "Douane", label: "Douane", icon: FileCheck },
 ];
 
 function ConfidenceBadge({ score }: { score: number }) {
@@ -125,21 +86,93 @@ function ConfidenceBadge({ score }: { score: number }) {
   );
 }
 
+function formatTime(dateStr: string | null) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function Inbox() {
-  const [drafts, setDrafts] = useState<DraftEmail[]>(initialDrafts);
-  const [selectedId, setSelectedId] = useState<string>(initialDrafts[0]?.id ?? "");
-  const [formData, setFormData] = useState<Record<string, DraftEmail["extracted"]>>(() => {
-    const map: Record<string, DraftEmail["extracted"]> = {};
-    initialDrafts.forEach((d) => (map[d.id] = { ...d.extracted }));
-    return map;
-  });
-  const [search, setSearch] = useState("");
+  const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [formData, setFormData] = useState<Record<string, FormState>>({});
+  const [search, setSearch] = useState("");
+
+  const { data: drafts = [], isLoading } = useQuery({
+    queryKey: ["draft-orders"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("status", "DRAFT")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as OrderDraft[];
+    },
+  });
+
+  // Initialize form data when drafts load
+  useEffect(() => {
+    if (drafts.length > 0) {
+      const map: Record<string, FormState> = {};
+      drafts.forEach((d) => {
+        if (!formData[d.id]) {
+          map[d.id] = orderToForm(d);
+        }
+      });
+      if (Object.keys(map).length > 0) {
+        setFormData((prev) => ({ ...prev, ...map }));
+      }
+      if (!selectedId || !drafts.find((d) => d.id === selectedId)) {
+        setSelectedId(drafts[0].id);
+      }
+    }
+  }, [drafts]);
+
+  const createOrderMutation = useMutation({
+    mutationFn: async ({ id, form }: { id: string; form: FormState }) => {
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          status: "OPEN",
+          transport_type: form.transportType.toUpperCase().replace("-", "_"),
+          pickup_address: form.pickupAddress,
+          delivery_address: form.deliveryAddress,
+          quantity: form.quantity,
+          unit: form.unit,
+          weight_kg: form.weight ? Number(form.weight) : null,
+          is_weight_per_unit: form.perUnit,
+          dimensions: form.dimensions || null,
+          requirements: form.requirements,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, { id }) => {
+      const order = drafts.find((d) => d.id === id);
+      toast({
+        title: "Order opgeslagen",
+        description: `Order #${order?.order_number} status gewijzigd naar OPEN`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("orders").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
+    },
+  });
 
   const selected = drafts.find((d) => d.id === selectedId);
   const form = selected ? formData[selected.id] : null;
 
-  const updateField = (field: keyof DraftEmail["extracted"], value: any) => {
+  const updateField = (field: keyof FormState, value: any) => {
     if (!selected) return;
     setFormData((prev) => ({
       ...prev,
@@ -156,31 +189,28 @@ export default function Inbox() {
   };
 
   const handleCreateOrder = () => {
-    if (!selected) return;
-    const orderId = `2024-${String(Math.floor(Math.random() * 900) + 100).padStart(3, "0")}`;
-    toast({
-      title: "Order aangemaakt",
-      description: `Order #${orderId} succesvol aangemaakt`,
-    });
-    const remaining = drafts.filter((d) => d.id !== selected.id);
-    setDrafts(remaining);
-    if (remaining.length > 0) setSelectedId(remaining[0].id);
-    else setSelectedId("");
+    if (!selected || !form) return;
+    createOrderMutation.mutate({ id: selected.id, form });
   };
 
   const handleDelete = () => {
     if (!selected) return;
-    const remaining = drafts.filter((d) => d.id !== selected.id);
-    setDrafts(remaining);
-    if (remaining.length > 0) setSelectedId(remaining[0].id);
-    else setSelectedId("");
+    deleteMutation.mutate(selected.id);
   };
 
   const filtered = drafts.filter(
     (d) =>
-      d.client.toLowerCase().includes(search.toLowerCase()) ||
-      d.subject.toLowerCase().includes(search.toLowerCase())
+      (d.client_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (d.source_email_subject || "").toLowerCase().includes(search.toLowerCase())
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-5rem)]">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-0 -m-4 md:-m-6">
@@ -220,14 +250,14 @@ export default function Inbox() {
                 )}
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <span className="text-xs font-semibold text-foreground truncate">{draft.client}</span>
-                  <ConfidenceBadge score={draft.confidence} />
+                  <span className="text-xs font-semibold text-foreground truncate">{draft.client_name || "Onbekend"}</span>
+                  {draft.confidence_score && <ConfidenceBadge score={draft.confidence_score} />}
                 </div>
-                <p className="text-[11px] text-muted-foreground truncate mb-1.5">{draft.subject}</p>
+                <p className="text-[11px] text-muted-foreground truncate mb-1.5">{draft.source_email_subject || "Geen onderwerp"}</p>
                 <div className="flex items-center gap-1.5 text-muted-foreground/60">
                   <Clock className="h-3 w-3" />
-                  <span className="text-[10px]">{draft.time}</span>
-                  <span className="text-[10px] ml-auto font-mono text-muted-foreground/40">#{draft.draftId}</span>
+                  <span className="text-[10px]">{formatTime(draft.received_at)}</span>
+                  <span className="text-[10px] ml-auto font-mono text-muted-foreground/40">#{draft.order_number}</span>
                 </div>
               </button>
             ))}
@@ -248,16 +278,17 @@ export default function Inbox() {
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold text-foreground">
-                Order Validatie: <span className="font-mono text-primary">#{selected.draftId}</span>
+                Order Validatie: <span className="font-mono text-primary">#{selected.order_number}</span>
               </h2>
-              <ConfidenceBadge score={selected.confidence} />
+              {selected.confidence_score && <ConfidenceBadge score={selected.confidence_score} />}
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-8 text-xs" onClick={handleDelete}>
+              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-8 text-xs" onClick={handleDelete} disabled={deleteMutation.isPending}>
                 <Trash2 className="h-3.5 w-3.5 mr-1" /> Verwijderen
               </Button>
-              <Button size="sm" className="h-8 text-xs" onClick={handleCreateOrder}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Order Aanmaken
+              <Button size="sm" className="h-8 text-xs" onClick={handleCreateOrder} disabled={createOrderMutation.isPending}>
+                {createOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                Order Aanmaken
               </Button>
             </div>
           </div>
@@ -268,22 +299,22 @@ export default function Inbox() {
             <div className="w-[45%] border-r border-border/40 flex flex-col overflow-hidden">
               <div className="px-5 py-3 border-b border-border/30">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Bron E-mail</p>
-                <h3 className="text-sm font-semibold text-foreground mb-2">{selected.subject}</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-2">{selected.source_email_subject || "Geen onderwerp"}</h3>
                 <div className="space-y-1 text-[11px]">
                   <div className="flex gap-2">
                     <span className="text-muted-foreground w-10">Van:</span>
-                    <span className="text-foreground font-medium">{selected.from}</span>
+                    <span className="text-foreground font-medium">{selected.source_email_from || "—"}</span>
                   </div>
                   <div className="flex gap-2">
                     <span className="text-muted-foreground w-10">Aan:</span>
-                    <span className="text-foreground">{selected.to}</span>
+                    <span className="text-foreground">planning@royaltycargo.nl</span>
                   </div>
                 </div>
               </div>
               <ScrollArea className="flex-1">
                 <div className="p-5">
                   <div className="bg-muted/40 rounded-lg p-4 border border-border/30">
-                    <p className="text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap">{selected.body}</p>
+                    <p className="text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap">{selected.source_email_body || "Geen inhoud"}</p>
                   </div>
                 </div>
               </ScrollArea>
@@ -352,9 +383,9 @@ export default function Inbox() {
                         <Select value={form.unit} onValueChange={(v) => updateField("unit", v)}>
                           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pallets">Pallets</SelectItem>
-                            <SelectItem value="colli">Colli</SelectItem>
-                            <SelectItem value="box">Box</SelectItem>
+                            <SelectItem value="Pallets">Pallets</SelectItem>
+                            <SelectItem value="Colli">Colli</SelectItem>
+                            <SelectItem value="Box">Box</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -364,7 +395,7 @@ export default function Inbox() {
                         <div className="flex items-center gap-1.5 mt-1">
                           <Checkbox
                             id={`per-unit-${selected.id}`}
-                            checked={form.perUnit ?? false}
+                            checked={form.perUnit}
                             onCheckedChange={(checked) => updateField("perUnit", !!checked)}
                             className="h-3 w-3"
                           />
