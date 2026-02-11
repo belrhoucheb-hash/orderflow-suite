@@ -11,15 +11,52 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
 
   try {
-    const { emailBody, pdfText } = await req.json();
+    const { emailBody, pdfUrls } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const contentParts: string[] = [];
-    if (emailBody) contentParts.push(`E-MAIL BODY:\n${emailBody}`);
-    if (pdfText) contentParts.push(`PDF BIJLAGE INHOUD:\n${pdfText}`);
+    // Build multimodal content parts
+    const userContent: any[] = [];
 
+    if (emailBody) {
+      userContent.push({ type: "text", text: `E-MAIL BODY:\n${emailBody}` });
+    }
+
+    // Fetch and encode PDF files from storage as base64 for Gemini multimodal
+    if (pdfUrls && Array.isArray(pdfUrls)) {
+      for (const url of pdfUrls) {
+        try {
+          console.log("Fetching PDF from:", url);
+          const pdfResp = await fetch(url);
+          if (!pdfResp.ok) {
+            console.error("Failed to fetch PDF:", pdfResp.status);
+            userContent.push({ type: "text", text: `[PDF kon niet worden opgehaald: ${url}]` });
+            continue;
+          }
+          const pdfBuffer = await pdfResp.arrayBuffer();
+          const base64 = btoa(
+            new Uint8Array(pdfBuffer).reduce((s, b) => s + String.fromCharCode(b), "")
+          );
+          console.log(`PDF fetched, size: ${pdfBuffer.byteLength} bytes`);
+          userContent.push({
+            type: "image_url",
+            image_url: { url: `data:application/pdf;base64,${base64}` },
+          });
+          userContent.push({ type: "text", text: "Analyseer bovenstaand PDF document en extraheer alle ordergegevens." });
+        } catch (e) {
+          console.error("PDF fetch error:", e);
+          userContent.push({ type: "text", text: `[Fout bij ophalen PDF: ${e}]` });
+        }
+      }
+    }
+
+    if (userContent.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Geen e-mail of PDF content meegegeven" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -48,7 +85,7 @@ Regels:
             },
             {
               role: "user",
-              content: contentParts.join("\n\n---\n\n"),
+              content: userContent,
             },
           ],
           tools: [
