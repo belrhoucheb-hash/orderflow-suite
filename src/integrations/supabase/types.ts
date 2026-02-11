@@ -46,6 +46,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          attachments: Json | null
           client_name: string | null
           confidence_score: number | null
           created_at: string
@@ -68,6 +69,7 @@ export type Database = {
           weight_kg: number | null
         }
         Insert: {
+          attachments?: Json | null
           client_name?: string | null
           confidence_score?: number | null
           created_at?: string
@@ -90,6 +92,7 @@ export type Database = {
           weight_kg?: number | null
         }
         Update: {
+          attachments?: Json | null
           client_name?: string | null
           confidence_score?: number | null
           created_at?: string
