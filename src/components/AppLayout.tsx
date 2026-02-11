@@ -10,10 +10,9 @@ export function AppLayout() {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-card">
-            <div className="flex items-center gap-2">
+          <header className="h-14 border-b border-border/40 flex items-center justify-between px-5 bg-card/80 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
               <SidebarTrigger />
-              <span className="text-sm text-muted-foreground hidden sm:inline">Royalty Cargo Solutions</span>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="relative">
