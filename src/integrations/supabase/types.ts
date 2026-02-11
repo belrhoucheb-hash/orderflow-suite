@@ -14,7 +14,105 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clients: {
+        Row: {
+          address: string | null
+          city: string | null
+          country: string
+          created_at: string
+          id: string
+          name: string
+          zipcode: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          country?: string
+          created_at?: string
+          id?: string
+          name: string
+          zipcode?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          country?: string
+          created_at?: string
+          id?: string
+          name?: string
+          zipcode?: string | null
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          client_name: string | null
+          confidence_score: number | null
+          created_at: string
+          delivery_address: string | null
+          dimensions: string | null
+          id: string
+          is_weight_per_unit: boolean
+          order_number: number
+          pickup_address: string | null
+          quantity: number | null
+          received_at: string | null
+          requirements: string[] | null
+          source_email_body: string | null
+          source_email_from: string | null
+          source_email_subject: string | null
+          status: string
+          transport_type: string | null
+          unit: string | null
+          updated_at: string
+          weight_kg: number | null
+        }
+        Insert: {
+          client_name?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          delivery_address?: string | null
+          dimensions?: string | null
+          id?: string
+          is_weight_per_unit?: boolean
+          order_number?: number
+          pickup_address?: string | null
+          quantity?: number | null
+          received_at?: string | null
+          requirements?: string[] | null
+          source_email_body?: string | null
+          source_email_from?: string | null
+          source_email_subject?: string | null
+          status?: string
+          transport_type?: string | null
+          unit?: string | null
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Update: {
+          client_name?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          delivery_address?: string | null
+          dimensions?: string | null
+          id?: string
+          is_weight_per_unit?: boolean
+          order_number?: number
+          pickup_address?: string | null
+          quantity?: number | null
+          received_at?: string | null
+          requirements?: string[] | null
+          source_email_body?: string | null
+          source_email_from?: string | null
+          source_email_subject?: string | null
+          status?: string
+          transport_type?: string | null
+          unit?: string | null
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
