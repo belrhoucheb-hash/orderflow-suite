@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2 } from "lucide-react";
+import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ interface OrderDraft {
   client_name: string | null;
   received_at: string | null;
   created_at: string;
+  attachments: { name: string; url: string; type: string }[] | null;
 }
 
 interface FormState {
@@ -92,6 +93,115 @@ function formatTime(dateStr: string | null) {
   return d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
 }
 
+function SourcePanel({ selected }: { selected: OrderDraft }) {
+  const [activeTab, setActiveTab] = useState<"email" | "attachment">("email");
+  const attachments = (selected.attachments || []) as { name: string; url: string; type: string }[];
+  const hasAttachments = attachments.length > 0;
+
+  return (
+    <div className="w-[45%] border-r border-border/40 flex flex-col overflow-hidden">
+      <div className="px-5 py-3 border-b border-border/30">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Bron E-mail</p>
+        <h3 className="text-sm font-semibold text-foreground mb-2">{selected.source_email_subject || "Geen onderwerp"}</h3>
+        <div className="space-y-1 text-[11px] mb-3">
+          <div className="flex gap-2">
+            <span className="text-muted-foreground w-10">Van:</span>
+            <span className="text-foreground font-medium">{selected.source_email_from || "—"}</span>
+          </div>
+          <div className="flex gap-2">
+            <span className="text-muted-foreground w-10">Aan:</span>
+            <span className="text-foreground">planning@royaltycargo.nl</span>
+          </div>
+        </div>
+
+        {/* Segmented Control Tabs */}
+        <div className="inline-flex rounded-full bg-muted/60 p-0.5 border border-border/40">
+          <button
+            onClick={() => setActiveTab("email")}
+            className={cn(
+              "px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-150",
+              activeTab === "email"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            E-mail Body
+          </button>
+          <button
+            onClick={() => setActiveTab("attachment")}
+            className={cn(
+              "px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-150 flex items-center gap-1",
+              activeTab === "attachment"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Paperclip className="h-3 w-3" />
+            Bijlage {hasAttachments && `(${attachments.length})`}
+          </button>
+        </div>
+      </div>
+
+      <ScrollArea className="flex-1">
+        {activeTab === "email" ? (
+          <div className="p-5">
+            <div className="bg-muted/40 rounded-lg p-4 border border-border/30">
+              <p className="text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap">{selected.source_email_body || "Geen inhoud"}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-5">
+            {hasAttachments ? (
+              <div className="space-y-2">
+                {attachments.map((att, i) => {
+                  const isPdf = att.type === "application/pdf";
+                  const isImage = att.type.startsWith("image/");
+                  return (
+                    <div key={i} className="bg-card rounded-lg border border-border/40 p-3">
+                      {isImage && att.url !== "#" && (
+                        <div className="mb-3 rounded-md overflow-hidden border border-border/30 bg-muted/20">
+                          <img src={att.url} alt={att.name} className="w-full h-40 object-cover" />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                          isPdf ? "bg-destructive/10" : "bg-primary/10"
+                        )}>
+                          {isPdf ? <FileText className="h-4 w-4 text-destructive" /> : <ImageIcon className="h-4 w-4 text-primary" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate">{att.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{isPdf ? "PDF Document" : "Afbeelding"}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {isPdf && (
+                            <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => window.open(att.url, "_blank")}>
+                              <Eye className="h-3 w-3" /> Bekijk PDF
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(att.url, "_blank")}>
+                            <Download className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Paperclip className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-xs text-muted-foreground">Geen bijlagen</p>
+              </div>
+            )}
+          </div>
+        )}
+      </ScrollArea>
+    </div>
+  );
+}
+
 export default function Inbox() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -108,7 +218,7 @@ export default function Inbox() {
         .eq("status", "DRAFT")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as OrderDraft[];
+      return data as unknown as OrderDraft[];
     },
   });
 
@@ -296,29 +406,7 @@ export default function Inbox() {
           {/* Split Content */}
           <div className="flex-1 flex overflow-hidden">
             {/* Panel A: Source Email */}
-            <div className="w-[45%] border-r border-border/40 flex flex-col overflow-hidden">
-              <div className="px-5 py-3 border-b border-border/30">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Bron E-mail</p>
-                <h3 className="text-sm font-semibold text-foreground mb-2">{selected.source_email_subject || "Geen onderwerp"}</h3>
-                <div className="space-y-1 text-[11px]">
-                  <div className="flex gap-2">
-                    <span className="text-muted-foreground w-10">Van:</span>
-                    <span className="text-foreground font-medium">{selected.source_email_from || "—"}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-muted-foreground w-10">Aan:</span>
-                    <span className="text-foreground">planning@royaltycargo.nl</span>
-                  </div>
-                </div>
-              </div>
-              <ScrollArea className="flex-1">
-                <div className="p-5">
-                  <div className="bg-muted/40 rounded-lg p-4 border border-border/30">
-                    <p className="text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap">{selected.source_email_body || "Geen inhoud"}</p>
-                  </div>
-                </div>
-              </ScrollArea>
-            </div>
+            <SourcePanel selected={selected} />
 
             {/* Panel B: Extracted Data Form */}
             <div className="flex-1 flex flex-col overflow-hidden">
