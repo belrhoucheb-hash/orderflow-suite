@@ -1,4 +1,4 @@
-import { LayoutDashboard, Package, Truck, Map, LogOut, Users } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Truck, Map, LogOut, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import logo from "@/assets/logo.png";
@@ -19,6 +19,7 @@ import {
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Inbox", url: "/inbox", icon: Inbox },
   { title: "Orders", url: "/orders", icon: Package },
   { title: "Transportplanning", url: "/planning", icon: Truck },
   { title: "Routekaart", url: "/routes", icon: Map },
