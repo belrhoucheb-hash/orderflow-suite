@@ -1,7 +1,8 @@
 import { LayoutDashboard, Package, Truck, Map, LogOut, Users } from "lucide-react";
-import { NavLink } from "@/components/NavLink";
+import { NavLink } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import logo from "@/assets/logo.png";
+import { cn } from "@/lib/utils";
 
 import {
   Sidebar,
@@ -32,66 +33,100 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
 
+  const isActive = (url: string) => {
+    if (url === "/") return location.pathname === "/";
+    return location.pathname.startsWith(url);
+  };
+
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-        <img src={logo} alt="Royalty Cargo Solutions" className="h-10 w-10 rounded object-contain bg-card" />
+    <Sidebar collapsible="icon" className="border-r-0">
+      <div className="flex items-center gap-3 px-5 py-6">
+        <img src={logo} alt="Royalty Cargo Solutions" className="h-9 w-9 rounded-lg object-contain bg-sidebar-accent" />
         {!collapsed && (
           <div className="flex flex-col">
-            <span className="font-display text-sm font-bold text-sidebar-primary-foreground leading-tight">Royalty Cargo</span>
-            <span className="text-[11px] text-sidebar-foreground/60">Solutions</span>
+            <span className="text-[13px] font-semibold text-white tracking-tight leading-tight">Royalty Cargo</span>
+            <span className="text-[11px] text-sidebar-foreground/50 font-light">Solutions</span>
           </div>
         )}
       </div>
 
-      <SidebarContent>
+      <SidebarContent className="px-3">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest">Navigatie</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sidebar-foreground/30 text-[10px] uppercase tracking-[0.15em] font-medium mb-1 px-3">
+            Navigatie
+          </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {mainItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={location.pathname === item.url}>
-                    <NavLink to={item.url} end activeClassName="bg-sidebar-accent text-sidebar-accent-foreground">
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+            <SidebarMenu className="space-y-0.5">
+              {mainItems.map((item) => {
+                const active = isActive(item.url);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={active}>
+                      <NavLink
+                        to={item.url}
+                        end={item.url === "/"}
+                        className={cn(
+                          "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
+                          active
+                            ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
+                            : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
+                        )}
+                      >
+                        <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] uppercase tracking-widest">Admin</SidebarGroupLabel>
+        <SidebarGroup className="mt-4">
+          <SidebarGroupLabel className="text-sidebar-foreground/30 text-[10px] uppercase tracking-[0.15em] font-medium mb-1 px-3">
+            Admin
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {adminItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={location.pathname === item.url}>
-                    <NavLink to={item.url} end activeClassName="bg-sidebar-accent text-sidebar-accent-foreground">
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {adminItems.map((item) => {
+                const active = isActive(item.url);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={active}>
+                      <NavLink
+                        to={item.url}
+                        className={cn(
+                          "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
+                          active
+                            ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
+                            : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
+                        )}
+                      >
+                        <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3">
+      <SidebarFooter className="border-t border-white/5 px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-bold text-sidebar-accent-foreground">AJ</div>
+          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-[11px] font-semibold text-white">
+            AJ
+          </div>
           {!collapsed && (
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-xs font-medium text-sidebar-foreground truncate">Admin Johan</span>
-              <span className="text-[10px] text-sidebar-foreground/50">admin@royaltycargo.nl</span>
+              <span className="text-[12px] font-medium text-white/90 truncate">Admin Johan</span>
+              <span className="text-[10px] text-sidebar-foreground/40">admin@royaltycargo.nl</span>
             </div>
           )}
-          {!collapsed && <LogOut className="h-4 w-4 text-sidebar-foreground/40 cursor-pointer hover:text-sidebar-foreground" />}
+          {!collapsed && <LogOut className="h-4 w-4 text-sidebar-foreground/30 cursor-pointer hover:text-white/70 transition-colors" />}
         </div>
       </SidebarFooter>
     </Sidebar>
