@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck } from "lucide-react";
+import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ interface DraftEmail {
     weight: string;
     dimensions: string;
     requirements: string[];
+    perUnit?: boolean;
   };
 }
 
@@ -310,11 +312,27 @@ export default function Inbox() {
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Ophaaladres</Label>
-                        <Input className="h-8 text-xs" value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} />
+                        <div className="relative">
+                          <Input className="h-8 text-xs pr-8" value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} />
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <DatabaseZap className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary/60 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="text-xs">Adres automatisch verrijkt uit adresboek</TooltipContent>
+                          </Tooltip>
+                        </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Afleveradres</Label>
-                        <Input className="h-8 text-xs" value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} />
+                        <div className="relative">
+                          <Input className="h-8 text-xs pr-8" value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} />
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <DatabaseZap className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary/60 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="text-xs">Adres automatisch verrijkt uit adresboek</TooltipContent>
+                          </Tooltip>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -343,6 +361,21 @@ export default function Inbox() {
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Gewicht (kg)</Label>
                         <Input className="h-8 text-xs" value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder="—" />
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <Checkbox
+                            id={`per-unit-${selected.id}`}
+                            checked={form.perUnit ?? false}
+                            onCheckedChange={(checked) => updateField("perUnit", !!checked)}
+                            className="h-3 w-3"
+                          />
+                          <label htmlFor={`per-unit-${selected.id}`} className="text-[10px] text-muted-foreground cursor-pointer">Per eenheid</label>
+                        </div>
+                        {form.perUnit && form.weight && form.quantity > 0 && (
+                          <div className="space-y-1 mt-1.5">
+                            <Label className="text-[10px] text-muted-foreground">Totaal gewicht (berekend)</Label>
+                            <Input className="h-7 text-xs bg-muted/30 font-medium" readOnly value={`${form.quantity * Number(form.weight)} kg`} />
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Afmetingen</Label>
