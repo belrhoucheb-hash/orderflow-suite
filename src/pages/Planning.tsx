@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -14,12 +14,21 @@ import { CSS } from "@dnd-kit/utilities";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { fleetVehicles, type FleetVehicle } from "@/data/fleetData";
+import {
+  resolveCoordinates,
+  getPostcodeRegion,
+  getRegionLabel,
+  haversineKm,
+  vehicleColors,
+  type GeoCoord,
+} from "@/data/geoData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   Truck,
   Search,
@@ -29,6 +38,8 @@ import {
   CheckCircle2,
   X,
   Filter,
+  MapPin,
+  List,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +55,7 @@ interface PlanOrder {
   is_weight_per_unit: boolean;
 }
 
-type Assignments = Record<string, PlanOrder[]>; // vehicleId -> orders
+type Assignments = Record<string, PlanOrder[]>;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 function getTotalWeight(order: PlanOrder) {
@@ -68,6 +79,17 @@ function capacityColor(pct: number) {
   if (pct > 90) return "text-amber-600";
   return "";
 }
+
+function createMarkerIcon(color: string, size: number = 12) {
+  return L.divIcon({
+    className: "custom-marker",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3);transition:all 0.2s;"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+const DISTANCE_WARN_KM = 150;
 
 // ─── Draggable Order Card ────────────────────────────────────────────
 function DraggableOrder({ order, overlay }: { order: PlanOrder; overlay?: boolean }) {
@@ -121,11 +143,13 @@ function VehicleDropZone({
   assigned,
   onRemove,
   rejected,
+  onHover,
 }: {
   vehicle: FleetVehicle;
   assigned: PlanOrder[];
   onRemove: (orderId: string) => void;
   rejected: boolean;
+  onHover: (vehicleId: string | null) => void;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: vehicle.id });
 
@@ -137,35 +161,37 @@ function VehicleDropZone({
   return (
     <Card
       ref={setNodeRef}
+      onMouseEnter={() => onHover(vehicle.id)}
+      onMouseLeave={() => onHover(null)}
       className={cn(
-        "transition-all duration-200 min-h-[220px]",
+        "transition-all duration-200",
         isOver && !rejected && "ring-2 ring-primary/40 bg-primary/5 scale-[1.01]",
         rejected && "animate-[shake_0.4s_ease-in-out] ring-2 ring-destructive/60 bg-destructive/5"
       )}
     >
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 pt-4 px-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-display flex items-center gap-2">
-            <Truck className="h-4 w-4 text-muted-foreground" />
+            <div
+              className="h-3 w-3 rounded-full shrink-0"
+              style={{ background: vehicleColors[vehicle.id] || "#888" }}
+            />
             {vehicle.name}
           </CardTitle>
           <Badge variant="secondary" className="text-[10px]">{vehicle.type}</Badge>
         </div>
         <p className="text-xs text-muted-foreground">{vehicle.plate}
-          {vehicle.features.length > 0 && (
-            <> · {vehicle.features.join(", ")}</>
-          )}
+          {vehicle.features.length > 0 && <> · {vehicle.features.join(", ")}</>}
         </p>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Capacity meters */}
-        <div className="space-y-2">
+      <CardContent className="space-y-2 px-4 pb-4">
+        <div className="space-y-1.5">
           <div>
             <div className="flex justify-between text-[11px] mb-0.5">
               <span className={cn("text-muted-foreground", capacityColor(pctKg))}>Gewicht</span>
               <span className={cn("font-medium", pctKg > 100 && "text-destructive")}>{totalKg} / {vehicle.capacityKg} kg</span>
             </div>
-            <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
+            <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-secondary">
               <div
                 className={cn(
                   "h-full rounded-full transition-all duration-300",
@@ -180,7 +206,7 @@ function VehicleDropZone({
               <span className={cn("text-muted-foreground", capacityColor(pctPallets))}>Pallets</span>
               <span className={cn("font-medium", pctPallets > 100 && "text-destructive")}>{totalPallets} / {vehicle.capacityPallets}</span>
             </div>
-            <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
+            <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-secondary">
               <div
                 className={cn(
                   "h-full rounded-full transition-all duration-300",
@@ -192,21 +218,17 @@ function VehicleDropZone({
           </div>
         </div>
 
-        {/* Assigned orders */}
         {assigned.length === 0 ? (
-          <div className="flex items-center justify-center h-16 border-2 border-dashed border-border/60 rounded-lg">
+          <div className="flex items-center justify-center h-12 border-2 border-dashed border-border/60 rounded-lg">
             <p className="text-xs text-muted-foreground italic">Sleep orders hierheen</p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {assigned.map((o) => (
-              <div
-                key={o.id}
-                className="flex items-center justify-between p-2 rounded-md bg-muted/40 text-xs group"
-              >
-                <div className="flex items-center gap-2 min-w-0">
+              <div key={o.id} className="flex items-center justify-between p-1.5 rounded bg-muted/40 text-xs group">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <Package className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="font-medium truncate">#{o.order_number}</span>
+                  <span className="font-medium">#{o.order_number}</span>
                   <span className="text-muted-foreground truncate">{o.client_name}</span>
                 </div>
                 <button
@@ -224,6 +246,91 @@ function VehicleDropZone({
   );
 }
 
+// ─── Imperative Leaflet Map ──────────────────────────────────────────
+function PlanningMap({
+  orders,
+  orderCoords,
+  orderToVehicle,
+  highlightedIds,
+}: {
+  orders: PlanOrder[];
+  orderCoords: Map<string, GeoCoord>;
+  orderToVehicle: Map<string, string>;
+  highlightedIds: Set<string>;
+}) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+
+  // Init map once
+  useEffect(() => {
+    if (!mapRef.current || mapInstanceRef.current) return;
+
+    const map = L.map(mapRef.current, {
+      center: [52.2, 5.3],
+      zoom: 7,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  // Update markers when orders/assignments/highlights change
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // Remove old markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current.clear();
+
+    const bounds: L.LatLngExpression[] = [];
+
+    for (const order of orders) {
+      const coord = orderCoords.get(order.id);
+      if (!coord) continue;
+
+      const vId = orderToVehicle.get(order.id);
+      const isAssigned = !!vId;
+      const isHighlighted = highlightedIds.has(order.id);
+      const color = isAssigned && vId ? (vehicleColors[vId] || "#22c55e") : "#ef4444";
+      const size = isHighlighted ? 20 : 12;
+
+      const marker = L.marker([coord.lat, coord.lng], {
+        icon: createMarkerIcon(color, size),
+        zIndexOffset: isHighlighted ? 1000 : 0,
+      }).addTo(map);
+
+      const vehicleName = vId ? fleetVehicles.find((v) => v.id === vId)?.name : null;
+      marker.bindPopup(
+        `<div style="font-size:12px;">
+          <b>${order.client_name || "Onbekend"}</b><br/>
+          ${getCity(order.delivery_address)}<br/>
+          ${getTotalWeight(order)} kg · ${order.quantity ?? "?"} pallets
+          ${vehicleName ? `<br/><span style="color:${color};font-weight:600;">→ ${vehicleName}</span>` : ""}
+        </div>`
+      );
+
+      markersRef.current.set(order.id, marker);
+      bounds.push([coord.lat, coord.lng]);
+    }
+
+    if (bounds.length > 0) {
+      map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 10 });
+    }
+  }, [orders, orderCoords, orderToVehicle, highlightedIds]);
+
+  return <div ref={mapRef} className="h-full w-full" />;
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────
 const Planning = () => {
   const { toast } = useToast();
@@ -233,10 +340,11 @@ const Planning = () => {
   const [activeOrder, setActiveOrder] = useState<PlanOrder | null>(null);
   const [rejectedVehicle, setRejectedVehicle] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [showMap, setShowMap] = useState(true);
+  const [hoveredVehicle, setHoveredVehicle] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  // Fetch open orders from DB
   const { data: orders = [], refetch } = useQuery({
     queryKey: ["planning-orders"],
     queryFn: async () => {
@@ -251,16 +359,31 @@ const Planning = () => {
     },
   });
 
-  // Assigned order ids flat set
   const assignedIds = useMemo(() => {
     const ids = new Set<string>();
     Object.values(assignments).forEach((arr) => arr.forEach((o) => ids.add(o.id)));
     return ids;
   }, [assignments]);
 
-  // Filtered unassigned
-  const unassigned = useMemo(() => {
-    return orders
+  const orderCoords = useMemo(() => {
+    const map = new Map<string, GeoCoord>();
+    for (const o of orders) {
+      const coord = resolveCoordinates(o.delivery_address);
+      if (coord) map.set(o.id, coord);
+    }
+    return map;
+  }, [orders]);
+
+  const orderToVehicle = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [vId, arr] of Object.entries(assignments)) {
+      for (const o of arr) map.set(o.id, vId);
+    }
+    return map;
+  }, [assignments]);
+
+  const groupedUnassigned = useMemo(() => {
+    const filtered = orders
       .filter((o) => !assignedIds.has(o.id))
       .filter((o) => {
         if (search) {
@@ -275,9 +398,32 @@ const Planning = () => {
         if (filterTag && !hasTag(o, filterTag)) return false;
         return true;
       });
+
+    const withRegion = filtered.map((o) => ({
+      order: o,
+      region: getPostcodeRegion(o.delivery_address),
+    }));
+    withRegion.sort((a, b) => a.region.localeCompare(b.region));
+
+    const groups: { region: string; label: string; orders: PlanOrder[] }[] = [];
+    let currentRegion = "";
+    for (const { order, region } of withRegion) {
+      if (region !== currentRegion) {
+        currentRegion = region;
+        groups.push({ region, label: getRegionLabel(region), orders: [] });
+      }
+      groups[groups.length - 1].orders.push(order);
+    }
+    return groups;
   }, [orders, assignedIds, search, filterTag]);
 
-  // Validate drop
+  const totalUnassigned = groupedUnassigned.reduce((s, g) => s + g.orders.length, 0);
+
+  const highlightedIds = useMemo(() => {
+    if (!hoveredVehicle) return new Set<string>();
+    return new Set((assignments[hoveredVehicle] ?? []).map((o) => o.id));
+  }, [hoveredVehicle, assignments]);
+
   const validateDrop = useCallback(
     (order: PlanOrder, vehicle: FleetVehicle): string | null => {
       if (hasTag(order, "KOELING") && !vehicle.features.includes("KOELING")) {
@@ -289,6 +435,28 @@ const Planning = () => {
       return null;
     },
     []
+  );
+
+  const checkDistanceWarning = useCallback(
+    (order: PlanOrder, vehicleId: string) => {
+      const newCoord = orderCoords.get(order.id);
+      if (!newCoord) return;
+
+      const existing = assignments[vehicleId] ?? [];
+      for (const ex of existing) {
+        const exCoord = orderCoords.get(ex.id);
+        if (!exCoord) continue;
+        const dist = haversineKm(newCoord, exCoord);
+        if (dist > DISTANCE_WARN_KM) {
+          toast({
+            title: "⚠️ Grote afstand tussen stops!",
+            description: `${getCity(order.delivery_address)} ↔ ${getCity(ex.delivery_address)}: ${Math.round(dist)} km uit elkaar.`,
+          });
+          return;
+        }
+      }
+    },
+    [assignments, orderCoords, toast]
   );
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -315,8 +483,9 @@ const Planning = () => {
       return;
     }
 
+    checkDistanceWarning(order, vehicle.id);
+
     setAssignments((prev) => {
-      // Remove from any previous vehicle
       const next = { ...prev };
       for (const vId of Object.keys(next)) {
         next[vId] = next[vId].filter((o) => o.id !== order.id);
@@ -364,26 +533,49 @@ const Planning = () => {
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex flex-col h-[calc(100vh-5rem)] gap-4">
+      <div className="flex flex-col h-[calc(100vh-5rem)] gap-3">
         {/* Header */}
         <div className="flex items-center justify-between shrink-0">
           <div>
             <h1 className="font-display text-2xl font-bold flex items-center gap-2">
               <Truck className="h-6 w-6 text-primary" />Smart Planning
             </h1>
-            <p className="text-sm text-muted-foreground">Sleep orders naar voertuigen om te plannen</p>
+            <p className="text-sm text-muted-foreground">Sleep orders naar voertuigen — met geografisch inzicht</p>
           </div>
-          {totalAssigned > 0 && (
-            <Button onClick={handleConfirm} disabled={isConfirming} className="gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Planning Bevestigen ({totalAssigned})
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showMap ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setShowMap(!showMap)}
+            >
+              {showMap ? <List className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}
+              {showMap ? "Verberg kaart" : "Toon kaart"}
             </Button>
-          )}
+            {totalAssigned > 0 && (
+              <Button onClick={handleConfirm} disabled={isConfirming} className="gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Planning Bevestigen ({totalAssigned})
+              </Button>
+            )}
+          </div>
         </div>
+
+        {/* Map */}
+        {showMap && (
+          <div className="shrink-0 h-[260px] rounded-lg overflow-hidden border bg-card">
+            <PlanningMap
+              orders={orders}
+              orderCoords={orderCoords}
+              orderToVehicle={orderToVehicle}
+              highlightedIds={highlightedIds}
+            />
+          </div>
+        )}
 
         {/* Split screen */}
         <div className="flex gap-4 flex-1 min-h-0">
-          {/* Left: Order list */}
+          {/* Left: Order list with region headers */}
           <div className="w-1/4 min-w-[260px] flex flex-col gap-3 shrink-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -413,27 +605,42 @@ const Planning = () => {
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {unassigned.length === 0 ? (
+            <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+              {groupedUnassigned.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm">
                   <Package className="h-8 w-8 mb-2 opacity-40" />
                   <p>Geen openstaande orders</p>
                 </div>
               ) : (
-                unassigned.map((order) => (
-                  <DraggableOrder key={order.id} order={order} />
+                groupedUnassigned.map((group) => (
+                  <div key={group.region}>
+                    <div className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 py-1 px-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3" />
+                        {group.label}
+                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0 ml-auto">
+                          {group.orders.length}
+                        </Badge>
+                      </p>
+                    </div>
+                    <div className="space-y-1.5 mb-2">
+                      {group.orders.map((order) => (
+                        <DraggableOrder key={order.id} order={order} />
+                      ))}
+                    </div>
+                  </div>
                 ))
               )}
             </div>
 
             <div className="text-xs text-muted-foreground pt-1 border-t">
-              {unassigned.length} beschikbaar · {totalAssigned} toegewezen
+              {totalUnassigned} beschikbaar · {totalAssigned} toegewezen
             </div>
           </div>
 
           {/* Right: Fleet grid */}
           <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {fleetVehicles.map((vehicle) => (
                 <VehicleDropZone
                   key={vehicle.id}
@@ -441,6 +648,7 @@ const Planning = () => {
                   assigned={assignments[vehicle.id] ?? []}
                   onRemove={handleRemove}
                   rejected={rejectedVehicle === vehicle.id}
+                  onHover={setHoveredVehicle}
                 />
               ))}
             </div>
@@ -448,12 +656,10 @@ const Planning = () => {
         </div>
       </div>
 
-      {/* Drag overlay */}
       <DragOverlay>
         {activeOrder ? <DraggableOrder order={activeOrder} overlay /> : null}
       </DragOverlay>
 
-      {/* Shake animation */}
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
@@ -462,6 +668,7 @@ const Planning = () => {
           60% { transform: translateX(-4px); }
           80% { transform: translateX(4px); }
         }
+        .custom-marker { background: none !important; border: none !important; }
       `}</style>
     </DndContext>
   );
