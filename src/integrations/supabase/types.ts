@@ -66,6 +66,7 @@ export type Database = {
           transport_type: string | null
           unit: string | null
           updated_at: string
+          vehicle_id: string | null
           weight_kg: number | null
         }
         Insert: {
@@ -89,6 +90,7 @@ export type Database = {
           transport_type?: string | null
           unit?: string | null
           updated_at?: string
+          vehicle_id?: string | null
           weight_kg?: number | null
         }
         Update: {
@@ -112,6 +114,7 @@ export type Database = {
           transport_type?: string | null
           unit?: string | null
           updated_at?: string
+          vehicle_id?: string | null
           weight_kg?: number | null
         }
         Relationships: []
