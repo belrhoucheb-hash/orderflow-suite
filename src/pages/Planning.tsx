@@ -9,7 +9,14 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  closestCenter,
 } from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +47,8 @@ import {
   Filter,
   MapPin,
   List,
+  Clock,
+  GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -89,13 +98,27 @@ function createMarkerIcon(color: string, size: number = 12) {
   });
 }
 
+/** Generate a fake time window based on order_number for demo purposes */
+function getTimeWindow(order: PlanOrder): string {
+  const windows = ["06:00 - 09:00", "08:00 - 12:00", "09:00 - 14:00", "12:00 - 17:00", "14:00 - 18:00", "16:00 - 20:00"];
+  return windows[order.order_number % windows.length];
+}
+
 const DISTANCE_WARN_KM = 150;
 
-// ─── Draggable Order Card ────────────────────────────────────────────
-function DraggableOrder({ order, overlay }: { order: PlanOrder; overlay?: boolean }) {
+// ─── Draggable Order Card (sidebar) ──────────────────────────────────
+function DraggableOrder({
+  order,
+  overlay,
+  onHover,
+}: {
+  order: PlanOrder;
+  overlay?: boolean;
+  onHover?: (orderId: string | null) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: order.id,
-    data: order,
+    data: { type: "order", order },
   });
 
   const style = overlay
@@ -107,6 +130,8 @@ function DraggableOrder({ order, overlay }: { order: PlanOrder; overlay?: boolea
       ref={overlay ? undefined : setNodeRef}
       style={style}
       {...(overlay ? {} : { ...listeners, ...attributes })}
+      onMouseEnter={() => onHover?.(order.id)}
+      onMouseLeave={() => onHover?.(null)}
       className={cn(
         "rounded-lg border bg-card p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow transition-shadow",
         overlay && "shadow-lg ring-2 ring-primary/30 rotate-2"
@@ -132,7 +157,67 @@ function DraggableOrder({ order, overlay }: { order: PlanOrder; overlay?: boolea
       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
         <span>{order.quantity ?? "?"} pallet(s)</span>
         <span className="font-medium text-foreground">{getTotalWeight(order)} kg</span>
+        <span className="flex items-center gap-0.5 ml-auto">
+          <Clock className="h-3 w-3" />
+          {getTimeWindow(order)}
+        </span>
       </div>
+    </div>
+  );
+}
+
+// ─── Sortable Order Row (inside vehicle card) ────────────────────────
+function SortableOrderRow({
+  order,
+  index,
+  onRemove,
+  onHover,
+  vehicleColor,
+}: {
+  order: PlanOrder;
+  index: number;
+  onRemove: (orderId: string) => void;
+  onHover: (orderId: string | null) => void;
+  vehicleColor: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: order.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      onMouseEnter={() => onHover(order.id)}
+      onMouseLeave={() => onHover(null)}
+      className="flex items-center justify-between p-1.5 rounded bg-muted/40 text-xs group"
+    >
+      <div className="flex items-center gap-1.5 min-w-0">
+        <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-0.5 touch-none">
+          <GripVertical className="h-3 w-3 text-muted-foreground" />
+        </button>
+        <span
+          className="flex items-center justify-center h-4 w-4 rounded-full text-[10px] font-bold text-white shrink-0"
+          style={{ background: vehicleColor }}
+        >
+          {index + 1}
+        </span>
+        <Package className="h-3 w-3 text-muted-foreground shrink-0" />
+        <span className="font-medium">#{order.order_number}</span>
+        <span className="text-muted-foreground truncate">{order.client_name}</span>
+      </div>
+      <button
+        onClick={() => onRemove(order.id)}
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10"
+      >
+        <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+      </button>
     </div>
   );
 }
@@ -142,16 +227,21 @@ function VehicleDropZone({
   vehicle,
   assigned,
   onRemove,
+  onReorder,
   rejected,
-  onHover,
+  onHoverVehicle,
+  onHoverOrder,
 }: {
   vehicle: FleetVehicle;
   assigned: PlanOrder[];
   onRemove: (orderId: string) => void;
+  onReorder: (vehicleId: string, oldIndex: number, newIndex: number) => void;
   rejected: boolean;
-  onHover: (vehicleId: string | null) => void;
+  onHoverVehicle: (vehicleId: string | null) => void;
+  onHoverOrder: (orderId: string | null) => void;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: vehicle.id });
+  const color = vehicleColors[vehicle.id] || "#888";
 
   const totalKg = assigned.reduce((s, o) => s + getTotalWeight(o), 0);
   const totalPallets = assigned.reduce((s, o) => s + (o.quantity ?? 0), 0);
@@ -161,8 +251,8 @@ function VehicleDropZone({
   return (
     <Card
       ref={setNodeRef}
-      onMouseEnter={() => onHover(vehicle.id)}
-      onMouseLeave={() => onHover(null)}
+      onMouseEnter={() => onHoverVehicle(vehicle.id)}
+      onMouseLeave={() => onHoverVehicle(null)}
       className={cn(
         "transition-all duration-200",
         isOver && !rejected && "ring-2 ring-primary/40 bg-primary/5 scale-[1.01]",
@@ -172,19 +262,18 @@ function VehicleDropZone({
       <CardHeader className="pb-2 pt-4 px-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-display flex items-center gap-2">
-            <div
-              className="h-3 w-3 rounded-full shrink-0"
-              style={{ background: vehicleColors[vehicle.id] || "#888" }}
-            />
+            <div className="h-3 w-3 rounded-full shrink-0" style={{ background: color }} />
             {vehicle.name}
           </CardTitle>
           <Badge variant="secondary" className="text-[10px]">{vehicle.type}</Badge>
         </div>
-        <p className="text-xs text-muted-foreground">{vehicle.plate}
+        <p className="text-xs text-muted-foreground">
+          {vehicle.plate}
           {vehicle.features.length > 0 && <> · {vehicle.features.join(", ")}</>}
         </p>
       </CardHeader>
       <CardContent className="space-y-2 px-4 pb-4">
+        {/* Capacity meters */}
         <div className="space-y-1.5">
           <div>
             <div className="flex justify-between text-[11px] mb-0.5">
@@ -223,23 +312,20 @@ function VehicleDropZone({
             <p className="text-xs text-muted-foreground italic">Sleep orders hierheen</p>
           </div>
         ) : (
-          <div className="space-y-1">
-            {assigned.map((o) => (
-              <div key={o.id} className="flex items-center justify-between p-1.5 rounded bg-muted/40 text-xs group">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <Package className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="font-medium">#{o.order_number}</span>
-                  <span className="text-muted-foreground truncate">{o.client_name}</span>
-                </div>
-                <button
-                  onClick={() => onRemove(o.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10"
-                >
-                  <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                </button>
-              </div>
-            ))}
-          </div>
+          <SortableContext items={assigned.map((o) => o.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-1">
+              {assigned.map((o, idx) => (
+                <SortableOrderRow
+                  key={o.id}
+                  order={o}
+                  index={idx}
+                  onRemove={onRemove}
+                  onHover={onHoverOrder}
+                  vehicleColor={color}
+                />
+              ))}
+            </div>
+          </SortableContext>
         )}
       </CardContent>
     </Card>
@@ -252,48 +338,49 @@ function PlanningMap({
   orderCoords,
   orderToVehicle,
   highlightedIds,
+  assignments,
 }: {
   orders: PlanOrder[];
   orderCoords: Map<string, GeoCoord>;
   orderToVehicle: Map<string, string>;
   highlightedIds: Set<string>;
+  assignments: Assignments;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const polylinesRef = useRef<L.Polyline[]>([]);
 
   // Init map once
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
-    const map = L.map(mapRef.current, {
-      center: [52.2, 5.3],
-      zoom: 7,
-    });
-
+    const map = L.map(mapRef.current, { center: [52.2, 5.3], zoom: 7 });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
     }).addTo(map);
 
     mapInstanceRef.current = map;
-
     return () => {
       map.remove();
       mapInstanceRef.current = null;
     };
   }, []);
 
-  // Update markers when orders/assignments/highlights change
+  // Update markers + polylines
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    // Remove old markers
+    // Clear old
     markersRef.current.forEach((m) => m.remove());
     markersRef.current.clear();
+    polylinesRef.current.forEach((p) => p.remove());
+    polylinesRef.current = [];
 
     const bounds: L.LatLngExpression[] = [];
 
+    // Draw markers
     for (const order of orders) {
       const coord = orderCoords.get(order.id);
       if (!coord) continue;
@@ -302,7 +389,7 @@ function PlanningMap({
       const isAssigned = !!vId;
       const isHighlighted = highlightedIds.has(order.id);
       const color = isAssigned && vId ? (vehicleColors[vId] || "#22c55e") : "#ef4444";
-      const size = isHighlighted ? 20 : 12;
+      const size = isHighlighted ? 22 : 12;
 
       const marker = L.marker([coord.lat, coord.lng], {
         icon: createMarkerIcon(color, size),
@@ -323,10 +410,30 @@ function PlanningMap({
       bounds.push([coord.lat, coord.lng]);
     }
 
+    // Draw polylines per vehicle (in assignment order)
+    for (const [vId, vehicleOrders] of Object.entries(assignments)) {
+      if (vehicleOrders.length < 2) continue;
+      const color = vehicleColors[vId] || "#888";
+      const latlngs: L.LatLngExpression[] = [];
+      for (const o of vehicleOrders) {
+        const coord = orderCoords.get(o.id);
+        if (coord) latlngs.push([coord.lat, coord.lng]);
+      }
+      if (latlngs.length >= 2) {
+        const polyline = L.polyline(latlngs, {
+          color,
+          weight: 3,
+          opacity: 0.7,
+          dashArray: "8 4",
+        }).addTo(map);
+        polylinesRef.current.push(polyline);
+      }
+    }
+
     if (bounds.length > 0) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 10 });
     }
-  }, [orders, orderCoords, orderToVehicle, highlightedIds]);
+  }, [orders, orderCoords, orderToVehicle, highlightedIds, assignments]);
 
   return <div ref={mapRef} className="h-full w-full" />;
 }
@@ -342,6 +449,7 @@ const Planning = () => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [hoveredVehicle, setHoveredVehicle] = useState<string | null>(null);
+  const [hoveredOrderId, setHoveredOrderId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -419,10 +527,17 @@ const Planning = () => {
 
   const totalUnassigned = groupedUnassigned.reduce((s, g) => s + g.orders.length, 0);
 
+  // Combine vehicle hover + individual order hover for highlighting
   const highlightedIds = useMemo(() => {
-    if (!hoveredVehicle) return new Set<string>();
-    return new Set((assignments[hoveredVehicle] ?? []).map((o) => o.id));
-  }, [hoveredVehicle, assignments]);
+    const ids = new Set<string>();
+    if (hoveredVehicle) {
+      (assignments[hoveredVehicle] ?? []).forEach((o) => ids.add(o.id));
+    }
+    if (hoveredOrderId) {
+      ids.add(hoveredOrderId);
+    }
+    return ids;
+  }, [hoveredVehicle, hoveredOrderId, assignments]);
 
   const validateDrop = useCallback(
     (order: PlanOrder, vehicle: FleetVehicle): string | null => {
@@ -441,7 +556,6 @@ const Planning = () => {
     (order: PlanOrder, vehicleId: string) => {
       const newCoord = orderCoords.get(order.id);
       if (!newCoord) return;
-
       const existing = assignments[vehicleId] ?? [];
       for (const ex of existing) {
         const exCoord = orderCoords.get(ex.id);
@@ -471,8 +585,28 @@ const Planning = () => {
     const { active, over } = event;
     if (!over) return;
 
-    const order = orders.find((o) => o.id === active.id);
-    const vehicle = fleetVehicles.find((v) => v.id === over.id);
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    // Check if this is a sortable reorder within a vehicle
+    const activeVehicle = orderToVehicle.get(activeId);
+    const overVehicle = orderToVehicle.get(overId);
+
+    if (activeVehicle && activeVehicle === overVehicle) {
+      // Reorder within the same vehicle
+      setAssignments((prev) => {
+        const list = [...(prev[activeVehicle] ?? [])];
+        const oldIndex = list.findIndex((o) => o.id === activeId);
+        const newIndex = list.findIndex((o) => o.id === overId);
+        if (oldIndex === -1 || newIndex === -1) return prev;
+        return { ...prev, [activeVehicle]: arrayMove(list, oldIndex, newIndex) };
+      });
+      return;
+    }
+
+    // Dropping into a vehicle zone
+    const order = orders.find((o) => o.id === activeId);
+    const vehicle = fleetVehicles.find((v) => v.id === overId);
     if (!order || !vehicle) return;
 
     const error = validateDrop(order, vehicle);
@@ -505,6 +639,13 @@ const Planning = () => {
     });
   };
 
+  const handleReorder = (vehicleId: string, oldIndex: number, newIndex: number) => {
+    setAssignments((prev) => ({
+      ...prev,
+      [vehicleId]: arrayMove(prev[vehicleId] ?? [], oldIndex, newIndex),
+    }));
+  };
+
   const totalAssigned = Object.values(assignments).reduce((s, a) => s + a.length, 0);
 
   const handleConfirm = async () => {
@@ -532,7 +673,7 @@ const Planning = () => {
   };
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex flex-col h-[calc(100vh-5rem)] gap-3">
         {/* Header */}
         <div className="flex items-center justify-between shrink-0">
@@ -553,7 +694,11 @@ const Planning = () => {
               {showMap ? "Verberg kaart" : "Toon kaart"}
             </Button>
             {totalAssigned > 0 && (
-              <Button onClick={handleConfirm} disabled={isConfirming} className="gap-2">
+              <Button
+                onClick={handleConfirm}
+                disabled={isConfirming}
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
                 <CheckCircle2 className="h-4 w-4" />
                 Planning Bevestigen ({totalAssigned})
               </Button>
@@ -569,6 +714,7 @@ const Planning = () => {
               orderCoords={orderCoords}
               orderToVehicle={orderToVehicle}
               highlightedIds={highlightedIds}
+              assignments={assignments}
             />
           </div>
         )}
@@ -625,7 +771,7 @@ const Planning = () => {
                     </div>
                     <div className="space-y-1.5 mb-2">
                       {group.orders.map((order) => (
-                        <DraggableOrder key={order.id} order={order} />
+                        <DraggableOrder key={order.id} order={order} onHover={setHoveredOrderId} />
                       ))}
                     </div>
                   </div>
@@ -647,8 +793,10 @@ const Planning = () => {
                   vehicle={vehicle}
                   assigned={assignments[vehicle.id] ?? []}
                   onRemove={handleRemove}
+                  onReorder={handleReorder}
                   rejected={rejectedVehicle === vehicle.id}
-                  onHover={setHoveredVehicle}
+                  onHoverVehicle={setHoveredVehicle}
+                  onHoverOrder={setHoveredOrderId}
                 />
               ))}
             </div>
