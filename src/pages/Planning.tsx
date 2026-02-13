@@ -912,11 +912,20 @@ const Planning = () => {
   }, [orderCoords, toast]);
 
   const handleAutoPlan = useCallback(() => {
-    // Step 1: Get unassigned orders, sorted by postcode region
+    // Step 1: Sort orders by region + time window for geographic/temporal clustering
     const unassigned = orders
       .filter((o) => !assignedIds.has(o.id))
-      .map((o) => ({ order: o, region: getPostcodeRegion(o.delivery_address) }));
-    unassigned.sort((a, b) => a.region.localeCompare(b.region));
+      .map((o) => ({
+        order: o,
+        region: getPostcodeRegion(o.delivery_address),
+        windowEnd: (() => {
+          const w = getTimeWindow(o).split(" - ")[1];
+          const [h, m] = w.split(":").map(Number);
+          return h * 60 + m;
+        })(),
+      }));
+    // Sort by region first, then by time window end (earliest deadline first)
+    unassigned.sort((a, b) => a.region.localeCompare(b.region) || a.windowEnd - b.windowEnd);
     const sortedOrders = unassigned.map((u) => u.order);
 
     if (sortedOrders.length === 0) {
@@ -924,20 +933,24 @@ const Planning = () => {
       return;
     }
 
-    // Step 2 & 3: Waterfall — loop vehicles, try to fit each order
+    // Step 2: Sort vehicles largest-first (bin-packing: fill big trucks first)
+    const sortedVehicles = [...fleetVehicles].sort((a, b) => b.capacityKg - a.capacityKg);
+
+    // Step 3: Bin-packing waterfall — fill each vehicle before moving to next
     const newAssignments: Assignments = { ...assignments };
     const placed: Set<string> = new Set();
 
-    // Track running totals per vehicle
     const vehicleWeight: Record<string, number> = {};
     const vehiclePallets: Record<string, number> = {};
-    for (const v of fleetVehicles) {
+    for (const v of sortedVehicles) {
       const existing = newAssignments[v.id] ?? [];
       vehicleWeight[v.id] = existing.reduce((s, o) => s + getTotalWeight(o), 0);
       vehiclePallets[v.id] = existing.reduce((s, o) => s + (o.quantity ?? 0), 0);
     }
 
-    for (const vehicle of fleetVehicles) {
+    for (const vehicle of sortedVehicles) {
+      // First pass: try to fit orders that REQUIRE this vehicle type
+      // Second pass: fill remaining capacity with general orders
       for (const order of sortedOrders) {
         if (placed.has(order.id)) continue;
 
@@ -945,13 +958,26 @@ const Planning = () => {
         if (hasTag(order, "KOELING") && !vehicle.features.includes("KOELING")) continue;
         if (hasTag(order, "ADR") && !vehicle.features.includes("ADR")) continue;
 
-        // Check weight capacity
         const orderWeight = getTotalWeight(order);
         if (vehicleWeight[vehicle.id] + orderWeight > vehicle.capacityKg) continue;
 
-        // Check pallet capacity
         const orderPallets = order.quantity ?? 0;
         if (vehiclePallets[vehicle.id] + orderPallets > vehicle.capacityPallets) continue;
+
+        // Geographic fit: if vehicle already has orders, prefer orders in nearby regions
+        const existing = newAssignments[vehicle.id] ?? [];
+        if (existing.length > 0) {
+          const existingRegions = new Set(existing.map((o) => getPostcodeRegion(o.delivery_address)));
+          const orderRegion = getPostcodeRegion(order.delivery_address);
+          // Allow if same region, adjacent region (±5), or vehicle is < 50% full
+          const regionNum = parseInt(orderRegion);
+          const isNearby = [...existingRegions].some((r) => {
+            const rNum = parseInt(r);
+            return isNaN(rNum) || isNaN(regionNum) || Math.abs(rNum - regionNum) <= 10;
+          });
+          const utilizationPct = (vehicleWeight[vehicle.id] / vehicle.capacityKg) * 100;
+          if (!isNearby && utilizationPct > 50) continue;
+        }
 
         // Fits! Assign it
         if (!newAssignments[vehicle.id]) newAssignments[vehicle.id] = [];
@@ -962,8 +988,27 @@ const Planning = () => {
       }
     }
 
+    // Step 4: Second pass — try remaining orders without geographic constraint
+    for (const vehicle of sortedVehicles) {
+      for (const order of sortedOrders) {
+        if (placed.has(order.id)) continue;
+        if (hasTag(order, "KOELING") && !vehicle.features.includes("KOELING")) continue;
+        if (hasTag(order, "ADR") && !vehicle.features.includes("ADR")) continue;
+        const orderWeight = getTotalWeight(order);
+        if (vehicleWeight[vehicle.id] + orderWeight > vehicle.capacityKg) continue;
+        const orderPallets = order.quantity ?? 0;
+        if (vehiclePallets[vehicle.id] + orderPallets > vehicle.capacityPallets) continue;
+
+        if (!newAssignments[vehicle.id]) newAssignments[vehicle.id] = [];
+        newAssignments[vehicle.id].push(order);
+        vehicleWeight[vehicle.id] += orderWeight;
+        vehiclePallets[vehicle.id] += orderPallets;
+        placed.add(order.id);
+      }
+    }
+
     // Step 5: Optimize route per vehicle
-    for (const vehicle of fleetVehicles) {
+    for (const vehicle of sortedVehicles) {
       const list = newAssignments[vehicle.id];
       if (list && list.length > 1) {
         newAssignments[vehicle.id] = optimizeRoute(list, orderCoords);
@@ -972,12 +1017,13 @@ const Planning = () => {
 
     setAssignments(newAssignments);
 
+    const usedVehicles = sortedVehicles.filter((v) => (newAssignments[v.id]?.length ?? 0) > 0).length;
     const notPlaced = sortedOrders.length - placed.size;
     toast({
-      title: `⚡ ${placed.size} orders automatisch ingepland`,
+      title: `⚡ ${placed.size} orders ingepland over ${usedVehicles} voertuig(en)`,
       description: notPlaced > 0
         ? `${notPlaced} order(s) konden niet geplaatst worden (capaciteit/vereisten).`
-        : "Alle orders succesvol verdeeld over de vloot!",
+        : "Alle orders succesvol verdeeld — minimaal aantal voertuigen gebruikt!",
       variant: notPlaced > 0 ? "destructive" : undefined,
     });
   }, [orders, assignedIds, assignments, orderCoords, toast]);
