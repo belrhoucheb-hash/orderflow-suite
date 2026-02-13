@@ -38,6 +38,7 @@ export const cityCoordinates: Record<string, GeoCoord> = {
   duitsland: { lat: 51.5, lng: 7.0 },
   nederland: { lat: 52.13, lng: 5.29 },
   belgie: { lat: 50.85, lng: 4.35 },
+  antwerpen: { lat: 51.22, lng: 4.40 },
 };
 
 // Vehicle colors for map markers
