@@ -1,0 +1,1 @@
+ALTER TABLE public.orders ADD COLUMN stop_sequence integer;
