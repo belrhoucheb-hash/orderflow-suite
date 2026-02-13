@@ -704,10 +704,11 @@ const Planning = () => {
   const [vehicleDrivers, setVehicleDrivers] = useState<Record<string, string>>(
     () => Object.fromEntries(fleetVehicles.map((v) => [v.id, ""]))
   );
+  const [testOrders, setTestOrders] = useState<PlanOrder[]>([]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const { data: orders = [], refetch } = useQuery({
+  const { data: dbOrders = [], refetch } = useQuery({
     queryKey: ["planning-orders"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -720,6 +721,46 @@ const Planning = () => {
       return (data ?? []) as PlanOrder[];
     },
   });
+
+  // Merge DB orders with injected test orders
+  const orders = useMemo(() => [...dbOrders, ...testOrders], [dbOrders, testOrders]);
+
+  const handleInjectTestOrders = useCallback(() => {
+    const testData: PlanOrder[] = [
+      {
+        id: "test-bakwagen-vuller",
+        order_number: 9901,
+        client_name: "Bouwmarkt Gigant",
+        delivery_address: "Damrak 1, Amsterdam",
+        quantity: 4,
+        weight_kg: 3200,
+        requirements: [],
+        is_weight_per_unit: false,
+      },
+      {
+        id: "test-full-truck-load",
+        order_number: 9902,
+        client_name: "Staalhandel Rotterdam",
+        delivery_address: "Havenweg 50, Antwerpen, Belgie",
+        quantity: 22,
+        weight_kg: 18500,
+        requirements: [],
+        is_weight_per_unit: false,
+      },
+      {
+        id: "test-koel-combinatie",
+        order_number: 9903,
+        client_name: "Supermarkt DC Zwolle",
+        delivery_address: "Distributieweg 1, Zwolle",
+        quantity: 14,
+        weight_kg: 6000,
+        requirements: ["KOELING"],
+        is_weight_per_unit: false,
+      },
+    ];
+    setTestOrders(testData);
+    toast({ title: "🧪 3 testorders geladen", description: "Bakwagen Vuller · Full Truck Load · Koel-Combinatie" });
+  }, [toast]);
 
   const assignedIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1130,14 +1171,25 @@ const Planning = () => {
                   Reset
                 </Button>
               )}
-              <Button
-                size="sm"
-                className="h-7 text-xs gap-1 ml-auto bg-primary hover:bg-primary/90 text-primary-foreground"
-                onClick={handleAutoPlan}
-                disabled={totalUnassigned === 0}
-              >
-                ⚡ Auto-Plan
-              </Button>
+              <div className="flex gap-1.5 ml-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1"
+                  onClick={handleInjectTestOrders}
+                  disabled={testOrders.length > 0}
+                >
+                  🧪 Test: Zware Lading
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+                  onClick={handleAutoPlan}
+                  disabled={totalUnassigned === 0}
+                >
+                  ⚡ Auto-Plan
+                </Button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-1 pr-1">
