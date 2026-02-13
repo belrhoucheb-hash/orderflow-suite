@@ -1084,6 +1084,102 @@ const Planning = () => {
     });
   }, [orders, assignedIds, assignments, orderCoords, toast]);
 
+  // ─── Combineer Ritten ──────────────────────────────────────────────
+  const handleCombineTrips = useCallback(() => {
+    const vehiclesWithOrders = fleetVehicles
+      .map((v) => ({
+        vehicle: v,
+        orders: assignments[v.id] ?? [],
+        weightKg: (assignments[v.id] ?? []).reduce((s, o) => s + getTotalWeight(o), 0),
+        pallets: (assignments[v.id] ?? []).reduce((s, o) => s + (o.quantity ?? 0), 0),
+      }))
+      .filter((v) => v.orders.length > 0);
+
+    if (vehiclesWithOrders.length < 2) {
+      toast({ title: "Combineer ritten", description: "Er zijn niet genoeg voertuigen met orders om te combineren." });
+      return;
+    }
+
+    let combinedCount = 0;
+    const newAssignments = { ...assignments };
+
+    // Try to merge pairs — iterate from smallest to largest
+    const sorted = [...vehiclesWithOrders].sort((a, b) => a.vehicle.capacityKg - b.vehicle.capacityKg);
+
+    const emptied = new Set<string>();
+
+    for (let i = 0; i < sorted.length; i++) {
+      const source = sorted[i];
+      if (emptied.has(source.vehicle.id)) continue;
+      if ((newAssignments[source.vehicle.id]?.length ?? 0) === 0) continue;
+
+      // Determine main region of source orders
+      const sourceRegions = new Set(
+        source.orders.map((o) => getPostcodeRegion(o.delivery_address))
+      );
+
+      // Check requirements of source orders
+      const sourceNeedsKoeling = source.orders.some((o) => hasTag(o, "KOELING"));
+      const sourceNeedsADR = source.orders.some((o) => hasTag(o, "ADR"));
+
+      // Find a target vehicle that can absorb source's orders AND is in a nearby region
+      for (let j = 0; j < sorted.length; j++) {
+        if (i === j) continue;
+        const target = sorted[j];
+        if (emptied.has(target.vehicle.id)) continue;
+
+        // Requirements check
+        if (sourceNeedsKoeling && !target.vehicle.features.includes("KOELING")) continue;
+        if (sourceNeedsADR && !target.vehicle.features.includes("ADR")) continue;
+
+        // Capacity check: can target absorb all source orders?
+        const currentTargetOrders = newAssignments[target.vehicle.id] ?? [];
+        const targetWeight = currentTargetOrders.reduce((s, o) => s + getTotalWeight(o), 0);
+        const targetPallets = currentTargetOrders.reduce((s, o) => s + (o.quantity ?? 0), 0);
+        const sourceOrders = newAssignments[source.vehicle.id] ?? [];
+        const addWeight = sourceOrders.reduce((s, o) => s + getTotalWeight(o), 0);
+        const addPallets = sourceOrders.reduce((s, o) => s + (o.quantity ?? 0), 0);
+
+        if (targetWeight + addWeight > target.vehicle.capacityKg) continue;
+        if (targetPallets + addPallets > target.vehicle.capacityPallets) continue;
+
+        // Region check: target should serve nearby regions
+        const targetRegions = new Set(
+          currentTargetOrders.map((o) => getPostcodeRegion(o.delivery_address))
+        );
+        const isNearbyRegion = targetRegions.size === 0 || [...sourceRegions].some((sr) => {
+          const srNum = parseInt(sr);
+          return [...targetRegions].some((tr) => {
+            const trNum = parseInt(tr);
+            return isNaN(srNum) || isNaN(trNum) || Math.abs(srNum - trNum) <= 15;
+          });
+        });
+        if (!isNearbyRegion) continue;
+
+        // Merge! Move all source orders to target
+        const merged = [...currentTargetOrders, ...sourceOrders];
+        newAssignments[target.vehicle.id] = optimizeRoute(merged, orderCoords);
+        newAssignments[source.vehicle.id] = [];
+        emptied.add(source.vehicle.id);
+        combinedCount++;
+        break; // source is emptied, move on
+      }
+    }
+
+    if (combinedCount === 0) {
+      toast({
+        title: "🔗 Geen combinaties gevonden",
+        description: "Geen voertuigen met dezelfde regio en voldoende restcapaciteit om samen te voegen.",
+      });
+    } else {
+      setAssignments(newAssignments);
+      toast({
+        title: `🔗 ${combinedCount} rit(ten) gecombineerd`,
+        description: `${combinedCount} voertuig(en) vrijgemaakt door orders samen te voegen.`,
+      });
+    }
+  }, [assignments, orderCoords, toast]);
+
   const totalAssigned = Object.values(assignments).reduce((s, a) => s + a.length, 0);
 
   const handleConfirm = async () => {
@@ -1197,6 +1293,15 @@ const Planning = () => {
                   disabled={testOrders.length > 0}
                 >
                   🧪 Test: Zware Lading
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1"
+                  onClick={handleCombineTrips}
+                  disabled={Object.values(assignments).filter((a) => a.length > 0).length < 2}
+                >
+                  🔗 Combineer
                 </Button>
                 <Button
                   size="sm"
