@@ -37,6 +37,13 @@ import { useToast } from "@/hooks/use-toast";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Truck,
   Search,
   Package,
@@ -51,8 +58,81 @@ import {
   GripVertical,
   RotateCw,
   Warehouse,
+  User,
+  Route,
+  Timer,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// ─── Mock Drivers ────────────────────────────────────────────────────
+const MOCK_DRIVERS = ["Henk de Vries", "Mo Ajam", "Sanne Jansen", "Piet Pietersen"];
+
+const AVG_SPEED_KMH = 60;
+const UNLOAD_MINUTES = 30;
+
+/** Compute ETA for each stop given start time, ordered stops, and coords */
+function computeETAs(
+  startTime: string,
+  stops: PlanOrder[],
+  coordMap: Map<string, GeoCoord>,
+): { eta: string; lateMinutes: number }[] {
+  const [startH, startM] = startTime.split(":").map(Number);
+  let currentMinutes = startH * 60 + startM;
+  let currentPos: GeoCoord = WAREHOUSE;
+  const results: { eta: string; lateMinutes: number }[] = [];
+
+  for (const order of stops) {
+    const coord = coordMap.get(order.id);
+    if (coord) {
+      const dist = haversineKm(currentPos, coord);
+      const driveMin = (dist / AVG_SPEED_KMH) * 60;
+      currentMinutes += driveMin;
+    }
+    const etaH = Math.floor(currentMinutes / 60) % 24;
+    const etaM = Math.floor(currentMinutes % 60);
+    const etaStr = `${String(etaH).padStart(2, "0")}:${String(etaM).padStart(2, "0")}`;
+
+    // Check against time window
+    const window = getTimeWindow(order);
+    const endStr = window.split(" - ")[1];
+    const [endH, endM2] = endStr.split(":").map(Number);
+    const windowEnd = endH * 60 + endM2;
+    const late = currentMinutes > windowEnd ? Math.round(currentMinutes - windowEnd) : 0;
+
+    results.push({ eta: etaStr, lateMinutes: late });
+
+    // Add unload time
+    currentMinutes += UNLOAD_MINUTES;
+    if (coord) currentPos = coord;
+  }
+  return results;
+}
+
+/** Compute total route distance and time */
+function computeRouteStats(
+  startTime: string,
+  stops: PlanOrder[],
+  coordMap: Map<string, GeoCoord>,
+): { totalKm: number; totalMinutes: number } {
+  const [startH, startM] = startTime.split(":").map(Number);
+  let totalKm = 0;
+  let currentPos: GeoCoord = WAREHOUSE;
+
+  for (const order of stops) {
+    const coord = coordMap.get(order.id);
+    if (coord) {
+      totalKm += haversineKm(currentPos, coord);
+      currentPos = coord;
+    }
+  }
+
+  const driveMinutes = (totalKm / AVG_SPEED_KMH) * 60;
+  const unloadMinutes = stops.length * UNLOAD_MINUTES;
+  const totalMinutes = driveMinutes + unloadMinutes;
+
+  return { totalKm: Math.round(totalKm), totalMinutes: Math.round(totalMinutes) };
+}
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface PlanOrder {
@@ -221,12 +301,16 @@ function SortableOrderRow({
   onRemove,
   onHover,
   vehicleColor,
+  eta,
+  isLate,
 }: {
   order: PlanOrder;
   index: number;
   onRemove: (orderId: string) => void;
   onHover: (orderId: string | null) => void;
   vehicleColor: string;
+  eta?: string;
+  isLate?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: order.id,
@@ -260,12 +344,20 @@ function SortableOrderRow({
         <span className="font-medium">#{order.order_number}</span>
         <span className="text-muted-foreground truncate">{order.client_name}</span>
       </div>
-      <button
-        onClick={() => onRemove(order.id)}
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10"
-      >
-        <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-      </button>
+      <div className="flex items-center gap-1.5">
+        {eta && (
+          <span className={cn("text-[10px] font-mono flex items-center gap-0.5", isLate ? "text-destructive font-bold" : "text-muted-foreground")}>
+            {isLate && <AlertTriangle className="h-3 w-3" />}
+            ETA: {eta}
+          </span>
+        )}
+        <button
+          onClick={() => onRemove(order.id)}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10"
+        >
+          <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -280,6 +372,11 @@ function VehicleDropZone({
   rejected,
   onHoverVehicle,
   onHoverOrder,
+  startTime,
+  onStartTimeChange,
+  driver,
+  onDriverChange,
+  orderCoords,
 }: {
   vehicle: FleetVehicle;
   assigned: PlanOrder[];
@@ -289,6 +386,11 @@ function VehicleDropZone({
   rejected: boolean;
   onHoverVehicle: (vehicleId: string | null) => void;
   onHoverOrder: (orderId: string | null) => void;
+  startTime: string;
+  onStartTimeChange: (vehicleId: string, time: string) => void;
+  driver: string;
+  onDriverChange: (vehicleId: string, driver: string) => void;
+  orderCoords: Map<string, GeoCoord>;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: vehicle.id });
   const color = vehicleColors[vehicle.id] || "#888";
@@ -298,13 +400,27 @@ function VehicleDropZone({
   const pctKg = (totalKg / vehicle.capacityKg) * 100;
   const pctPallets = (totalPallets / vehicle.capacityPallets) * 100;
 
+  // ETA calculations
+  const etas = useMemo(() => computeETAs(startTime, assigned, orderCoords), [startTime, assigned, orderCoords]);
+  const stats = useMemo(() => computeRouteStats(startTime, assigned, orderCoords), [startTime, assigned, orderCoords]);
+  const utilizationPct = Math.max(
+    Math.round((totalKg / vehicle.capacityKg) * 100),
+    Math.round((totalPallets / vehicle.capacityPallets) * 100),
+  );
+
+  const formatDuration = (min: number) => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return h > 0 ? `${h}u ${m}m` : `${m}m`;
+  };
+
   return (
     <Card
       ref={setNodeRef}
       onMouseEnter={() => onHoverVehicle(vehicle.id)}
       onMouseLeave={() => onHoverVehicle(null)}
       className={cn(
-        "transition-all duration-200",
+        "transition-all duration-200 flex flex-col",
         isOver && !rejected && "ring-2 ring-primary/40 bg-primary/5 scale-[1.01]",
         rejected && "animate-[shake_0.4s_ease-in-out] ring-2 ring-destructive/60 bg-destructive/5"
       )}
@@ -329,12 +445,32 @@ function VehicleDropZone({
             <Badge variant="secondary" className="text-[10px]">{vehicle.type}</Badge>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {vehicle.plate}
-          {vehicle.features.length > 0 && <> · {vehicle.features.join(", ")}</>}
-        </p>
+        {/* Driver + Start time row */}
+        <div className="flex items-center gap-2 mt-1.5">
+          <p className="text-xs text-muted-foreground shrink-0">{vehicle.plate}</p>
+          <Select value={driver} onValueChange={(v) => onDriverChange(vehicle.id, v)}>
+            <SelectTrigger className="h-6 text-[11px] px-2 w-[130px] bg-background">
+              <User className="h-3 w-3 mr-1 text-muted-foreground" />
+              <SelectValue placeholder="Chauffeur..." />
+            </SelectTrigger>
+            <SelectContent>
+              {MOCK_DRIVERS.map((d) => (
+                <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1 ml-auto">
+            <Clock className="h-3 w-3 text-muted-foreground" />
+            <Input
+              type="time"
+              value={startTime}
+              onChange={(e) => onStartTimeChange(vehicle.id, e.target.value)}
+              className="h-6 w-[80px] text-[11px] px-1.5 text-center bg-background"
+            />
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-2 px-4 pb-4">
+      <CardContent className="space-y-2 px-4 pb-0 flex-1">
         {/* Capacity meters */}
         <div className="space-y-1.5">
           <div>
@@ -384,12 +520,36 @@ function VehicleDropZone({
                   onRemove={onRemove}
                   onHover={onHoverOrder}
                   vehicleColor={color}
+                  eta={etas[idx]?.eta}
+                  isLate={etas[idx]?.lateMinutes > 0}
                 />
               ))}
             </div>
           </SortableContext>
         )}
       </CardContent>
+
+      {/* Efficiency Footer */}
+      {assigned.length > 0 && (
+        <div className="mt-auto px-4 pb-3 pt-2">
+          <div className="flex items-center justify-between gap-2 rounded-md bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Timer className="h-3 w-3" />
+              {formatDuration(stats.totalMinutes)}
+            </span>
+            <span className="flex items-center gap-1">
+              <Route className="h-3 w-3" />
+              {stats.totalKm} km
+            </span>
+            <span className="flex items-center gap-1">
+              <BarChart3 className="h-3 w-3" />
+              <span className={cn("font-medium", utilizationPct > 90 ? "text-amber-600" : utilizationPct > 100 ? "text-destructive" : "text-foreground")}>
+                {utilizationPct}%
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -538,6 +698,12 @@ const Planning = () => {
   const [showMap, setShowMap] = useState(true);
   const [hoveredVehicle, setHoveredVehicle] = useState<string | null>(null);
   const [hoveredOrderId, setHoveredOrderId] = useState<string | null>(null);
+  const [vehicleStartTimes, setVehicleStartTimes] = useState<Record<string, string>>(
+    () => Object.fromEntries(fleetVehicles.map((v) => [v.id, "07:00"]))
+  );
+  const [vehicleDrivers, setVehicleDrivers] = useState<Record<string, string>>(
+    () => Object.fromEntries(fleetVehicles.map((v) => [v.id, ""]))
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -977,6 +1143,11 @@ const Planning = () => {
                   rejected={rejectedVehicle === vehicle.id}
                   onHoverVehicle={setHoveredVehicle}
                   onHoverOrder={setHoveredOrderId}
+                  startTime={vehicleStartTimes[vehicle.id] ?? "07:00"}
+                  onStartTimeChange={(vId, t) => setVehicleStartTimes((p) => ({ ...p, [vId]: t }))}
+                  driver={vehicleDrivers[vehicle.id] ?? ""}
+                  onDriverChange={(vId, d) => setVehicleDrivers((p) => ({ ...p, [vId]: d }))}
+                  orderCoords={orderCoords}
                 />
               ))}
             </div>
