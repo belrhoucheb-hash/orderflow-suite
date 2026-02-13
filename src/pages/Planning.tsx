@@ -886,7 +886,14 @@ const Planning = () => {
   );
 
   const handleDragStart = (event: DragStartEvent) => {
-    const order = orders.find((o) => o.id === event.active.id);
+    const id = String(event.active.id);
+    let order = orders.find((o) => o.id === id);
+    if (!order) {
+      for (const arr of Object.values(assignments)) {
+        order = arr.find((o) => o.id === id);
+        if (order) break;
+      }
+    }
     if (order) setActiveOrder(order);
   };
 
@@ -916,31 +923,47 @@ const Planning = () => {
       return;
     }
 
-    // Dropping into a vehicle zone
-    const order = orders.find((o) => o.id === activeId);
-    const vehicle = fleetVehicles.find((v) => v.id === overId);
-    if (!order || !vehicle) return;
+    // Find the order — either from unassigned list or from current assignments
+    let order = orders.find((o) => o.id === activeId);
+    if (!order && activeVehicle) {
+      order = assignments[activeVehicle]?.find((o) => o.id === activeId);
+    }
+    if (!order) return;
 
-    const error = validateDrop(order, vehicle);
+    // Determine target vehicle: overId is a vehicle directly, or overId is an order inside a vehicle
+    let targetVehicle = fleetVehicles.find((v) => v.id === overId);
+    if (!targetVehicle && overVehicle) {
+      // Dropped on an order that belongs to a different vehicle
+      targetVehicle = fleetVehicles.find((v) => v.id === overVehicle);
+    }
+    if (!targetVehicle) return;
+
+    // Don't do anything if dropping back on the same vehicle
+    if (activeVehicle === targetVehicle.id) return;
+
+    const error = validateDrop(order, targetVehicle);
     if (error) {
-      setRejectedVehicle(vehicle.id);
+      setRejectedVehicle(targetVehicle.id);
       setTimeout(() => setRejectedVehicle(null), 600);
       toast({ title: "Niet toegestaan", description: error, variant: "destructive" });
       return;
     }
 
-    checkDistanceWarning(order, vehicle.id);
+    checkDistanceWarning(order, targetVehicle.id);
 
     setAssignments((prev) => {
       const next = { ...prev };
+      // Remove from all vehicles (including source)
       for (const vId of Object.keys(next)) {
-        next[vId] = next[vId].filter((o) => o.id !== order.id);
+        next[vId] = next[vId].filter((o) => o.id !== order!.id);
       }
-      const newList = [...(next[vehicle.id] ?? []), order];
-      next[vehicle.id] = optimizeRoute(newList, orderCoords);
+      const newList = [...(next[targetVehicle!.id] ?? []), order!];
+      next[targetVehicle!.id] = optimizeRoute(newList, orderCoords);
       return next;
     });
-    toast({ title: "Route geoptimaliseerd", description: `Volgorde automatisch berekend via nearest-neighbor.` });
+
+    const fromLabel = activeVehicle ? fleetVehicles.find((v) => v.id === activeVehicle)?.name : "ongepland";
+    toast({ title: "Order verplaatst", description: `${order.client_name} → ${targetVehicle.name} (van ${fromLabel})` });
   };
 
   const handleRemove = (orderId: string) => {
