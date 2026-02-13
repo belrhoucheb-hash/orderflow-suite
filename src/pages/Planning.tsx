@@ -753,10 +753,11 @@ const Planning = () => {
       for (const [vehicleId, vehicleOrders] of Object.entries(assignments)) {
         if (vehicleOrders.length === 0) continue;
         const vehicle = fleetVehicles.find((v) => v.id === vehicleId);
-        for (const order of vehicleOrders) {
+        for (let i = 0; i < vehicleOrders.length; i++) {
+          const order = vehicleOrders[i];
           const { error } = await supabase
             .from("orders")
-            .update({ vehicle_id: vehicle?.name ?? vehicleId, status: "PLANNED" })
+            .update({ vehicle_id: vehicle?.name ?? vehicleId, status: "PLANNED", stop_sequence: i + 1 } as any)
             .eq("id", order.id);
           if (error) throw error;
         }
