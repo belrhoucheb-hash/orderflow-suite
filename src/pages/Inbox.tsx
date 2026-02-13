@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload, FlaskConical, MapPin } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,34 @@ function orderToForm(order: OrderDraft): FormState {
     requirements: order.requirements || [],
     perUnit: order.is_weight_per_unit,
   };
+}
+
+const TEST_SCENARIOS = [
+  {
+    label: "A: Gevaarlijke Rekensom",
+    description: "Test: Math + ADR",
+    email: "Hoi, graag transport voor 5 pallets chemisch afval (ADR). Gewicht is 800 kg per pallet. Ophalen bij Shell Pernis, leveren bij Jansen in Venlo.",
+  },
+  {
+    label: "B: Koelvracht via Lucht",
+    description: "Test: Koeling + Type",
+    email: "Order voor Schiphol Cargo. 10 dozen vis, moet gekoeld blijven op 2 graden. Totaal 500kg. Leveren bij KLM Cargo loods.",
+  },
+  {
+    label: "C: Vage Mail",
+    description: "Test: Incomplete Data",
+    email: "Graag 2 pallets naar Groningen. Morgen ophalen.",
+  },
+];
+
+function isAddressIncomplete(address: string): boolean {
+  if (!address || address.trim().length < 5) return true;
+  // Check if address has at least a street number or zipcode pattern
+  const hasNumber = /\d/.test(address);
+  const hasZipcode = /\d{4}\s?[A-Za-z]{2}/.test(address);
+  const hasCity = address.split(/[,\s]+/).length >= 2;
+  // If it's just a city name or very short, it's incomplete
+  return !hasNumber && !hasZipcode;
 }
 
 const requirementOptions = [
@@ -290,6 +318,84 @@ export default function Inbox() {
     }
   };
 
+  const [loadingScenario, setLoadingScenario] = useState<number | null>(null);
+
+  const handleLoadTestScenario = useCallback(async (scenarioIndex: number) => {
+    setLoadingScenario(scenarioIndex);
+    try {
+      const scenario = TEST_SCENARIOS[scenarioIndex];
+      // Create a draft order with the test email body
+      const { data: newOrder, error } = await supabase
+        .from("orders")
+        .insert({
+          status: "DRAFT",
+          source_email_from: "test@royaltycargo.nl",
+          source_email_subject: `Test: ${scenario.label}`,
+          source_email_body: scenario.email,
+          client_name: "Test Scenario",
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Invalidate and refetch drafts
+      await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
+      
+      // Select the new draft
+      setSelectedId(newOrder.id);
+
+      // Auto-trigger AI parse
+      toast({ title: "Test data geladen", description: `${scenario.label} - AI analyse wordt gestart...` });
+
+      // Trigger parse via edge function
+      const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-order", {
+        body: { emailBody: scenario.email },
+      });
+
+      if (parseError) throw parseError;
+      if (parseData?.error) throw new Error(parseData.error);
+
+      const ext = parseData.extracted;
+      setFormData((prev) => ({
+        ...prev,
+        [newOrder.id]: {
+          transportType: ext.transport_type || "direct",
+          pickupAddress: ext.pickup_address || "",
+          deliveryAddress: ext.delivery_address || "",
+          quantity: ext.quantity || 0,
+          unit: ext.unit || "Pallets",
+          weight: ext.weight_kg?.toString() || "",
+          dimensions: ext.dimensions || "",
+          requirements: ext.requirements || [],
+          perUnit: ext.is_weight_per_unit || false,
+        },
+      }));
+
+      // Update the order with parsed data including confidence
+      await supabase.from("orders").update({
+        confidence_score: ext.confidence_score,
+        client_name: ext.client_name || "Test Scenario",
+        transport_type: ext.transport_type,
+        pickup_address: ext.pickup_address,
+        delivery_address: ext.delivery_address,
+        quantity: ext.quantity,
+        unit: ext.unit,
+        weight_kg: ext.weight_kg,
+        is_weight_per_unit: ext.is_weight_per_unit,
+        dimensions: ext.dimensions,
+        requirements: ext.requirements,
+      }).eq("id", newOrder.id);
+
+      await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
+      toast({ title: "AI Extractie voltooid", description: `Confidence: ${ext.confidence_score}%` });
+    } catch (e: any) {
+      console.error("Test scenario error:", e);
+      toast({ title: "Test scenario fout", description: e.message, variant: "destructive" });
+    } finally {
+      setLoadingScenario(null);
+    }
+  }, [queryClient, toast]);
+
   const { data: drafts = [], isLoading } = useQuery({
     queryKey: ["draft-orders"],
     queryFn: async () => {
@@ -446,6 +552,35 @@ export default function Inbox() {
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8 h-8 text-xs bg-muted/50 border-border/40"
             />
+          </div>
+
+          {/* Test Scenario Buttons */}
+          <div className="px-4 py-2 border-t border-border/30">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
+              <FlaskConical className="h-3 w-3" /> Laad Test Data
+            </p>
+            <div className="space-y-1">
+              {TEST_SCENARIOS.map((scenario, i) => (
+                <Button
+                  key={i}
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-auto py-1.5 px-2.5 text-left justify-start text-[10px] gap-1.5"
+                  onClick={() => handleLoadTestScenario(i)}
+                  disabled={loadingScenario !== null}
+                >
+                  {loadingScenario === i ? (
+                    <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                  ) : (
+                    <FlaskConical className="h-3 w-3 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">{scenario.label}</div>
+                    <div className="text-muted-foreground font-normal">{scenario.description}</div>
+                  </div>
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -638,6 +773,24 @@ export default function Inbox() {
                       })}
                     </div>
                   </div>
+
+                  {/* Address validation warnings */}
+                  {(isAddressIncomplete(form.pickupAddress) || isAddressIncomplete(form.deliveryAddress)) && (
+                    <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-3.5 w-3.5 text-orange-600 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-medium text-orange-800">Adres incompleet</p>
+                          <p className="text-[11px] text-orange-600 mt-0.5">
+                            {[
+                              isAddressIncomplete(form.pickupAddress) && "Ophaaladres",
+                              isAddressIncomplete(form.deliveryAddress) && "Afleveradres",
+                            ].filter(Boolean).join(" en ")} lijkt incompleet (geen huisnummer of postcode). Verifieer via het adresboek.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Missing fields warning */}
                   {(!form.weight || !form.dimensions) && (
