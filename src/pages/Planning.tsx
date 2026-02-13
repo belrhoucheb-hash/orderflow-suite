@@ -49,6 +49,8 @@ import {
   List,
   Clock,
   GripVertical,
+  RotateCw,
+  Warehouse,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -89,13 +91,59 @@ function capacityColor(pct: number) {
   return "";
 }
 
-function createMarkerIcon(color: string, size: number = 12) {
+const WAREHOUSE: GeoCoord = { lat: 52.30, lng: 4.76 };
+
+function createMarkerIcon(color: string, size: number = 12, label?: string) {
+  if (label) {
+    const fontSize = size > 18 ? 11 : 9;
+    return L.divIcon({
+      className: "custom-marker",
+      html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:white;font-size:${fontSize}px;font-weight:700;line-height:1;transition:all 0.2s;">${label}</div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+    });
+  }
   return L.divIcon({
     className: "custom-marker",
     html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3);transition:all 0.2s;"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
+}
+
+function createWarehouseIcon() {
+  return L.divIcon({
+    className: "custom-marker",
+    html: `<div style="width:28px;height:28px;border-radius:4px;background:#1e293b;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:white;font-size:14px;">🏭</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+/** Nearest-neighbor route optimization starting from warehouse */
+function optimizeRoute(routeOrders: PlanOrder[], coordMap: Map<string, GeoCoord>): PlanOrder[] {
+  if (routeOrders.length <= 1) return routeOrders;
+  const remaining = [...routeOrders];
+  const result: PlanOrder[] = [];
+  let current: GeoCoord = WAREHOUSE;
+
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const coord = coordMap.get(remaining[i].id);
+      if (!coord) continue;
+      const d = haversineKm(current, coord);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    const next = remaining.splice(bestIdx, 1)[0];
+    result.push(next);
+    current = coordMap.get(next.id) || current;
+  }
+  return result;
 }
 
 /** Generate a fake time window based on order_number for demo purposes */
@@ -228,6 +276,7 @@ function VehicleDropZone({
   assigned,
   onRemove,
   onReorder,
+  onOptimize,
   rejected,
   onHoverVehicle,
   onHoverOrder,
@@ -236,6 +285,7 @@ function VehicleDropZone({
   assigned: PlanOrder[];
   onRemove: (orderId: string) => void;
   onReorder: (vehicleId: string, oldIndex: number, newIndex: number) => void;
+  onOptimize: (vehicleId: string) => void;
   rejected: boolean;
   onHoverVehicle: (vehicleId: string | null) => void;
   onHoverOrder: (orderId: string | null) => void;
@@ -265,7 +315,19 @@ function VehicleDropZone({
             <div className="h-3 w-3 rounded-full shrink-0" style={{ background: color }} />
             {vehicle.name}
           </CardTitle>
-          <Badge variant="secondary" className="text-[10px]">{vehicle.type}</Badge>
+          <div className="flex items-center gap-1.5">
+            {assigned.length >= 2 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px] gap-1"
+                onClick={(e) => { e.stopPropagation(); onOptimize(vehicle.id); }}
+              >
+                <RotateCw className="h-3 w-3" />Optimaliseer
+              </Button>
+            )}
+            <Badge variant="secondary" className="text-[10px]">{vehicle.type}</Badge>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">
           {vehicle.plate}
@@ -350,6 +412,7 @@ function PlanningMap({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const polylinesRef = useRef<L.Polyline[]>([]);
+  const warehouseRef = useRef<L.Marker | null>(null);
 
   // Init map once
   useEffect(() => {
@@ -377,28 +440,41 @@ function PlanningMap({
     markersRef.current.clear();
     polylinesRef.current.forEach((p) => p.remove());
     polylinesRef.current = [];
+    if (warehouseRef.current) {
+      warehouseRef.current.remove();
+      warehouseRef.current = null;
+    }
 
     const bounds: L.LatLngExpression[] = [];
+
+    // Build order-to-index map for assigned orders
+    const orderIndex = new Map<string, { idx: number; vId: string }>();
+    for (const [vId, arr] of Object.entries(assignments)) {
+      arr.forEach((o, idx) => orderIndex.set(o.id, { idx, vId }));
+    }
 
     // Draw markers
     for (const order of orders) {
       const coord = orderCoords.get(order.id);
       if (!coord) continue;
 
+      const info = orderIndex.get(order.id);
       const vId = orderToVehicle.get(order.id);
       const isAssigned = !!vId;
       const isHighlighted = highlightedIds.has(order.id);
       const color = isAssigned && vId ? (vehicleColors[vId] || "#22c55e") : "#ef4444";
-      const size = isHighlighted ? 22 : 12;
+      const size = isHighlighted ? 26 : isAssigned ? 20 : 12;
+      const label = info ? String(info.idx + 1) : undefined;
 
       const marker = L.marker([coord.lat, coord.lng], {
-        icon: createMarkerIcon(color, size),
-        zIndexOffset: isHighlighted ? 1000 : 0,
+        icon: createMarkerIcon(color, size, label),
+        zIndexOffset: isHighlighted ? 1000 : isAssigned ? 500 : 0,
       }).addTo(map);
 
       const vehicleName = vId ? fleetVehicles.find((v) => v.id === vId)?.name : null;
       marker.bindPopup(
         `<div style="font-size:12px;">
+          ${label ? `<span style="font-weight:700;color:${color};">Stop #${label}</span><br/>` : ""}
           <b>${order.client_name || "Onbekend"}</b><br/>
           ${getCity(order.delivery_address)}<br/>
           ${getTotalWeight(order)} kg · ${order.quantity ?? "?"} pallets
@@ -410,11 +486,23 @@ function PlanningMap({
       bounds.push([coord.lat, coord.lng]);
     }
 
-    // Draw polylines per vehicle (in assignment order)
+    // Draw warehouse marker if any vehicle has assignments
+    const hasAnyAssignment = Object.values(assignments).some((a) => a.length > 0);
+    if (hasAnyAssignment) {
+      const wh = L.marker([WAREHOUSE.lat, WAREHOUSE.lng], {
+        icon: createWarehouseIcon(),
+        zIndexOffset: 2000,
+      }).addTo(map);
+      wh.bindPopup('<div style="font-size:12px;"><b>🏭 Warehouse</b><br/>Schiphol / Hoofddorp</div>');
+      warehouseRef.current = wh;
+      bounds.push([WAREHOUSE.lat, WAREHOUSE.lng]);
+    }
+
+    // Draw polylines per vehicle (from warehouse → stop1 → stop2 → ...)
     for (const [vId, vehicleOrders] of Object.entries(assignments)) {
-      if (vehicleOrders.length < 2) continue;
+      if (vehicleOrders.length === 0) continue;
       const color = vehicleColors[vId] || "#888";
-      const latlngs: L.LatLngExpression[] = [];
+      const latlngs: L.LatLngExpression[] = [[WAREHOUSE.lat, WAREHOUSE.lng]];
       for (const o of vehicleOrders) {
         const coord = orderCoords.get(o.id);
         if (coord) latlngs.push([coord.lat, coord.lng]);
@@ -624,9 +712,11 @@ const Planning = () => {
       for (const vId of Object.keys(next)) {
         next[vId] = next[vId].filter((o) => o.id !== order.id);
       }
-      next[vehicle.id] = [...(next[vehicle.id] ?? []), order];
+      const newList = [...(next[vehicle.id] ?? []), order];
+      next[vehicle.id] = optimizeRoute(newList, orderCoords);
       return next;
     });
+    toast({ title: "Route geoptimaliseerd", description: `Volgorde automatisch berekend via nearest-neighbor.` });
   };
 
   const handleRemove = (orderId: string) => {
@@ -645,6 +735,15 @@ const Planning = () => {
       [vehicleId]: arrayMove(prev[vehicleId] ?? [], oldIndex, newIndex),
     }));
   };
+
+  const handleOptimize = useCallback((vehicleId: string) => {
+    setAssignments((prev) => {
+      const list = prev[vehicleId] ?? [];
+      if (list.length <= 1) return prev;
+      return { ...prev, [vehicleId]: optimizeRoute(list, orderCoords) };
+    });
+    toast({ title: "Route geoptimaliseerd", description: "Volgorde herberekend via nearest-neighbor." });
+  }, [orderCoords, toast]);
 
   const totalAssigned = Object.values(assignments).reduce((s, a) => s + a.length, 0);
 
@@ -794,6 +893,7 @@ const Planning = () => {
                   assigned={assignments[vehicle.id] ?? []}
                   onRemove={handleRemove}
                   onReorder={handleReorder}
+                  onOptimize={handleOptimize}
                   rejected={rejectedVehicle === vehicle.id}
                   onHoverVehicle={setHoveredVehicle}
                   onHoverOrder={setHoveredOrderId}
