@@ -745,6 +745,77 @@ const Planning = () => {
     toast({ title: "Route geoptimaliseerd", description: "Volgorde herberekend via nearest-neighbor." });
   }, [orderCoords, toast]);
 
+  const handleAutoPlan = useCallback(() => {
+    // Step 1: Get unassigned orders, sorted by postcode region
+    const unassigned = orders
+      .filter((o) => !assignedIds.has(o.id))
+      .map((o) => ({ order: o, region: getPostcodeRegion(o.delivery_address) }));
+    unassigned.sort((a, b) => a.region.localeCompare(b.region));
+    const sortedOrders = unassigned.map((u) => u.order);
+
+    if (sortedOrders.length === 0) {
+      toast({ title: "Geen orders", description: "Er zijn geen ongeplande orders om te verdelen." });
+      return;
+    }
+
+    // Step 2 & 3: Waterfall — loop vehicles, try to fit each order
+    const newAssignments: Assignments = { ...assignments };
+    const placed: Set<string> = new Set();
+
+    // Track running totals per vehicle
+    const vehicleWeight: Record<string, number> = {};
+    const vehiclePallets: Record<string, number> = {};
+    for (const v of fleetVehicles) {
+      const existing = newAssignments[v.id] ?? [];
+      vehicleWeight[v.id] = existing.reduce((s, o) => s + getTotalWeight(o), 0);
+      vehiclePallets[v.id] = existing.reduce((s, o) => s + (o.quantity ?? 0), 0);
+    }
+
+    for (const vehicle of fleetVehicles) {
+      for (const order of sortedOrders) {
+        if (placed.has(order.id)) continue;
+
+        // Check requirements
+        if (hasTag(order, "KOELING") && !vehicle.features.includes("KOELING")) continue;
+        if (hasTag(order, "ADR") && !vehicle.features.includes("ADR")) continue;
+
+        // Check weight capacity
+        const orderWeight = getTotalWeight(order);
+        if (vehicleWeight[vehicle.id] + orderWeight > vehicle.capacityKg) continue;
+
+        // Check pallet capacity
+        const orderPallets = order.quantity ?? 0;
+        if (vehiclePallets[vehicle.id] + orderPallets > vehicle.capacityPallets) continue;
+
+        // Fits! Assign it
+        if (!newAssignments[vehicle.id]) newAssignments[vehicle.id] = [];
+        newAssignments[vehicle.id].push(order);
+        vehicleWeight[vehicle.id] += orderWeight;
+        vehiclePallets[vehicle.id] += orderPallets;
+        placed.add(order.id);
+      }
+    }
+
+    // Step 5: Optimize route per vehicle
+    for (const vehicle of fleetVehicles) {
+      const list = newAssignments[vehicle.id];
+      if (list && list.length > 1) {
+        newAssignments[vehicle.id] = optimizeRoute(list, orderCoords);
+      }
+    }
+
+    setAssignments(newAssignments);
+
+    const notPlaced = sortedOrders.length - placed.size;
+    toast({
+      title: `⚡ ${placed.size} orders automatisch ingepland`,
+      description: notPlaced > 0
+        ? `${notPlaced} order(s) konden niet geplaatst worden (capaciteit/vereisten).`
+        : "Alle orders succesvol verdeeld over de vloot!",
+      variant: notPlaced > 0 ? "destructive" : undefined,
+    });
+  }, [orders, assignedIds, assignments, orderCoords, toast]);
+
   const totalAssigned = Object.values(assignments).reduce((s, a) => s + a.length, 0);
 
   const handleConfirm = async () => {
@@ -849,6 +920,14 @@ const Planning = () => {
                   Reset
                 </Button>
               )}
+              <Button
+                size="sm"
+                className="h-7 text-xs gap-1 ml-auto bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={handleAutoPlan}
+                disabled={totalUnassigned === 0}
+              >
+                ⚡ Auto-Plan
+              </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-1 pr-1">
