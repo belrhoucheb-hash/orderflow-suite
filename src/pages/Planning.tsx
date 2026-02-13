@@ -109,13 +109,14 @@ function computeETAs(
   return results;
 }
 
-/** Compute total route distance and time */
+const MAX_DRIVE_MINUTES = 9 * 60; // Rijtijdenwet: max 9 uur
+
+/** Compute total route distance and time (including return to warehouse) */
 function computeRouteStats(
   startTime: string,
   stops: PlanOrder[],
   coordMap: Map<string, GeoCoord>,
-): { totalKm: number; totalMinutes: number } {
-  const [startH, startM] = startTime.split(":").map(Number);
+): { totalKm: number; returnKm: number; totalMinutes: number; exceedsDriveLimit: boolean } {
   let totalKm = 0;
   let currentPos: GeoCoord = WAREHOUSE;
 
@@ -127,11 +128,20 @@ function computeRouteStats(
     }
   }
 
-  const driveMinutes = (totalKm / AVG_SPEED_KMH) * 60;
+  // Return trip: last stop back to warehouse
+  const returnKm = stops.length > 0 ? haversineKm(currentPos, WAREHOUSE) : 0;
+  const roundTripKm = totalKm + returnKm;
+
+  const driveMinutes = (roundTripKm / AVG_SPEED_KMH) * 60;
   const unloadMinutes = stops.length * UNLOAD_MINUTES;
   const totalMinutes = driveMinutes + unloadMinutes;
 
-  return { totalKm: Math.round(totalKm), totalMinutes: Math.round(totalMinutes) };
+  return {
+    totalKm: Math.round(roundTripKm),
+    returnKm: Math.round(returnKm),
+    totalMinutes: Math.round(totalMinutes),
+    exceedsDriveLimit: totalMinutes > MAX_DRIVE_MINUTES,
+  };
 }
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -531,7 +541,7 @@ function VehicleDropZone({
 
       {/* Efficiency Footer */}
       {assigned.length > 0 && (
-        <div className="mt-auto px-4 pb-3 pt-2">
+        <div className="mt-auto px-4 pb-3 pt-2 space-y-1.5">
           <div className="flex items-center justify-between gap-2 rounded-md bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1">
               <Timer className="h-3 w-3" />
@@ -540,6 +550,7 @@ function VehicleDropZone({
             <span className="flex items-center gap-1">
               <Route className="h-3 w-3" />
               {stats.totalKm} km
+              <span className="text-[10px] opacity-60">(retour {stats.returnKm} km)</span>
             </span>
             <span className="flex items-center gap-1">
               <BarChart3 className="h-3 w-3" />
@@ -548,6 +559,12 @@ function VehicleDropZone({
               </span>
             </span>
           </div>
+          {stats.exceedsDriveLimit && (
+            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-1.5 text-[11px] text-destructive font-medium">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>⚠️ Rijtijdenwet: totale rittijd ({formatDuration(stats.totalMinutes)}) overschrijdt 9 uur!</span>
+            </div>
+          )}
         </div>
       )}
     </Card>
