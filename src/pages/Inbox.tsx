@@ -14,6 +14,15 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
+interface ClientRecord {
+  id: string;
+  name: string;
+  address: string | null;
+  zipcode: string | null;
+  city: string | null;
+  country: string;
+}
+
 interface OrderDraft {
   id: string;
   order_number: number;
@@ -83,12 +92,32 @@ const TEST_SCENARIOS = [
 
 function isAddressIncomplete(address: string): boolean {
   if (!address || address.trim().length < 5) return true;
-  // Check if address has at least a street number or zipcode pattern
   const hasNumber = /\d/.test(address);
   const hasZipcode = /\d{4}\s?[A-Za-z]{2}/.test(address);
-  const hasCity = address.split(/[,\s]+/).length >= 2;
-  // If it's just a city name or very short, it's incomplete
   return !hasNumber && !hasZipcode;
+}
+
+// Try to enrich an address by matching client names from the address book
+function tryEnrichAddress(address: string, clients: ClientRecord[]): { enriched: string; matchedClient: string | null } {
+  if (!address || clients.length === 0) return { enriched: address, matchedClient: null };
+  
+  const lowerAddr = address.toLowerCase();
+  
+  // Find a client whose name appears in the address text
+  const match = clients.find((c) => {
+    const nameParts = c.name.toLowerCase().split(/\s+/);
+    // Match if any significant word (>2 chars) from client name appears in address
+    return nameParts.some((part) => part.length > 2 && lowerAddr.includes(part));
+  });
+  
+  if (!match || !match.address) return { enriched: address, matchedClient: null };
+  
+  // Check if address already looks complete (has zipcode pattern)
+  if (/\d{4}\s?[A-Za-z]{2}/.test(address)) return { enriched: address, matchedClient: null };
+  
+  // Build full address from client record
+  const parts = [match.address, match.zipcode, match.city].filter(Boolean);
+  return { enriched: parts.join(", "), matchedClient: match.name };
 }
 
 const requirementOptions = [
@@ -182,7 +211,6 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Segmented Control Tabs */}
           <div className="inline-flex rounded-full bg-muted/60 p-0.5 border border-border/40">
             <button
               onClick={() => setActiveTab("email")}
@@ -209,7 +237,6 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
             </button>
           </div>
 
-          {/* AI Parse Button */}
           <Button
             variant="outline"
             size="sm"
@@ -318,13 +345,45 @@ export default function Inbox() {
     }
   };
 
+  // Fetch clients for address book lookup
+  const { data: clients = [] } = useQuery({
+    queryKey: ["clients-addressbook"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, address, zipcode, city, country");
+      if (error) throw error;
+      return data as ClientRecord[];
+    },
+  });
+
+  // Enrich both addresses using client address book
+  const enrichAddresses = useCallback((formState: Partial<FormState>): { result: Partial<FormState>; enrichments: string[] } => {
+    const enrichments: string[] = [];
+    const result = { ...formState };
+    if (result.pickupAddress) {
+      const pickup = tryEnrichAddress(result.pickupAddress, clients);
+      if (pickup.matchedClient) {
+        result.pickupAddress = pickup.enriched;
+        enrichments.push(`Ophaaladres verrijkt via "${pickup.matchedClient}"`);
+      }
+    }
+    if (result.deliveryAddress) {
+      const delivery = tryEnrichAddress(result.deliveryAddress, clients);
+      if (delivery.matchedClient) {
+        result.deliveryAddress = delivery.enriched;
+        enrichments.push(`Afleveradres verrijkt via "${delivery.matchedClient}"`);
+      }
+    }
+    return { result, enrichments };
+  }, [clients]);
+
   const [loadingScenario, setLoadingScenario] = useState<number | null>(null);
 
   const handleLoadTestScenario = useCallback(async (scenarioIndex: number) => {
     setLoadingScenario(scenarioIndex);
     try {
       const scenario = TEST_SCENARIOS[scenarioIndex];
-      // Create a draft order with the test email body
       const { data: newOrder, error } = await supabase
         .from("orders")
         .insert({
@@ -338,46 +397,43 @@ export default function Inbox() {
         .single();
       if (error) throw error;
 
-      // Invalidate and refetch drafts
       await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
-      
-      // Select the new draft
       setSelectedId(newOrder.id);
-
-      // Auto-trigger AI parse
       toast({ title: "Test data geladen", description: `${scenario.label} - AI analyse wordt gestart...` });
 
-      // Trigger parse via edge function
       const { data: parseData, error: parseError } = await supabase.functions.invoke("parse-order", {
         body: { emailBody: scenario.email },
       });
-
       if (parseError) throw parseError;
       if (parseData?.error) throw new Error(parseData.error);
 
       const ext = parseData.extracted;
-      setFormData((prev) => ({
-        ...prev,
-        [newOrder.id]: {
-          transportType: ext.transport_type || "direct",
-          pickupAddress: ext.pickup_address || "",
-          deliveryAddress: ext.delivery_address || "",
-          quantity: ext.quantity || 0,
-          unit: ext.unit || "Pallets",
-          weight: ext.weight_kg?.toString() || "",
-          dimensions: ext.dimensions || "",
-          requirements: ext.requirements || [],
-          perUnit: ext.is_weight_per_unit || false,
-        },
-      }));
+      const parsedForm: FormState = {
+        transportType: ext.transport_type || "direct",
+        pickupAddress: ext.pickup_address || "",
+        deliveryAddress: ext.delivery_address || "",
+        quantity: ext.quantity || 0,
+        unit: ext.unit || "Pallets",
+        weight: ext.weight_kg?.toString() || "",
+        dimensions: ext.dimensions || "",
+        requirements: ext.requirements || [],
+        perUnit: ext.is_weight_per_unit || false,
+      };
+      
+      // Auto-enrich addresses from client address book
+      const { result: enriched, enrichments } = enrichAddresses(parsedForm);
+      setFormData((prev) => ({ ...prev, [newOrder.id]: enriched as FormState }));
+      if (enrichments.length > 0) {
+        toast({ title: "Adresboek verrijking", description: enrichments.join(". ") });
+      }
 
-      // Update the order with parsed data including confidence
+      const enrichedForm = enriched as FormState;
       await supabase.from("orders").update({
         confidence_score: ext.confidence_score,
         client_name: ext.client_name || "Test Scenario",
         transport_type: ext.transport_type,
-        pickup_address: ext.pickup_address,
-        delivery_address: ext.delivery_address,
+        pickup_address: enrichedForm.pickupAddress,
+        delivery_address: enrichedForm.deliveryAddress,
         quantity: ext.quantity,
         unit: ext.unit,
         weight_kg: ext.weight_kg,
@@ -394,7 +450,7 @@ export default function Inbox() {
     } finally {
       setLoadingScenario(null);
     }
-  }, [queryClient, toast]);
+  }, [queryClient, toast, enrichAddresses]);
 
   const { data: drafts = [], isLoading } = useQuery({
     queryKey: ["draft-orders"],
@@ -646,10 +702,14 @@ export default function Inbox() {
             {/* Panel A: Source Email */}
             <SourcePanel selected={selected} onParseResult={(data) => {
               if (!selected) return;
+              const { result: enriched, enrichments } = enrichAddresses(data);
               setFormData((prev) => ({
                 ...prev,
-                [selected.id]: { ...prev[selected.id], ...data },
+                [selected.id]: { ...prev[selected.id], ...enriched },
               }));
+              if (enrichments.length > 0) {
+                toast({ title: "Adresboek verrijking", description: enrichments.join(". ") });
+              }
             }} />
 
             {/* Panel B: Extracted Data Form */}
@@ -679,9 +739,23 @@ export default function Inbox() {
                           <Input className="h-8 text-xs pr-8" value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} />
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <DatabaseZap className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary/60 cursor-help" />
+                              <button
+                                type="button"
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                                onClick={() => {
+                                  const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
+                                  if (matchedClient) {
+                                    updateField("pickupAddress", enriched);
+                                    toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` });
+                                  } else {
+                                    toast({ title: "Adresboek", description: "Geen match gevonden in adresboek", variant: "destructive" });
+                                  }
+                                }}
+                              >
+                                <DatabaseZap className="h-3.5 w-3.5 text-primary/60 hover:text-primary transition-colors" />
+                              </button>
                             </TooltipTrigger>
-                            <TooltipContent side="left" className="text-xs">Adres automatisch verrijkt uit adresboek</TooltipContent>
+                            <TooltipContent side="left" className="text-xs">Zoek adres in adresboek</TooltipContent>
                           </Tooltip>
                         </div>
                       </div>
@@ -691,9 +765,23 @@ export default function Inbox() {
                           <Input className="h-8 text-xs pr-8" value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} />
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <DatabaseZap className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-primary/60 cursor-help" />
+                              <button
+                                type="button"
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                                onClick={() => {
+                                  const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
+                                  if (matchedClient) {
+                                    updateField("deliveryAddress", enriched);
+                                    toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` });
+                                  } else {
+                                    toast({ title: "Adresboek", description: "Geen match gevonden in adresboek", variant: "destructive" });
+                                  }
+                                }}
+                              >
+                                <DatabaseZap className="h-3.5 w-3.5 text-primary/60 hover:text-primary transition-colors" />
+                              </button>
                             </TooltipTrigger>
-                            <TooltipContent side="left" className="text-xs">Adres automatisch verrijkt uit adresboek</TooltipContent>
+                            <TooltipContent side="left" className="text-xs">Zoek adres in adresboek</TooltipContent>
                           </Tooltip>
                         </div>
                       </div>
@@ -785,7 +873,7 @@ export default function Inbox() {
                             {[
                               isAddressIncomplete(form.pickupAddress) && "Ophaaladres",
                               isAddressIncomplete(form.deliveryAddress) && "Afleveradres",
-                            ].filter(Boolean).join(" en ")} lijkt incompleet (geen huisnummer of postcode). Verifieer via het adresboek.
+                            ].filter(Boolean).join(" en ")} lijkt incompleet (geen huisnummer of postcode). Klik op het <DatabaseZap className="inline h-3 w-3" /> icoon om het adresboek te raadplegen.
                           </p>
                         </div>
                       </div>
