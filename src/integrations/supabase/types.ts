@@ -63,6 +63,7 @@ export type Database = {
           source_email_from: string | null
           source_email_subject: string | null
           status: string
+          stop_sequence: number | null
           transport_type: string | null
           unit: string | null
           updated_at: string
@@ -87,6 +88,7 @@ export type Database = {
           source_email_from?: string | null
           source_email_subject?: string | null
           status?: string
+          stop_sequence?: number | null
           transport_type?: string | null
           unit?: string | null
           updated_at?: string
@@ -111,6 +113,7 @@ export type Database = {
           source_email_from?: string | null
           source_email_subject?: string | null
           status?: string
+          stop_sequence?: number | null
           transport_type?: string | null
           unit?: string | null
           updated_at?: string
