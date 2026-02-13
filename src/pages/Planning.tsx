@@ -571,6 +571,22 @@ function VehicleDropZone({
   );
 }
 
+// ─── Droppable Unassigned Sidebar ────────────────────────────────────
+function UnassignedDropZone({ children }: { children: React.ReactNode }) {
+  const { isOver, setNodeRef } = useDroppable({ id: "unassigned" });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex-1 overflow-y-auto space-y-1 pr-1 rounded-lg transition-colors duration-200",
+        isOver && "ring-2 ring-primary/40 bg-primary/5"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Imperative Leaflet Map ──────────────────────────────────────────
 function PlanningMap({
   orders,
@@ -906,6 +922,16 @@ const Planning = () => {
 
     const activeId = String(active.id);
     const overId = String(over.id);
+
+    // Handle drop back to unassigned sidebar
+    if (overId === "unassigned") {
+      const sourceVehicle = orderToVehicle.get(activeId);
+      if (sourceVehicle) {
+        handleRemove(activeId);
+        toast({ title: "Order teruggezet", description: "Order is weer beschikbaar voor planning." });
+      }
+      return;
+    }
 
     // Check if this is a sortable reorder within a vehicle
     const activeVehicle = orderToVehicle.get(activeId);
@@ -1337,7 +1363,7 @@ const Planning = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+            <UnassignedDropZone>
               {groupedUnassigned.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm">
                   <Package className="h-8 w-8 mb-2 opacity-40" />
@@ -1363,7 +1389,7 @@ const Planning = () => {
                   </div>
                 ))
               )}
-            </div>
+            </UnassignedDropZone>
 
             <div className="text-xs text-muted-foreground pt-1 border-t">
               {totalUnassigned} beschikbaar · {totalAssigned} toegewezen
