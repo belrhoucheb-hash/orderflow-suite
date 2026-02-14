@@ -193,6 +193,44 @@ function getDeadlineInfo(receivedAt: string | null): { label: string; urgency: "
   return { label: `Nog ${hrs}u ${mins}m`, urgency: "green", minutesLeft: diffMin };
 }
 
+// ─── Duplicate Detection ───
+// Compares orders on client_name + delivery_address within a time window
+const DUPLICATE_WINDOW_MINUTES = 60;
+
+function normalizeStr(s: string | null): string {
+  return (s || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+}
+
+function findDuplicates(orders: OrderDraft[]): Map<string, string[]> {
+  // Map each order id → list of duplicate order ids
+  const dupeMap = new Map<string, string[]>();
+  for (let i = 0; i < orders.length; i++) {
+    for (let j = i + 1; j < orders.length; j++) {
+      const a = orders[i];
+      const b = orders[j];
+      // Must share client name
+      const clientA = normalizeStr(a.client_name);
+      const clientB = normalizeStr(b.client_name);
+      if (!clientA || clientA !== clientB) continue;
+      // Must share delivery address (fuzzy)
+      const addrA = normalizeStr(a.delivery_address);
+      const addrB = normalizeStr(b.delivery_address);
+      if (!addrA || addrA !== addrB) continue;
+      // Must be received within time window
+      if (a.received_at && b.received_at) {
+        const diffMin = Math.abs(new Date(a.received_at).getTime() - new Date(b.received_at).getTime()) / 60000;
+        if (diffMin > DUPLICATE_WINDOW_MINUTES) continue;
+      }
+      // Mark both as duplicates of each other
+      if (!dupeMap.has(a.id)) dupeMap.set(a.id, []);
+      if (!dupeMap.has(b.id)) dupeMap.set(b.id, []);
+      dupeMap.get(a.id)!.push(`#${b.order_number}`);
+      dupeMap.get(b.id)!.push(`#${a.order_number}`);
+    }
+  }
+  return dupeMap;
+}
+
 // ─── Capacity Check ───
 function getCapacityWarning(): { hasWarning: boolean; message: string } {
   const totalVehicles = mockVehicles.length;
@@ -566,6 +604,9 @@ export default function Inbox() {
     });
   };
 
+  // Duplicate detection
+  const duplicateMap = useMemo(() => findDuplicates(drafts), [drafts]);
+
   // Find the single most urgent item (lowest minutesLeft among red items)
   const mostUrgentId = useMemo(() => {
     let best: { id: string; min: number } | null = null;
@@ -596,6 +637,7 @@ export default function Inbox() {
     const deadline = getDeadlineInfo(draft.received_at);
     const hasNote = !!draft.internal_note;
     const isPulse = draft.id === mostUrgentId;
+    const isDuplicate = duplicateMap.has(draft.id);
 
     return (
       <motion.button
@@ -653,6 +695,19 @@ export default function Inbox() {
                     <StickyNote className="h-3 w-3 text-amber-500" />
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
+                </Tooltip>
+              )}
+              {isDuplicate && (
+                <Tooltip>
+                  <TooltipTrigger>
+                    <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded-md">
+                      <AlertTriangle className="h-2.5 w-2.5" />
+                      Duplicaat?
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-[10px] max-w-[250px]">
+                    Lijkt op order {duplicateMap.get(draft.id)!.join(", ")} — zelfde klant en adres binnen {DUPLICATE_WINDOW_MINUTES} min
+                  </TooltipContent>
                 </Tooltip>
               )}
             </div>
@@ -1072,6 +1127,23 @@ export default function Inbox() {
                           <p className="text-xs font-semibold text-amber-800">Ontbrekende gegevens</p>
                           <p className="text-[11px] text-amber-600/80 mt-0.5 leading-relaxed">
                             {[!form.weight && "Gewicht", !form.dimensions && "Afmetingen"].filter(Boolean).join(" en ")} ontbreekt.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Duplicate warning in detail view */}
+                  {selected && duplicateMap.has(selected.id) && (
+                    <div className="rounded-xl border border-amber-300/40 bg-amber-50/50 p-3.5">
+                      <div className="flex items-start gap-2.5">
+                        <div className="h-6 w-6 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <AlertTriangle className="h-3 w-3 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-amber-800">Mogelijk duplicaat</p>
+                          <p className="text-[11px] text-amber-600/80 mt-0.5 leading-relaxed">
+                            Deze order lijkt sterk op {duplicateMap.get(selected.id)!.join(", ")} — zelfde klant en afleveradres, ontvangen binnen {DUPLICATE_WINDOW_MINUTES} minuten.
                           </p>
                         </div>
                       </div>
