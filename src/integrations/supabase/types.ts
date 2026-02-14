@@ -122,6 +122,48 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicles: {
+        Row: {
+          capacity_kg: number
+          capacity_pallets: number
+          code: string
+          created_at: string
+          features: string[]
+          id: string
+          is_active: boolean
+          name: string
+          plate: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_kg?: number
+          capacity_pallets?: number
+          code: string
+          created_at?: string
+          features?: string[]
+          id?: string
+          is_active?: boolean
+          name: string
+          plate: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_kg?: number
+          capacity_pallets?: number
+          code?: string
+          created_at?: string
+          features?: string[]
+          id?: string
+          is_active?: boolean
+          name?: string
+          plate?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
