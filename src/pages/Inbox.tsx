@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload, FlaskConical, MapPin, ArrowLeft, CheckCircle2, Zap, Package, Route, ShieldCheck, Scale, Ruler, Bot, Inbox as InboxIcon, ChevronRight, MailOpen, Timer, Users, Merge, StickyNote, TriangleAlert } from "lucide-react";
+import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload, FlaskConical, MapPin, ArrowLeft, CheckCircle2, Zap, Package, Route, ShieldCheck, Scale, Ruler, Bot, Inbox as InboxIcon, ChevronRight, MailOpen, Timer, Users, Merge, StickyNote, TriangleAlert, FileType } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,9 @@ interface OrderDraft {
   internal_note: string | null;
 }
 
+type FieldSource = "email" | "pdf" | "both";
+type FieldSources = Record<string, FieldSource>;
+
 interface FormState {
   transportType: string;
   pickupAddress: string;
@@ -61,6 +64,7 @@ interface FormState {
   requirements: string[];
   perUnit: boolean;
   internalNote: string;
+  fieldSources: FieldSources;
 }
 
 function orderToForm(order: OrderDraft): FormState {
@@ -75,6 +79,7 @@ function orderToForm(order: OrderDraft): FormState {
     requirements: order.requirements || [],
     perUnit: order.is_weight_per_unit,
     internalNote: order.internal_note || "",
+    fieldSources: {},
   };
 }
 
@@ -202,6 +207,22 @@ function getCapacityWarning(): { hasWarning: boolean; message: string } {
   return { hasWarning: false, message: "" };
 }
 
+function SourceBadge({ source }: { source?: FieldSource }) {
+  if (!source) return null;
+  const config = {
+    email: { label: "E-mail", className: "bg-blue-50 text-blue-600 border-blue-200" },
+    pdf: { label: "PDF", className: "bg-red-50 text-red-600 border-red-200" },
+    both: { label: "E-mail + PDF", className: "bg-violet-50 text-violet-600 border-violet-200" },
+  };
+  const c = config[source];
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded border", c.className)}>
+      {source === "pdf" ? <FileType className="h-2.5 w-2.5" /> : <Mail className="h-2.5 w-2.5" />}
+      {c.label}
+    </span>
+  );
+}
+
 function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onParseResult: (data: Partial<FormState>) => void }) {
   const [activeTab, setActiveTab] = useState<"email" | "attachment">("email");
   const [isParsing, setIsParsing] = useState(false);
@@ -230,6 +251,7 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
         dimensions: ext.dimensions || "",
         requirements: ext.requirements || [],
         perUnit: ext.is_weight_per_unit || false,
+        fieldSources: ext.field_sources || {},
       });
       toast({ title: "AI Extractie voltooid", description: `Confidence: ${ext.confidence_score}%` });
     } catch (e: any) {
@@ -332,13 +354,16 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
   );
 }
 
-function FormField({ label, icon: Icon, children, className }: { label: string; icon?: any; children: React.ReactNode; className?: string }) {
+function FormField({ label, icon: Icon, children, className, source }: { label: string; icon?: any; children: React.ReactNode; className?: string; source?: FieldSource }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
-        {Icon && <Icon className="h-3 w-3" />}
-        {label}
-      </Label>
+      <div className="flex items-center justify-between">
+        <Label className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+          {Icon && <Icon className="h-3 w-3" />}
+          {label}
+        </Label>
+        {source && <SourceBadge source={source} />}
+      </div>
       {children}
     </div>
   );
@@ -422,7 +447,7 @@ export default function Inbox() {
       const parsedForm: FormState = {
         transportType: ext.transport_type || "direct", pickupAddress: ext.pickup_address || "", deliveryAddress: ext.delivery_address || "",
         quantity: ext.quantity || 0, unit: ext.unit || "Pallets", weight: ext.weight_kg?.toString() || "", dimensions: ext.dimensions || "",
-        requirements: ext.requirements || [], perUnit: ext.is_weight_per_unit || false, internalNote: "",
+        requirements: ext.requirements || [], perUnit: ext.is_weight_per_unit || false, internalNote: "", fieldSources: ext.field_sources || {},
       };
       const { result: enriched, enrichments } = enrichAddresses(parsedForm);
       setFormData((prev) => ({ ...prev, [newOrder.id]: enriched as FormState }));
@@ -876,7 +901,7 @@ export default function Inbox() {
                       <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Route</h4>
                     </div>
                     <div className="space-y-3">
-                      <FormField label="Transport Type">
+                      <FormField label="Transport Type" source={form.fieldSources?.transport_type}>
                         <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
                           <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -886,7 +911,7 @@ export default function Inbox() {
                         </Select>
                       </FormField>
                       
-                      <FormField label="Ophaaladres" icon={MapPin}>
+                      <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}>
                         <div className="relative">
                           <Input className="h-9 text-xs pr-9 rounded-lg" value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder="Voer ophaaladres in..." />
                           <Tooltip>
@@ -905,7 +930,7 @@ export default function Inbox() {
                         </div>
                       </FormField>
 
-                      <FormField label="Afleveradres" icon={MapPin}>
+                      <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}>
                         <div className="relative">
                           <Input className="h-9 text-xs pr-9 rounded-lg" value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder="Voer afleveradres in..." />
                           <Tooltip>
@@ -935,10 +960,10 @@ export default function Inbox() {
                       <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Lading</h4>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <FormField label="Aantal">
+                      <FormField label="Aantal" source={form.fieldSources?.quantity}>
                         <Input type="number" className="h-9 text-xs rounded-lg" value={form.quantity} onChange={(e) => updateField("quantity", Number(e.target.value))} />
                       </FormField>
-                      <FormField label="Eenheid">
+                      <FormField label="Eenheid" source={form.fieldSources?.unit}>
                         <Select value={form.unit} onValueChange={(v) => updateField("unit", v)}>
                           <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -948,7 +973,7 @@ export default function Inbox() {
                           </SelectContent>
                         </Select>
                       </FormField>
-                      <FormField label="Gewicht (kg)" icon={Scale}>
+                      <FormField label="Gewicht (kg)" icon={Scale} source={form.fieldSources?.weight_kg}>
                         <Input className="h-9 text-xs rounded-lg" value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder="—" />
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <Checkbox id={`pu-${selected.id}`} checked={form.perUnit} onCheckedChange={(c) => updateField("perUnit", !!c)} className="h-3 w-3" />
@@ -960,7 +985,7 @@ export default function Inbox() {
                           </div>
                         )}
                       </FormField>
-                      <FormField label="Afmetingen (LxBxH)" icon={Ruler}>
+                      <FormField label="Afmetingen (LxBxH)" icon={Ruler} source={form.fieldSources?.dimensions}>
                         <Input className="h-9 text-xs rounded-lg" value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder="—" />
                       </FormField>
                     </div>
