@@ -566,17 +566,6 @@ export default function Inbox() {
     });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-5rem)]">
-        <div className="text-center">
-          <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-3" />
-          <p className="text-xs text-muted-foreground">Inbox laden...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Find the single most urgent item (lowest minutesLeft among red items)
   const mostUrgentId = useMemo(() => {
     let best: { id: string; min: number } | null = null;
@@ -588,6 +577,17 @@ export default function Inbox() {
     }
     return best?.id || null;
   }, [filtered]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-5rem)]">
+        <div className="text-center">
+          <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-3" />
+          <p className="text-xs text-muted-foreground">Inbox laden...</p>
+        </div>
+      </div>
+    );
+  }
 
   const renderInboxItem = (draft: OrderDraft) => {
     const isSelected = selectedId === draft.id;
