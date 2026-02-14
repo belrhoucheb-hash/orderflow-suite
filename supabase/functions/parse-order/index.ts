@@ -6,6 +6,49 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Fields we consider "required" for a complete transport order
+const REQUIRED_FIELDS: { key: string; label: string }[] = [
+  { key: "client_name", label: "Klantnaam" },
+  { key: "pickup_address", label: "Ophaaladres" },
+  { key: "delivery_address", label: "Afleveradres" },
+  { key: "quantity", label: "Aantal" },
+  { key: "weight_kg", label: "Gewicht" },
+  { key: "dimensions", label: "Afmetingen (LxBxH)" },
+];
+
+function detectMissingFields(extracted: Record<string, any>): string[] {
+  const missing: string[] = [];
+  for (const { key, label } of REQUIRED_FIELDS) {
+    const val = extracted[key];
+    if (val === undefined || val === null || val === "" || val === 0) {
+      missing.push(label);
+    }
+  }
+  return missing;
+}
+
+function generateFollowUpDraft(
+  missing: string[],
+  extracted: Record<string, any>,
+  senderEmail: string | null
+): string {
+  if (missing.length === 0) return "";
+
+  const missingList = missing.map((f) => `  • ${f}`).join("\n");
+  const clientName = extracted.client_name || "Geachte heer/mevrouw";
+
+  return `Beste ${clientName},
+
+Bedankt voor uw transportaanvraag. Wij hebben uw order ontvangen maar missen nog de volgende gegevens om uw transport correct in te plannen:
+
+${missingList}
+
+Kunt u deze informatie zo spoedig mogelijk aanleveren? Dan plannen wij uw transport direct in.
+
+Met vriendelijke groet,
+Royalty Cargo Planning`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { headers: corsHeaders });
@@ -239,7 +282,15 @@ Regels:
 
     const extracted = JSON.parse(toolCall.function.arguments);
 
-    return new Response(JSON.stringify({ extracted }), {
+    // Detect missing fields and generate follow-up draft
+    const missingFields = detectMissingFields(extracted);
+    const followUpDraft = generateFollowUpDraft(missingFields, extracted, null);
+
+    return new Response(JSON.stringify({ 
+      extracted,
+      missing_fields: missingFields,
+      follow_up_draft: followUpDraft,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
