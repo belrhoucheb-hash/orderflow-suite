@@ -20,7 +20,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { fleetVehicles, type FleetVehicle } from "@/data/fleetData";
+import { useVehicles, type FleetVehicle } from "@/hooks/useVehicles";
 import {
   resolveCoordinates,
   getPostcodeRegion,
@@ -594,12 +594,14 @@ function PlanningMap({
   orderToVehicle,
   highlightedIds,
   assignments,
+  fleetVehicles,
 }: {
   orders: PlanOrder[];
   orderCoords: Map<string, GeoCoord>;
   orderToVehicle: Map<string, string>;
   highlightedIds: Set<string>;
   assignments: Assignments;
+  fleetVehicles: FleetVehicle[];
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -722,6 +724,7 @@ function PlanningMap({
 // ─── Main Page ───────────────────────────────────────────────────────
 const Planning = () => {
   const { toast } = useToast();
+  const { data: fleetVehicles = [] } = useVehicles();
   const [assignments, setAssignments] = useState<Assignments>({});
   const [search, setSearch] = useState("");
   const [filterTag, setFilterTag] = useState<string | null>(null);
@@ -731,13 +734,29 @@ const Planning = () => {
   const [showMap, setShowMap] = useState(true);
   const [hoveredVehicle, setHoveredVehicle] = useState<string | null>(null);
   const [hoveredOrderId, setHoveredOrderId] = useState<string | null>(null);
-  const [vehicleStartTimes, setVehicleStartTimes] = useState<Record<string, string>>(
-    () => Object.fromEntries(fleetVehicles.map((v) => [v.id, "07:00"]))
-  );
-  const [vehicleDrivers, setVehicleDrivers] = useState<Record<string, string>>(
-    () => Object.fromEntries(fleetVehicles.map((v) => [v.id, ""]))
-  );
+  const [vehicleStartTimes, setVehicleStartTimes] = useState<Record<string, string>>({});
+  const [vehicleDrivers, setVehicleDrivers] = useState<Record<string, string>>({});
   const [testOrders, setTestOrders] = useState<PlanOrder[]>([]);
+
+  // Initialize vehicle start times and drivers when fleet data loads
+  useEffect(() => {
+    if (fleetVehicles.length > 0) {
+      setVehicleStartTimes((prev) => {
+        const next = { ...prev };
+        for (const v of fleetVehicles) {
+          if (!(v.id in next)) next[v.id] = "07:00";
+        }
+        return next;
+      });
+      setVehicleDrivers((prev) => {
+        const next = { ...prev };
+        for (const v of fleetVehicles) {
+          if (!(v.id in next)) next[v.id] = "";
+        }
+        return next;
+      });
+    }
+  }, [fleetVehicles]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -1299,6 +1318,7 @@ const Planning = () => {
               orderToVehicle={orderToVehicle}
               highlightedIds={highlightedIds}
               assignments={assignments}
+              fleetVehicles={fleetVehicles}
             />
           </div>
         )}
