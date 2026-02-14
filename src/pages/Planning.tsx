@@ -64,6 +64,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 // ─── Mock Drivers ────────────────────────────────────────────────────
 const MOCK_DRIVERS = ["Henk de Vries", "Mo Ajam", "Sanne Jansen", "Piet Pietersen"];
@@ -271,32 +272,35 @@ function DraggableOrder({
       onMouseEnter={() => onHover?.(order.id)}
       onMouseLeave={() => onHover?.(null)}
       className={cn(
-        "rounded-lg border bg-card p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow transition-shadow",
-        overlay && "shadow-lg ring-2 ring-primary/30 rotate-2"
+        "rounded-xl border border-border/40 bg-card p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all duration-150 group/card",
+        overlay && "shadow-xl ring-2 ring-primary/30 rotate-1 scale-105"
       )}
     >
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-mono text-muted-foreground">#{order.order_number}</span>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[11px] font-mono text-muted-foreground/60 font-medium">#{order.order_number}</span>
         <div className="flex gap-1">
           {hasTag(order, "ADR") && (
-            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 border-amber-200 px-1.5 py-0">
-              <AlertTriangle className="h-3 w-3 mr-0.5" />ADR
-            </Badge>
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide bg-amber-500/10 text-amber-700 border border-amber-200/60 rounded-md px-1.5 py-0.5">
+              <AlertTriangle className="h-2.5 w-2.5" />ADR
+            </span>
           )}
           {hasTag(order, "KOELING") && (
-            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-700 border-blue-200 px-1.5 py-0">
-              <Snowflake className="h-3 w-3 mr-0.5" />KOEL
-            </Badge>
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide bg-blue-500/10 text-blue-700 border border-blue-200/60 rounded-md px-1.5 py-0.5">
+              <Snowflake className="h-2.5 w-2.5" />KOEL
+            </span>
           )}
         </div>
       </div>
-      <p className="text-sm font-medium truncate">{order.client_name || "Onbekend"}</p>
-      <p className="text-xs text-muted-foreground truncate">{getCity(order.delivery_address)}</p>
-      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-        <span>{order.quantity ?? "?"} pallet(s)</span>
-        <span className="font-medium text-foreground">{getTotalWeight(order)} kg</span>
-        <span className="flex items-center gap-0.5 ml-auto">
-          <Clock className="h-3 w-3" />
+      <p className="text-sm font-medium truncate text-foreground">{order.client_name || "Onbekend"}</p>
+      <p className="text-[11px] text-muted-foreground/60 truncate mt-0.5 flex items-center gap-1">
+        <MapPin className="h-2.5 w-2.5 shrink-0" />
+        {getCity(order.delivery_address)}
+      </p>
+      <div className="flex items-center gap-3 mt-2.5 pt-2 border-t border-border/30 text-[11px] text-muted-foreground">
+        <span className="tabular-nums">{order.quantity ?? "?"} plt</span>
+        <span className="font-semibold text-foreground tabular-nums">{getTotalWeight(order)} kg</span>
+        <span className="flex items-center gap-0.5 ml-auto text-muted-foreground/60">
+          <Clock className="h-2.5 w-2.5" />
           {getTimeWindow(order)}
         </span>
       </div>
@@ -430,15 +434,15 @@ function VehicleDropZone({
       onMouseEnter={() => onHoverVehicle(vehicle.id)}
       onMouseLeave={() => onHoverVehicle(null)}
       className={cn(
-        "transition-all duration-200 flex flex-col",
-        isOver && !rejected && "ring-2 ring-primary/40 bg-primary/5 scale-[1.01]",
+        "transition-all duration-200 flex flex-col rounded-xl border-border/40 shadow-sm",
+        isOver && !rejected && "ring-2 ring-primary/30 bg-primary/[0.03] scale-[1.005] shadow-md",
         rejected && "animate-[shake_0.4s_ease-in-out] ring-2 ring-destructive/60 bg-destructive/5"
       )}
     >
       <CardHeader className="pb-2 pt-4 px-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-display flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full shrink-0" style={{ background: color }} />
+          <CardTitle className="text-sm font-display font-semibold flex items-center gap-2">
+            <div className="h-3 w-3 rounded-full shrink-0 ring-2 ring-background shadow-sm" style={{ background: color }} />
             {vehicle.name}
           </CardTitle>
           <div className="flex items-center gap-1.5">
@@ -516,8 +520,10 @@ function VehicleDropZone({
         </div>
 
         {assigned.length === 0 ? (
-          <div className="flex items-center justify-center h-12 border-2 border-dashed border-border/60 rounded-lg">
-            <p className="text-xs text-muted-foreground italic">Sleep orders hierheen</p>
+          <div className="flex items-center justify-center h-14 border-2 border-dashed border-border/40 rounded-xl bg-muted/20">
+            <p className="text-[11px] text-muted-foreground/50 italic flex items-center gap-1.5">
+              <Package className="h-3.5 w-3.5" />Sleep orders hierheen
+            </p>
           </div>
         ) : (
           <SortableContext items={assigned.map((o) => o.id)} strategy={verticalListSortingStrategy}>
@@ -542,27 +548,27 @@ function VehicleDropZone({
       {/* Efficiency Footer */}
       {assigned.length > 0 && (
         <div className="mt-auto px-4 pb-3 pt-2 space-y-1.5">
-          <div className="flex items-center justify-between gap-2 rounded-md bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2.5 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1">
               <Timer className="h-3 w-3" />
-              {formatDuration(stats.totalMinutes)}
+              <span className="font-medium text-foreground">{formatDuration(stats.totalMinutes)}</span>
             </span>
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1 tabular-nums">
               <Route className="h-3 w-3" />
               {stats.totalKm} km
-              <span className="text-[10px] opacity-60">(retour {stats.returnKm} km)</span>
+              <span className="text-[10px] opacity-50">(+{stats.returnKm})</span>
             </span>
             <span className="flex items-center gap-1">
               <BarChart3 className="h-3 w-3" />
-              <span className={cn("font-medium", utilizationPct > 90 ? "text-amber-600" : utilizationPct > 100 ? "text-destructive" : "text-foreground")}>
+              <span className={cn("font-semibold", utilizationPct > 100 ? "text-destructive" : utilizationPct > 90 ? "text-amber-600" : "text-foreground")}>
                 {utilizationPct}%
               </span>
             </span>
           </div>
           {stats.exceedsDriveLimit && (
-            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/20 px-3 py-1.5 text-[11px] text-destructive font-medium">
+            <div className="flex items-center gap-1.5 rounded-xl bg-destructive/8 border border-destructive/15 px-3 py-2 text-[11px] text-destructive font-medium">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              <span>⚠️ Rijtijdenwet: totale rittijd ({formatDuration(stats.totalMinutes)}) overschrijdt 9 uur!</span>
+              <span>Rijtijdenwet: {formatDuration(stats.totalMinutes)} overschrijdt 9 uur!</span>
             </div>
           )}
         </div>
@@ -1277,41 +1283,46 @@ const Planning = () => {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex flex-col h-[calc(100vh-5rem)] gap-3">
+      <div className="flex flex-col h-[calc(100vh-5rem)] gap-4">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
           <div>
-            <h1 className="font-display text-xl sm:text-2xl font-bold flex items-center gap-2">
-              <Truck className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />Smart Planning
+            <h1 className="font-display text-2xl font-semibold tracking-tight flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Truck className="h-4.5 w-4.5 text-primary" />
+              </div>
+              Smart Planning
             </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">Sleep orders naar voertuigen</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Sleep orders naar voertuigen · {totalUnassigned} beschikbaar · {totalAssigned} ingepland</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant={showMap ? "default" : "outline"}
               size="sm"
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs rounded-lg"
               onClick={() => setShowMap(!showMap)}
             >
               {showMap ? <List className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}
               {showMap ? "Verberg kaart" : "Toon kaart"}
             </Button>
             {totalAssigned > 0 && (
-              <Button
-                onClick={handleConfirm}
-                disabled={isConfirming}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="hidden sm:inline">Planning</span> Bevestigen ({totalAssigned})
-              </Button>
+              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+                <Button
+                  onClick={handleConfirm}
+                  disabled={isConfirming}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Planning</span> Bevestigen ({totalAssigned})
+                </Button>
+              </motion.div>
             )}
           </div>
         </div>
 
         {/* Map */}
         {showMap && (
-          <div className="shrink-0 h-[260px] rounded-lg overflow-hidden border bg-card">
+          <div className="shrink-0 h-[260px] rounded-xl overflow-hidden border border-border/40 bg-card shadow-sm">
             <PlanningMap
               orders={orders}
               orderCoords={orderCoords}
@@ -1326,14 +1337,14 @@ const Planning = () => {
         {/* Split screen */}
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
           {/* Left: Order list with region headers */}
-          <div className="w-full lg:w-1/4 lg:min-w-[260px] flex flex-col gap-3 shrink-0 max-h-[40vh] lg:max-h-none">
+          <div className="w-full lg:w-1/4 lg:min-w-[280px] flex flex-col gap-3 shrink-0 max-h-[40vh] lg:max-h-none bg-card rounded-xl border border-border/40 p-3 shadow-sm">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
               <Input
                 placeholder="Zoek order..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-9 text-sm"
+                className="pl-9 h-9 text-sm rounded-lg border-border/40"
               />
             </div>
             <div className="flex gap-1.5 flex-wrap">
@@ -1342,14 +1353,14 @@ const Planning = () => {
                   key={tag}
                   variant={filterTag === tag ? "default" : "outline"}
                   size="sm"
-                  className="h-7 text-xs gap-1"
+                  className="h-7 text-[11px] gap-1 rounded-lg"
                   onClick={() => setFilterTag(filterTag === tag ? null : tag)}
                 >
                   <Filter className="h-3 w-3" />{tag}
                 </Button>
               ))}
               {filterTag && (
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setFilterTag(null)}>
+                <Button variant="ghost" size="sm" className="h-7 text-[11px] rounded-lg" onClick={() => setFilterTag(null)}>
                   Reset
                 </Button>
               )}
@@ -1357,16 +1368,16 @@ const Planning = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs gap-1"
+                  className="h-7 text-[11px] gap-1 rounded-lg"
                   onClick={handleInjectTestOrders}
                   disabled={testOrders.length > 0}
                 >
-                  🧪 Test: Zware Lading
+                  🧪 Test
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs gap-1"
+                  className="h-7 text-[11px] gap-1 rounded-lg"
                   onClick={handleCombineTrips}
                   disabled={Object.values(assignments).filter((a) => a.length > 0).length < 2}
                 >
@@ -1374,7 +1385,7 @@ const Planning = () => {
                 </Button>
                 <Button
                   size="sm"
-                  className="h-7 text-xs gap-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+                  className="h-7 text-[11px] gap-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
                   onClick={handleAutoPlan}
                   disabled={totalUnassigned === 0}
                 >
@@ -1386,19 +1397,19 @@ const Planning = () => {
             <UnassignedDropZone>
               {groupedUnassigned.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm">
-                  <Package className="h-8 w-8 mb-2 opacity-40" />
-                  <p>Geen openstaande orders</p>
+                  <Package className="h-8 w-8 mb-2 opacity-30" />
+                  <p className="text-[11px]">Geen openstaande orders</p>
                 </div>
               ) : (
                 groupedUnassigned.map((group) => (
                   <div key={group.region}>
-                    <div className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 py-1 px-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                        <MapPin className="h-3 w-3" />
+                    <div className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 py-1.5 px-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1.5">
+                        <MapPin className="h-2.5 w-2.5" />
                         {group.label}
-                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0 ml-auto">
+                        <span className="text-[9px] bg-muted rounded-md px-1.5 py-0.5 ml-auto tabular-nums font-medium">
                           {group.orders.length}
-                        </Badge>
+                        </span>
                       </p>
                     </div>
                     <div className="space-y-1.5 mb-2">
@@ -1411,8 +1422,8 @@ const Planning = () => {
               )}
             </UnassignedDropZone>
 
-            <div className="text-xs text-muted-foreground pt-1 border-t">
-              {totalUnassigned} beschikbaar · {totalAssigned} toegewezen
+            <div className="text-[11px] text-muted-foreground/60 pt-2 border-t border-border/30 tabular-nums">
+              {totalUnassigned} beschikbaar · {totalAssigned} ingepland
             </div>
           </div>
 
