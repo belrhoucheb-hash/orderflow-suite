@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload, FlaskConical, MapPin, ArrowLeft, CheckCircle2, Zap, Package, Route, ShieldCheck, Scale, Ruler, Bot, Inbox as InboxIcon, ChevronRight, MailOpen } from "lucide-react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload, FlaskConical, MapPin, ArrowLeft, CheckCircle2, Zap, Package, Route, ShieldCheck, Scale, Ruler, Bot, Inbox as InboxIcon, ChevronRight, MailOpen, Timer, Users, Merge, StickyNote, TriangleAlert } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
+import { mockVehicles } from "@/data/mockData";
 
 interface ClientRecord {
   id: string;
@@ -45,6 +47,7 @@ interface OrderDraft {
   received_at: string | null;
   created_at: string;
   attachments: { name: string; url: string; type: string }[] | null;
+  internal_note: string | null;
 }
 
 interface FormState {
@@ -57,6 +60,7 @@ interface FormState {
   dimensions: string;
   requirements: string[];
   perUnit: boolean;
+  internalNote: string;
 }
 
 function orderToForm(order: OrderDraft): FormState {
@@ -70,6 +74,7 @@ function orderToForm(order: OrderDraft): FormState {
     dimensions: order.dimensions || "",
     requirements: order.requirements || [],
     perUnit: order.is_weight_per_unit,
+    internalNote: order.internal_note || "",
   };
 }
 
@@ -156,6 +161,47 @@ function formatDate(dateStr: string | null) {
   return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) + ` ${formatTime(dateStr)}`;
 }
 
+// ─── Deadline Indicator ───
+// Calculates a planning deadline based on received_at: must be planned within 4 hours of receipt
+function getDeadlineInfo(receivedAt: string | null): { label: string; urgency: "red" | "amber" | "green" | "neutral"; minutesLeft: number } {
+  if (!receivedAt) return { label: "", urgency: "neutral", minutesLeft: Infinity };
+  const received = new Date(receivedAt);
+  // Deadline = 4 hours after receipt (typical SLA)
+  const deadline = new Date(received.getTime() + 4 * 60 * 60 * 1000);
+  const now = new Date();
+  const diffMs = deadline.getTime() - now.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin <= 0) {
+    return { label: "Nu inplannen!", urgency: "red", minutesLeft: 0 };
+  }
+  if (diffMin < 60) {
+    return { label: `Nog ${diffMin} min`, urgency: "red", minutesLeft: diffMin };
+  }
+  if (diffMin < 120) {
+    const hrs = Math.floor(diffMin / 60);
+    const mins = diffMin % 60;
+    return { label: `Nog ${hrs}u ${mins}m`, urgency: "amber", minutesLeft: diffMin };
+  }
+  const hrs = Math.floor(diffMin / 60);
+  const mins = diffMin % 60;
+  return { label: `Nog ${hrs}u ${mins}m`, urgency: "green", minutesLeft: diffMin };
+}
+
+// ─── Capacity Check ───
+function getCapacityWarning(): { hasWarning: boolean; message: string } {
+  const totalVehicles = mockVehicles.length;
+  const busy = mockVehicles.filter((v) => v.status !== "beschikbaar").length;
+  const freeCount = totalVehicles - busy;
+  if (freeCount === 0) {
+    return { hasWarning: true, message: "Geen capaciteit beschikbaar — vloot zit 100% vol voor vandaag/morgen" };
+  }
+  if (freeCount === 1) {
+    return { hasWarning: true, message: `Slechts ${freeCount} voertuig beschikbaar — plan met zorg` };
+  }
+  return { hasWarning: false, message: "" };
+}
+
 function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onParseResult: (data: Partial<FormState>) => void }) {
   const [activeTab, setActiveTab] = useState<"email" | "attachment">("email");
   const [isParsing, setIsParsing] = useState(false);
@@ -196,7 +242,6 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
 
   return (
     <div className="w-full lg:w-[45%] border-r border-border/30 flex flex-col overflow-hidden bg-card">
-      {/* Email header */}
       <div className="px-5 pt-4 pb-3">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
@@ -204,7 +249,6 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
             <h3 className="text-sm font-semibold text-foreground leading-snug">{selected.source_email_subject || "Geen onderwerp"}</h3>
           </div>
         </div>
-        
         <div className="flex items-center gap-4 text-[11px] text-muted-foreground mb-4">
           <div className="flex items-center gap-1.5">
             <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
@@ -215,55 +259,23 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
           <span className="text-muted-foreground/40">→</span>
           <span>planning@royaltycargo.nl</span>
         </div>
-
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-lg bg-muted/50 p-0.5">
-            <button
-              onClick={() => setActiveTab("email")}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200",
-                activeTab === "email"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <MailOpen className="h-3 w-3 inline mr-1.5 -mt-px" />
-              Inhoud
+            <button onClick={() => setActiveTab("email")} className={cn("px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200", activeTab === "email" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+              <MailOpen className="h-3 w-3 inline mr-1.5 -mt-px" />Inhoud
             </button>
-            <button
-              onClick={() => setActiveTab("attachment")}
-              className={cn(
-                "px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 flex items-center gap-1.5",
-                activeTab === "attachment"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Paperclip className="h-3 w-3" />
-              Bijlagen
-              {hasAttachments && (
-                <span className="bg-primary/10 text-primary text-[9px] font-bold px-1 rounded">
-                  {attachments.length}
-                </span>
-              )}
+            <button onClick={() => setActiveTab("attachment")} className={cn("px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 flex items-center gap-1.5", activeTab === "attachment" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+              <Paperclip className="h-3 w-3" />Bijlagen
+              {hasAttachments && <span className="bg-primary/10 text-primary text-[9px] font-bold px-1 rounded">{attachments.length}</span>}
             </button>
           </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-[10px] gap-1.5 ml-auto border-primary/20 text-primary hover:bg-primary/5 hover:text-primary"
-            onClick={handleParseWithAI}
-            disabled={isParsing}
-          >
+          <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1.5 ml-auto border-primary/20 text-primary hover:bg-primary/5 hover:text-primary" onClick={handleParseWithAI} disabled={isParsing}>
             {isParsing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
             {isParsing ? "Analyseren..." : "AI Extractie"}
           </Button>
         </div>
       </div>
-
       <Separator className="bg-border/30" />
-
       <ScrollArea className="flex-1">
         {activeTab === "email" ? (
           <div className="p-5">
@@ -273,9 +285,7 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
               </div>
             ) : (
               <div className="text-center py-16">
-                <div className="h-12 w-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                  <MailOpen className="h-5 w-5 text-muted-foreground/40" />
-                </div>
+                <div className="h-12 w-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3"><MailOpen className="h-5 w-5 text-muted-foreground/40" /></div>
                 <p className="text-xs text-muted-foreground">Geen inhoud beschikbaar</p>
               </div>
             )}
@@ -290,15 +300,10 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
                   return (
                     <div key={i} className="rounded-xl border border-border/30 p-3 hover:border-border/60 transition-colors">
                       {isImage && att.url !== "#" && (
-                        <div className="mb-3 rounded-lg overflow-hidden border border-border/20">
-                          <img src={att.url} alt={att.name} className="w-full h-40 object-cover" />
-                        </div>
+                        <div className="mb-3 rounded-lg overflow-hidden border border-border/20"><img src={att.url} alt={att.name} className="w-full h-40 object-cover" /></div>
                       )}
                       <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
-                          isPdf ? "bg-red-50 border border-red-100" : "bg-primary/5 border border-primary/10"
-                        )}>
+                        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0", isPdf ? "bg-red-50 border border-red-100" : "bg-primary/5 border border-primary/10")}>
                           {isPdf ? <FileText className="h-4 w-4 text-red-500" /> : <ImageIcon className="h-4 w-4 text-primary" />}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -306,14 +311,8 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
                           <p className="text-[10px] text-muted-foreground">{isPdf ? "PDF Document" : "Afbeelding"}</p>
                         </div>
                         <div className="flex items-center gap-1">
-                          {isPdf && (
-                            <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => window.open(att.url, "_blank")}>
-                              <Eye className="h-3 w-3" /> Bekijk
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(att.url, "_blank")}>
-                            <Download className="h-3 w-3" />
-                          </Button>
+                          {isPdf && <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => window.open(att.url, "_blank")}><Eye className="h-3 w-3" /> Bekijk</Button>}
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => window.open(att.url, "_blank")}><Download className="h-3 w-3" /></Button>
                         </div>
                       </div>
                     </div>
@@ -322,9 +321,7 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
               </div>
             ) : (
               <div className="text-center py-16">
-                <div className="h-12 w-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                  <Paperclip className="h-5 w-5 text-muted-foreground/40" />
-                </div>
+                <div className="h-12 w-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3"><Paperclip className="h-5 w-5 text-muted-foreground/40" /></div>
                 <p className="text-xs text-muted-foreground">Geen bijlagen</p>
               </div>
             )}
@@ -335,7 +332,6 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
   );
 }
 
-// ─── Form Field Component ───
 function FormField({ label, icon: Icon, children, className }: { label: string; icon?: any; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -357,7 +353,11 @@ export default function Inbox() {
   const [isImporting, setIsImporting] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const [showTestPanel, setShowTestPanel] = useState(false);
+  const [groupByClient, setGroupByClient] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Capacity warning
+  const capacityWarning = useMemo(() => getCapacityWarning(), []);
 
   const handleImportEmail = async (file: File) => {
     setIsImporting(true);
@@ -422,7 +422,7 @@ export default function Inbox() {
       const parsedForm: FormState = {
         transportType: ext.transport_type || "direct", pickupAddress: ext.pickup_address || "", deliveryAddress: ext.delivery_address || "",
         quantity: ext.quantity || 0, unit: ext.unit || "Pallets", weight: ext.weight_kg?.toString() || "", dimensions: ext.dimensions || "",
-        requirements: ext.requirements || [], perUnit: ext.is_weight_per_unit || false,
+        requirements: ext.requirements || [], perUnit: ext.is_weight_per_unit || false, internalNote: "",
       };
       const { result: enriched, enrichments } = enrichAddresses(parsedForm);
       setFormData((prev) => ({ ...prev, [newOrder.id]: enriched as FormState }));
@@ -466,7 +466,8 @@ export default function Inbox() {
       const { error } = await supabase.from("orders").update({
         status: "OPEN", transport_type: form.transportType.toUpperCase().replace("-", "_"), pickup_address: form.pickupAddress,
         delivery_address: form.deliveryAddress, quantity: form.quantity, unit: form.unit,
-        weight_kg: form.weight ? Number(form.weight) : null, is_weight_per_unit: form.perUnit, dimensions: form.dimensions || null, requirements: form.requirements,
+        weight_kg: form.weight ? Number(form.weight) : null, is_weight_per_unit: form.perUnit, dimensions: form.dimensions || null,
+        requirements: form.requirements, internal_note: form.internalNote || null,
       }).eq("id", id);
       if (error) throw error;
     },
@@ -483,6 +484,14 @@ export default function Inbox() {
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["draft-orders"] }); },
+  });
+
+  // Save internal note to DB on blur
+  const saveNoteMutation = useMutation({
+    mutationFn: async ({ id, note }: { id: string; note: string }) => {
+      const { error } = await supabase.from("orders").update({ internal_note: note || null }).eq("id", id);
+      if (error) throw error;
+    },
   });
 
   const selected = drafts.find((d) => d.id === selectedId);
@@ -507,10 +516,30 @@ export default function Inbox() {
       (d.source_email_subject || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  // Count confidence levels
+  // Group by client
+  const groupedByClient = useMemo(() => {
+    if (!groupByClient) return null;
+    const groups: Record<string, OrderDraft[]> = {};
+    filtered.forEach((d) => {
+      const key = d.client_name || "Onbekend";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(d);
+    });
+    return groups;
+  }, [filtered, groupByClient]);
+
   const highConf = drafts.filter(d => (d.confidence_score || 0) >= 80).length;
   const lowConf = drafts.filter(d => (d.confidence_score || 0) > 0 && (d.confidence_score || 0) < 80).length;
   const noConf = drafts.filter(d => !d.confidence_score).length;
+
+  // Merge handler — merge multiple orders from same client into one multi-stop order
+  const handleMerge = (clientName: string, orders: OrderDraft[]) => {
+    if (orders.length < 2) return;
+    toast({
+      title: "Orders samenvoegen",
+      description: `${orders.length} orders van ${clientName} worden samengevoegd tot 1 multi-stop transportopdracht (komt in volgende versie)`,
+    });
+  };
 
   if (isLoading) {
     return (
@@ -522,6 +551,99 @@ export default function Inbox() {
       </div>
     );
   }
+
+  // Render a single inbox item
+  const renderInboxItem = (draft: OrderDraft) => {
+    const isSelected = selectedId === draft.id;
+    const conf = draft.confidence_score || 0;
+    const hasReqs = (draft.requirements || []).length > 0;
+    const deadline = getDeadlineInfo(draft.received_at);
+    const hasNote = !!draft.internal_note;
+
+    return (
+      <motion.button
+        key={draft.id}
+        layoutId={draft.id}
+        onClick={() => { setSelectedId(draft.id); setMobileView("detail"); }}
+        className={cn(
+          "w-full text-left p-3 rounded-xl transition-all duration-200 group relative",
+          isSelected ? "bg-primary/[0.04] ring-1 ring-primary/15" : "hover:bg-muted/40"
+        )}
+      >
+        {/* Confidence indicator bar */}
+        {conf > 0 && (
+          <div className={cn(
+            "absolute left-0 top-3 bottom-3 w-[3px] rounded-full",
+            conf >= 80 ? "bg-emerald-400" : conf >= 60 ? "bg-amber-400" : "bg-red-400"
+          )} />
+        )}
+        
+        <div className="pl-2">
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <span className="text-[13px] font-semibold text-foreground truncate leading-tight">
+              {draft.client_name || "Nieuwe aanvraag"}
+            </span>
+            {conf > 0 && <ConfidenceBadge score={conf} />}
+          </div>
+          
+          <p className="text-[11px] text-muted-foreground truncate mb-2 leading-snug">
+            {draft.source_email_subject || "Geen onderwerp"}
+          </p>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Deadline indicator */}
+              {deadline.urgency !== "neutral" ? (
+                <span className={cn(
+                  "inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md",
+                  deadline.urgency === "red" && "bg-destructive/10 text-destructive animate-pulse",
+                  deadline.urgency === "amber" && "bg-amber-500/10 text-amber-600",
+                  deadline.urgency === "green" && "bg-emerald-500/10 text-emerald-600",
+                )}>
+                  <Timer className="h-2.5 w-2.5" />
+                  {deadline.label}
+                </span>
+              ) : (
+                <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
+              )}
+              {hasReqs && (
+                <div className="flex items-center gap-0.5">
+                  {draft.requirements!.slice(0, 2).map(r => {
+                    const opt = requirementOptions.find(o => o.id === r);
+                    return opt ? (
+                      <Tooltip key={r}>
+                        <TooltipTrigger>
+                          <span className={cn("inline-flex items-center justify-center h-4 w-4 rounded", opt.color.split(' ')[1])}>
+                            <opt.icon className={cn("h-2.5 w-2.5", opt.color.split(' ')[0])} />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
+                      </Tooltip>
+                    ) : null;
+                  })}
+                </div>
+              )}
+              {hasNote && (
+                <Tooltip>
+                  <TooltipTrigger>
+                    <StickyNote className="h-3 w-3 text-amber-500" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            <span className="text-[10px] font-mono text-muted-foreground/30">#{draft.order_number}</span>
+          </div>
+        </div>
+        
+        <ChevronRight className={cn(
+          "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/0 transition-all",
+          "group-hover:text-muted-foreground/40",
+          isSelected && "text-primary/40"
+        )} />
+      </motion.button>
+    );
+  };
 
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-0 -m-4 md:-m-6">
@@ -552,6 +674,14 @@ export default function Inbox() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" className={cn("h-8 w-8", groupByClient && "bg-primary/10 border-primary/30")} onClick={() => setGroupByClient(!groupByClient)}>
+                    <Users className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Groepeer per klant</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <Button variant="outline" size="icon" className={cn("h-8 w-8", showTestPanel && "bg-muted")} onClick={() => setShowTestPanel(!showTestPanel)}>
                     <FlaskConical className="h-3.5 w-3.5" />
                   </Button>
@@ -560,6 +690,18 @@ export default function Inbox() {
               </Tooltip>
             </div>
           </div>
+
+          {/* Capacity Warning Banner */}
+          {capacityWarning.hasWarning && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="mb-3 rounded-lg border border-destructive/20 bg-destructive/5 p-2.5 flex items-start gap-2"
+            >
+              <TriangleAlert className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
+              <p className="text-[10px] text-destructive font-medium leading-snug">{capacityWarning.message}</p>
+            </motion.div>
+          )}
 
           {/* Stats bar */}
           {drafts.length > 0 && (
@@ -588,39 +730,19 @@ export default function Inbox() {
           {/* Search */}
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
-            <Input
-              placeholder="Zoek op klant of onderwerp..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-9 text-xs bg-background border-border/40 rounded-lg"
-            />
+            <Input placeholder="Zoek op klant of onderwerp..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9 text-xs bg-background border-border/40 rounded-lg" />
           </div>
         </div>
 
         {/* Test Panel */}
         <AnimatePresence>
           {showTestPanel && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
               <div className="px-4 py-2.5 border-y border-border/30 bg-muted/20">
-                <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-[0.1em] mb-2">
-                  Test Scenario's
-                </p>
+                <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-[0.1em] mb-2">Test Scenario's</p>
                 <div className="flex flex-wrap gap-1.5">
                   {TEST_SCENARIOS.map((scenario, i) => (
-                    <Button
-                      key={i}
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-[10px] gap-1"
-                      onClick={() => handleLoadTestScenario(i)}
-                      disabled={loadingScenario !== null}
-                    >
+                    <Button key={i} variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => handleLoadTestScenario(i)} disabled={loadingScenario !== null}>
                       {loadingScenario === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
                       {scenario.label}
                     </Button>
@@ -634,83 +756,36 @@ export default function Inbox() {
         {/* Order List */}
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-0.5">
-            {filtered.map((draft) => {
-              const isSelected = selectedId === draft.id;
-              const conf = draft.confidence_score || 0;
-              const hasReqs = (draft.requirements || []).length > 0;
-              
-              return (
-                <motion.button
-                  key={draft.id}
-                  layoutId={draft.id}
-                  onClick={() => { setSelectedId(draft.id); setMobileView("detail"); }}
-                  className={cn(
-                    "w-full text-left p-3 rounded-xl transition-all duration-200 group relative",
-                    isSelected
-                      ? "bg-primary/[0.04] ring-1 ring-primary/15"
-                      : "hover:bg-muted/40"
-                  )}
-                >
-                  {/* Confidence indicator bar */}
-                  {conf > 0 && (
-                    <div className={cn(
-                      "absolute left-0 top-3 bottom-3 w-[3px] rounded-full",
-                      conf >= 80 ? "bg-emerald-400" : conf >= 60 ? "bg-amber-400" : "bg-red-400"
-                    )} />
-                  )}
-                  
-                  <div className="pl-2">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="text-[13px] font-semibold text-foreground truncate leading-tight">
-                        {draft.client_name || "Nieuwe aanvraag"}
-                      </span>
-                      {conf > 0 && <ConfidenceBadge score={conf} />}
+            {groupByClient && groupedByClient ? (
+              Object.entries(groupedByClient).map(([clientName, orders]) => (
+                <div key={clientName} className="mb-2">
+                  <div className="flex items-center justify-between px-3 py-1.5 mb-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Users className="h-3 w-3 text-muted-foreground/50" />
+                      <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider">{clientName}</span>
+                      <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">{orders.length}</Badge>
                     </div>
-                    
-                    <p className="text-[11px] text-muted-foreground truncate mb-2 leading-snug">
-                      {draft.source_email_subject || "Geen onderwerp"}
-                    </p>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
-                        {hasReqs && (
-                          <div className="flex items-center gap-0.5">
-                            {draft.requirements!.slice(0, 2).map(r => {
-                              const opt = requirementOptions.find(o => o.id === r);
-                              return opt ? (
-                                <Tooltip key={r}>
-                                  <TooltipTrigger>
-                                    <span className={cn("inline-flex items-center justify-center h-4 w-4 rounded", opt.color.split(' ')[1])}>
-                                      <opt.icon className={cn("h-2.5 w-2.5", opt.color.split(' ')[0])} />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
-                                </Tooltip>
-                              ) : null;
-                            })}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[10px] font-mono text-muted-foreground/30">#{draft.order_number}</span>
-                    </div>
+                    {orders.length >= 2 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-primary" onClick={() => handleMerge(clientName, orders)}>
+                            <Merge className="h-3 w-3" /> Samenvoegen
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-[10px]">Combineer tot multi-stop opdracht</TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
-                  
-                  {/* Hover chevron */}
-                  <ChevronRight className={cn(
-                    "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/0 transition-all",
-                    "group-hover:text-muted-foreground/40",
-                    isSelected && "text-primary/40"
-                  )} />
-                </motion.button>
-              );
-            })}
+                  {orders.map(renderInboxItem)}
+                </div>
+              ))
+            ) : (
+              filtered.map(renderInboxItem)
+            )}
             
             {filtered.length === 0 && (
               <div className="text-center py-16">
-                <div className="h-14 w-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                  <InboxIcon className="h-6 w-6 text-muted-foreground/30" />
-                </div>
+                <div className="h-14 w-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3"><InboxIcon className="h-6 w-6 text-muted-foreground/30" /></div>
                 <p className="text-sm font-medium text-muted-foreground mb-1">Geen aanvragen</p>
                 <p className="text-[11px] text-muted-foreground/60">Alle orders zijn verwerkt</p>
               </div>
@@ -742,32 +817,30 @@ export default function Inbox() {
                   <p className="text-[10px] text-muted-foreground">{selected.client_name || "Onbekende klant"}</p>
                 </div>
               </div>
-              {selected.confidence_score != null && (
-                <ConfidenceBadge score={selected.confidence_score} />
-              )}
+              {selected.confidence_score != null && <ConfidenceBadge score={selected.confidence_score} />}
+              {/* Deadline in header */}
+              {(() => {
+                const dl = getDeadlineInfo(selected.received_at);
+                if (dl.urgency === "neutral") return null;
+                return (
+                  <span className={cn(
+                    "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md ml-2",
+                    dl.urgency === "red" && "bg-destructive/10 text-destructive",
+                    dl.urgency === "amber" && "bg-amber-500/10 text-amber-600",
+                    dl.urgency === "green" && "bg-emerald-500/10 text-emerald-600",
+                  )}>
+                    <Timer className="h-3 w-3" />
+                    {dl.label}
+                  </span>
+                );
+              })()}
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-destructive h-8 text-[11px] gap-1"
-                onClick={handleDelete}
-                disabled={deleteMutation.isPending}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Verwijderen</span>
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive h-8 text-[11px] gap-1" onClick={handleDelete} disabled={deleteMutation.isPending}>
+                <Trash2 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Verwijderen</span>
               </Button>
-              <Button
-                size="sm"
-                className="h-8 text-[11px] gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                onClick={handleCreateOrder}
-                disabled={createOrderMutation.isPending}
-              >
-                {createOrderMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                )}
+              <Button size="sm" className="h-8 text-[11px] gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={handleCreateOrder} disabled={createOrderMutation.isPending}>
+                {createOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                 Order Aanmaken
               </Button>
             </div>
@@ -775,7 +848,6 @@ export default function Inbox() {
 
           {/* Split Content */}
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            {/* Panel A: Source Email */}
             <SourcePanel selected={selected} onParseResult={(data) => {
               if (!selected) return;
               const { result: enriched, enrichments } = enrichAddresses(data);
@@ -790,9 +862,7 @@ export default function Inbox() {
                   <Bot className="h-3.5 w-3.5 text-primary" />
                   <p className="text-[11px] font-semibold text-foreground">Geëxtraheerde Data</p>
                   {selected.confidence_score != null && (
-                    <span className="text-[10px] text-muted-foreground ml-auto">
-                      AI confidence: {selected.confidence_score}%
-                    </span>
+                    <span className="text-[10px] text-muted-foreground ml-auto">AI confidence: {selected.confidence_score}%</span>
                   )}
                 </div>
               </div>
@@ -886,9 +956,7 @@ export default function Inbox() {
                         </div>
                         {form.perUnit && form.weight && form.quantity > 0 && (
                           <div className="mt-2 px-2.5 py-1.5 rounded-md bg-emerald-50 border border-emerald-100">
-                            <p className="text-[10px] text-emerald-700 font-semibold">
-                              Totaal: {form.quantity * Number(form.weight)} kg
-                            </p>
+                            <p className="text-[10px] text-emerald-700 font-semibold">Totaal: {form.quantity * Number(form.weight)} kg</p>
                           </div>
                         )}
                       </FormField>
@@ -929,6 +997,26 @@ export default function Inbox() {
                     </div>
                   </div>
 
+                  <Separator className="bg-border/20" />
+
+                  {/* Internal Note Section */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <StickyNote className="h-3.5 w-3.5 text-amber-500/60" />
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Interne Notitie</h4>
+                      <span className="text-[9px] text-muted-foreground/50 ml-auto">Zichtbaar voor planners</span>
+                    </div>
+                    <Textarea
+                      placeholder="Bijv: Klant gebeld, mag ook iets later geleverd worden..."
+                      value={form.internalNote}
+                      onChange={(e) => updateField("internalNote", e.target.value)}
+                      onBlur={() => {
+                        if (selected) saveNoteMutation.mutate({ id: selected.id, note: form.internalNote });
+                      }}
+                      className="text-xs min-h-[72px] rounded-lg resize-none bg-amber-50/30 border-amber-200/40 focus:border-amber-300 placeholder:text-muted-foreground/40"
+                    />
+                  </div>
+
                   {/* Warnings */}
                   {(isAddressIncomplete(form.pickupAddress) || isAddressIncomplete(form.deliveryAddress)) && (
                     <div className="rounded-xl border border-orange-200/60 bg-orange-50/50 p-3.5">
@@ -965,6 +1053,21 @@ export default function Inbox() {
                       </div>
                     </div>
                   )}
+
+                  {/* Capacity conflict warning in detail view */}
+                  {capacityWarning.hasWarning && (
+                    <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3.5">
+                      <div className="flex items-start gap-2.5">
+                        <div className="h-6 w-6 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0 mt-0.5">
+                          <TriangleAlert className="h-3 w-3 text-destructive" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-destructive">Capaciteit conflict</p>
+                          <p className="text-[11px] text-destructive/80 mt-0.5 leading-relaxed">{capacityWarning.message}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
@@ -973,9 +1076,7 @@ export default function Inbox() {
       ) : (
         <div className="flex-1 flex items-center justify-center bg-background">
           <div className="text-center">
-            <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              <InboxIcon className="h-7 w-7 text-muted-foreground/30" />
-            </div>
+            <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4"><InboxIcon className="h-7 w-7 text-muted-foreground/30" /></div>
             <p className="text-sm font-semibold text-muted-foreground mb-1">Alles verwerkt</p>
             <p className="text-[11px] text-muted-foreground/60">Er zijn geen openstaande aanvragen</p>
           </div>

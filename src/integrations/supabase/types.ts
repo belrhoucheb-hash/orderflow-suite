@@ -53,6 +53,7 @@ export type Database = {
           delivery_address: string | null
           dimensions: string | null
           id: string
+          internal_note: string | null
           is_weight_per_unit: boolean
           order_number: number
           pickup_address: string | null
@@ -78,6 +79,7 @@ export type Database = {
           delivery_address?: string | null
           dimensions?: string | null
           id?: string
+          internal_note?: string | null
           is_weight_per_unit?: boolean
           order_number?: number
           pickup_address?: string | null
@@ -103,6 +105,7 @@ export type Database = {
           delivery_address?: string | null
           dimensions?: string | null
           id?: string
+          internal_note?: string | null
           is_weight_per_unit?: boolean
           order_number?: number
           pickup_address?: string | null
