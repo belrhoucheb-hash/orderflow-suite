@@ -577,13 +577,25 @@ export default function Inbox() {
     );
   }
 
-  // Render a single inbox item
+  // Find the single most urgent item (lowest minutesLeft among red items)
+  const mostUrgentId = useMemo(() => {
+    let best: { id: string; min: number } | null = null;
+    for (const d of filtered) {
+      const dl = getDeadlineInfo(d.received_at);
+      if (dl.urgency === "red" && (best === null || dl.minutesLeft < best.min)) {
+        best = { id: d.id, min: dl.minutesLeft };
+      }
+    }
+    return best?.id || null;
+  }, [filtered]);
+
   const renderInboxItem = (draft: OrderDraft) => {
     const isSelected = selectedId === draft.id;
     const conf = draft.confidence_score || 0;
     const hasReqs = (draft.requirements || []).length > 0;
     const deadline = getDeadlineInfo(draft.received_at);
     const hasNote = !!draft.internal_note;
+    const isPulse = draft.id === mostUrgentId;
 
     return (
       <motion.button
@@ -621,7 +633,7 @@ export default function Inbox() {
               {deadline.urgency !== "neutral" ? (
                 <span className={cn(
                   "inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md",
-                  deadline.urgency === "red" && "bg-destructive/10 text-destructive animate-pulse",
+                  deadline.urgency === "red" && (isPulse ? "bg-destructive/10 text-destructive animate-pulse" : "bg-destructive/10 text-destructive"),
                   deadline.urgency === "amber" && "bg-amber-500/10 text-amber-600",
                   deadline.urgency === "green" && "bg-emerald-500/10 text-emerald-600",
                 )}>
