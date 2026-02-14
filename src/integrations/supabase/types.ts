@@ -52,9 +52,12 @@ export type Database = {
           created_at: string
           delivery_address: string | null
           dimensions: string | null
+          follow_up_draft: string | null
+          follow_up_sent_at: string | null
           id: string
           internal_note: string | null
           is_weight_per_unit: boolean
+          missing_fields: string[] | null
           order_number: number
           pickup_address: string | null
           quantity: number | null
@@ -78,9 +81,12 @@ export type Database = {
           created_at?: string
           delivery_address?: string | null
           dimensions?: string | null
+          follow_up_draft?: string | null
+          follow_up_sent_at?: string | null
           id?: string
           internal_note?: string | null
           is_weight_per_unit?: boolean
+          missing_fields?: string[] | null
           order_number?: number
           pickup_address?: string | null
           quantity?: number | null
@@ -104,9 +110,12 @@ export type Database = {
           created_at?: string
           delivery_address?: string | null
           dimensions?: string | null
+          follow_up_draft?: string | null
+          follow_up_sent_at?: string | null
           id?: string
           internal_note?: string | null
           is_weight_per_unit?: boolean
+          missing_fields?: string[] | null
           order_number?: number
           pickup_address?: string | null
           quantity?: number | null
