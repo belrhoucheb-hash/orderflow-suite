@@ -126,10 +126,7 @@ function parseEml(raw: string, messageId = ""): ParsedEmail {
 
 // ── Main handler ──
 
-serve(async (req) => {
-  if (req.method === "OPTIONS")
-    return new Response(null, { headers: corsHeaders });
-
+async function pollInbox(): Promise<Response> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -164,120 +161,100 @@ serve(async (req) => {
     const lock = await client.getMailboxLock("INBOX");
 
     try {
-      // Fetch unseen messages
-      const messages = client.fetch({ seen: false }, {
-        source: true,
-        envelope: true,
-        uid: true,
-      });
+      // Search for unseen UIDs first (non-blocking)
+      const uids = await client.search({ seen: false }, { uid: true });
+      console.log(`Found ${uids.length} unseen messages`);
 
-      for await (const msg of messages) {
-        const rawEmail = msg.source?.toString("utf-8");
-        if (!rawEmail) continue;
+      if (uids.length === 0) {
+        lock.release();
+        await client.logout();
+        return new Response(
+          JSON.stringify({ success: true, processed: 0, orders: [] }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-        const messageId = msg.envelope?.messageId || `uid-${msg.uid}`;
-        console.log(`Processing: ${messageId}`);
+      // Process max 10 emails per run to stay within timeout
+      const toProcess = uids.slice(0, 10);
 
-        // Check if already processed (by message-id in email subject/from combo)
-        const { data: existing } = await supabase
-          .from("orders")
-          .select("id")
-          .eq("source_email_from", msg.envelope?.from?.[0]?.address || "")
-          .eq("source_email_subject", msg.envelope?.subject || "")
-          .limit(1);
+      for (const uid of toProcess) {
+        try {
+          const msg = await client.fetchOne(uid, { source: true, envelope: true }, { uid: true });
+          const rawEmail = msg.source?.toString("utf-8");
+          if (!rawEmail) continue;
 
-        if (existing && existing.length > 0) {
-          console.log(`Skipping duplicate: ${messageId}`);
-          // Mark as seen so we don't re-process
-          await client.messageFlagsAdd({ uid: msg.uid }, ["\\Seen"], { uid: true });
-          continue;
-        }
+          const fromAddr = msg.envelope?.from?.[0]?.address || "";
+          const subject = msg.envelope?.subject || "";
+          const messageId = msg.envelope?.messageId || `uid-${uid}`;
+          console.log(`Processing: ${messageId} from ${fromAddr}`);
 
-        // Parse the email
-        const parsed = parseEml(rawEmail, messageId);
+          // Dedup check
+          const { data: existing } = await supabase
+            .from("orders")
+            .select("id")
+            .eq("source_email_from", fromAddr)
+            .eq("source_email_subject", subject)
+            .limit(1);
 
-        // Upload attachments
-        const uploadedAttachments: { name: string; url: string; type: string }[] = [];
-        const timestamp = Date.now();
-
-        for (const att of parsed.attachments) {
-          const path = `imports/${timestamp}_${att.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-          const { error: uploadError } = await supabase.storage
-            .from("email-attachments")
-            .upload(path, att.data, { contentType: att.type, upsert: true });
-
-          if (uploadError) {
-            console.error("Upload error:", uploadError);
+          if (existing && existing.length > 0) {
+            console.log(`Skipping duplicate: ${messageId}`);
+            await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
             continue;
           }
 
-          const { data: urlData } = supabase.storage
-            .from("email-attachments")
-            .getPublicUrl(path);
-          uploadedAttachments.push({
-            name: att.name,
-            url: urlData.publicUrl,
-            type: att.type,
-          });
-        }
+          const parsed = parseEml(rawEmail, messageId);
 
-        // Create draft order
-        const { data: order, error: insertError } = await supabase
-          .from("orders")
-          .insert({
-            status: "DRAFT",
-            source_email_from: parsed.from,
-            source_email_subject: parsed.subject,
-            source_email_body: parsed.body,
-            received_at: parsed.date
-              ? new Date(parsed.date).toISOString()
-              : new Date().toISOString(),
-            attachments: uploadedAttachments,
-          })
-          .select("id, order_number")
-          .single();
+          // Upload attachments
+          const uploadedAttachments: { name: string; url: string; type: string }[] = [];
+          const timestamp = Date.now();
 
-        if (insertError) {
-          console.error("Insert error:", insertError);
-          continue;
-        }
+          for (const att of parsed.attachments) {
+            const path = `imports/${timestamp}_${att.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+            const { error: uploadError } = await supabase.storage
+              .from("email-attachments")
+              .upload(path, att.data, { contentType: att.type, upsert: true });
+            if (uploadError) { console.error("Upload error:", uploadError); continue; }
 
-        // Run AI extraction via parse-order
-        const pdfUrls = uploadedAttachments
-          .filter((a) => a.type === "application/pdf")
-          .map((a) => a.url);
+            const { data: urlData } = supabase.storage.from("email-attachments").getPublicUrl(path);
+            uploadedAttachments.push({ name: att.name, url: urlData.publicUrl, type: att.type });
+          }
 
-        const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-        let confidence = 0;
+          // Create draft order
+          const { data: order, error: insertError } = await supabase
+            .from("orders")
+            .insert({
+              status: "DRAFT",
+              source_email_from: fromAddr || parsed.from,
+              source_email_subject: subject || parsed.subject,
+              source_email_body: parsed.body,
+              received_at: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : new Date().toISOString(),
+              attachments: uploadedAttachments,
+            })
+            .select("id, order_number")
+            .single();
 
-        if (LOVABLE_API_KEY && (parsed.body || pdfUrls.length > 0)) {
-          try {
-            const parseResp = await fetch(
-              `${supabaseUrl}/functions/v1/parse-order`,
-              {
+          if (insertError) { console.error("Insert error:", insertError); continue; }
+
+          // AI extraction via parse-order
+          const pdfUrls = uploadedAttachments.filter((a) => a.type === "application/pdf").map((a) => a.url);
+          const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+          let confidence = 0;
+
+          if (LOVABLE_API_KEY && (parsed.body || pdfUrls.length > 0)) {
+            try {
+              const parseResp = await fetch(`${supabaseUrl}/functions/v1/parse-order`, {
                 method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${supabaseKey}`,
-                },
-                body: JSON.stringify({
-                  emailBody: parsed.body,
-                  pdfUrls,
-                }),
-              }
-            );
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+                body: JSON.stringify({ emailBody: parsed.body, pdfUrls }),
+              });
 
-            if (parseResp.ok) {
-              const parseResult = await parseResp.json();
-              const extracted = parseResult.extracted;
+              if (parseResp.ok) {
+                const { extracted } = await parseResp.json();
+                if (extracted) {
+                  confidence = extracted.confidence_score || 0;
+                  const newStatus = confidence > 90 ? "OPEN" : "DRAFT";
 
-              if (extracted) {
-                confidence = extracted.confidence_score || 0;
-                const newStatus = confidence > 90 ? "OPEN" : "DRAFT";
-
-                await supabase
-                  .from("orders")
-                  .update({
+                  await supabase.from("orders").update({
                     client_name: extracted.client_name || null,
                     transport_type: extracted.transport_type || null,
                     pickup_address: extracted.pickup_address || null,
@@ -290,29 +267,24 @@ serve(async (req) => {
                     requirements: extracted.requirements || [],
                     confidence_score: confidence,
                     status: newStatus,
-                  })
-                  .eq("id", order.id);
+                  }).eq("id", order.id);
 
-                console.log(
-                  `Order #${order.order_number}: confidence=${confidence}, status=${newStatus}`
-                );
+                  console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}`);
+                }
+              } else {
+                console.error("parse-order failed:", parseResp.status);
+                await parseResp.text(); // consume body
               }
-            } else {
-              console.error("parse-order failed:", parseResp.status);
+            } catch (parseErr) {
+              console.error("AI extraction error:", parseErr);
             }
-          } catch (parseErr) {
-            console.error("AI extraction error:", parseErr);
           }
+
+          await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
+          results.push({ orderNumber: order.order_number, status: confidence > 90 ? "OPEN" : "DRAFT", confidence });
+        } catch (msgErr) {
+          console.error(`Error processing uid ${uid}:`, msgErr);
         }
-
-        // Mark as seen in IMAP
-        await client.messageFlagsAdd({ uid: msg.uid }, ["\\Seen"], { uid: true });
-
-        results.push({
-          orderNumber: order.order_number,
-          status: confidence > 90 ? "OPEN" : "DRAFT",
-          confidence,
-        });
       }
     } finally {
       lock.release();
@@ -322,21 +294,29 @@ serve(async (req) => {
     console.log(`Poll complete: ${results.length} emails processed`);
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        processed: results.length,
-        orders: results,
-      }),
+      JSON.stringify({ success: true, processed: results.length, orders: results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("poll-inbox error:", e);
-    if (client) {
-      try { await client.logout(); } catch { /* ignore */ }
-    }
+    if (client) { try { await client.logout(); } catch { /* ignore */ } }
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  // 50s timeout to stay within edge function limits
+  const timeout = new Promise<Response>((resolve) =>
+    setTimeout(() => resolve(new Response(
+      JSON.stringify({ error: "Timeout na 50 seconden" }),
+      { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    )), 50000)
+  );
+
+  return Promise.race([pollInbox(), timeout]);
 });
