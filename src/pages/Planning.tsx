@@ -1320,24 +1320,10 @@ const Planning = () => {
           </div>
         </div>
 
-        {/* Map */}
-        {showMap && (
-          <div className="shrink-0 h-[260px] rounded-xl overflow-hidden border border-border/40 bg-card shadow-sm">
-            <PlanningMap
-              orders={orders}
-              orderCoords={orderCoords}
-              orderToVehicle={orderToVehicle}
-              highlightedIds={highlightedIds}
-              assignments={assignments}
-              fleetVehicles={fleetVehicles}
-            />
-          </div>
-        )}
-
-        {/* Split screen */}
+        {/* Main content: sidebar + fleet + optional map */}
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
           {/* Left: Order list with region headers */}
-          <div className="w-full lg:w-1/4 lg:min-w-[280px] flex flex-col gap-3 shrink-0 max-h-[40vh] lg:max-h-none bg-card rounded-xl border border-border/40 p-3 shadow-sm">
+          <div className="w-full lg:w-1/4 lg:min-w-[260px] flex flex-col gap-3 shrink-0 max-h-[40vh] lg:max-h-none bg-card rounded-xl border border-border/40 p-3 shadow-sm">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
               <Input
@@ -1427,8 +1413,8 @@ const Planning = () => {
             </div>
           </div>
 
-          {/* Right: Fleet grid */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Center: Fleet grid */}
+          <div className={cn("flex-1 overflow-y-auto", showMap && "lg:w-1/2")}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {fleetVehicles.map((vehicle) => (
                 <VehicleDropZone
@@ -1450,6 +1436,20 @@ const Planning = () => {
               ))}
             </div>
           </div>
+
+          {/* Right: Map as side panel */}
+          {showMap && (
+            <div className="hidden lg:block lg:w-1/4 lg:min-w-[280px] rounded-xl overflow-hidden border border-border/40 bg-card shadow-sm">
+              <PlanningMap
+                orders={orders}
+                orderCoords={orderCoords}
+                orderToVehicle={orderToVehicle}
+                highlightedIds={highlightedIds}
+                assignments={assignments}
+                fleetVehicles={fleetVehicles}
+              />
+            </div>
+          )}
         </div>
       </div>
 
