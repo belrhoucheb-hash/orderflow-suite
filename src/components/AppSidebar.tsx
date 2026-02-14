@@ -1,8 +1,9 @@
 import { LayoutDashboard, Inbox, Package, Truck, Map, LogOut, Users } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import logo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 import {
   Sidebar,
@@ -33,6 +34,8 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { profile, user, signOut } = useAuth();
 
   const isActive = (url: string) => {
     if (url === "/") return location.pathname === "/";
@@ -119,15 +122,20 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-white/5 px-4 py-4">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-[11px] font-semibold text-white">
-            AJ
+            {(profile?.display_name || user?.email || "?").slice(0, 2).toUpperCase()}
           </div>
           {!collapsed && (
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-[12px] font-medium text-white/90 truncate">Admin Johan</span>
-              <span className="text-[10px] text-sidebar-foreground/40">admin@royaltycargo.nl</span>
+              <span className="text-[12px] font-medium text-white/90 truncate">{profile?.display_name || "Gebruiker"}</span>
+              <span className="text-[10px] text-sidebar-foreground/40">{user?.email}</span>
             </div>
           )}
-          {!collapsed && <LogOut className="h-4 w-4 text-sidebar-foreground/30 cursor-pointer hover:text-white/70 transition-colors" />}
+          {!collapsed && (
+            <LogOut
+              className="h-4 w-4 text-sidebar-foreground/30 cursor-pointer hover:text-white/70 transition-colors"
+              onClick={async () => { await signOut(); navigate("/login"); }}
+            />
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>
