@@ -204,6 +204,43 @@ async function pollInbox(): Promise<Response> {
 
           const parsed = parseEml(rawEmail, messageId);
 
+          // Quick AI classification: is this a transport/logistics email?
+          const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+          if (LOVABLE_API_KEY && parsed.body) {
+            try {
+              const classifyResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  model: "google/gemini-2.5-flash-lite",
+                  messages: [
+                    { role: "system", content: "Je bent een e-mail classifier. Bepaal of een e-mail gaat over transport, logistiek, verzending of orders. Antwoord ALLEEN met 'JA' of 'NEE'." },
+                    { role: "user", content: `Onderwerp: ${subject}\nVan: ${fromAddr}\n\n${parsed.body.substring(0, 500)}` },
+                  ],
+                }),
+              });
+              if (classifyResp.ok) {
+                const classifyResult = await classifyResp.json();
+                const answer = classifyResult.choices?.[0]?.message?.content?.trim().toUpperCase() || "";
+                if (answer.startsWith("NEE")) {
+                  console.log(`Skipping non-transport email: ${subject}`);
+                  await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
+                  continue;
+                }
+              } else {
+                await classifyResp.text(); // consume
+              }
+            } catch (classErr) {
+              console.error("Classification error:", classErr);
+              // Continue anyway if classification fails
+            }
+          } else if (!parsed.body && parsed.attachments.length === 0) {
+            // No body and no attachments — skip
+            console.log(`Skipping empty email: ${subject}`);
+            await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
+            continue;
+          }
+
           // Upload attachments
           const uploadedAttachments: { name: string; url: string; type: string }[] = [];
           const timestamp = Date.now();
@@ -237,7 +274,6 @@ async function pollInbox(): Promise<Response> {
 
           // AI extraction via parse-order
           const pdfUrls = uploadedAttachments.filter((a) => a.type === "application/pdf").map((a) => a.url);
-          const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
           let confidence = 0;
 
           if (LOVABLE_API_KEY && (parsed.body || pdfUrls.length > 0)) {
