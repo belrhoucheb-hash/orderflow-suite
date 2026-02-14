@@ -629,20 +629,7 @@ export default function Inbox() {
           
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {/* Deadline indicator */}
-              {deadline.urgency !== "neutral" ? (
-                <span className={cn(
-                  "inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md",
-                  deadline.urgency === "red" && (isPulse ? "bg-destructive/10 text-destructive animate-pulse" : "bg-destructive/10 text-destructive"),
-                  deadline.urgency === "amber" && "bg-amber-500/10 text-amber-600",
-                  deadline.urgency === "green" && "bg-emerald-500/10 text-emerald-600",
-                )}>
-                  <Timer className="h-2.5 w-2.5" />
-                  {deadline.label}
-                </span>
-              ) : (
-                <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
-              )}
+              <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
               {hasReqs && (
                 <div className="flex items-center gap-0.5">
                   {draft.requirements!.slice(0, 2).map(r => {
