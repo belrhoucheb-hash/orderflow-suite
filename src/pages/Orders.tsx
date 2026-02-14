@@ -133,13 +133,13 @@ const Orders = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/40 bg-muted/30">
-                <th className="px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Order</th>
-                <th className="px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Klant</th>
-                <th className="px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden lg:table-cell">Ophaaladres</th>
-                <th className="px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden md:table-cell">Afleveradres</th>
-                <th className="px-5 py-3 text-right text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Gewicht</th>
-                <th className="px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Status</th>
-                <th className="px-5 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden sm:table-cell">Prioriteit</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Order</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Klant</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden lg:table-cell">Ophaaladres</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden md:table-cell">Afleveradres</th>
+                <th className="px-4 py-2.5 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Gewicht</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Status</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden sm:table-cell">Prioriteit</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/20">
@@ -154,40 +154,40 @@ const Orders = () => {
                     transition={{ delay: idx * 0.02 }}
                     className="hover:bg-muted/20 transition-colors duration-100 group"
                   >
-                    <td className="px-5 py-3.5">
+                    <td className="px-4 py-2">
                       <Link
                         to={`/orders/${order.id}`}
-                        className="font-mono text-sm font-medium text-foreground hover:text-primary transition-colors flex items-center gap-2"
+                        className="font-mono text-[13px] font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
                       >
                         <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDotColors[order.status])} />
                         {order.orderNumber}
                       </Link>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-foreground/80">{order.customer}</td>
-                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
+                    <td className="px-4 py-2 text-[13px] text-foreground/80">{order.customer}</td>
+                    <td className="px-4 py-2 text-[13px] text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
                       {order.pickupAddress}
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
+                    <td className="px-4 py-2 text-[13px] text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
                       {order.deliveryAddress}
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-foreground/80 text-right tabular-nums font-medium">
+                    <td className="px-4 py-2 text-[13px] text-foreground/80 text-right tabular-nums font-medium">
                       {order.totalWeight.toLocaleString()} kg
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-4 py-2">
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border",
+                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border",
                           statusStyles[order.status]
                         )}
                       >
-                        <span className={cn("h-1.5 w-1.5 rounded-full", statusDotColors[order.status])} />
+                        <span className={cn("h-1 w-1 rounded-full", statusDotColors[order.status])} />
                         {statusLabels[order.status]}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 hidden sm:table-cell">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground capitalize">
+                    <td className="px-4 py-2 hidden sm:table-cell">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground capitalize">
                         <Circle
-                          className={cn("h-2 w-2 fill-current", priorityDotColors[order.priority])}
+                          className={cn("h-1.5 w-1.5 fill-current", priorityDotColors[order.priority])}
                           strokeWidth={0}
                         />
                         {order.priority}
@@ -209,7 +209,7 @@ const Orders = () => {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-border/30 bg-muted/20">
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
           <p className="text-[11px] text-muted-foreground">
             {filtered.length} van {mockOrders.length} orders
           </p>
