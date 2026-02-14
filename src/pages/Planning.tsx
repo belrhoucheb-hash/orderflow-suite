@@ -1279,14 +1279,14 @@ const Planning = () => {
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex flex-col h-[calc(100vh-5rem)] gap-3">
         {/* Header */}
-        <div className="flex items-center justify-between shrink-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
           <div>
-            <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-              <Truck className="h-6 w-6 text-primary" />Smart Planning
+            <h1 className="font-display text-xl sm:text-2xl font-bold flex items-center gap-2">
+              <Truck className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />Smart Planning
             </h1>
-            <p className="text-sm text-muted-foreground">Sleep orders naar voertuigen — met geografisch inzicht</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Sleep orders naar voertuigen</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant={showMap ? "default" : "outline"}
               size="sm"
@@ -1303,7 +1303,7 @@ const Planning = () => {
                 className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Planning Bevestigen ({totalAssigned})
+                <span className="hidden sm:inline">Planning</span> Bevestigen ({totalAssigned})
               </Button>
             )}
           </div>
@@ -1324,9 +1324,9 @@ const Planning = () => {
         )}
 
         {/* Split screen */}
-        <div className="flex gap-4 flex-1 min-h-0">
+        <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
           {/* Left: Order list with region headers */}
-          <div className="w-1/4 min-w-[260px] flex flex-col gap-3 shrink-0">
+          <div className="w-full lg:w-1/4 lg:min-w-[260px] flex flex-col gap-3 shrink-0 max-h-[40vh] lg:max-h-none">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -1336,7 +1336,7 @@ const Planning = () => {
                 className="pl-9 h-9 text-sm"
               />
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 flex-wrap">
               {["ADR", "KOELING"].map((tag) => (
                 <Button
                   key={tag}
