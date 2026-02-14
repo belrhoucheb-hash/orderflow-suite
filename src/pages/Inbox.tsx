@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload, FlaskConical, MapPin } from "lucide-react";
+import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload, FlaskConical, MapPin, ArrowLeft } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -195,7 +195,7 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
   };
 
   return (
-    <div className="w-[45%] border-r border-border/40 flex flex-col overflow-hidden">
+    <div className="w-full lg:w-[45%] border-r border-border/40 flex flex-col overflow-hidden">
       <div className="px-5 py-3 border-b border-border/30">
         <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Bron E-mail</p>
         <h3 className="text-sm font-semibold text-foreground mb-2">{selected.source_email_subject || "Geen onderwerp"}</h3>
@@ -317,6 +317,7 @@ export default function Inbox() {
   const [formData, setFormData] = useState<Record<string, FormState>>({});
   const [search, setSearch] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const [mobileView, setMobileView] = useState<"list" | "detail">("list");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportEmail = async (file: File) => {
@@ -565,10 +566,14 @@ export default function Inbox() {
     );
   }
 
+
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-0 -m-4 md:-m-6">
       {/* Left Column - Incoming Drafts */}
-      <div className="w-[340px] min-w-[300px] border-r border-border/60 flex flex-col bg-card">
+      <div className={cn(
+        "w-full md:w-[340px] md:min-w-[300px] border-r border-border/60 flex flex-col bg-card",
+        mobileView === "detail" && "hidden md:flex"
+      )}>
         <div className="p-4 pb-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -645,7 +650,7 @@ export default function Inbox() {
             {filtered.map((draft) => (
               <button
                 key={draft.id}
-                onClick={() => setSelectedId(draft.id)}
+                onClick={() => { setSelectedId(draft.id); setMobileView("detail"); }}
                 className={cn(
                   "w-full text-left p-3 rounded-lg transition-all duration-150",
                   selectedId === draft.id
@@ -676,10 +681,16 @@ export default function Inbox() {
 
       {/* Right Column - Validation Workspace */}
       {selected && form ? (
-        <div className="flex-1 flex flex-col min-w-0 bg-background">
+        <div className={cn(
+          "flex-1 flex flex-col min-w-0 bg-background",
+          mobileView === "list" && "hidden md:flex"
+        )}>
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-border/40 bg-card/80">
             <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={() => setMobileView("list")}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
               <Mail className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold text-foreground">
                 Order Validatie: <span className="font-mono text-primary">#{selected.order_number}</span>
@@ -698,7 +709,7 @@ export default function Inbox() {
           </div>
 
           {/* Split Content */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             {/* Panel A: Source Email */}
             <SourcePanel selected={selected} onParseResult={(data) => {
               if (!selected) return;
