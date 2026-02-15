@@ -426,7 +426,7 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
   };
 
   return (
-    <div className="w-full lg:w-[45%] border-r border-border/30 flex flex-col overflow-hidden bg-card">
+    <div className="flex-1 min-w-0 border-r border-border/30 flex flex-col overflow-hidden bg-card">
       <div className="px-5 pt-4 pb-3">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
@@ -1002,68 +1002,72 @@ export default function Inbox() {
         </ScrollArea>
       </div>
 
-      {/* ─── Right: Validation Workspace ─── */}
+      {/* ─── Middle: Source Email ─── */}
       {selected && form ? (
-        <div className={cn(
-          "flex-1 flex flex-col min-w-0 bg-background",
-          mobileView === "list" && "hidden md:flex"
-        )}>
-          {/* Header Bar */}
-          <div className="flex items-center justify-between px-5 py-2.5 border-b border-border/30 bg-card">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={() => setMobileView("list")}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Package className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-foreground leading-tight">
-                    Order <span className="font-mono text-primary">#{selected.order_number}</span>
-                  </h2>
-                  <p className="text-[10px] text-muted-foreground">{selected.client_name || "Onbekende klant"}</p>
-                </div>
-              </div>
-              {selected.confidence_score != null && <ConfidenceBadge score={selected.confidence_score} />}
-              {/* Deadline in header */}
-              {(() => {
-                const dl = getDeadlineInfo(selected.received_at);
-                if (dl.urgency === "neutral") return null;
-                return (
-                  <span className={cn(
-                    "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md ml-2",
-                    dl.urgency === "red" && "bg-destructive/10 text-destructive",
-                    dl.urgency === "amber" && "bg-amber-500/10 text-amber-600",
-                    dl.urgency === "green" && "bg-emerald-500/10 text-emerald-600",
-                  )}>
-                    <Timer className="h-3 w-3" />
-                    {dl.label}
-                  </span>
-                );
-              })()}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive h-8 text-[11px] gap-1" onClick={handleDelete} disabled={deleteMutation.isPending}>
-                <Trash2 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Verwijderen</span>
-              </Button>
-              <Button size="sm" className="h-8 text-[11px] gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={handleCreateOrder} disabled={createOrderMutation.isPending}>
-                {createOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                Order Aanmaken
-              </Button>
-            </div>
-          </div>
-
-          {/* Split Content */}
-          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        <>
+          <div className={cn(
+            "w-full md:w-[400px] lg:w-[420px] flex flex-col min-w-0",
+            mobileView === "list" && "hidden md:flex"
+          )}>
             <SourcePanel selected={selected} onParseResult={(data) => {
               if (!selected) return;
               const { result: enriched, enrichments } = enrichAddresses(data);
               setFormData((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], ...enriched } }));
               if (enrichments.length > 0) toast({ title: "Adresboek verrijking", description: enrichments.join(". ") });
             }} />
+          </div>
 
-            {/* Panel B: Extracted Data */}
+          {/* ─── Right: Order Form ─── */}
+          <div className={cn(
+            "flex-1 flex flex-col min-w-0 bg-background border-l border-border/30",
+            mobileView === "list" && "hidden md:flex"
+          )}>
+            {/* Header Bar */}
+            <div className="flex items-center justify-between px-5 py-2.5 border-b border-border/30 bg-card">
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={() => setMobileView("list")}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Package className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-foreground leading-tight">
+                      Order <span className="font-mono text-primary">#{selected.order_number}</span>
+                    </h2>
+                    <p className="text-[10px] text-muted-foreground">{selected.client_name || "Onbekende klant"}</p>
+                  </div>
+                </div>
+                {selected.confidence_score != null && <ConfidenceBadge score={selected.confidence_score} />}
+                {(() => {
+                  const dl = getDeadlineInfo(selected.received_at);
+                  if (dl.urgency === "neutral") return null;
+                  return (
+                    <span className={cn(
+                      "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md ml-2",
+                      dl.urgency === "red" && "bg-destructive/10 text-destructive",
+                      dl.urgency === "amber" && "bg-amber-500/10 text-amber-600",
+                      dl.urgency === "green" && "bg-emerald-500/10 text-emerald-600",
+                    )}>
+                      <Timer className="h-3 w-3" />
+                      {dl.label}
+                    </span>
+                  );
+                })()}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive h-8 text-[11px] gap-1" onClick={handleDelete} disabled={deleteMutation.isPending}>
+                  <Trash2 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Verwijderen</span>
+                </Button>
+                <Button size="sm" className="h-8 text-[11px] gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={handleCreateOrder} disabled={createOrderMutation.isPending}>
+                  {createOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  Order Aanmaken
+                </Button>
+              </div>
+            </div>
+
+            {/* Extracted Data */}
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="px-5 py-3 border-b border-border/20 bg-card/50">
                 <div className="flex items-center gap-2">
@@ -1297,7 +1301,7 @@ export default function Inbox() {
               </ScrollArea>
             </div>
           </div>
-        </div>
+        </>
       ) : (
         <div className="flex-1 flex items-center justify-center bg-background">
           <div className="text-center">
