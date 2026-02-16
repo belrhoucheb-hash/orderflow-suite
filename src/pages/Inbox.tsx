@@ -1032,47 +1032,47 @@ export default function Inbox() {
             mobileView !== "detail" && "hidden md:flex"
           )}>
             {/* Header Bar */}
-            <div className="flex items-center justify-between px-5 py-2.5 border-b border-border/30 bg-card">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={() => setMobileView("source")}>
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Package className="h-4 w-4 text-primary" />
+            <div className="px-4 py-2.5 border-b border-border/30 bg-card space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Button variant="ghost" size="icon" className="md:hidden h-7 w-7 shrink-0" onClick={() => setMobileView("source")}>
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Package className="h-3.5 w-3.5 text-primary" />
                   </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-foreground leading-tight">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-foreground leading-tight truncate">
                       Order <span className="font-mono text-primary">#{selected.order_number}</span>
+                      <span className="text-muted-foreground font-normal text-xs ml-1.5 hidden sm:inline">{selected.client_name || "Onbekende klant"}</span>
                     </h2>
-                    <p className="text-[10px] text-muted-foreground">{selected.client_name || "Onbekende klant"}</p>
                   </div>
+                  {selected.confidence_score != null && <ConfidenceBadge score={selected.confidence_score} />}
                 </div>
-                {selected.confidence_score != null && <ConfidenceBadge score={selected.confidence_score} />}
-                {(() => {
-                  const dl = getDeadlineInfo(selected.received_at);
-                  if (dl.urgency === "neutral") return null;
-                  return (
-                    <span className={cn(
-                      "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md ml-2",
-                      dl.urgency === "red" && "bg-destructive/10 text-destructive",
-                      dl.urgency === "amber" && "bg-amber-500/10 text-amber-600",
-                      dl.urgency === "green" && "bg-emerald-500/10 text-emerald-600",
-                    )}>
-                      <Timer className="h-3 w-3" />
-                      {dl.label}
-                    </span>
-                  );
-                })()}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive h-8 text-[11px] gap-1" onClick={handleDelete} disabled={deleteMutation.isPending}>
-                  <Trash2 className="h-3.5 w-3.5" /><span className="hidden sm:inline">Verwijderen</span>
-                </Button>
-                <Button size="sm" className="h-8 text-[11px] gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={handleCreateOrder} disabled={createOrderMutation.isPending}>
-                  {createOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  Order Aanmaken
-                </Button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {(() => {
+                    const dl = getDeadlineInfo(selected.received_at);
+                    if (dl.urgency === "neutral") return null;
+                    return (
+                      <span className={cn(
+                        "inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md",
+                        dl.urgency === "red" && "bg-destructive/10 text-destructive",
+                        dl.urgency === "amber" && "bg-amber-500/10 text-amber-600",
+                        dl.urgency === "green" && "bg-emerald-500/10 text-emerald-600",
+                      )}>
+                        <Timer className="h-3 w-3" />
+                        <span className="hidden sm:inline">{dl.label}</span>
+                      </span>
+                    );
+                  })()}
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive h-8 w-8" onClick={handleDelete} disabled={deleteMutation.isPending}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" className="h-8 text-[11px] gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" onClick={handleCreateOrder} disabled={createOrderMutation.isPending}>
+                    {createOrderMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    <span className="hidden sm:inline">Order</span> Aanmaken
+                  </Button>
+                </div>
               </div>
             </div>
 
