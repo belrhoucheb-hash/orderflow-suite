@@ -542,7 +542,7 @@ export default function Inbox() {
   const [formData, setFormData] = useState<Record<string, FormState>>({});
   const [search, setSearch] = useState("");
   const [isImporting, setIsImporting] = useState(false);
-  const [mobileView, setMobileView] = useState<"list" | "detail">("list");
+  const [mobileView, setMobileView] = useState<"list" | "source" | "detail">("list");
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [groupByClient, setGroupByClient] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -772,7 +772,7 @@ export default function Inbox() {
       <motion.button
         key={draft.id}
         layoutId={draft.id}
-        onClick={() => { setSelectedId(draft.id); setMobileView("detail"); }}
+        onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
         className={cn(
           "w-full text-left p-3 rounded-xl transition-all duration-200 group relative",
           isSelected ? "bg-primary/[0.04] ring-1 ring-primary/15" : "hover:bg-muted/40"
@@ -858,7 +858,7 @@ export default function Inbox() {
       {/* ─── Left: Inbox List ─── */}
       <div className={cn(
         "w-full md:w-[360px] md:min-w-[320px] border-r border-border/40 flex flex-col bg-card",
-        mobileView === "detail" && "hidden md:flex"
+        mobileView !== "list" && "hidden md:flex"
       )}>
         {/* Header */}
         <div className="p-4 pb-0">
@@ -1007,8 +1007,17 @@ export default function Inbox() {
         <>
           <div className={cn(
             "w-full md:w-[400px] lg:w-[420px] flex flex-col min-w-0",
-            mobileView === "list" && "hidden md:flex"
+            mobileView !== "source" && "hidden md:flex"
           )}>
+            {/* Mobile back + next buttons */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border/30 bg-card md:hidden">
+              <Button variant="ghost" size="sm" className="h-8 text-[11px] gap-1" onClick={() => setMobileView("list")}>
+                <ArrowLeft className="h-3.5 w-3.5" /> Inbox
+              </Button>
+              <Button size="sm" className="h-8 text-[11px] gap-1" onClick={() => setMobileView("detail")}>
+                Order <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
             <SourcePanel selected={selected} onParseResult={(data) => {
               if (!selected) return;
               const { result: enriched, enrichments } = enrichAddresses(data);
@@ -1020,12 +1029,12 @@ export default function Inbox() {
           {/* ─── Right: Order Form ─── */}
           <div className={cn(
             "flex-1 flex flex-col min-w-0 bg-background border-l border-border/30",
-            mobileView === "list" && "hidden md:flex"
+            mobileView !== "detail" && "hidden md:flex"
           )}>
             {/* Header Bar */}
             <div className="flex items-center justify-between px-5 py-2.5 border-b border-border/30 bg-card">
               <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={() => setMobileView("list")}>
+                <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={() => setMobileView("source")}>
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="flex items-center gap-2">
