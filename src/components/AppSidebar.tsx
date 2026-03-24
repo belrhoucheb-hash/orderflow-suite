@@ -87,36 +87,38 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="text-sidebar-foreground/30 text-[10px] uppercase tracking-[0.15em] font-medium mb-1 px-3">
-            Admin
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {adminItems.map((item) => {
-                const active = isActive(item.url);
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={active}>
-                      <NavLink
-                        to={item.url}
-                        className={cn(
-                          "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
-                          active
-                            ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
-                            : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
-                        )}
-                      >
-                        <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {isAdmin && (
+          <SidebarGroup className="mt-4">
+            <SidebarGroupLabel className="text-sidebar-foreground/30 text-[10px] uppercase tracking-[0.15em] font-medium mb-1 px-3">
+              Admin
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminItems.map((item) => {
+                  const active = isActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={active}>
+                        <NavLink
+                          to={item.url}
+                          className={cn(
+                            "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150",
+                            active
+                              ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
+                              : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
+                          )}
+                        >
+                          <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-white/5 px-4 py-4">
