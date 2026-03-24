@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
-import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Filter } from "lucide-react";
+import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Filter, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { mockOrders, statusLabels } from "@/data/mockData";
+import { statusLabels } from "@/data/mockData";
+import { useOrders } from "@/hooks/useOrders";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -35,8 +36,9 @@ const filterOptions = ["alle", "nieuw", "in_behandeling", "onderweg", "afgelever
 const Orders = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
+  const { data: orders = [], isLoading } = useOrders();
 
-  const filtered = mockOrders.filter((o) => {
+  const filtered = orders.filter((o) => {
     const matchesSearch =
       o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
       o.customer.toLowerCase().includes(search.toLowerCase());
@@ -46,14 +48,22 @@ const Orders = () => {
 
   // Stats
   const stats = useMemo(() => {
-    const byStatus = mockOrders.reduce((acc, o) => {
+    const byStatus = orders.reduce((acc, o) => {
       acc[o.status] = (acc[o.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    const totalWeight = mockOrders.reduce((s, o) => s + o.totalWeight, 0);
-    const spoedCount = mockOrders.filter((o) => o.priority === "spoed" || o.priority === "hoog").length;
+    const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
+    const spoedCount = orders.filter((o) => o.priority === "spoed" || o.priority === "hoog").length;
     return { byStatus, totalWeight, spoedCount };
-  }, []);
+  }, [orders]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -61,7 +71,7 @@ const Orders = () => {
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">Orders</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{mockOrders.length} orders in totaal</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{orders.length} orders in totaal</p>
         </div>
         <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
           <Plus className="h-4 w-4" /> Nieuwe order
@@ -211,7 +221,7 @@ const Orders = () => {
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
           <p className="text-[11px] text-muted-foreground">
-            {filtered.length} van {mockOrders.length} orders
+            {filtered.length} van {orders.length} orders
           </p>
           <p className="text-[11px] text-muted-foreground tabular-nums">
             Totaal: {filtered.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
