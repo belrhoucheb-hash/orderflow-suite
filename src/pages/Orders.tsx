@@ -213,7 +213,7 @@ const Orders = () => {
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
           <p className="text-[11px] text-muted-foreground">
-            {filtered.length} van {mockOrders.length} orders
+            {filtered.length} van {orders.length} orders
           </p>
           <p className="text-[11px] text-muted-foreground tabular-nums">
             Totaal: {filtered.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
