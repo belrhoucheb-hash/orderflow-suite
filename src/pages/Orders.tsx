@@ -36,8 +36,9 @@ const filterOptions = ["alle", "nieuw", "in_behandeling", "onderweg", "afgelever
 const Orders = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
+  const { data: orders = [], isLoading } = useOrders();
 
-  const filtered = mockOrders.filter((o) => {
+  const filtered = orders.filter((o) => {
     const matchesSearch =
       o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
       o.customer.toLowerCase().includes(search.toLowerCase());
@@ -47,14 +48,14 @@ const Orders = () => {
 
   // Stats
   const stats = useMemo(() => {
-    const byStatus = mockOrders.reduce((acc, o) => {
+    const byStatus = orders.reduce((acc, o) => {
       acc[o.status] = (acc[o.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    const totalWeight = mockOrders.reduce((s, o) => s + o.totalWeight, 0);
-    const spoedCount = mockOrders.filter((o) => o.priority === "spoed" || o.priority === "hoog").length;
+    const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
+    const spoedCount = orders.filter((o) => o.priority === "spoed" || o.priority === "hoog").length;
     return { byStatus, totalWeight, spoedCount };
-  }, []);
+  }, [orders]);
 
   return (
     <div className="space-y-5">
