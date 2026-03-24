@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
-import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Filter } from "lucide-react";
+import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Filter, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { mockOrders, statusLabels } from "@/data/mockData";
+import { statusLabels } from "@/data/mockData";
+import { useOrders } from "@/hooks/useOrders";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
