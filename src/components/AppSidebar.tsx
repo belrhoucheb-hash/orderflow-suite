@@ -35,7 +35,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, isAdmin } = useAuth();
 
   const isActive = (url: string) => {
     if (url === "/") return location.pathname === "/";
