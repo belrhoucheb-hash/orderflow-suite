@@ -13,6 +13,7 @@ import OrderDetail from "@/pages/OrderDetail";
 import Planning from "@/pages/Planning";
 import RoutesPage from "@/pages/Routes";
 import Inbox from "@/pages/Inbox";
+import UsersPage from "@/pages/UsersPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
