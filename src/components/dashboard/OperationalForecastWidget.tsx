@@ -1,18 +1,22 @@
-import { CalendarPlus, Container, Truck } from "lucide-react";
+import { CalendarPlus, Container } from "lucide-react";
 import { motion } from "framer-motion";
-import { mockVehicles, mockOrders } from "@/data/mockData";
+import type { Order } from "@/data/mockData";
+import type { FleetVehicle } from "@/hooks/useVehicles";
 
-export function OperationalForecastWidget() {
-  // Mock: morgen capacity — vehicles not in onderhoud are potentially available
-  const totalVehicles = mockVehicles.length;
-  const inMaintenance = mockVehicles.filter((v) => v.status === "onderhoud").length;
-  // Simulate: 2 planned for tomorrow
-  const plannedTomorrow = 2;
-  const freeTomorrow = totalVehicles - inMaintenance - plannedTomorrow;
+interface Props {
+  vehicles: FleetVehicle[];
+  orders: Order[];
+}
 
-  // Emballage: mock pallet counts
-  const palletsRuiled = 14;
-  const palletsOpen = 6;
+export function OperationalForecastWidget({ vehicles, orders }: Props) {
+  const totalVehicles = vehicles.length || 1;
+  // Orders with status "onderweg" = planned/active
+  const plannedCount = orders.filter((o) => o.status === "onderweg" || o.status === "in_behandeling").length;
+  const freeCount = Math.max(totalVehicles - plannedCount, 0);
+
+  // Pallet count from orders
+  const palletOrders = orders.filter((o) => o.status !== "afgeleverd" && o.status !== "geannuleerd");
+  const totalPallets = palletOrders.reduce((s, o) => s + (o.items?.length || 0), 0);
 
   return (
     <motion.div
@@ -32,53 +36,35 @@ export function OperationalForecastWidget() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {/* Capaciteit morgen */}
         <div className="rounded-lg bg-muted/30 p-3">
-          <p className="text-[10px] text-muted-foreground mb-2">Capaciteit Morgen</p>
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-[11px] text-muted-foreground">Vrij</span>
-                <span className="text-[13px] font-bold font-display tabular-nums ml-auto">{freeTomorrow}</span>
-              </div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="h-2 w-2 rounded-full bg-primary" />
-                <span className="text-[11px] text-muted-foreground">Gepland</span>
-                <span className="text-[13px] font-bold font-display tabular-nums ml-auto">{plannedTomorrow}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                <span className="text-[11px] text-muted-foreground">Onderhoud</span>
-                <span className="text-[13px] font-bold font-display tabular-nums ml-auto">{inMaintenance}</span>
-              </div>
-            </div>
+          <p className="text-[10px] text-muted-foreground mb-2">Capaciteit</p>
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-[11px] text-muted-foreground">Vrij</span>
+            <span className="text-[13px] font-bold font-display tabular-nums ml-auto">{freeCount}</span>
           </div>
-          {/* mini bar */}
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-primary" />
+            <span className="text-[11px] text-muted-foreground">Gepland</span>
+            <span className="text-[13px] font-bold font-display tabular-nums ml-auto">{plannedCount}</span>
+          </div>
           <div className="flex gap-0.5 mt-2.5 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-emerald-500 rounded-l-full" style={{ width: `${(freeTomorrow / totalVehicles) * 100}%` }} />
-            <div className="bg-primary" style={{ width: `${(plannedTomorrow / totalVehicles) * 100}%` }} />
-            <div className="bg-amber-500 rounded-r-full" style={{ width: `${(inMaintenance / totalVehicles) * 100}%` }} />
+            <div className="bg-emerald-500 rounded-l-full" style={{ width: `${(freeCount / totalVehicles) * 100}%` }} />
+            <div className="bg-primary rounded-r-full" style={{ width: `${(plannedCount / totalVehicles) * 100}%` }} />
           </div>
         </div>
 
-        {/* Emballage teller */}
         <div className="rounded-lg bg-muted/30 p-3">
-          <p className="text-[10px] text-muted-foreground mb-2">Emballage Teller</p>
+          <p className="text-[10px] text-muted-foreground mb-2">Totaal gewicht actief</p>
           <div className="flex items-center gap-3">
             <Container className="h-8 w-8 text-muted-foreground/30" />
             <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-[11px] text-muted-foreground">Geruild vandaag</span>
-                <span className="text-[13px] font-bold font-display tabular-nums ml-auto">{palletsRuiled}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-muted-foreground">Open bij klant</span>
-                <span className="text-[13px] font-bold font-display tabular-nums ml-auto text-amber-600">{palletsOpen}</span>
-              </div>
+              <p className="text-lg font-bold font-display tabular-nums">
+                {orders.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
+              </p>
+              <p className="text-[9px] text-muted-foreground/60">{orders.length} orders</p>
             </div>
           </div>
-          <p className="text-[9px] text-muted-foreground/60 mt-2">Europallets</p>
         </div>
       </div>
     </motion.div>
