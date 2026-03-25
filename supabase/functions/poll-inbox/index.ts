@@ -188,18 +188,41 @@ async function pollInbox(): Promise<Response> {
           const messageId = msg.envelope?.messageId || `uid-${uid}`;
           console.log(`Processing: ${messageId} from ${fromAddr}`);
 
-          // Dedup check
-          const { data: existing } = await supabase
-            .from("orders")
-            .select("id")
-            .eq("source_email_from", fromAddr)
-            .eq("source_email_subject", subject)
-            .limit(1);
+          // ── Thread detection: check if this is a reply to an existing order ──
+          const isReply = /^(re|fw|fwd):\s*/i.test(subject);
+          const cleanSubject = subject.replace(/^(re|fw|fwd):\s*/gi, "").trim();
+          let parentOrder: any = null;
 
-          if (existing && existing.length > 0) {
-            console.log(`Skipping duplicate: ${messageId}`);
-            await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
-            continue;
+          if (isReply && fromAddr) {
+            // Try to find the original order by matching sender + cleaned subject
+            const { data: candidates } = await supabase
+              .from("orders")
+              .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, requirements, status")
+              .eq("source_email_from", fromAddr)
+              .ilike("source_email_subject", `%${cleanSubject.substring(0, 60)}%`)
+              .order("created_at", { ascending: false })
+              .limit(1);
+            
+            if (candidates && candidates.length > 0) {
+              parentOrder = candidates[0];
+              console.log(`Thread detected: reply to order #${parentOrder.order_number}`);
+            }
+          }
+
+          // Dedup check (skip for replies — those are intentional)
+          if (!isReply) {
+            const { data: existing } = await supabase
+              .from("orders")
+              .select("id")
+              .eq("source_email_from", fromAddr)
+              .eq("source_email_subject", subject)
+              .limit(1);
+
+            if (existing && existing.length > 0) {
+              console.log(`Skipping duplicate: ${messageId}`);
+              await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
+              continue;
+            }
           }
 
           const parsed = parseEml(rawEmail, messageId);
