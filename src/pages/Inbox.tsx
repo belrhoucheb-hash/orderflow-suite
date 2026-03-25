@@ -517,13 +517,87 @@ function FollowUpPanel({ selected }: { selected: OrderDraft }) {
   );
 }
 
-function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onParseResult: (data: Partial<FormState>) => void }) {
+function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState }) {
+  const items = [
+    { label: "Klant", value: order.client_name },
+    { label: "Ophaaladres", value: form.pickupAddress },
+    { label: "Afleveradres", value: form.deliveryAddress },
+    { label: "Lading", value: form.quantity ? `${form.quantity} ${form.unit}` : null },
+    { label: "Gewicht", value: form.weight ? `${form.weight} kg${form.perUnit ? " per eenheid" : ""}` : null },
+    { label: "Afmetingen", value: form.dimensions },
+    { label: "Vereisten", value: form.requirements.length > 0 ? form.requirements.join(", ") : null },
+    { label: "Type", value: form.transportType === "warehouse-air" ? "Warehouse → Air" : "Direct" },
+  ].filter(i => i.value);
+
+  if (items.length === 0) return null;
+
+  // Find matching vehicles for requirements
+  const matchingVehicles = mockVehicles.filter(v => {
+    if (v.status !== "beschikbaar") return false;
+    const reqs = form.requirements || [];
+    if (reqs.includes("Koeling") && !v.features?.includes("Koeling")) return false;
+    if (reqs.includes("ADR") && !v.features?.includes("ADR")) return false;
+    if (reqs.includes("Laadklep") && !v.features?.includes("Laadklep")) return false;
+    return true;
+  });
+
+  return (
+    <div className="p-5 space-y-4">
+      <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/30 p-4 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="h-5 w-5 rounded-md bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+          </div>
+          <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-[0.08em]">Dit hebben we begrepen</h4>
+        </div>
+        <div className="grid gap-1.5">
+          {items.map((item) => (
+            <div key={item.label} className="flex items-baseline gap-2 text-[12px]">
+              <span className="text-emerald-600/70 font-medium min-w-[80px]">{item.label}</span>
+              <span className="text-foreground font-semibold">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {matchingVehicles.length > 0 && (
+        <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <Truck className="h-3.5 w-3.5 text-primary" />
+            <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Beschikbare capaciteit</h4>
+          </div>
+          <div className="space-y-1.5">
+            {matchingVehicles.slice(0, 3).map((v) => (
+              <div key={v.id} className="flex items-center gap-2 text-[11px] rounded-lg bg-card border border-border/20 px-3 py-2">
+                <Truck className="h-3 w-3 text-muted-foreground" />
+                <span className="font-semibold text-foreground">{v.name}</span>
+                <span className="text-muted-foreground">({v.plate})</span>
+                {v.features?.length > 0 && (
+                  <div className="flex gap-1 ml-auto">
+                    {v.features.slice(0, 2).map(f => (
+                      <span key={f} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{f}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourcePanel({ selected, form, onParseResult }: { selected: OrderDraft; form: FormState | null; onParseResult: (data: Partial<FormState>) => void }) {
   const [activeTab, setActiveTab] = useState<"email" | "attachment">("email");
   const [isParsing, setIsParsing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const attachments = (selected.attachments || []) as { name: string; url: string; type: string }[];
   const hasAttachments = attachments.length > 0;
+  const hasMissing = (selected.missing_fields || []).length > 0;
+  const hasFollowUp = !!selected.follow_up_draft;
+  const showSummary = !hasMissing && !hasFollowUp && form && selected.confidence_score && selected.confidence_score >= 60;
 
   const handleParseWithAI = async () => {
     setIsParsing(true);
@@ -658,6 +732,9 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
         
         {/* Follow-up Draft Panel - under source email */}
         <FollowUpPanel selected={selected} />
+
+        {/* Extraction Summary - when order is complete */}
+        {showSummary && form && <ExtractionSummary order={selected} form={form} />}
       </ScrollArea>
     </div>
   );
