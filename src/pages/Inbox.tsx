@@ -826,7 +826,7 @@ export default function Inbox() {
             <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
               {draft.client_name || "Nieuwe aanvraag"}
             </span>
-            <span className="text-[10px] font-mono text-muted-foreground/30 shrink-0">#{draft.order_number}</span>
+          </div>
           
           <p className="text-[11px] text-muted-foreground truncate mb-1.5 leading-snug">
             {draft.source_email_subject || "Geen onderwerp"}
