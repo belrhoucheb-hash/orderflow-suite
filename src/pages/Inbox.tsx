@@ -1491,27 +1491,37 @@ export default function Inbox() {
                         <span className="text-[9px] text-muted-foreground/60 ml-auto italic">Geen vereisten gedetecteerd in bericht</span>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {requirementOptions.map((req) => {
-                        const active = form.requirements.includes(req.id);
-                        return (
+                    {/* Active requirements shown prominently */}
+                    {form.requirements.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {requirementOptions.filter(r => form.requirements.includes(r.id)).map((req) => (
                           <button
                             key={req.id}
                             onClick={() => toggleRequirement(req.id)}
-                            className={cn(
-                              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200",
-                              active
-                                ? cn(req.color, "border-current/20 shadow-sm")
-                                : "bg-card text-muted-foreground/50 border-border/20 hover:border-border/60 hover:text-muted-foreground"
-                            )}
+                            className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border shadow-sm transition-all duration-200", req.color, "border-current/20")}
                           >
                             <req.icon className="h-3.5 w-3.5" />
                             {req.label}
-                            {active && <CheckCircle2 className="h-3 w-3 ml-auto" />}
+                            <CheckCircle2 className="h-3 w-3 ml-1" />
                           </button>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Inactive requirements as compact row */}
+                    {requirementOptions.filter(r => !form.requirements.includes(r.id)).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {requirementOptions.filter(r => !form.requirements.includes(r.id)).map((req) => (
+                          <button
+                            key={req.id}
+                            onClick={() => toggleRequirement(req.id)}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground/40 border border-border/15 hover:border-border/40 hover:text-muted-foreground transition-all"
+                          >
+                            <req.icon className="h-3 w-3" />
+                            {req.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* ── Interne Notitie ── */}
