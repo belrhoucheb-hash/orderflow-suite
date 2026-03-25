@@ -1150,9 +1150,45 @@ export default function Inbox() {
                   {orders.map(renderInboxItem)}
                 </div>
               ))
-            ) : (
-              filtered.map(renderInboxItem)
-            )}
+            ) : (() => {
+              // Split into "Actie nodig" and "Klaar voor planning"
+              const needsAction = filtered.filter(d => {
+                const hasMissing = (d.missing_fields || []).length > 0;
+                const lowConf = (d.confidence_score || 0) > 0 && (d.confidence_score || 0) < 80;
+                const noScore = !d.confidence_score;
+                return hasMissing || lowConf || noScore;
+              });
+              const readyToGo = filtered.filter(d => {
+                const hasMissing = (d.missing_fields || []).length > 0;
+                const score = d.confidence_score || 0;
+                return !hasMissing && score >= 80;
+              });
+
+              return (
+                <>
+                  {needsAction.length > 0 && (
+                    <div className="mb-1">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 mb-0.5">
+                        <CircleAlert className="h-3 w-3 text-amber-500" />
+                        <span className="text-[10px] font-bold text-amber-600/80 uppercase tracking-wider">Actie nodig</span>
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/20">{needsAction.length}</Badge>
+                      </div>
+                      {needsAction.map(renderInboxItem)}
+                    </div>
+                  )}
+                  {readyToGo.length > 0 && (
+                    <div className="mb-1">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 mb-0.5">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                        <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider">Klaar voor planning</span>
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{readyToGo.length}</Badge>
+                      </div>
+                      {readyToGo.map(renderInboxItem)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             
             {filtered.length === 0 && (
               <div className="text-center py-16">
