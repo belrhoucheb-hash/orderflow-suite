@@ -466,6 +466,7 @@ function VehicleDropZone({
   driver,
   onDriverChange,
   orderCoords,
+  emptyReason,
 }: {
   vehicle: FleetVehicle;
   assigned: PlanOrder[];
@@ -480,6 +481,7 @@ function VehicleDropZone({
   driver: string;
   onDriverChange: (vehicleId: string, driver: string) => void;
   orderCoords: Map<string, GeoCoord>;
+  emptyReason: string;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: vehicle.id });
   const color = vehicleColors[vehicle.id] || "#888";
