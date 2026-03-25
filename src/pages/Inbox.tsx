@@ -1364,6 +1364,9 @@ export default function Inbox() {
                     <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <ShieldCheck className="h-3.5 w-3.5 text-primary" />
                       <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Vereisten</h4>
+                      {form.requirements.length === 0 && (
+                        <span className="text-[9px] text-muted-foreground/60 ml-auto italic">Geen vereisten gedetecteerd in bericht</span>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {requirementOptions.map((req) => {
@@ -1376,7 +1379,7 @@ export default function Inbox() {
                               "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200",
                               active
                                 ? cn(req.color, "border-current/20 shadow-sm")
-                                : "bg-card text-muted-foreground border-border/30 hover:border-border/60"
+                                : "bg-card text-muted-foreground/50 border-border/20 hover:border-border/60 hover:text-muted-foreground"
                             )}
                           >
                             <req.icon className="h-3.5 w-3.5" />
