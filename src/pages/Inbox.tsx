@@ -132,21 +132,53 @@ const requirementOptions = [
   { id: "Douane", label: "Douane", icon: FileCheck, color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
 ];
 
-function ConfidenceBadge({ score }: { score: number }) {
+function ConfidenceDot({ score }: { score: number }) {
   const isHigh = score >= 80;
   const isMedium = score >= 60 && score < 80;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide",
-        isHigh && "bg-emerald-500/10 text-emerald-600",
-        isMedium && "bg-amber-500/10 text-amber-600",
-        !isHigh && !isMedium && "bg-red-500/10 text-red-600"
-      )}
-    >
-      <Bot className="h-2.5 w-2.5" />
-      {score}%
-    </span>
+    <Tooltip>
+      <TooltipTrigger>
+        <span className={cn(
+          "inline-block h-2 w-2 rounded-full shrink-0",
+          isHigh && "bg-emerald-500",
+          isMedium && "bg-amber-500",
+          !isHigh && !isMedium && "bg-destructive"
+        )} />
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-[10px]">AI confidence: {score}%</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ConfidenceRing({ score }: { score: number }) {
+  const isHigh = score >= 80;
+  const isMedium = score >= 60 && score < 80;
+  const radius = 18;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+  const color = isHigh ? "hsl(var(--primary))" : isMedium ? "hsl(38, 92%, 50%)" : "hsl(var(--destructive))";
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="relative h-12 w-12 shrink-0">
+        <svg className="h-12 w-12 -rotate-90" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="3" />
+          <circle cx="22" cy="22" r={radius} fill="none" stroke={color} strokeWidth="3"
+            strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
+            className="transition-all duration-700 ease-out" />
+        </svg>
+        <span className={cn(
+          "absolute inset-0 flex items-center justify-center text-[11px] font-bold",
+          isHigh && "text-primary",
+          isMedium && "text-amber-600",
+          !isHigh && !isMedium && "text-destructive"
+        )}>{score}%</span>
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-foreground">AI Confidence</p>
+        <p className="text-[9px] text-muted-foreground">{isHigh ? "Hoge zekerheid" : isMedium ? "Controleer velden" : "Handmatig invoeren"}</p>
+      </div>
+    </div>
   );
 }
 
@@ -521,13 +553,14 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
   );
 }
 
-function FormField({ label, icon: Icon, children, className, source }: { label: string; icon?: any; children: React.ReactNode; className?: string; source?: FieldSource }) {
+function FormField({ label, icon: Icon, children, className, source, warning }: { label: string; icon?: any; children: React.ReactNode; className?: string; source?: FieldSource; warning?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
       <div className="flex items-center justify-between">
-        <Label className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", warning ? "text-destructive" : "text-muted-foreground")}>
           {Icon && <Icon className="h-3 w-3" />}
           {label}
+          {warning && <span className="text-[9px] font-normal">— {warning}</span>}
         </Label>
         {source && <SourceBadge source={source} />}
       </div>
@@ -775,81 +808,55 @@ export default function Inbox() {
         layoutId={draft.id}
         onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
         className={cn(
-          "w-full text-left p-3 rounded-xl transition-all duration-200 group relative",
-          isSelected ? "bg-primary/[0.04] ring-1 ring-primary/15" : "hover:bg-muted/40"
+          "w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 group relative",
+          isSelected ? "bg-primary/[0.05] ring-1 ring-primary/15" : "hover:bg-muted/40"
         )}
       >
-        {/* Confidence indicator bar */}
-        {conf > 0 && (
-          <div className={cn(
-            "absolute left-0 top-3 bottom-3 w-[3px] rounded-full",
-            conf >= 80 ? "bg-emerald-400" : conf >= 60 ? "bg-amber-400" : "bg-red-400"
-          )} />
-        )}
-        
-        <div className="pl-2">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <span className="text-[13px] font-semibold text-foreground truncate leading-tight">
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            {conf > 0 && <ConfidenceDot score={conf} />}
+            <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
               {draft.client_name || "Nieuwe aanvraag"}
             </span>
-            {conf > 0 && <ConfidenceBadge score={conf} />}
           </div>
           
-          <p className="text-[11px] text-muted-foreground truncate mb-2 leading-snug">
+          <p className="text-[11px] text-muted-foreground truncate mb-1.5 leading-snug">
             {draft.source_email_subject || "Geen onderwerp"}
           </p>
           
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
-              {hasReqs && (
-                <div className="flex items-center gap-0.5">
-                  {draft.requirements!.slice(0, 2).map(r => {
-                    const opt = requirementOptions.find(o => o.id === r);
-                    return opt ? (
-                      <Tooltip key={r}>
-                        <TooltipTrigger>
-                          <span className={cn("inline-flex items-center justify-center h-4 w-4 rounded", opt.color.split(' ')[1])}>
-                            <opt.icon className={cn("h-2.5 w-2.5", opt.color.split(' ')[0])} />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
-                      </Tooltip>
-                    ) : null;
-                  })}
-                </div>
-              )}
-              {hasNote && (
-                <Tooltip>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
+            {hasReqs && draft.requirements!.slice(0, 2).map(r => {
+              const opt = requirementOptions.find(o => o.id === r);
+              return opt ? (
+                <Tooltip key={r}>
                   <TooltipTrigger>
-                    <StickyNote className="h-3 w-3 text-amber-500" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
-                </Tooltip>
-              )}
-              {isDuplicate && (
-                <Tooltip>
-                  <TooltipTrigger>
-                    <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded-md">
-                      <AlertTriangle className="h-2.5 w-2.5" />
-                      Duplicaat?
+                    <span className={cn("inline-flex items-center justify-center h-4 w-4 rounded", opt.color.split(' ')[1])}>
+                      <opt.icon className={cn("h-2.5 w-2.5", opt.color.split(' ')[0])} />
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-[10px] max-w-[250px]">
-                    Lijkt op order {duplicateMap.get(draft.id)!.join(", ")} — zelfde klant en adres binnen {DUPLICATE_WINDOW_MINUTES} min
-                  </TooltipContent>
+                  <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
                 </Tooltip>
-              )}
-            </div>
-            <span className="text-[10px] font-mono text-muted-foreground/30">#{draft.order_number}</span>
+              ) : null;
+            })}
+            {hasNote && (
+              <Tooltip>
+                <TooltipTrigger><StickyNote className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
+              </Tooltip>
+            )}
+            {isDuplicate && (
+              <Tooltip>
+                <TooltipTrigger>
+                  <AlertTriangle className="h-3 w-3 text-amber-500" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px] max-w-[250px]">
+                  Duplicaat van {duplicateMap.get(draft.id)!.join(", ")}
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </div>
-        
-        <ChevronRight className={cn(
-          "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/0 transition-all",
-          "group-hover:text-muted-foreground/40",
-          isSelected && "text-primary/40"
-        )} />
       </motion.button>
     );
   };
@@ -1053,7 +1060,7 @@ export default function Inbox() {
                       <span className="text-muted-foreground font-normal text-xs ml-1.5 hidden sm:inline">{selected.client_name || "Onbekende klant"}</span>
                     </h2>
                   </div>
-                  {selected.confidence_score != null && <ConfidenceBadge score={selected.confidence_score} />}
+                  {selected.confidence_score != null && <ConfidenceRing score={selected.confidence_score} />}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {(() => {
@@ -1084,82 +1091,79 @@ export default function Inbox() {
 
             {/* Extracted Data */}
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="px-5 py-3 border-b border-border/20 bg-card/50">
-                <div className="flex items-center gap-2">
-                  <Bot className="h-3.5 w-3.5 text-primary" />
-                  <p className="text-[11px] font-semibold text-foreground">Geëxtraheerde Data</p>
-                  {selected.confidence_score != null && (
-                    <span className="text-[10px] text-muted-foreground ml-auto">AI confidence: {selected.confidence_score}%</span>
-                  )}
-                </div>
-              </div>
-              
               <ScrollArea className="flex-1">
-                <div className="p-5 space-y-6">
-                  {/* Route Section */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Route className="h-3.5 w-3.5 text-primary/60" />
-                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Route</h4>
+                <div className="p-4 space-y-4">
+                  {/* Confidence Ring */}
+                  {selected.confidence_score != null && (
+                    <div className="rounded-xl border border-border/40 bg-card p-4">
+                      <ConfidenceRing score={selected.confidence_score} />
                     </div>
-                    <div className="space-y-3">
-                      <FormField label="Transport Type" source={form.fieldSources?.transport_type}>
-                        <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
-                          <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="direct">Direct Transport</SelectItem>
-                            <SelectItem value="warehouse-air">Warehouse → Air</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormField>
-                      
-                      <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}>
-                        <div className="relative">
-                          <Input className="h-9 text-xs pr-9 rounded-lg" value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder="Voer ophaaladres in..." />
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                                onClick={() => {
-                                  const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
-                                  if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                  else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
-                                }}>
-                                <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </FormField>
+                  )}
 
-                      <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}>
-                        <div className="relative">
-                          <Input className="h-9 text-xs pr-9 rounded-lg" value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder="Voer afleveradres in..." />
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                                onClick={() => {
-                                  const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
-                                  if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                  else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
-                                }}>
-                                <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
-                          </Tooltip>
-                        </div>
-                      </FormField>
+                  {/* Route Card */}
+                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Route className="h-3.5 w-3.5 text-primary" />
+                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Route</h4>
                     </div>
+                    <FormField label="Transport Type" source={form.fieldSources?.transport_type}>
+                      <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
+                        <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="direct">Direct Transport</SelectItem>
+                          <SelectItem value="warehouse-air">Warehouse → Air</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                    
+                    <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
+                      warning={isAddressIncomplete(form.pickupAddress) ? "Incompleet" : undefined}>
+                      <div className="relative">
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", isAddressIncomplete(form.pickupAddress) && "border-destructive/60 focus-visible:ring-destructive/30")}
+                          value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder="Voer ophaaladres in..." />
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                              onClick={() => {
+                                const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
+                                if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                              }}>
+                              <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </FormField>
+
+                    <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
+                      warning={isAddressIncomplete(form.deliveryAddress) ? "Incompleet" : undefined}>
+                      <div className="relative">
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", isAddressIncomplete(form.deliveryAddress) && "border-destructive/60 focus-visible:ring-destructive/30")}
+                          value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder="Voer afleveradres in..." />
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                              onClick={() => {
+                                const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
+                                if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                              }}>
+                              <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </FormField>
                   </div>
 
-                  <Separator className="bg-border/20" />
-
-                  {/* Cargo Section */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Package className="h-3.5 w-3.5 text-primary/60" />
-                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Lading</h4>
+                  {/* Cargo Card */}
+                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-3.5 w-3.5 text-primary" />
+                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Lading</h4>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <FormField label="Aantal" source={form.fieldSources?.quantity}>
@@ -1175,31 +1179,33 @@ export default function Inbox() {
                           </SelectContent>
                         </Select>
                       </FormField>
-                      <FormField label="Gewicht (kg)" icon={Scale} source={form.fieldSources?.weight_kg}>
-                        <Input className="h-9 text-xs rounded-lg" value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder="—" />
+                      <FormField label="Gewicht (kg)" icon={Scale} source={form.fieldSources?.weight_kg}
+                        warning={!form.weight ? "Ontbreekt" : undefined}>
+                        <Input className={cn("h-9 text-xs rounded-lg", !form.weight && "border-amber-400/60")}
+                          value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder="—" />
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <Checkbox id={`pu-${selected.id}`} checked={form.perUnit} onCheckedChange={(c) => updateField("perUnit", !!c)} className="h-3 w-3" />
                           <label htmlFor={`pu-${selected.id}`} className="text-[10px] text-muted-foreground cursor-pointer">Per eenheid</label>
                         </div>
                         {form.perUnit && form.weight && form.quantity > 0 && (
-                          <div className="mt-2 px-2.5 py-1.5 rounded-md bg-emerald-50 border border-emerald-100">
-                            <p className="text-[10px] text-emerald-700 font-semibold">Totaal: {form.quantity * Number(form.weight)} kg</p>
+                          <div className="mt-2 px-2.5 py-1.5 rounded-md bg-primary/5 border border-primary/10">
+                            <p className="text-[10px] text-primary font-semibold">Totaal: {form.quantity * Number(form.weight)} kg</p>
                           </div>
                         )}
                       </FormField>
-                      <FormField label="Afmetingen (LxBxH)" icon={Ruler} source={form.fieldSources?.dimensions}>
-                        <Input className="h-9 text-xs rounded-lg" value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder="—" />
+                      <FormField label="Afmetingen (LxBxH)" icon={Ruler} source={form.fieldSources?.dimensions}
+                        warning={!form.dimensions ? "Ontbreekt" : undefined}>
+                        <Input className={cn("h-9 text-xs rounded-lg", !form.dimensions && "border-amber-400/60")}
+                          value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder="—" />
                       </FormField>
                     </div>
                   </div>
 
-                  <Separator className="bg-border/20" />
-
-                  {/* Requirements Section */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <ShieldCheck className="h-3.5 w-3.5 text-primary/60" />
-                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Vereisten</h4>
+                  {/* Requirements Card */}
+                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Vereisten</h4>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {requirementOptions.map((req) => {
@@ -1209,7 +1215,7 @@ export default function Inbox() {
                             key={req.id}
                             onClick={() => toggleRequirement(req.id)}
                             className={cn(
-                              "flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium border transition-all duration-200",
+                              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200",
                               active
                                 ? cn(req.color, "border-current/20 shadow-sm")
                                 : "bg-background text-muted-foreground border-border/30 hover:border-border/60"
@@ -1224,13 +1230,11 @@ export default function Inbox() {
                     </div>
                   </div>
 
-                  <Separator className="bg-border/20" />
-
-                  {/* Internal Note Section */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <StickyNote className="h-3.5 w-3.5 text-amber-500/60" />
-                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Interne Notitie</h4>
+                  {/* Internal Note Card */}
+                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
+                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Interne Notitie</h4>
                       <span className="text-[9px] text-muted-foreground/50 ml-auto">Zichtbaar voor planners</span>
                     </div>
                     <Textarea
@@ -1240,71 +1244,30 @@ export default function Inbox() {
                       onBlur={() => {
                         if (selected) saveNoteMutation.mutate({ id: selected.id, note: form.internalNote });
                       }}
-                      className="text-xs min-h-[72px] rounded-lg resize-none bg-amber-50/30 border-amber-200/40 focus:border-amber-300 placeholder:text-muted-foreground/40"
+                      className="text-xs min-h-[64px] rounded-lg resize-none bg-muted/30 border-border/30 placeholder:text-muted-foreground/40"
                     />
                   </div>
 
-                  {/* Warnings */}
-                  {(isAddressIncomplete(form.pickupAddress) || isAddressIncomplete(form.deliveryAddress)) && (
-                    <div className="rounded-xl border border-orange-200/60 bg-orange-50/50 p-3.5">
-                      <div className="flex items-start gap-2.5">
-                        <div className="h-6 w-6 rounded-lg bg-orange-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <MapPin className="h-3 w-3 text-orange-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-orange-800">Adres incompleet</p>
-                          <p className="text-[11px] text-orange-600/80 mt-0.5 leading-relaxed">
-                            {[
-                              isAddressIncomplete(form.pickupAddress) && "Ophaaladres",
-                              isAddressIncomplete(form.deliveryAddress) && "Afleveradres",
-                            ].filter(Boolean).join(" en ")} lijkt incompleet. Gebruik het{" "}
-                            <DatabaseZap className="inline h-3 w-3 -mt-px" /> adresboek om te verrijken.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {(!form.weight || !form.dimensions) && (
-                    <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 p-3.5">
-                      <div className="flex items-start gap-2.5">
-                        <div className="h-6 w-6 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <AlertTriangle className="h-3 w-3 text-amber-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-amber-800">Ontbrekende gegevens</p>
-                          <p className="text-[11px] text-amber-600/80 mt-0.5 leading-relaxed">
-                            {[!form.weight && "Gewicht", !form.dimensions && "Afmetingen"].filter(Boolean).join(" en ")} ontbreekt.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Duplicate warning in detail view */}
+                  {/* Duplicate warning */}
                   {selected && duplicateMap.has(selected.id) && (
                     <div className="rounded-xl border border-amber-300/40 bg-amber-50/50 p-3.5">
                       <div className="flex items-start gap-2.5">
-                        <div className="h-6 w-6 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
-                          <AlertTriangle className="h-3 w-3 text-amber-600" />
-                        </div>
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-xs font-semibold text-amber-800">Mogelijk duplicaat</p>
                           <p className="text-[11px] text-amber-600/80 mt-0.5 leading-relaxed">
-                            Deze order lijkt sterk op {duplicateMap.get(selected.id)!.join(", ")} — zelfde klant en afleveradres, ontvangen binnen {DUPLICATE_WINDOW_MINUTES} minuten.
+                            Lijkt op {duplicateMap.get(selected.id)!.join(", ")} — zelfde klant en adres binnen {DUPLICATE_WINDOW_MINUTES} min.
                           </p>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Capacity conflict warning in detail view */}
+                  {/* Capacity warning */}
                   {capacityWarning.hasWarning && (
                     <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3.5">
                       <div className="flex items-start gap-2.5">
-                        <div className="h-6 w-6 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0 mt-0.5">
-                          <TriangleAlert className="h-3 w-3 text-destructive" />
-                        </div>
+                        <TriangleAlert className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
                         <div>
                           <p className="text-xs font-semibold text-destructive">Capaciteit conflict</p>
                           <p className="text-[11px] text-destructive/80 mt-0.5 leading-relaxed">{capacityWarning.message}</p>
