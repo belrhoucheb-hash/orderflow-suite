@@ -82,7 +82,7 @@ function orderToForm(order: OrderDraft): FormState {
     deliveryAddress: order.delivery_address || "",
     quantity: order.quantity || 0,
     unit: order.unit || "Pallets",
-    weight: order.weight_kg?.toString() || "",
+    weight: order.weight_kg ? order.weight_kg.toString() : "",
     dimensions: order.dimensions || "",
     requirements: order.requirements || [],
     perUnit: order.is_weight_per_unit,
@@ -668,9 +668,10 @@ function FormField({ label, icon: Icon, children, className, source, warning, co
   return (
     <div className={cn("space-y-1.5", className)}>
       <div className="flex items-center justify-between gap-1">
-        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", hasIssue ? "text-destructive" : "text-muted-foreground")}>
+        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", hasIssue ? "text-destructive font-semibold" : "text-muted-foreground")}>
           {Icon && <Icon className="h-3 w-3" />}
           {label}
+          {confidence === "missing" && <span className="text-[9px] text-destructive/80 font-normal ml-1">— ontbreekt in bericht</span>}
         </Label>
         <div className="flex items-center gap-1.5">
           {confidence && <FieldConfidence level={confidence} />}
@@ -1149,9 +1150,45 @@ export default function Inbox() {
                   {orders.map(renderInboxItem)}
                 </div>
               ))
-            ) : (
-              filtered.map(renderInboxItem)
-            )}
+            ) : (() => {
+              // Split into "Actie nodig" and "Klaar voor planning"
+              const needsAction = filtered.filter(d => {
+                const hasMissing = (d.missing_fields || []).length > 0;
+                const lowConf = (d.confidence_score || 0) > 0 && (d.confidence_score || 0) < 80;
+                const noScore = !d.confidence_score;
+                return hasMissing || lowConf || noScore;
+              });
+              const readyToGo = filtered.filter(d => {
+                const hasMissing = (d.missing_fields || []).length > 0;
+                const score = d.confidence_score || 0;
+                return !hasMissing && score >= 80;
+              });
+
+              return (
+                <>
+                  {needsAction.length > 0 && (
+                    <div className="mb-1">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 mb-0.5">
+                        <CircleAlert className="h-3 w-3 text-amber-500" />
+                        <span className="text-[10px] font-bold text-amber-600/80 uppercase tracking-wider">Actie nodig</span>
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/20">{needsAction.length}</Badge>
+                      </div>
+                      {needsAction.map(renderInboxItem)}
+                    </div>
+                  )}
+                  {readyToGo.length > 0 && (
+                    <div className="mb-1">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 mb-0.5">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                        <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider">Klaar voor planning</span>
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{readyToGo.length}</Badge>
+                      </div>
+                      {readyToGo.map(renderInboxItem)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             
             {filtered.length === 0 && (
               <div className="text-center py-16">
@@ -1276,8 +1313,8 @@ export default function Inbox() {
                     <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
                       confidence={!form.pickupAddress ? "missing" : isAddressIncomplete(form.pickupAddress) ? "low" : "high"}>
                       <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg bg-card", isAddressIncomplete(form.pickupAddress) && "border-destructive ring-1 ring-destructive/20")}
-                          value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder="Voer ophaaladres in..." />
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : isAddressIncomplete(form.pickupAddress) ? "bg-card border-destructive ring-1 ring-destructive/20" : "bg-card")}
+                          value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
@@ -1297,8 +1334,8 @@ export default function Inbox() {
                     <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
                       confidence={!form.deliveryAddress ? "missing" : isAddressIncomplete(form.deliveryAddress) ? "low" : "high"}>
                       <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg bg-card", isAddressIncomplete(form.deliveryAddress) && "border-destructive ring-1 ring-destructive/20")}
-                          value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder="Voer afleveradres in..." />
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : isAddressIncomplete(form.deliveryAddress) ? "bg-card border-destructive ring-1 ring-destructive/20" : "bg-card")}
+                          value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
@@ -1338,8 +1375,8 @@ export default function Inbox() {
                       </FormField>
                       <FormField label="Gewicht (kg)" icon={Scale} source={form.fieldSources?.weight_kg}
                         confidence={!form.weight ? "missing" : "high"}>
-                        <Input className={cn("h-9 text-xs rounded-lg bg-card", !form.weight && "border-amber-500/60 ring-1 ring-amber-500/20")}
-                          value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder="—" />
+                        <Input className={cn("h-9 text-xs rounded-lg", !form.weight ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                          value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder={!form.weight ? "⚠ Niet gevonden" : "—"} />
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <Checkbox id={`pu-${selected.id}`} checked={form.perUnit} onCheckedChange={(c) => updateField("perUnit", !!c)} className="h-3 w-3" />
                           <label htmlFor={`pu-${selected.id}`} className="text-[10px] text-muted-foreground cursor-pointer">Per eenheid</label>
@@ -1352,8 +1389,8 @@ export default function Inbox() {
                       </FormField>
                       <FormField label="Afmetingen (LxBxH)" icon={Ruler} source={form.fieldSources?.dimensions}
                         confidence={!form.dimensions ? "missing" : "high"}>
-                        <Input className={cn("h-9 text-xs rounded-lg bg-card", !form.dimensions && "border-amber-500/60 ring-1 ring-amber-500/20")}
-                          value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder="—" />
+                        <Input className={cn("h-9 text-xs rounded-lg", !form.dimensions ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                          value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder={!form.dimensions ? "⚠ Niet gevonden" : "—"} />
                       </FormField>
                     </div>
                   </div>
@@ -1363,6 +1400,9 @@ export default function Inbox() {
                     <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <ShieldCheck className="h-3.5 w-3.5 text-primary" />
                       <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Vereisten</h4>
+                      {form.requirements.length === 0 && (
+                        <span className="text-[9px] text-muted-foreground/60 ml-auto italic">Geen vereisten gedetecteerd in bericht</span>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {requirementOptions.map((req) => {
@@ -1375,7 +1415,7 @@ export default function Inbox() {
                               "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200",
                               active
                                 ? cn(req.color, "border-current/20 shadow-sm")
-                                : "bg-card text-muted-foreground border-border/30 hover:border-border/60"
+                                : "bg-card text-muted-foreground/50 border-border/20 hover:border-border/60 hover:text-muted-foreground"
                             )}
                           >
                             <req.icon className="h-3.5 w-3.5" />
