@@ -279,7 +279,7 @@ async function pollInbox(): Promise<Response> {
             uploadedAttachments.push({ name: att.name, url: urlData.publicUrl, type: att.type });
           }
 
-          // Create draft order
+          // Create draft order (link to parent if reply)
           const { data: order, error: insertError } = await supabase
             .from("orders")
             .insert({
@@ -289,6 +289,8 @@ async function pollInbox(): Promise<Response> {
               source_email_body: parsed.body,
               received_at: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : new Date().toISOString(),
               attachments: uploadedAttachments,
+              thread_type: parentOrder ? "update" : "new",
+              parent_order_id: parentOrder?.id || null,
             })
             .select("id, order_number")
             .single();
