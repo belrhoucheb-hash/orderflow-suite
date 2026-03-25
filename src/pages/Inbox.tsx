@@ -1286,12 +1286,12 @@ export default function Inbox() {
                         <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                         <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider">Klaar voor planning</span>
                         <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{readyToGo.length}</Badge>
-                        {readyToGo.length === 1 && (
+                        {readyToGo.length === 1 ? (
                           <Button
-                            variant="ghost"
                             size="sm"
-                            className="h-5 text-[9px] gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 ml-auto px-2"
-                            onClick={() => {
+                            className="h-6 text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white ml-auto px-2.5 shadow-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedId(readyToGo[0].id);
                               const f = formData[readyToGo[0].id];
                               if (f) createOrderMutation.mutate({ id: readyToGo[0].id, form: f });
@@ -1299,7 +1299,21 @@ export default function Inbox() {
                           >
                             <Zap className="h-2.5 w-2.5" /> Direct inplannen
                           </Button>
-                        )}
+                        ) : readyToGo.length > 1 ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 text-[10px] gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50 ml-auto px-2.5"
+                            onClick={() => {
+                              readyToGo.forEach(d => {
+                                const f = formData[d.id];
+                                if (f) createOrderMutation.mutate({ id: d.id, form: f });
+                              });
+                            }}
+                          >
+                            <Zap className="h-2.5 w-2.5" /> Alle {readyToGo.length} inplannen
+                          </Button>
+                        ) : null}
                       </div>
                       {readyToGo.map(renderInboxItem)}
                     </div>
