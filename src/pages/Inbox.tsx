@@ -856,9 +856,10 @@ export default function Inbox() {
 
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-0 -m-4 md:-m-6">
+      <ResizablePanelGroup direction="horizontal" className="h-full">
       {/* ─── Left: Inbox List ─── */}
-      <div className={cn(
-        "w-full md:w-[360px] md:min-w-[320px] border-r border-border/40 flex flex-col bg-card",
+      <ResizablePanel defaultSize={25} minSize={15} maxSize={40} className={cn(
+        "flex flex-col bg-card",
         mobileView !== "list" && "hidden md:flex"
       )}>
         {/* Header */}
