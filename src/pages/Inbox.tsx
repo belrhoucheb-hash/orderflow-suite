@@ -1438,6 +1438,7 @@ export default function Inbox() {
                         </>
                       );
                     })()}
+                  </div>
 
                   {/* ── Lading Section ── */}
                   <div className="rounded-xl bg-muted/20 p-4 space-y-3">
