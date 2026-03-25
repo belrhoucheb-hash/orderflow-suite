@@ -82,7 +82,7 @@ function orderToForm(order: OrderDraft): FormState {
     deliveryAddress: order.delivery_address || "",
     quantity: order.quantity || 0,
     unit: order.unit || "Pallets",
-    weight: order.weight_kg?.toString() || "",
+    weight: order.weight_kg ? order.weight_kg.toString() : "",
     dimensions: order.dimensions || "",
     requirements: order.requirements || [],
     perUnit: order.is_weight_per_unit,
