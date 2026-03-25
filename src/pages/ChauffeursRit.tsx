@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useVehicles, type FleetVehicle } from "@/hooks/useVehicles";
+import { type FleetVehicle } from "@/hooks/useVehicles";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -276,7 +276,27 @@ const ChauffeursRit = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
-  const { data: vehicles = [], isLoading: vehiclesLoading } = useVehicles();
+  const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
+    queryKey: ["trip-vehicles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("id, code, name, plate, type, capacity_kg, capacity_pallets, features")
+        .eq("is_active", true)
+        .order("capacity_kg", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((v): FleetVehicle => ({
+        id: v.id, // Use real UUID for matching with orders.vehicle_id
+        code: v.code,
+        name: v.name,
+        plate: v.plate,
+        type: v.type,
+        capacityKg: v.capacity_kg,
+        capacityPallets: v.capacity_pallets,
+        features: v.features ?? [],
+      }));
+    },
+  });
 
   const { data: allOrders = [], isLoading: ordersLoading } = useQuery({
     queryKey: ["trip-orders"],
