@@ -141,11 +141,12 @@ const FIELD_LABELS: Record<string, string> = {
   client_name: "Klantnaam",
 };
 
-const THREAD_TYPE_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-  update: { label: "Wijziging", color: "bg-blue-50 text-blue-700 border-blue-200", icon: ArrowLeft },
-  cancellation: { label: "Annulering", color: "bg-destructive/10 text-destructive border-destructive/20", icon: Trash2 },
-  confirmation: { label: "Bevestiging", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
-  question: { label: "Vraag", color: "bg-violet-50 text-violet-700 border-violet-200", icon: CircleAlert },
+const THREAD_TYPE_CONFIG: Record<string, { label: string; color: string; icon: any; listLabel: string; listColor: string }> = {
+  new: { label: "Nieuw", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Plus, listLabel: "🆕 Nieuw", listColor: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  update: { label: "Wijziging", color: "bg-blue-50 text-blue-700 border-blue-200", icon: ArrowLeft, listLabel: "🔄 Update", listColor: "text-violet-600 bg-violet-50 border-violet-200" },
+  cancellation: { label: "Annulering", color: "bg-destructive/10 text-destructive border-destructive/20", icon: Trash2, listLabel: "❌ Annulering", listColor: "text-destructive bg-destructive/10 border-destructive/20" },
+  confirmation: { label: "Bevestiging", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2, listLabel: "✅ Bevestiging", listColor: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  question: { label: "Vraag", color: "bg-violet-50 text-violet-700 border-violet-200", icon: CircleAlert, listLabel: "❓ Vraag", listColor: "text-violet-600 bg-violet-50 border-violet-200" },
 };
 
 function ThreadDiffBanner({ order }: { order: OrderDraft }) {
@@ -893,10 +894,11 @@ export default function Inbox() {
     const isSelected = selectedId === draft.id;
     const conf = draft.confidence_score || 0;
     const hasReqs = (draft.requirements || []).length > 0;
-    const deadline = getDeadlineInfo(draft.received_at);
     const hasNote = !!draft.internal_note;
-    const isPulse = draft.id === mostUrgentId;
     const isDuplicate = duplicateMap.has(draft.id);
+    const threadType = draft.thread_type || "new";
+    const threadConfig = THREAD_TYPE_CONFIG[threadType];
+    const changes = (draft.changes_detected || []) as { field: string; old_value: string; new_value: string }[];
 
     return (
       <motion.button
@@ -911,14 +913,11 @@ export default function Inbox() {
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             {conf > 0 && <ConfidenceDot score={conf} />}
-            {draft.thread_type && draft.thread_type !== "new" && (() => {
-              const tc = THREAD_TYPE_CONFIG[draft.thread_type];
-              return tc ? (
-                <span className={cn("inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded border shrink-0", tc.color)}>
-                  <tc.icon className="h-2 w-2" />{tc.label}
-                </span>
-              ) : null;
-            })()}
+            {threadConfig && (
+              <span className={cn("inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>
+                {threadConfig.listLabel}
+              </span>
+            )}
             {(draft.anomalies as any[])?.length > 0 && (
               <Tooltip>
                 <TooltipTrigger>
@@ -936,9 +935,24 @@ export default function Inbox() {
             </span>
           </div>
           
-          <p className="text-[11px] text-muted-foreground truncate mb-1.5 leading-snug">
+          <p className="text-[11px] text-muted-foreground truncate mb-1 leading-snug">
             {draft.source_email_subject || "Geen onderwerp"}
           </p>
+
+          {/* Inline change diffs for update threads */}
+          {threadType === "update" && changes.length > 0 && (
+            <div className="mb-1.5 space-y-0.5">
+              {changes.slice(0, 2).map((change, i) => (
+                <div key={i} className="flex items-center gap-1 text-[10px]">
+                  <span className="text-muted-foreground font-medium">{FIELD_LABELS[change.field] || change.field}:</span>
+                  <span className="text-muted-foreground/60 line-through">{change.old_value}</span>
+                  <span className="text-muted-foreground/50">→</span>
+                  <span className="text-violet-600 font-semibold">{change.new_value}</span>
+                </div>
+              ))}
+              <span className="text-[9px] text-muted-foreground/40">(Gewijzigd via mail)</span>
+            </div>
+          )}
           
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
