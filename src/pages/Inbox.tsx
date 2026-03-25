@@ -1188,6 +1188,12 @@ export default function Inbox() {
             <div className="flex-1 flex flex-col overflow-hidden">
               <ScrollArea className="flex-1">
                 <div className="p-4 space-y-4">
+                  {/* Thread Diff Banner */}
+                  <ThreadDiffBanner order={selected} />
+
+                  {/* Anomaly Warnings */}
+                  <AnomalyWarnings anomalies={(selected.anomalies || []) as { field: string; value: number; avg_value: number; message: string }[]} />
+
                   {/* Confidence Ring */}
                   {selected.confidence_score != null && (
                     <div className="rounded-xl border border-border/40 bg-card p-4">
