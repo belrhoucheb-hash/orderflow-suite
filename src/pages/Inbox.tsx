@@ -1009,8 +1009,8 @@ export default function Inbox() {
       {/* ─── Middle: Source Email ─── */}
       {selected && form ? (
         <>
-          <div className={cn(
-            "w-full md:w-[400px] lg:w-[420px] flex flex-col min-w-0",
+          <ResizablePanel defaultSize={35} minSize={20} maxSize={50} className={cn(
+            "flex flex-col min-w-0",
             mobileView !== "source" && "hidden md:flex"
           )}>
             {/* Mobile back + next buttons */}
