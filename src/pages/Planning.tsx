@@ -1274,15 +1274,26 @@ const Planning = () => {
 
     setAssignments(newAssignments);
 
-    // Efficiency reporting
+    // Efficiency reporting with scenario stats
     const usedVehicles = sortedVehicles.filter((v) => (newAssignments[v.id]?.length ?? 0) > 0);
-    const smallVehiclesUsed = usedVehicles.filter((v) => v.capacityKg <= 5000).length;
     const notPlaced = sortedOrders.length - placed.size;
+
+    // Calculate total km and cost estimate
+    let totalKm = 0;
+    for (const v of usedVehicles) {
+      const vOrders = newAssignments[v.id] ?? [];
+      if (vOrders.length > 0) {
+        const stats = computeRouteStats("07:00", vOrders, orderCoords);
+        totalKm += stats.totalKm;
+      }
+    }
+    const costEstimate = Math.round(totalKm * 2.85); // ~€2.85/km average
+
     toast({
-      title: `⚡ ${placed.size} orders ingepland over ${usedVehicles.length} voertuig(en)`,
+      title: `⚡ ${placed.size} orders → ${usedVehicles.length} ritten · ${totalKm} km · €${costEstimate.toLocaleString("nl-NL")}`,
       description: notPlaced > 0
         ? `${notPlaced} order(s) konden niet geplaatst worden (capaciteit/vereisten).`
-        : `Optimalisatie gereed. ${smallVehiclesUsed} kleine voertuig(en) maximaal benut.`,
+        : `Optimalisatie gereed. Geschatte kosten: €${costEstimate.toLocaleString("nl-NL")} (${totalKm} km × €2,85/km).`,
       variant: notPlaced > 0 ? "destructive" : undefined,
     });
   }, [orders, assignedIds, assignments, orderCoords, toast]);
