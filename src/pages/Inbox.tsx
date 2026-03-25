@@ -1002,7 +1002,9 @@ export default function Inbox() {
             )}
           </div>
         </ScrollArea>
-      </div>
+      </ResizablePanel>
+
+      <ResizableHandle withHandle />
 
       {/* ─── Middle: Source Email ─── */}
       {selected && form ? (
