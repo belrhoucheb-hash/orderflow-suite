@@ -910,6 +910,26 @@ export default function Inbox() {
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             {conf > 0 && <ConfidenceDot score={conf} />}
+            {draft.thread_type && draft.thread_type !== "new" && (() => {
+              const tc = THREAD_TYPE_CONFIG[draft.thread_type];
+              return tc ? (
+                <span className={cn("inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded border shrink-0", tc.color)}>
+                  <tc.icon className="h-2 w-2" />{tc.label}
+                </span>
+              ) : null;
+            })()}
+            {(draft.anomalies as any[])?.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger>
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-amber-100 border border-amber-200">
+                    <Bot className="h-2.5 w-2.5 text-amber-600" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px] max-w-[250px]">
+                  {(draft.anomalies as any[])[0]?.message}
+                </TooltipContent>
+              </Tooltip>
+            )}
             <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
               {draft.client_name || "Nieuwe aanvraag"}
             </span>
