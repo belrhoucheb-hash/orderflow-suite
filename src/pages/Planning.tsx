@@ -1530,6 +1530,7 @@ const Planning = () => {
                   driver={vehicleDrivers[vehicle.id] ?? ""}
                   onDriverChange={(vId, d) => setVehicleDrivers((p) => ({ ...p, [vId]: d }))}
                   orderCoords={orderCoords}
+                  emptyReason={getEmptyReason(vehicle, orders, assignedIds)}
                 />
               ))}
             </div>
