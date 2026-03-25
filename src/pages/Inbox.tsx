@@ -1298,8 +1298,8 @@ export default function Inbox() {
                     <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
                       confidence={!form.deliveryAddress ? "missing" : isAddressIncomplete(form.deliveryAddress) ? "low" : "high"}>
                       <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg bg-card", isAddressIncomplete(form.deliveryAddress) && "border-destructive ring-1 ring-destructive/20")}
-                          value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder="Voer afleveradres in..." />
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : isAddressIncomplete(form.deliveryAddress) ? "bg-card border-destructive ring-1 ring-destructive/20" : "bg-card")}
+                          value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
