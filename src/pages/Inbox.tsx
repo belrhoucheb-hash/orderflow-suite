@@ -1283,7 +1283,7 @@ export default function Inbox() {
                 Order <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <SourcePanel selected={selected} onParseResult={(data) => {
+            <SourcePanel selected={selected} form={form} onParseResult={(data) => {
               if (!selected) return;
               const { result: enriched, enrichments } = enrichAddresses(data);
               setFormData((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], ...enriched } }));
