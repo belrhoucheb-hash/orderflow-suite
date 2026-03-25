@@ -808,19 +808,11 @@ export default function Inbox() {
         layoutId={draft.id}
         onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
         className={cn(
-          "w-full text-left p-3 rounded-xl transition-all duration-200 group relative",
-          isSelected ? "bg-primary/[0.04] ring-1 ring-primary/15" : "hover:bg-muted/40"
+          "w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 group relative",
+          isSelected ? "bg-primary/[0.05] ring-1 ring-primary/15" : "hover:bg-muted/40"
         )}
       >
-        {/* Confidence indicator bar */}
-        {conf > 0 && (
-          <div className={cn(
-            "absolute left-0 top-3 bottom-3 w-[3px] rounded-full",
-            conf >= 80 ? "bg-emerald-400" : conf >= 60 ? "bg-amber-400" : "bg-red-400"
-          )} />
-        )}
-        
-        <div className="pl-2">
+        <div>
           <div className="flex items-center gap-2 mb-0.5">
             {conf > 0 && <ConfidenceDot score={conf} />}
             <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
