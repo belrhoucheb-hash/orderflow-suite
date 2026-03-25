@@ -132,21 +132,53 @@ const requirementOptions = [
   { id: "Douane", label: "Douane", icon: FileCheck, color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
 ];
 
-function ConfidenceBadge({ score }: { score: number }) {
+function ConfidenceDot({ score }: { score: number }) {
   const isHigh = score >= 80;
   const isMedium = score >= 60 && score < 80;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide",
-        isHigh && "bg-emerald-500/10 text-emerald-600",
-        isMedium && "bg-amber-500/10 text-amber-600",
-        !isHigh && !isMedium && "bg-red-500/10 text-red-600"
-      )}
-    >
-      <Bot className="h-2.5 w-2.5" />
-      {score}%
-    </span>
+    <Tooltip>
+      <TooltipTrigger>
+        <span className={cn(
+          "inline-block h-2 w-2 rounded-full shrink-0",
+          isHigh && "bg-emerald-500",
+          isMedium && "bg-amber-500",
+          !isHigh && !isMedium && "bg-destructive"
+        )} />
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-[10px]">AI confidence: {score}%</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ConfidenceRing({ score }: { score: number }) {
+  const isHigh = score >= 80;
+  const isMedium = score >= 60 && score < 80;
+  const radius = 18;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+  const color = isHigh ? "hsl(var(--primary))" : isMedium ? "hsl(38, 92%, 50%)" : "hsl(var(--destructive))";
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="relative h-12 w-12 shrink-0">
+        <svg className="h-12 w-12 -rotate-90" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="3" />
+          <circle cx="22" cy="22" r={radius} fill="none" stroke={color} strokeWidth="3"
+            strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
+            className="transition-all duration-700 ease-out" />
+        </svg>
+        <span className={cn(
+          "absolute inset-0 flex items-center justify-center text-[11px] font-bold",
+          isHigh && "text-primary",
+          isMedium && "text-amber-600",
+          !isHigh && !isMedium && "text-destructive"
+        )}>{score}%</span>
+      </div>
+      <div>
+        <p className="text-[10px] font-semibold text-foreground">AI Confidence</p>
+        <p className="text-[9px] text-muted-foreground">{isHigh ? "Hoge zekerheid" : isMedium ? "Controleer velden" : "Handmatig invoeren"}</p>
+      </div>
+    </div>
   );
 }
 
