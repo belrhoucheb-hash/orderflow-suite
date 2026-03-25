@@ -544,7 +544,10 @@ function VehicleDropZone({
             </SelectTrigger>
             <SelectContent>
               {MOCK_DRIVERS.map((d) => (
-                <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>
+                <SelectItem key={d.name} value={d.name} className="text-xs">
+                  {d.name}
+                  {d.certs.length > 0 && <span className="text-[9px] text-muted-foreground ml-1">({d.certs.join(", ")})</span>}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
