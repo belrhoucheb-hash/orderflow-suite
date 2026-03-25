@@ -1121,7 +1121,19 @@ export default function Inbox() {
             <div>
               <h2 className="text-base font-bold text-foreground tracking-tight">Inbox</h2>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                {drafts.length} {drafts.length === 1 ? "aanvraag" : "aanvragen"} te verwerken
+                {(() => {
+                  const actionCount = drafts.filter(d => {
+                    const hasMissing = (d.missing_fields || []).length > 0;
+                    const lowConf = (d.confidence_score || 0) > 0 && (d.confidence_score || 0) < 80;
+                    const noScore = !d.confidence_score;
+                    return hasMissing || lowConf || noScore;
+                  }).length;
+                  const readyCount = drafts.length - actionCount;
+                  if (actionCount > 0 && readyCount > 0) return <><strong className="text-amber-600">{actionCount}</strong> vereisen actie · <strong className="text-emerald-600">{readyCount}</strong> klaar</>;
+                  if (actionCount > 0) return <><strong className="text-amber-600">{actionCount}</strong> vereisen actie</>;
+                  if (readyCount > 0) return <><strong className="text-emerald-600">{readyCount}</strong> klaar voor planning</>;
+                  return "Geen aanvragen";
+                })()}
               </p>
             </div>
             <div className="flex items-center gap-1.5">
