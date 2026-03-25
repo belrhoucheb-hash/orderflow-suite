@@ -1213,7 +1213,7 @@ export default function Inbox() {
                       <span className="text-muted-foreground font-normal text-xs ml-1.5 hidden sm:inline">{selected.client_name || "Onbekende klant"}</span>
                     </h2>
                   </div>
-                  {selected.confidence_score != null && <ConfidenceRing score={selected.confidence_score} />}
+                  
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {(() => {
