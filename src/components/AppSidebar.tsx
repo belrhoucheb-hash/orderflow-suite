@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Truck, Map, LogOut, Users } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Truck, Map, Route, LogOut, Users } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import logo from "@/assets/logo.png";
@@ -24,6 +24,7 @@ const mainItems = [
   { title: "Orders", url: "/orders", icon: Package },
   { title: "Transportplanning", url: "/planning", icon: Truck },
   { title: "Routekaart", url: "/routes", icon: Map },
+  { title: "Chauffeurs Rit", url: "/ritten", icon: Route },
 ];
 
 const adminItems = [
