@@ -29,7 +29,20 @@ function generateFollowUpDraft(missing: string[], extracted: Record<string, any>
   if (missing.length === 0) return "";
   const missingList = missing.map((f) => `  • ${f}`).join("\n");
   const clientName = extracted.client_name || "Geachte heer/mevrouw";
-  return `Beste ${clientName},\n\nBedankt voor uw transportaanvraag. Wij hebben uw order ontvangen maar missen nog de volgende gegevens om uw transport correct in te plannen:\n\n${missingList}\n\nKunt u deze informatie zo spoedig mogelijk aanleveren? Dan plannen wij uw transport direct in.\n\nMet vriendelijke groet,\nRoyalty Cargo Planning`;
+
+  // Build a summary of what WAS understood to make the mail more personal
+  const understood: string[] = [];
+  if (extracted.quantity && extracted.unit) understood.push(`${extracted.quantity} ${extracted.unit}`);
+  else if (extracted.quantity) understood.push(`${extracted.quantity} stuks`);
+  if (extracted.delivery_address) understood.push(`levering naar ${extracted.delivery_address}`);
+  if (extracted.pickup_address) understood.push(`ophalen bij ${extracted.pickup_address}`);
+  if (extracted.requirements?.length > 0) understood.push(`vereisten: ${extracted.requirements.join(", ")}`);
+
+  const understoodText = understood.length > 0
+    ? `Wij hebben uw aanvraag voor ${understood.join(", ")} ontvangen.`
+    : `Wij hebben uw transportaanvraag ontvangen.`;
+
+  return `Beste ${clientName},\n\n${understoodText} Om dit correct in te plannen hebben wij nog het volgende nodig:\n\n${missingList}\n\nKunt u deze informatie zo spoedig mogelijk aanleveren? Dan plannen wij uw transport direct in.\n\nMet vriendelijke groet,\nRoyalty Cargo Planning`;
 }
 
 // ── Anomaly detection against client history ──
