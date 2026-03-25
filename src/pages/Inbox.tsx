@@ -1039,6 +1039,14 @@ export default function Inbox() {
           {draft.source_email_subject || "Geen onderwerp"}
         </p>
 
+        {/* Inline duplicate indicator */}
+        {isDuplicate && (
+          <div className="flex items-center gap-1 mb-1 text-[10px] text-amber-600">
+            <Merge className="h-2.5 w-2.5" />
+            <span className="font-medium">Mogelijk duplicaat van {duplicateMap.get(draft.id)!.join(", ")}</span>
+          </div>
+        )}
+
         {/* Inline change diffs for update threads */}
         {threadType === "update" && changes.length > 0 && (
           <div className="mb-1 space-y-0.5">
