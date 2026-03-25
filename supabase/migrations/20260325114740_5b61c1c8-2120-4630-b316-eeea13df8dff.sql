@@ -1,0 +1,3 @@
+ALTER TABLE public.orders 
+  ADD COLUMN IF NOT EXISTS invoice_ref TEXT,
+  ADD COLUMN IF NOT EXISTS barcode TEXT;

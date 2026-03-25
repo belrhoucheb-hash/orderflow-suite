@@ -14,6 +14,7 @@ import Planning from "@/pages/Planning";
 import RoutesPage from "@/pages/Routes";
 import ChauffeursRit from "@/pages/ChauffeursRit";
 import Inbox from "@/pages/Inbox";
+import Transportopdrachten from "@/pages/Transportopdrachten";
 import UsersPage from "@/pages/UsersPage";
 import NotFound from "@/pages/NotFound";
 
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="/planning" element={<Planning />} />
               <Route path="/routes" element={<RoutesPage />} />
               <Route path="/ritten" element={<ChauffeursRit />} />
+              <Route path="/opdrachten" element={<Transportopdrachten />} />
               <Route path="/users" element={<UsersPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
