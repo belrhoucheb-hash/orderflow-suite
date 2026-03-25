@@ -1028,11 +1028,13 @@ export default function Inbox() {
               setFormData((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], ...enriched } }));
               if (enrichments.length > 0) toast({ title: "Adresboek verrijking", description: enrichments.join(". ") });
             }} />
-          </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle />
 
           {/* ─── Right: Order Form ─── */}
-          <div className={cn(
-            "flex-1 flex flex-col min-w-0 bg-background border-l border-border/30",
+          <ResizablePanel defaultSize={40} minSize={25} className={cn(
+            "flex flex-col min-w-0 bg-background",
             mobileView !== "detail" && "hidden md:flex"
           )}>
             {/* Header Bar */}
