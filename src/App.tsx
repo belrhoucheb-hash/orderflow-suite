@@ -10,6 +10,7 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Orders from "@/pages/Orders";
 import OrderDetail from "@/pages/OrderDetail";
+import NewOrder from "@/pages/NewOrder";
 import Planning from "@/pages/Planning";
 import RoutesPage from "@/pages/Routes";
 import ChauffeursRit from "@/pages/ChauffeursRit";
