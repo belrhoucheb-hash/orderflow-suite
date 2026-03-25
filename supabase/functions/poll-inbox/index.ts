@@ -311,10 +311,12 @@ async function pollInbox(): Promise<Response> {
               });
 
               if (parseResp.ok) {
-                const { extracted } = await parseResp.json();
+                const parseData = await parseResp.json();
+                const extracted = parseData.extracted;
                 if (extracted) {
                   confidence = extracted.confidence_score || 0;
                   const newStatus = confidence > 90 ? "OPEN" : "DRAFT";
+                  const detectedThreadType = parseData.thread_type || (parentOrder ? "update" : "new");
 
                   await supabase.from("orders").update({
                     client_name: extracted.client_name || null,
@@ -329,9 +331,12 @@ async function pollInbox(): Promise<Response> {
                     requirements: extracted.requirements || [],
                     confidence_score: confidence,
                     status: newStatus,
+                    thread_type: detectedThreadType,
+                    changes_detected: parseData.changes_detected || [],
+                    anomalies: parseData.anomalies || [],
                   }).eq("id", order.id);
 
-                  console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}`);
+                  console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}, thread=${detectedThreadType}, anomalies=${(parseData.anomalies || []).length}`);
                 }
               } else {
                 console.error("parse-order failed:", parseResp.status);
