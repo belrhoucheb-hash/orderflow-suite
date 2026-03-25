@@ -220,7 +220,7 @@ function AnomalyWarnings({ anomalies }: { anomalies: { field: string; value: num
   );
 }
 
-
+const requirementOptions = [
   { id: "Koeling", label: "Koeling", icon: ThermometerSnowflake, color: "text-sky-600 bg-sky-50 border-sky-200" },
   { id: "ADR", label: "ADR", icon: AlertTriangle, color: "text-amber-600 bg-amber-50 border-amber-200" },
   { id: "Laadklep", label: "Laadklep", icon: Truck, color: "text-violet-600 bg-violet-50 border-violet-200" },
