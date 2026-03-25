@@ -1506,8 +1506,16 @@ const Planning = () => {
               )}
             </UnassignedDropZone>
 
-            <div className="text-[11px] text-muted-foreground/60 pt-2 border-t border-border/30 tabular-nums">
-              {totalUnassigned} beschikbaar · {totalAssigned} ingepland
+            <div className="text-[11px] text-muted-foreground/60 pt-2 border-t border-border/30 tabular-nums space-y-0.5">
+              <div>{totalUnassigned} beschikbaar · {totalAssigned} ingepland</div>
+              <div>{(() => {
+                const withSpace = fleetVehicles.filter(v => {
+                  const a = assignments[v.id] ?? [];
+                  const kg = a.reduce((s, o) => s + getTotalWeight(o), 0);
+                  return kg < v.capacityKg * 0.95;
+                }).length;
+                return `${withSpace} van ${fleetVehicles.length} voertuigen hebben ruimte`;
+              })()}</div>
             </div>
           </div>
 
