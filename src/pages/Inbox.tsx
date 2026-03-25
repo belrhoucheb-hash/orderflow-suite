@@ -52,6 +52,10 @@ interface OrderDraft {
   missing_fields: string[] | null;
   follow_up_draft: string | null;
   follow_up_sent_at: string | null;
+  thread_type: string;
+  parent_order_id: string | null;
+  changes_detected: { field: string; old_value: string; new_value: string }[] | null;
+  anomalies: { field: string; value: number; avg_value: number; message: string }[] | null;
 }
 
 type FieldSource = "email" | "pdf" | "both";
