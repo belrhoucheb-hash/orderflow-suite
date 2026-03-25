@@ -999,11 +999,19 @@ export default function Inbox() {
           <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
             {draft.client_name || "Nieuwe aanvraag"}
           </span>
-          {threadConfig && (
-            <span className={cn("inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>
-              {threadConfig.listLabel}
-            </span>
-          )}
+          {(() => {
+            // Action-specific badge instead of generic thread type
+            const hasMissing = (draft.missing_fields || []).length > 0;
+            const noScore = !draft.confidence_score;
+            const lowScore = (draft.confidence_score || 0) > 0 && (draft.confidence_score || 0) < 80;
+            
+            if (isDuplicate) return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-amber-700 bg-amber-500/15 border-amber-500/25">Duplicaat?</span>;
+            if (threadType !== "new" && threadConfig) return <span className={cn("inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>{threadConfig.listLabel}</span>;
+            if (hasMissing) return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-destructive bg-destructive/10 border-destructive/20">Data mist</span>;
+            if (noScore) return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-muted-foreground bg-muted border-border">Nieuw</span>;
+            if (lowScore) return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-amber-700 bg-amber-500/15 border-amber-500/25">Review</span>;
+            return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-emerald-700 bg-emerald-500/15 border-emerald-500/25">Gereed</span>;
+          })()}
         </div>
 
         {/* Row 2: Subject */}
