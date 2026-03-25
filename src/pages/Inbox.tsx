@@ -1375,8 +1375,8 @@ export default function Inbox() {
                       </FormField>
                       <FormField label="Gewicht (kg)" icon={Scale} source={form.fieldSources?.weight_kg}
                         confidence={!form.weight ? "missing" : "high"}>
-                        <Input className={cn("h-9 text-xs rounded-lg bg-card", !form.weight && "border-amber-500/60 ring-1 ring-amber-500/20")}
-                          value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder="—" />
+                        <Input className={cn("h-9 text-xs rounded-lg", !form.weight ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                          value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder={!form.weight ? "⚠ Niet gevonden" : "—"} />
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <Checkbox id={`pu-${selected.id}`} checked={form.perUnit} onCheckedChange={(c) => updateField("perUnit", !!c)} className="h-3 w-3" />
                           <label htmlFor={`pu-${selected.id}`} className="text-[10px] text-muted-foreground cursor-pointer">Per eenheid</label>
@@ -1389,8 +1389,8 @@ export default function Inbox() {
                       </FormField>
                       <FormField label="Afmetingen (LxBxH)" icon={Ruler} source={form.fieldSources?.dimensions}
                         confidence={!form.dimensions ? "missing" : "high"}>
-                        <Input className={cn("h-9 text-xs rounded-lg bg-card", !form.dimensions && "border-amber-500/60 ring-1 ring-amber-500/20")}
-                          value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder="—" />
+                        <Input className={cn("h-9 text-xs rounded-lg", !form.dimensions ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                          value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder={!form.dimensions ? "⚠ Niet gevonden" : "—"} />
                       </FormField>
                     </div>
                   </div>
