@@ -531,15 +531,8 @@ function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState
 
   if (items.length === 0) return null;
 
-  // Find matching vehicles for requirements
-  const matchingVehicles = mockVehicles.filter(v => {
-    if (v.status !== "beschikbaar") return false;
-    const reqs = form.requirements || [];
-    if (reqs.includes("Koeling") && !v.features?.includes("Koeling")) return false;
-    if (reqs.includes("ADR") && !v.features?.includes("ADR")) return false;
-    if (reqs.includes("Laadklep") && !v.features?.includes("Laadklep")) return false;
-    return true;
-  });
+  // Find matching vehicles based on availability
+  const matchingVehicles = mockVehicles.filter(v => v.status === "beschikbaar");
 
   return (
     <div className="p-5 space-y-4">
@@ -572,13 +565,7 @@ function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState
                 <Truck className="h-3 w-3 text-muted-foreground" />
                 <span className="font-semibold text-foreground">{v.name}</span>
                 <span className="text-muted-foreground">({v.plate})</span>
-                {v.features?.length > 0 && (
-                  <div className="flex gap-1 ml-auto">
-                    {v.features.slice(0, 2).map(f => (
-                      <span key={f} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{f}</span>
-                    ))}
-                  </div>
-                )}
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-auto">{v.type}</span>
               </div>
             ))}
           </div>
