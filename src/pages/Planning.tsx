@@ -1493,6 +1493,25 @@ const Planning = () => {
               </div>
             </div>
 
+            {/* Combine suggestion banner */}
+            {(() => {
+              const combineGroups = findCombinableGroups(orders, assignedIds);
+              if (combineGroups.length === 0) return null;
+              return (
+                <div className="space-y-1.5 mb-2">
+                  {combineGroups.slice(0, 2).map(g => (
+                    <div key={g.key} className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[10px]">
+                      <div className="flex items-center gap-1.5 text-primary font-semibold">
+                        <Route className="h-3 w-3" />
+                        Combineerbaar
+                      </div>
+                      <p className="text-muted-foreground mt-0.5">{g.savings}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             <UnassignedDropZone>
               {groupedUnassigned.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm">
@@ -1513,7 +1532,7 @@ const Planning = () => {
                     </div>
                     <div className="space-y-1.5 mb-2">
                       {group.orders.map((order) => (
-                        <DraggableOrder key={order.id} order={order} onHover={setHoveredOrderId} />
+                        <DraggableOrder key={order.id} order={order} onHover={setHoveredOrderId} whyNotReason={getUnassignedReason(order, fleetVehicles, assignments)} />
                       ))}
                     </div>
                   </div>
