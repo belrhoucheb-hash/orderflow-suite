@@ -663,16 +663,19 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
   );
 }
 
-function FormField({ label, icon: Icon, children, className, source, warning }: { label: string; icon?: any; children: React.ReactNode; className?: string; source?: FieldSource; warning?: string }) {
+function FormField({ label, icon: Icon, children, className, source, warning, confidence }: { label: string; icon?: any; children: React.ReactNode; className?: string; source?: FieldSource; warning?: string; confidence?: "high" | "medium" | "low" | "missing" }) {
+  const hasIssue = warning || confidence === "low" || confidence === "missing";
   return (
     <div className={cn("space-y-1.5", className)}>
-      <div className="flex items-center justify-between">
-        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", warning ? "text-destructive" : "text-muted-foreground")}>
+      <div className="flex items-center justify-between gap-1">
+        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", hasIssue ? "text-destructive" : "text-muted-foreground")}>
           {Icon && <Icon className="h-3 w-3" />}
           {label}
-          {warning && <span className="text-[9px] font-normal">— {warning}</span>}
         </Label>
-        {source && <SourceBadge source={source} />}
+        <div className="flex items-center gap-1.5">
+          {confidence && <FieldConfidence level={confidence} />}
+          {source && <SourceBadge source={source} />}
+        </div>
       </div>
       {children}
     </div>
