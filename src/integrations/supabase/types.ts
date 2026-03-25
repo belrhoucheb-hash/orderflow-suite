@@ -47,6 +47,7 @@ export type Database = {
       orders: {
         Row: {
           attachments: Json | null
+          barcode: string | null
           client_name: string | null
           confidence_score: number | null
           created_at: string
@@ -56,6 +57,7 @@ export type Database = {
           follow_up_sent_at: string | null
           id: string
           internal_note: string | null
+          invoice_ref: string | null
           is_weight_per_unit: boolean
           missing_fields: string[] | null
           order_number: number
@@ -76,6 +78,7 @@ export type Database = {
         }
         Insert: {
           attachments?: Json | null
+          barcode?: string | null
           client_name?: string | null
           confidence_score?: number | null
           created_at?: string
@@ -85,6 +88,7 @@ export type Database = {
           follow_up_sent_at?: string | null
           id?: string
           internal_note?: string | null
+          invoice_ref?: string | null
           is_weight_per_unit?: boolean
           missing_fields?: string[] | null
           order_number?: number
@@ -105,6 +109,7 @@ export type Database = {
         }
         Update: {
           attachments?: Json | null
+          barcode?: string | null
           client_name?: string | null
           confidence_score?: number | null
           created_at?: string
@@ -114,6 +119,7 @@ export type Database = {
           follow_up_sent_at?: string | null
           id?: string
           internal_note?: string | null
+          invoice_ref?: string | null
           is_weight_per_unit?: boolean
           missing_fields?: string[] | null
           order_number?: number
