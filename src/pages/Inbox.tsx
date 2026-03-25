@@ -915,6 +915,7 @@ export default function Inbox() {
     const threadType = draft.thread_type || "new";
     const threadConfig = THREAD_TYPE_CONFIG[threadType];
     const changes = (draft.changes_detected || []) as { field: string; old_value: string; new_value: string }[];
+    const deadline = getDeadlineInfo(draft.received_at);
 
     return (
       <motion.button
@@ -922,86 +923,92 @@ export default function Inbox() {
         layoutId={draft.id}
         onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
         className={cn(
-          "w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 group relative",
-          isSelected ? "bg-primary/[0.05] ring-1 ring-primary/15" : "hover:bg-muted/40"
+          "w-full text-left px-3 py-2 rounded-lg transition-all duration-150 group relative",
+          isSelected ? "bg-primary/[0.06] ring-1 ring-primary/20" : "hover:bg-muted/30",
+          deadline.urgency === "red" && !isSelected && "border-l-2 border-l-destructive"
         )}
       >
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            {conf > 0 && <ConfidenceDot score={conf} />}
-            {threadConfig && (
-              <span className={cn("inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>
-                {threadConfig.listLabel}
-              </span>
-            )}
-            {(draft.anomalies as any[])?.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger>
-                  <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-amber-100 border border-amber-200">
-                    <Bot className="h-2.5 w-2.5 text-amber-600" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-[10px] max-w-[250px]">
-                  {(draft.anomalies as any[])[0]?.message}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
-              {draft.client_name || "Nieuwe aanvraag"}
+        {/* Row 1: Dot + Client + Thread Badge + SLA */}
+        <div className="flex items-center gap-1.5 mb-0.5">
+          {conf > 0 && <ConfidenceDot score={conf} />}
+          <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
+            {draft.client_name || "Nieuwe aanvraag"}
+          </span>
+          {threadConfig && (
+            <span className={cn("inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>
+              {threadConfig.listLabel}
             </span>
-          </div>
-          
-          <p className="text-[11px] text-muted-foreground truncate mb-1 leading-snug">
-            {draft.source_email_subject || "Geen onderwerp"}
-          </p>
-
-          {/* Inline change diffs for update threads */}
-          {threadType === "update" && changes.length > 0 && (
-            <div className="mb-1.5 space-y-0.5">
-              {changes.slice(0, 2).map((change, i) => (
-                <div key={i} className="flex items-center gap-1 text-[10px]">
-                  <span className="text-muted-foreground font-medium">{FIELD_LABELS[change.field] || change.field}:</span>
-                  <span className="text-muted-foreground/60 line-through">{change.old_value}</span>
-                  <span className="text-muted-foreground/50">→</span>
-                  <span className="text-violet-600 font-semibold">{change.new_value}</span>
-                </div>
-              ))}
-              <span className="text-[9px] text-muted-foreground/40">(Gewijzigd via mail)</span>
-            </div>
           )}
-          
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
-            {hasReqs && draft.requirements!.slice(0, 2).map(r => {
-              const opt = requirementOptions.find(o => o.id === r);
-              return opt ? (
-                <Tooltip key={r}>
-                  <TooltipTrigger>
-                    <span className={cn("inline-flex items-center justify-center h-4 w-4 rounded", opt.color.split(' ')[1])}>
-                      <opt.icon className={cn("h-2.5 w-2.5", opt.color.split(' ')[0])} />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
-                </Tooltip>
-              ) : null;
-            })}
-            {hasNote && (
-              <Tooltip>
-                <TooltipTrigger><StickyNote className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
-              </Tooltip>
-            )}
-            {isDuplicate && (
-              <Tooltip>
-                <TooltipTrigger>
-                  <AlertTriangle className="h-3 w-3 text-amber-500" />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-[10px] max-w-[250px]">
-                  Duplicaat van {duplicateMap.get(draft.id)!.join(", ")}
-                </TooltipContent>
-              </Tooltip>
-            )}
+        </div>
+
+        {/* Row 2: Subject */}
+        <p className="text-[11px] text-muted-foreground truncate mb-1 leading-snug">
+          {draft.source_email_subject || "Geen onderwerp"}
+        </p>
+
+        {/* Inline change diffs for update threads */}
+        {threadType === "update" && changes.length > 0 && (
+          <div className="mb-1 space-y-0.5">
+            {changes.slice(0, 2).map((change, i) => (
+              <div key={i} className="flex items-center gap-1 text-[10px]">
+                <span className="text-muted-foreground font-medium">{FIELD_LABELS[change.field] || change.field}:</span>
+                <span className="text-muted-foreground/50 line-through">{change.old_value}</span>
+                <span className="text-muted-foreground/40">→</span>
+                <span className="text-primary font-semibold">{change.new_value}</span>
+              </div>
+            ))}
           </div>
+        )}
+
+        {/* Row 3: Time + icons */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
+          
+          {/* SLA indicator */}
+          {deadline.urgency !== "neutral" && (
+            <span className={cn(
+              "inline-flex items-center gap-0.5 text-[9px] font-medium px-1 py-0.5 rounded",
+              deadline.urgency === "red" && "text-destructive bg-destructive/8",
+              deadline.urgency === "amber" && "text-amber-600 bg-amber-500/8",
+              deadline.urgency === "green" && "text-muted-foreground",
+            )}>
+              <Timer className="h-2.5 w-2.5" />
+              {deadline.label}
+            </span>
+          )}
+
+          <span className="flex-1" />
+
+          {/* Compact icons */}
+          {hasReqs && draft.requirements!.slice(0, 2).map(r => {
+            const opt = requirementOptions.find(o => o.id === r);
+            return opt ? (
+              <Tooltip key={r}>
+                <TooltipTrigger>
+                  <opt.icon className={cn("h-3 w-3", opt.color.split(' ')[0])} />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
+              </Tooltip>
+            ) : null;
+          })}
+          {(draft.anomalies as any[])?.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger><Bot className="h-3 w-3 text-amber-500" /></TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px] max-w-[250px]">{(draft.anomalies as any[])[0]?.message}</TooltipContent>
+            </Tooltip>
+          )}
+          {hasNote && (
+            <Tooltip>
+              <TooltipTrigger><StickyNote className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
+            </Tooltip>
+          )}
+          {isDuplicate && (
+            <Tooltip>
+              <TooltipTrigger><AlertTriangle className="h-3 w-3 text-amber-500" /></TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px] max-w-[250px]">Duplicaat van {duplicateMap.get(draft.id)!.join(", ")}</TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </motion.button>
     );
