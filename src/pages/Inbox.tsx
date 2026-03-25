@@ -1364,58 +1364,72 @@ export default function Inbox() {
                       <Route className="h-3.5 w-3.5 text-primary" />
                       <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Route</h4>
                     </div>
-                    <FormField label="Transport Type" source={form.fieldSources?.transport_type} confidence={form.transportType ? "high" : "missing"}>
-                      <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
-                        <SelectTrigger className="h-9 text-xs rounded-lg bg-card"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="direct">Direct Transport</SelectItem>
-                          <SelectItem value="warehouse-air">Warehouse → Air</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormField>
-                    
-                    <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
-                      confidence={!form.pickupAddress ? "missing" : isAddressIncomplete(form.pickupAddress) ? "low" : "high"}>
-                      <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : isAddressIncomplete(form.pickupAddress) ? "bg-card border-destructive ring-1 ring-destructive/20" : "bg-card")}
-                          value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                              onClick={() => {
-                                const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
-                                if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
-                              }}>
-                              <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </FormField>
+                    {(() => {
+                      const aiScore = selected.confidence_score || 0;
+                      const highAI = aiScore >= 85;
+                      // At high AI confidence, filled fields are trusted
+                      const getConfidence = (val: string | number | undefined | null, useAddressCheck = false): "high" | "medium" | "low" | "missing" => {
+                        if (!val || val === "" || val === 0) return "missing";
+                        if (highAI) return "high";
+                        if (useAddressCheck && typeof val === "string" && isAddressIncomplete(val)) return "low";
+                        return aiScore >= 60 ? "medium" : "low";
+                      };
+                      return (
+                        <>
+                          <FormField label="Transport Type" source={form.fieldSources?.transport_type} confidence={getConfidence(form.transportType)}>
+                            <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
+                              <SelectTrigger className="h-9 text-xs rounded-lg bg-card"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="direct">Direct Transport</SelectItem>
+                                <SelectItem value="warehouse-air">Warehouse → Air</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormField>
+                          
+                          <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
+                            confidence={getConfidence(form.pickupAddress, true)}>
+                            <div className="relative">
+                              <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                                value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                                    onClick={() => {
+                                      const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
+                                      if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                      else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                    }}>
+                                    <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </FormField>
 
-                    <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
-                      confidence={!form.deliveryAddress ? "missing" : isAddressIncomplete(form.deliveryAddress) ? "low" : "high"}>
-                      <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : isAddressIncomplete(form.deliveryAddress) ? "bg-card border-destructive ring-1 ring-destructive/20" : "bg-card")}
-                          value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                              onClick={() => {
-                                const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
-                                if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
-                              }}>
-                              <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </FormField>
-                  </div>
+                          <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
+                            confidence={getConfidence(form.deliveryAddress, true)}>
+                            <div className="relative">
+                              <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                                value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                                    onClick={() => {
+                                      const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
+                                      if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                      else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                    }}>
+                                    <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </FormField>
+                        </>
+                      );
+                    })()}
 
                   {/* ── Lading Section ── */}
                   <div className="rounded-xl bg-muted/20 p-4 space-y-3">
