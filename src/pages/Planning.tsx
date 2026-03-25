@@ -877,6 +877,22 @@ const Planning = () => {
     }
   }, [fleetVehicles]);
 
+  // Auto-suggest drivers when assignments change
+  useEffect(() => {
+    setVehicleDrivers(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const v of fleetVehicles) {
+        const assigned = assignments[v.id] ?? [];
+        if (assigned.length > 0 && !next[v.id]) {
+          const suggested = suggestDriver(assigned, v.features);
+          if (suggested) { next[v.id] = suggested; changed = true; }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [assignments, fleetVehicles]);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const { data: dbOrders = [], refetch } = useQuery({
