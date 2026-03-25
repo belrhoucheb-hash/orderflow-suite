@@ -188,18 +188,41 @@ async function pollInbox(): Promise<Response> {
           const messageId = msg.envelope?.messageId || `uid-${uid}`;
           console.log(`Processing: ${messageId} from ${fromAddr}`);
 
-          // Dedup check
-          const { data: existing } = await supabase
-            .from("orders")
-            .select("id")
-            .eq("source_email_from", fromAddr)
-            .eq("source_email_subject", subject)
-            .limit(1);
+          // ── Thread detection: check if this is a reply to an existing order ──
+          const isReply = /^(re|fw|fwd):\s*/i.test(subject);
+          const cleanSubject = subject.replace(/^(re|fw|fwd):\s*/gi, "").trim();
+          let parentOrder: any = null;
 
-          if (existing && existing.length > 0) {
-            console.log(`Skipping duplicate: ${messageId}`);
-            await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
-            continue;
+          if (isReply && fromAddr) {
+            // Try to find the original order by matching sender + cleaned subject
+            const { data: candidates } = await supabase
+              .from("orders")
+              .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, requirements, status")
+              .eq("source_email_from", fromAddr)
+              .ilike("source_email_subject", `%${cleanSubject.substring(0, 60)}%`)
+              .order("created_at", { ascending: false })
+              .limit(1);
+            
+            if (candidates && candidates.length > 0) {
+              parentOrder = candidates[0];
+              console.log(`Thread detected: reply to order #${parentOrder.order_number}`);
+            }
+          }
+
+          // Dedup check (skip for replies — those are intentional)
+          if (!isReply) {
+            const { data: existing } = await supabase
+              .from("orders")
+              .select("id")
+              .eq("source_email_from", fromAddr)
+              .eq("source_email_subject", subject)
+              .limit(1);
+
+            if (existing && existing.length > 0) {
+              console.log(`Skipping duplicate: ${messageId}`);
+              await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
+              continue;
+            }
           }
 
           const parsed = parseEml(rawEmail, messageId);
@@ -256,7 +279,7 @@ async function pollInbox(): Promise<Response> {
             uploadedAttachments.push({ name: att.name, url: urlData.publicUrl, type: att.type });
           }
 
-          // Create draft order
+          // Create draft order (link to parent if reply)
           const { data: order, error: insertError } = await supabase
             .from("orders")
             .insert({
@@ -266,6 +289,8 @@ async function pollInbox(): Promise<Response> {
               source_email_body: parsed.body,
               received_at: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : new Date().toISOString(),
               attachments: uploadedAttachments,
+              thread_type: parentOrder ? "update" : "new",
+              parent_order_id: parentOrder?.id || null,
             })
             .select("id, order_number")
             .single();
@@ -278,17 +303,20 @@ async function pollInbox(): Promise<Response> {
 
           if (LOVABLE_API_KEY && (parsed.body || pdfUrls.length > 0)) {
             try {
+              const threadContext = parentOrder ? { parentOrder } : undefined;
               const parseResp = await fetch(`${supabaseUrl}/functions/v1/parse-order`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
-                body: JSON.stringify({ emailBody: parsed.body, pdfUrls }),
+                body: JSON.stringify({ emailBody: parsed.body, pdfUrls, threadContext }),
               });
 
               if (parseResp.ok) {
-                const { extracted } = await parseResp.json();
+                const parseData = await parseResp.json();
+                const extracted = parseData.extracted;
                 if (extracted) {
                   confidence = extracted.confidence_score || 0;
                   const newStatus = confidence > 90 ? "OPEN" : "DRAFT";
+                  const detectedThreadType = parseData.thread_type || (parentOrder ? "update" : "new");
 
                   await supabase.from("orders").update({
                     client_name: extracted.client_name || null,
@@ -303,9 +331,12 @@ async function pollInbox(): Promise<Response> {
                     requirements: extracted.requirements || [],
                     confidence_score: confidence,
                     status: newStatus,
+                    thread_type: detectedThreadType,
+                    changes_detected: parseData.changes_detected || [],
+                    anomalies: parseData.anomalies || [],
                   }).eq("id", order.id);
 
-                  console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}`);
+                  console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}, thread=${detectedThreadType}, anomalies=${(parseData.anomalies || []).length}`);
                 }
               } else {
                 console.error("parse-order failed:", parseResp.status);
