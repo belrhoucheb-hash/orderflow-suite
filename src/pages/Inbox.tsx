@@ -129,7 +129,98 @@ function tryEnrichAddress(address: string, clients: ClientRecord[]): { enriched:
   return { enriched: parts.join(", "), matchedClient: match.name };
 }
 
-const requirementOptions = [
+const FIELD_LABELS: Record<string, string> = {
+  weight_kg: "Gewicht",
+  quantity: "Aantal",
+  pickup_address: "Ophaaladres",
+  delivery_address: "Afleveradres",
+  requirements: "Vereisten",
+  unit: "Eenheid",
+  dimensions: "Afmetingen",
+  transport_type: "Transport type",
+  client_name: "Klantnaam",
+};
+
+const THREAD_TYPE_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  update: { label: "Wijziging", color: "bg-blue-50 text-blue-700 border-blue-200", icon: ArrowLeft },
+  cancellation: { label: "Annulering", color: "bg-destructive/10 text-destructive border-destructive/20", icon: Trash2 },
+  confirmation: { label: "Bevestiging", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
+  question: { label: "Vraag", color: "bg-violet-50 text-violet-700 border-violet-200", icon: CircleAlert },
+};
+
+function ThreadDiffBanner({ order }: { order: OrderDraft }) {
+  if (order.thread_type === "new" || !order.thread_type) return null;
+  const config = THREAD_TYPE_CONFIG[order.thread_type];
+  if (!config) return null;
+  const changes = (order.changes_detected || []) as { field: string; old_value: string; new_value: string }[];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-blue-200/60 bg-blue-50/50 p-4 space-y-2.5"
+    >
+      <div className="flex items-center gap-2">
+        <div className={cn("inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-md border", config.color)}>
+          <config.icon className="h-3 w-3" />
+          E-mail Thread: {config.label}
+        </div>
+        {order.parent_order_id && (
+          <span className="text-[10px] text-muted-foreground">
+            Reactie op bestaande order
+          </span>
+        )}
+      </div>
+
+      {changes.length > 0 && (
+        <div className="space-y-1.5">
+          {changes.map((change, i) => (
+            <div key={i} className="flex items-center gap-2 text-[12px] rounded-lg bg-white/80 border border-blue-100/60 px-3 py-2">
+              <span className="text-muted-foreground font-medium min-w-[80px]">{FIELD_LABELS[change.field] || change.field}</span>
+              <span className="text-destructive/70 line-through">{change.old_value}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="text-emerald-700 font-semibold">{change.new_value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {order.thread_type === "cancellation" && (
+        <p className="text-[11px] text-destructive/80 font-medium">
+          ⚠ Klant wil deze order annuleren. Controleer en verwerk handmatig.
+        </p>
+      )}
+    </motion.div>
+  );
+}
+
+function AnomalyWarnings({ anomalies }: { anomalies: { field: string; value: number; avg_value: number; message: string }[] }) {
+  if (!anomalies || anomalies.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      {anomalies.map((a, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: i * 0.1 }}
+          className="flex items-start gap-2.5 rounded-lg border border-amber-200/50 bg-amber-50/40 px-3 py-2"
+        >
+          <Bot className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-amber-800 font-medium leading-snug">{a.message}</p>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-[10px] text-amber-600/70">Huidige waarde: <strong>{a.value}</strong></span>
+              <span className="text-[10px] text-amber-600/70">Gemiddeld: <strong>{a.avg_value}</strong></span>
+            </div>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+
   { id: "Koeling", label: "Koeling", icon: ThermometerSnowflake, color: "text-sky-600 bg-sky-50 border-sky-200" },
   { id: "ADR", label: "ADR", icon: AlertTriangle, color: "text-amber-600 bg-amber-50 border-amber-200" },
   { id: "Laadklep", label: "Laadklep", icon: Truck, color: "text-violet-600 bg-violet-50 border-violet-200" },
