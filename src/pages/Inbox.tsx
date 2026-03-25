@@ -232,49 +232,62 @@ function ConfidenceDot({ score }: { score: number }) {
   const isHigh = score >= 80;
   const isMedium = score >= 60 && score < 80;
   return (
-    <Tooltip>
-      <TooltipTrigger>
-        <span className={cn(
-          "inline-block h-2 w-2 rounded-full shrink-0",
-          isHigh && "bg-emerald-500",
-          isMedium && "bg-amber-500",
-          !isHigh && !isMedium && "bg-destructive"
-        )} />
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-[10px]">AI confidence: {score}%</TooltipContent>
-    </Tooltip>
+    <span className={cn(
+      "inline-block h-[6px] w-[6px] rounded-full shrink-0",
+      isHigh && "bg-emerald-500",
+      isMedium && "bg-amber-500",
+      !isHigh && !isMedium && "bg-destructive"
+    )} />
   );
 }
 
 function ConfidenceRing({ score }: { score: number }) {
   const isHigh = score >= 80;
   const isMedium = score >= 60 && score < 80;
-  const radius = 18;
+  const radius = 22;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
-  const color = isHigh ? "hsl(var(--primary))" : isMedium ? "hsl(38, 92%, 50%)" : "hsl(var(--destructive))";
+  const colorClass = isHigh ? "text-emerald-600" : isMedium ? "text-amber-500" : "text-destructive";
+  const strokeColor = isHigh ? "#059669" : isMedium ? "#f59e0b" : "hsl(var(--destructive))";
+  const bgColor = isHigh ? "bg-emerald-50" : isMedium ? "bg-amber-50" : "bg-destructive/5";
 
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="relative h-12 w-12 shrink-0">
-        <svg className="h-12 w-12 -rotate-90" viewBox="0 0 44 44">
-          <circle cx="22" cy="22" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="3" />
-          <circle cx="22" cy="22" r={radius} fill="none" stroke={color} strokeWidth="3"
+    <div className={cn("flex items-center gap-3 rounded-xl px-3 py-2", bgColor)}>
+      <div className="relative h-11 w-11 shrink-0">
+        <svg className="h-11 w-11 -rotate-90" viewBox="0 0 52 52">
+          <circle cx="26" cy="26" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="2.5" opacity="0.3" />
+          <circle cx="26" cy="26" r={radius} fill="none" stroke={strokeColor} strokeWidth="2.5"
             strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
             className="transition-all duration-700 ease-out" />
         </svg>
-        <span className={cn(
-          "absolute inset-0 flex items-center justify-center text-[11px] font-bold",
-          isHigh && "text-primary",
-          isMedium && "text-amber-600",
-          !isHigh && !isMedium && "text-destructive"
-        )}>{score}%</span>
+        <span className={cn("absolute inset-0 flex items-center justify-center text-[13px] font-bold tabular-nums", colorClass)}>
+          {score}
+        </span>
       </div>
       <div>
-        <p className="text-[10px] font-semibold text-foreground">AI Confidence</p>
-        <p className="text-[9px] text-muted-foreground">{isHigh ? "Hoge zekerheid" : isMedium ? "Controleer velden" : "Handmatig invoeren"}</p>
+        <p className="text-[11px] font-semibold text-foreground leading-tight">AI Score</p>
+        <p className={cn("text-[10px] font-medium", colorClass)}>
+          {isHigh ? "Hoge zekerheid" : isMedium ? "Controleer velden" : "Handmatig invoeren"}
+        </p>
       </div>
     </div>
+  );
+}
+
+// Mini confidence bar for individual fields
+function FieldConfidence({ level }: { level: "high" | "medium" | "low" | "missing" }) {
+  if (level === "high") return null; // Don't clutter high-confidence fields
+  const config = {
+    medium: { color: "bg-amber-500", label: "Controleer", textColor: "text-amber-600" },
+    low: { color: "bg-destructive", label: "Onzeker", textColor: "text-destructive" },
+    missing: { color: "bg-muted-foreground/30", label: "Ontbreekt", textColor: "text-muted-foreground" },
+  };
+  const c = config[level];
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[9px] font-medium", c.textColor)}>
+      <span className={cn("h-1 w-3 rounded-full", c.color)} />
+      {c.label}
+    </span>
   );
 }
 
@@ -650,16 +663,19 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
   );
 }
 
-function FormField({ label, icon: Icon, children, className, source, warning }: { label: string; icon?: any; children: React.ReactNode; className?: string; source?: FieldSource; warning?: string }) {
+function FormField({ label, icon: Icon, children, className, source, warning, confidence }: { label: string; icon?: any; children: React.ReactNode; className?: string; source?: FieldSource; warning?: string; confidence?: "high" | "medium" | "low" | "missing" }) {
+  const hasIssue = warning || confidence === "low" || confidence === "missing";
   return (
     <div className={cn("space-y-1.5", className)}>
-      <div className="flex items-center justify-between">
-        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", warning ? "text-destructive" : "text-muted-foreground")}>
+      <div className="flex items-center justify-between gap-1">
+        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", hasIssue ? "text-destructive" : "text-muted-foreground")}>
           {Icon && <Icon className="h-3 w-3" />}
           {label}
-          {warning && <span className="text-[9px] font-normal">— {warning}</span>}
         </Label>
-        {source && <SourceBadge source={source} />}
+        <div className="flex items-center gap-1.5">
+          {confidence && <FieldConfidence level={confidence} />}
+          {source && <SourceBadge source={source} />}
+        </div>
       </div>
       {children}
     </div>
@@ -899,6 +915,7 @@ export default function Inbox() {
     const threadType = draft.thread_type || "new";
     const threadConfig = THREAD_TYPE_CONFIG[threadType];
     const changes = (draft.changes_detected || []) as { field: string; old_value: string; new_value: string }[];
+    const deadline = getDeadlineInfo(draft.received_at);
 
     return (
       <motion.button
@@ -906,86 +923,92 @@ export default function Inbox() {
         layoutId={draft.id}
         onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
         className={cn(
-          "w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 group relative",
-          isSelected ? "bg-primary/[0.05] ring-1 ring-primary/15" : "hover:bg-muted/40"
+          "w-full text-left px-3 py-2 rounded-lg transition-all duration-150 group relative",
+          isSelected ? "bg-primary/[0.06] ring-1 ring-primary/20" : "hover:bg-muted/30",
+          deadline.urgency === "red" && !isSelected && "border-l-2 border-l-destructive"
         )}
       >
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            {conf > 0 && <ConfidenceDot score={conf} />}
-            {threadConfig && (
-              <span className={cn("inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>
-                {threadConfig.listLabel}
-              </span>
-            )}
-            {(draft.anomalies as any[])?.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger>
-                  <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-amber-100 border border-amber-200">
-                    <Bot className="h-2.5 w-2.5 text-amber-600" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-[10px] max-w-[250px]">
-                  {(draft.anomalies as any[])[0]?.message}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
-              {draft.client_name || "Nieuwe aanvraag"}
+        {/* Row 1: Dot + Client + Thread Badge + SLA */}
+        <div className="flex items-center gap-1.5 mb-0.5">
+          {conf > 0 && <ConfidenceDot score={conf} />}
+          <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
+            {draft.client_name || "Nieuwe aanvraag"}
+          </span>
+          {threadConfig && (
+            <span className={cn("inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>
+              {threadConfig.listLabel}
             </span>
-          </div>
-          
-          <p className="text-[11px] text-muted-foreground truncate mb-1 leading-snug">
-            {draft.source_email_subject || "Geen onderwerp"}
-          </p>
-
-          {/* Inline change diffs for update threads */}
-          {threadType === "update" && changes.length > 0 && (
-            <div className="mb-1.5 space-y-0.5">
-              {changes.slice(0, 2).map((change, i) => (
-                <div key={i} className="flex items-center gap-1 text-[10px]">
-                  <span className="text-muted-foreground font-medium">{FIELD_LABELS[change.field] || change.field}:</span>
-                  <span className="text-muted-foreground/60 line-through">{change.old_value}</span>
-                  <span className="text-muted-foreground/50">→</span>
-                  <span className="text-violet-600 font-semibold">{change.new_value}</span>
-                </div>
-              ))}
-              <span className="text-[9px] text-muted-foreground/40">(Gewijzigd via mail)</span>
-            </div>
           )}
-          
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
-            {hasReqs && draft.requirements!.slice(0, 2).map(r => {
-              const opt = requirementOptions.find(o => o.id === r);
-              return opt ? (
-                <Tooltip key={r}>
-                  <TooltipTrigger>
-                    <span className={cn("inline-flex items-center justify-center h-4 w-4 rounded", opt.color.split(' ')[1])}>
-                      <opt.icon className={cn("h-2.5 w-2.5", opt.color.split(' ')[0])} />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
-                </Tooltip>
-              ) : null;
-            })}
-            {hasNote && (
-              <Tooltip>
-                <TooltipTrigger><StickyNote className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
-                <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
-              </Tooltip>
-            )}
-            {isDuplicate && (
-              <Tooltip>
-                <TooltipTrigger>
-                  <AlertTriangle className="h-3 w-3 text-amber-500" />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-[10px] max-w-[250px]">
-                  Duplicaat van {duplicateMap.get(draft.id)!.join(", ")}
-                </TooltipContent>
-              </Tooltip>
-            )}
+        </div>
+
+        {/* Row 2: Subject */}
+        <p className="text-[11px] text-muted-foreground truncate mb-1 leading-snug">
+          {draft.source_email_subject || "Geen onderwerp"}
+        </p>
+
+        {/* Inline change diffs for update threads */}
+        {threadType === "update" && changes.length > 0 && (
+          <div className="mb-1 space-y-0.5">
+            {changes.slice(0, 2).map((change, i) => (
+              <div key={i} className="flex items-center gap-1 text-[10px]">
+                <span className="text-muted-foreground font-medium">{FIELD_LABELS[change.field] || change.field}:</span>
+                <span className="text-muted-foreground/50 line-through">{change.old_value}</span>
+                <span className="text-muted-foreground/40">→</span>
+                <span className="text-primary font-semibold">{change.new_value}</span>
+              </div>
+            ))}
           </div>
+        )}
+
+        {/* Row 3: Time + icons */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
+          
+          {/* SLA indicator */}
+          {deadline.urgency !== "neutral" && (
+            <span className={cn(
+              "inline-flex items-center gap-0.5 text-[9px] font-medium px-1 py-0.5 rounded",
+              deadline.urgency === "red" && "text-destructive bg-destructive/8",
+              deadline.urgency === "amber" && "text-amber-600 bg-amber-500/8",
+              deadline.urgency === "green" && "text-muted-foreground",
+            )}>
+              <Timer className="h-2.5 w-2.5" />
+              {deadline.label}
+            </span>
+          )}
+
+          <span className="flex-1" />
+
+          {/* Compact icons */}
+          {hasReqs && draft.requirements!.slice(0, 2).map(r => {
+            const opt = requirementOptions.find(o => o.id === r);
+            return opt ? (
+              <Tooltip key={r}>
+                <TooltipTrigger>
+                  <opt.icon className={cn("h-3 w-3", opt.color.split(' ')[0])} />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
+              </Tooltip>
+            ) : null;
+          })}
+          {(draft.anomalies as any[])?.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger><Bot className="h-3 w-3 text-amber-500" /></TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px] max-w-[250px]">{(draft.anomalies as any[])[0]?.message}</TooltipContent>
+            </Tooltip>
+          )}
+          {hasNote && (
+            <Tooltip>
+              <TooltipTrigger><StickyNote className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
+            </Tooltip>
+          )}
+          {isDuplicate && (
+            <Tooltip>
+              <TooltipTrigger><AlertTriangle className="h-3 w-3 text-amber-500" /></TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px] max-w-[250px]">Duplicaat van {duplicateMap.get(draft.id)!.join(", ")}</TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </motion.button>
     );
@@ -1190,7 +1213,7 @@ export default function Inbox() {
                       <span className="text-muted-foreground font-normal text-xs ml-1.5 hidden sm:inline">{selected.client_name || "Onbekende klant"}</span>
                     </h2>
                   </div>
-                  {selected.confidence_score != null && <ConfidenceRing score={selected.confidence_score} />}
+                  
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {(() => {
@@ -1222,29 +1245,27 @@ export default function Inbox() {
             {/* Extracted Data */}
             <div className="flex-1 flex flex-col overflow-hidden">
               <ScrollArea className="flex-1">
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-3">
                   {/* Thread Diff Banner */}
                   <ThreadDiffBanner order={selected} />
 
                   {/* Anomaly Warnings */}
                   <AnomalyWarnings anomalies={(selected.anomalies || []) as { field: string; value: number; avg_value: number; message: string }[]} />
 
-                  {/* Confidence Ring */}
+                  {/* Confidence Ring — prominent */}
                   {selected.confidence_score != null && (
-                    <div className="rounded-xl border border-border/40 bg-card p-4">
-                      <ConfidenceRing score={selected.confidence_score} />
-                    </div>
+                    <ConfidenceRing score={selected.confidence_score} />
                   )}
 
-                  {/* Route Card */}
-                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
-                    <div className="flex items-center gap-2">
+                  {/* ── Route Section ── */}
+                  <div className="rounded-xl bg-muted/20 p-4 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <Route className="h-3.5 w-3.5 text-primary" />
-                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Route</h4>
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Route</h4>
                     </div>
-                    <FormField label="Transport Type" source={form.fieldSources?.transport_type}>
+                    <FormField label="Transport Type" source={form.fieldSources?.transport_type} confidence={form.transportType ? "high" : "missing"}>
                       <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
-                        <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 text-xs rounded-lg bg-card"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="direct">Direct Transport</SelectItem>
                           <SelectItem value="warehouse-air">Warehouse → Air</SelectItem>
@@ -1253,9 +1274,9 @@ export default function Inbox() {
                     </FormField>
                     
                     <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
-                      warning={isAddressIncomplete(form.pickupAddress) ? "Incompleet" : undefined}>
+                      confidence={!form.pickupAddress ? "missing" : isAddressIncomplete(form.pickupAddress) ? "low" : "high"}>
                       <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", isAddressIncomplete(form.pickupAddress) && "border-destructive/60 focus-visible:ring-destructive/30")}
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg bg-card", isAddressIncomplete(form.pickupAddress) && "border-destructive ring-1 ring-destructive/20")}
                           value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder="Voer ophaaladres in..." />
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1274,9 +1295,9 @@ export default function Inbox() {
                     </FormField>
 
                     <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
-                      warning={isAddressIncomplete(form.deliveryAddress) ? "Incompleet" : undefined}>
+                      confidence={!form.deliveryAddress ? "missing" : isAddressIncomplete(form.deliveryAddress) ? "low" : "high"}>
                       <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", isAddressIncomplete(form.deliveryAddress) && "border-destructive/60 focus-visible:ring-destructive/30")}
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg bg-card", isAddressIncomplete(form.deliveryAddress) && "border-destructive ring-1 ring-destructive/20")}
                           value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder="Voer afleveradres in..." />
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1295,19 +1316,19 @@ export default function Inbox() {
                     </FormField>
                   </div>
 
-                  {/* Cargo Card */}
-                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
-                    <div className="flex items-center gap-2">
+                  {/* ── Lading Section ── */}
+                  <div className="rounded-xl bg-muted/20 p-4 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <Package className="h-3.5 w-3.5 text-primary" />
-                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Lading</h4>
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Lading</h4>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <FormField label="Aantal" source={form.fieldSources?.quantity}>
-                        <Input type="number" className="h-9 text-xs rounded-lg" value={form.quantity} onChange={(e) => updateField("quantity", Number(e.target.value))} />
+                      <FormField label="Aantal" source={form.fieldSources?.quantity} confidence={form.quantity ? "high" : "missing"}>
+                        <Input type="number" className="h-9 text-xs rounded-lg bg-card" value={form.quantity} onChange={(e) => updateField("quantity", Number(e.target.value))} />
                       </FormField>
-                      <FormField label="Eenheid" source={form.fieldSources?.unit}>
+                      <FormField label="Eenheid" source={form.fieldSources?.unit} confidence="high">
                         <Select value={form.unit} onValueChange={(v) => updateField("unit", v)}>
-                          <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-9 text-xs rounded-lg bg-card"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Pallets">Pallets</SelectItem>
                             <SelectItem value="Colli">Colli</SelectItem>
@@ -1316,8 +1337,8 @@ export default function Inbox() {
                         </Select>
                       </FormField>
                       <FormField label="Gewicht (kg)" icon={Scale} source={form.fieldSources?.weight_kg}
-                        warning={!form.weight ? "Ontbreekt" : undefined}>
-                        <Input className={cn("h-9 text-xs rounded-lg", !form.weight && "border-amber-400/60")}
+                        confidence={!form.weight ? "missing" : "high"}>
+                        <Input className={cn("h-9 text-xs rounded-lg bg-card", !form.weight && "border-amber-500/60 ring-1 ring-amber-500/20")}
                           value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder="—" />
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <Checkbox id={`pu-${selected.id}`} checked={form.perUnit} onCheckedChange={(c) => updateField("perUnit", !!c)} className="h-3 w-3" />
@@ -1330,18 +1351,18 @@ export default function Inbox() {
                         )}
                       </FormField>
                       <FormField label="Afmetingen (LxBxH)" icon={Ruler} source={form.fieldSources?.dimensions}
-                        warning={!form.dimensions ? "Ontbreekt" : undefined}>
-                        <Input className={cn("h-9 text-xs rounded-lg", !form.dimensions && "border-amber-400/60")}
+                        confidence={!form.dimensions ? "missing" : "high"}>
+                        <Input className={cn("h-9 text-xs rounded-lg bg-card", !form.dimensions && "border-amber-500/60 ring-1 ring-amber-500/20")}
                           value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder="—" />
                       </FormField>
                     </div>
                   </div>
 
-                  {/* Requirements Card */}
-                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
-                    <div className="flex items-center gap-2">
+                  {/* ── Vereisten Section ── */}
+                  <div className="rounded-xl bg-muted/20 p-4 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Vereisten</h4>
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Vereisten</h4>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {requirementOptions.map((req) => {
@@ -1354,7 +1375,7 @@ export default function Inbox() {
                               "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200",
                               active
                                 ? cn(req.color, "border-current/20 shadow-sm")
-                                : "bg-background text-muted-foreground border-border/30 hover:border-border/60"
+                                : "bg-card text-muted-foreground border-border/30 hover:border-border/60"
                             )}
                           >
                             <req.icon className="h-3.5 w-3.5" />
@@ -1366,11 +1387,11 @@ export default function Inbox() {
                     </div>
                   </div>
 
-                  {/* Internal Note Card */}
-                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-2">
-                    <div className="flex items-center gap-2">
+                  {/* ── Interne Notitie ── */}
+                  <div className="rounded-xl bg-muted/20 p-4 space-y-2">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
-                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Interne Notitie</h4>
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Interne Notitie</h4>
                       <span className="text-[9px] text-muted-foreground/50 ml-auto">Zichtbaar voor planners</span>
                     </div>
                     <Textarea
@@ -1380,7 +1401,7 @@ export default function Inbox() {
                       onBlur={() => {
                         if (selected) saveNoteMutation.mutate({ id: selected.id, note: form.internalNote });
                       }}
-                      className="text-xs min-h-[64px] rounded-lg resize-none bg-muted/30 border-border/30 placeholder:text-muted-foreground/40"
+                      className="text-xs min-h-[64px] rounded-lg resize-none bg-card border-border/30 placeholder:text-muted-foreground/40"
                     />
                   </div>
 
