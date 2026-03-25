@@ -857,12 +857,6 @@ export default function Inbox() {
             )}
           </div>
         </div>
-        
-        <ChevronRight className={cn(
-          "absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/0 transition-all",
-          "group-hover:text-muted-foreground/40",
-          isSelected && "text-primary/40"
-        )} />
       </motion.button>
     );
   };
