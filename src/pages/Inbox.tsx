@@ -668,9 +668,10 @@ function FormField({ label, icon: Icon, children, className, source, warning, co
   return (
     <div className={cn("space-y-1.5", className)}>
       <div className="flex items-center justify-between gap-1">
-        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", hasIssue ? "text-destructive" : "text-muted-foreground")}>
+        <Label className={cn("text-[11px] font-medium flex items-center gap-1.5", hasIssue ? "text-destructive font-semibold" : "text-muted-foreground")}>
           {Icon && <Icon className="h-3 w-3" />}
           {label}
+          {confidence === "missing" && <span className="text-[9px] text-destructive/80 font-normal ml-1">— ontbreekt in bericht</span>}
         </Label>
         <div className="flex items-center gap-1.5">
           {confidence && <FieldConfidence level={confidence} />}
