@@ -1245,29 +1245,27 @@ export default function Inbox() {
             {/* Extracted Data */}
             <div className="flex-1 flex flex-col overflow-hidden">
               <ScrollArea className="flex-1">
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-3">
                   {/* Thread Diff Banner */}
                   <ThreadDiffBanner order={selected} />
 
                   {/* Anomaly Warnings */}
                   <AnomalyWarnings anomalies={(selected.anomalies || []) as { field: string; value: number; avg_value: number; message: string }[]} />
 
-                  {/* Confidence Ring */}
+                  {/* Confidence Ring — prominent */}
                   {selected.confidence_score != null && (
-                    <div className="rounded-xl border border-border/40 bg-card p-4">
-                      <ConfidenceRing score={selected.confidence_score} />
-                    </div>
+                    <ConfidenceRing score={selected.confidence_score} />
                   )}
 
-                  {/* Route Card */}
-                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
-                    <div className="flex items-center gap-2">
+                  {/* ── Route Section ── */}
+                  <div className="rounded-xl bg-muted/20 p-4 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <Route className="h-3.5 w-3.5 text-primary" />
-                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Route</h4>
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Route</h4>
                     </div>
-                    <FormField label="Transport Type" source={form.fieldSources?.transport_type}>
+                    <FormField label="Transport Type" source={form.fieldSources?.transport_type} confidence={form.transportType ? "high" : "missing"}>
                       <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
-                        <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 text-xs rounded-lg bg-card"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="direct">Direct Transport</SelectItem>
                           <SelectItem value="warehouse-air">Warehouse → Air</SelectItem>
@@ -1276,9 +1274,9 @@ export default function Inbox() {
                     </FormField>
                     
                     <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
-                      warning={isAddressIncomplete(form.pickupAddress) ? "Incompleet" : undefined}>
+                      confidence={!form.pickupAddress ? "missing" : isAddressIncomplete(form.pickupAddress) ? "low" : "high"}>
                       <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", isAddressIncomplete(form.pickupAddress) && "border-destructive/60 focus-visible:ring-destructive/30")}
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg bg-card", isAddressIncomplete(form.pickupAddress) && "border-destructive ring-1 ring-destructive/20")}
                           value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder="Voer ophaaladres in..." />
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1297,9 +1295,9 @@ export default function Inbox() {
                     </FormField>
 
                     <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
-                      warning={isAddressIncomplete(form.deliveryAddress) ? "Incompleet" : undefined}>
+                      confidence={!form.deliveryAddress ? "missing" : isAddressIncomplete(form.deliveryAddress) ? "low" : "high"}>
                       <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", isAddressIncomplete(form.deliveryAddress) && "border-destructive/60 focus-visible:ring-destructive/30")}
+                        <Input className={cn("h-9 text-xs pr-9 rounded-lg bg-card", isAddressIncomplete(form.deliveryAddress) && "border-destructive ring-1 ring-destructive/20")}
                           value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder="Voer afleveradres in..." />
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1318,19 +1316,19 @@ export default function Inbox() {
                     </FormField>
                   </div>
 
-                  {/* Cargo Card */}
-                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
-                    <div className="flex items-center gap-2">
+                  {/* ── Lading Section ── */}
+                  <div className="rounded-xl bg-muted/20 p-4 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <Package className="h-3.5 w-3.5 text-primary" />
-                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Lading</h4>
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Lading</h4>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <FormField label="Aantal" source={form.fieldSources?.quantity}>
-                        <Input type="number" className="h-9 text-xs rounded-lg" value={form.quantity} onChange={(e) => updateField("quantity", Number(e.target.value))} />
+                      <FormField label="Aantal" source={form.fieldSources?.quantity} confidence={form.quantity ? "high" : "missing"}>
+                        <Input type="number" className="h-9 text-xs rounded-lg bg-card" value={form.quantity} onChange={(e) => updateField("quantity", Number(e.target.value))} />
                       </FormField>
-                      <FormField label="Eenheid" source={form.fieldSources?.unit}>
+                      <FormField label="Eenheid" source={form.fieldSources?.unit} confidence="high">
                         <Select value={form.unit} onValueChange={(v) => updateField("unit", v)}>
-                          <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-9 text-xs rounded-lg bg-card"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Pallets">Pallets</SelectItem>
                             <SelectItem value="Colli">Colli</SelectItem>
@@ -1339,8 +1337,8 @@ export default function Inbox() {
                         </Select>
                       </FormField>
                       <FormField label="Gewicht (kg)" icon={Scale} source={form.fieldSources?.weight_kg}
-                        warning={!form.weight ? "Ontbreekt" : undefined}>
-                        <Input className={cn("h-9 text-xs rounded-lg", !form.weight && "border-amber-400/60")}
+                        confidence={!form.weight ? "missing" : "high"}>
+                        <Input className={cn("h-9 text-xs rounded-lg bg-card", !form.weight && "border-amber-500/60 ring-1 ring-amber-500/20")}
                           value={form.weight} onChange={(e) => updateField("weight", e.target.value)} placeholder="—" />
                         <div className="flex items-center gap-1.5 mt-1.5">
                           <Checkbox id={`pu-${selected.id}`} checked={form.perUnit} onCheckedChange={(c) => updateField("perUnit", !!c)} className="h-3 w-3" />
@@ -1353,18 +1351,18 @@ export default function Inbox() {
                         )}
                       </FormField>
                       <FormField label="Afmetingen (LxBxH)" icon={Ruler} source={form.fieldSources?.dimensions}
-                        warning={!form.dimensions ? "Ontbreekt" : undefined}>
-                        <Input className={cn("h-9 text-xs rounded-lg", !form.dimensions && "border-amber-400/60")}
+                        confidence={!form.dimensions ? "missing" : "high"}>
+                        <Input className={cn("h-9 text-xs rounded-lg bg-card", !form.dimensions && "border-amber-500/60 ring-1 ring-amber-500/20")}
                           value={form.dimensions} onChange={(e) => updateField("dimensions", e.target.value)} placeholder="—" />
                       </FormField>
                     </div>
                   </div>
 
-                  {/* Requirements Card */}
-                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
-                    <div className="flex items-center gap-2">
+                  {/* ── Vereisten Section ── */}
+                  <div className="rounded-xl bg-muted/20 p-4 space-y-3">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Vereisten</h4>
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Vereisten</h4>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {requirementOptions.map((req) => {
@@ -1377,7 +1375,7 @@ export default function Inbox() {
                               "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200",
                               active
                                 ? cn(req.color, "border-current/20 shadow-sm")
-                                : "bg-background text-muted-foreground border-border/30 hover:border-border/60"
+                                : "bg-card text-muted-foreground border-border/30 hover:border-border/60"
                             )}
                           >
                             <req.icon className="h-3.5 w-3.5" />
@@ -1389,11 +1387,11 @@ export default function Inbox() {
                     </div>
                   </div>
 
-                  {/* Internal Note Card */}
-                  <div className="rounded-xl border border-border/40 bg-card p-4 space-y-2">
-                    <div className="flex items-center gap-2">
+                  {/* ── Interne Notitie ── */}
+                  <div className="rounded-xl bg-muted/20 p-4 space-y-2">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/20">
                       <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
-                      <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-[0.06em]">Interne Notitie</h4>
+                      <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Interne Notitie</h4>
                       <span className="text-[9px] text-muted-foreground/50 ml-auto">Zichtbaar voor planners</span>
                     </div>
                     <Textarea
@@ -1403,7 +1401,7 @@ export default function Inbox() {
                       onBlur={() => {
                         if (selected) saveNoteMutation.mutate({ id: selected.id, note: form.internalNote });
                       }}
-                      className="text-xs min-h-[64px] rounded-lg resize-none bg-muted/30 border-border/30 placeholder:text-muted-foreground/40"
+                      className="text-xs min-h-[64px] rounded-lg resize-none bg-card border-border/30 placeholder:text-muted-foreground/40"
                     />
                   </div>
 
