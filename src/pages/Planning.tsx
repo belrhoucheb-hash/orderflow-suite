@@ -598,10 +598,11 @@ function VehicleDropZone({
         </div>
 
         {assigned.length === 0 ? (
-          <div className="flex items-center justify-center h-14 border-2 border-dashed border-border/40 rounded-xl bg-muted/20">
+          <div className="flex flex-col items-center justify-center h-16 border-2 border-dashed border-border/40 rounded-xl bg-muted/20 px-3">
             <p className="text-[11px] text-muted-foreground/50 italic flex items-center gap-1.5">
               <Package className="h-3.5 w-3.5" />Sleep orders hierheen
             </p>
+            <p className="text-[9px] text-muted-foreground/35 mt-0.5 text-center leading-snug">{emptyReason}</p>
           </div>
         ) : (
           <SortableContext items={assigned.map((o) => o.id)} strategy={verticalListSortingStrategy}>
