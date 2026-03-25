@@ -232,49 +232,62 @@ function ConfidenceDot({ score }: { score: number }) {
   const isHigh = score >= 80;
   const isMedium = score >= 60 && score < 80;
   return (
-    <Tooltip>
-      <TooltipTrigger>
-        <span className={cn(
-          "inline-block h-2 w-2 rounded-full shrink-0",
-          isHigh && "bg-emerald-500",
-          isMedium && "bg-amber-500",
-          !isHigh && !isMedium && "bg-destructive"
-        )} />
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-[10px]">AI confidence: {score}%</TooltipContent>
-    </Tooltip>
+    <span className={cn(
+      "inline-block h-[6px] w-[6px] rounded-full shrink-0",
+      isHigh && "bg-emerald-500",
+      isMedium && "bg-amber-500",
+      !isHigh && !isMedium && "bg-destructive"
+    )} />
   );
 }
 
 function ConfidenceRing({ score }: { score: number }) {
   const isHigh = score >= 80;
   const isMedium = score >= 60 && score < 80;
-  const radius = 18;
+  const radius = 22;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
-  const color = isHigh ? "hsl(var(--primary))" : isMedium ? "hsl(38, 92%, 50%)" : "hsl(var(--destructive))";
+  const colorClass = isHigh ? "text-emerald-600" : isMedium ? "text-amber-500" : "text-destructive";
+  const strokeColor = isHigh ? "#059669" : isMedium ? "#f59e0b" : "hsl(var(--destructive))";
+  const bgColor = isHigh ? "bg-emerald-50" : isMedium ? "bg-amber-50" : "bg-destructive/5";
 
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="relative h-12 w-12 shrink-0">
-        <svg className="h-12 w-12 -rotate-90" viewBox="0 0 44 44">
-          <circle cx="22" cy="22" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="3" />
-          <circle cx="22" cy="22" r={radius} fill="none" stroke={color} strokeWidth="3"
+    <div className={cn("flex items-center gap-3 rounded-xl px-3 py-2", bgColor)}>
+      <div className="relative h-11 w-11 shrink-0">
+        <svg className="h-11 w-11 -rotate-90" viewBox="0 0 52 52">
+          <circle cx="26" cy="26" r={radius} fill="none" stroke="hsl(var(--border))" strokeWidth="2.5" opacity="0.3" />
+          <circle cx="26" cy="26" r={radius} fill="none" stroke={strokeColor} strokeWidth="2.5"
             strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
             className="transition-all duration-700 ease-out" />
         </svg>
-        <span className={cn(
-          "absolute inset-0 flex items-center justify-center text-[11px] font-bold",
-          isHigh && "text-primary",
-          isMedium && "text-amber-600",
-          !isHigh && !isMedium && "text-destructive"
-        )}>{score}%</span>
+        <span className={cn("absolute inset-0 flex items-center justify-center text-[13px] font-bold tabular-nums", colorClass)}>
+          {score}
+        </span>
       </div>
       <div>
-        <p className="text-[10px] font-semibold text-foreground">AI Confidence</p>
-        <p className="text-[9px] text-muted-foreground">{isHigh ? "Hoge zekerheid" : isMedium ? "Controleer velden" : "Handmatig invoeren"}</p>
+        <p className="text-[11px] font-semibold text-foreground leading-tight">AI Score</p>
+        <p className={cn("text-[10px] font-medium", colorClass)}>
+          {isHigh ? "Hoge zekerheid" : isMedium ? "Controleer velden" : "Handmatig invoeren"}
+        </p>
       </div>
     </div>
+  );
+}
+
+// Mini confidence bar for individual fields
+function FieldConfidence({ level }: { level: "high" | "medium" | "low" | "missing" }) {
+  if (level === "high") return null; // Don't clutter high-confidence fields
+  const config = {
+    medium: { color: "bg-amber-500", label: "Controleer", textColor: "text-amber-600" },
+    low: { color: "bg-destructive", label: "Onzeker", textColor: "text-destructive" },
+    missing: { color: "bg-muted-foreground/30", label: "Ontbreekt", textColor: "text-muted-foreground" },
+  };
+  const c = config[level];
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[9px] font-medium", c.textColor)}>
+      <span className={cn("h-1 w-3 rounded-full", c.color)} />
+      {c.label}
+    </span>
   );
 }
 
