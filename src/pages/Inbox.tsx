@@ -142,11 +142,11 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const THREAD_TYPE_CONFIG: Record<string, { label: string; color: string; icon: any; listLabel: string; listColor: string }> = {
-  new: { label: "Nieuw", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Plus, listLabel: "🆕 Nieuw", listColor: "text-emerald-600 bg-emerald-50 border-emerald-200" },
-  update: { label: "Wijziging", color: "bg-blue-50 text-blue-700 border-blue-200", icon: ArrowLeft, listLabel: "🔄 Update", listColor: "text-violet-600 bg-violet-50 border-violet-200" },
-  cancellation: { label: "Annulering", color: "bg-destructive/10 text-destructive border-destructive/20", icon: Trash2, listLabel: "❌ Annulering", listColor: "text-destructive bg-destructive/10 border-destructive/20" },
-  confirmation: { label: "Bevestiging", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2, listLabel: "✅ Bevestiging", listColor: "text-emerald-600 bg-emerald-50 border-emerald-200" },
-  question: { label: "Vraag", color: "bg-violet-50 text-violet-700 border-violet-200", icon: CircleAlert, listLabel: "❓ Vraag", listColor: "text-violet-600 bg-violet-50 border-violet-200" },
+  new: { label: "Nieuw", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Plus, listLabel: "Nieuw", listColor: "text-emerald-700 bg-emerald-500/15 border-emerald-500/25" },
+  update: { label: "Wijziging", color: "bg-blue-50 text-blue-700 border-blue-200", icon: ArrowLeft, listLabel: "Update", listColor: "text-violet-700 bg-violet-500/15 border-violet-500/25" },
+  cancellation: { label: "Annulering", color: "bg-destructive/10 text-destructive border-destructive/20", icon: Trash2, listLabel: "Annulering", listColor: "text-destructive bg-destructive/10 border-destructive/20" },
+  confirmation: { label: "Bevestiging", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2, listLabel: "Bevestiging", listColor: "text-emerald-700 bg-emerald-500/15 border-emerald-500/25" },
+  question: { label: "Vraag", color: "bg-violet-50 text-violet-700 border-violet-200", icon: CircleAlert, listLabel: "Vraag", listColor: "text-violet-700 bg-violet-500/15 border-violet-500/25" },
 };
 
 function ThreadDiffBanner({ order }: { order: OrderDraft }) {
