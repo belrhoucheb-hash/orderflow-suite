@@ -303,10 +303,11 @@ async function pollInbox(): Promise<Response> {
 
           if (LOVABLE_API_KEY && (parsed.body || pdfUrls.length > 0)) {
             try {
+              const threadContext = parentOrder ? { parentOrder } : undefined;
               const parseResp = await fetch(`${supabaseUrl}/functions/v1/parse-order`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
-                body: JSON.stringify({ emailBody: parsed.body, pdfUrls }),
+                body: JSON.stringify({ emailBody: parsed.body, pdfUrls, threadContext }),
               });
 
               if (parseResp.ok) {
