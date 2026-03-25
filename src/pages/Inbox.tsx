@@ -535,7 +535,12 @@ function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState
   const matchingVehicles = mockVehicles.filter(v => v.status === "beschikbaar");
 
   return (
-    <div className="p-5 space-y-4">
+    <div className="p-5 space-y-1">
+      {/* Phase 1: Extractie */}
+      <div className="flex items-center gap-2 px-1 pt-1 pb-2">
+        <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em]">Fase 1 — Extractie</span>
+        <div className="flex-1 h-px bg-border/30" />
+      </div>
       <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/30 p-4 space-y-3">
         <div className="flex items-center gap-2 mb-1">
           <div className="h-5 w-5 rounded-md bg-emerald-500/10 flex items-center justify-center">
@@ -554,22 +559,37 @@ function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState
       </div>
 
       {matchingVehicles.length > 0 && (
-        <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-2">
-          <div className="flex items-center gap-2 mb-1">
-            <Truck className="h-3.5 w-3.5 text-primary" />
-            <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Beschikbare capaciteit</h4>
+        <>
+          {/* Phase 2: Planning */}
+          <div className="flex items-center gap-2 px-1 pt-4 pb-2">
+            <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em]">Fase 2 — Planning</span>
+            <div className="flex-1 h-px bg-border/30" />
           </div>
-          <div className="space-y-1.5">
-            {matchingVehicles.slice(0, 3).map((v) => (
-              <div key={v.id} className="flex items-center gap-2 text-[11px] rounded-lg bg-card border border-border/20 px-3 py-2">
-                <Truck className="h-3 w-3 text-muted-foreground" />
-                <span className="font-semibold text-foreground">{v.name}</span>
-                <span className="text-muted-foreground">({v.plate})</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-auto">{v.type}</span>
-              </div>
-            ))}
+          <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <Truck className="h-3.5 w-3.5 text-primary" />
+              <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Beschikbare capaciteit</h4>
+            </div>
+            <div className="space-y-1.5">
+              {matchingVehicles.slice(0, 3).map((v) => (
+                <div key={v.id} className="flex items-center gap-2 text-[11px] rounded-lg bg-card border border-border/20 px-3 py-2">
+                  <Truck className="h-3 w-3 text-muted-foreground" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-foreground">{v.name}</span>
+                      <span className="text-muted-foreground/60">({v.plate})</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Users className="h-2.5 w-2.5 text-muted-foreground/50" />
+                      <span className="text-[10px] text-muted-foreground">{v.driver}</span>
+                    </div>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{v.type}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
