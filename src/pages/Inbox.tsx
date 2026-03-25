@@ -535,14 +535,15 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
         fieldSources: ext.field_sources || {},
       });
 
-      // Save missing fields and follow-up draft to DB
-      if (data.missing_fields || data.follow_up_draft) {
-        await supabase.from("orders").update({
-          missing_fields: data.missing_fields || [],
-          follow_up_draft: data.follow_up_draft || null,
-        }).eq("id", selected.id);
-        queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
-      }
+      // Save missing fields, follow-up draft, thread info, and anomalies to DB
+      await supabase.from("orders").update({
+        missing_fields: data.missing_fields || [],
+        follow_up_draft: data.follow_up_draft || null,
+        thread_type: data.thread_type || selected.thread_type || "new",
+        changes_detected: data.changes_detected || [],
+        anomalies: data.anomalies || [],
+      }).eq("id", selected.id);
+      queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
 
       toast({ title: "AI Extractie voltooid", description: `Confidence: ${ext.confidence_score}%` });
     } catch (e: any) {
