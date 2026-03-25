@@ -832,49 +832,37 @@ export default function Inbox() {
             {draft.source_email_subject || "Geen onderwerp"}
           </p>
           
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
-              {hasReqs && (
-                <div className="flex items-center gap-0.5">
-                  {draft.requirements!.slice(0, 2).map(r => {
-                    const opt = requirementOptions.find(o => o.id === r);
-                    return opt ? (
-                      <Tooltip key={r}>
-                        <TooltipTrigger>
-                          <span className={cn("inline-flex items-center justify-center h-4 w-4 rounded", opt.color.split(' ')[1])}>
-                            <opt.icon className={cn("h-2.5 w-2.5", opt.color.split(' ')[0])} />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
-                      </Tooltip>
-                    ) : null;
-                  })}
-                </div>
-              )}
-              {hasNote && (
-                <Tooltip>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-muted-foreground/50">{formatDate(draft.received_at)}</span>
+            {hasReqs && draft.requirements!.slice(0, 2).map(r => {
+              const opt = requirementOptions.find(o => o.id === r);
+              return opt ? (
+                <Tooltip key={r}>
                   <TooltipTrigger>
-                    <StickyNote className="h-3 w-3 text-amber-500" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
-                </Tooltip>
-              )}
-              {isDuplicate && (
-                <Tooltip>
-                  <TooltipTrigger>
-                    <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded-md">
-                      <AlertTriangle className="h-2.5 w-2.5" />
-                      Duplicaat?
+                    <span className={cn("inline-flex items-center justify-center h-4 w-4 rounded", opt.color.split(' ')[1])}>
+                      <opt.icon className={cn("h-2.5 w-2.5", opt.color.split(' ')[0])} />
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-[10px] max-w-[250px]">
-                    Lijkt op order {duplicateMap.get(draft.id)!.join(", ")} — zelfde klant en adres binnen {DUPLICATE_WINDOW_MINUTES} min
-                  </TooltipContent>
+                  <TooltipContent side="top" className="text-[10px]">{opt.label}</TooltipContent>
                 </Tooltip>
-              )}
-            </div>
-            <span className="text-[10px] font-mono text-muted-foreground/30">#{draft.order_number}</span>
+              ) : null;
+            })}
+            {hasNote && (
+              <Tooltip>
+                <TooltipTrigger><StickyNote className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px] max-w-[200px]">{draft.internal_note}</TooltipContent>
+              </Tooltip>
+            )}
+            {isDuplicate && (
+              <Tooltip>
+                <TooltipTrigger>
+                  <AlertTriangle className="h-3 w-3 text-amber-500" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px] max-w-[250px]">
+                  Duplicaat van {duplicateMap.get(draft.id)!.join(", ")}
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         </div>
         
