@@ -1254,6 +1254,20 @@ export default function Inbox() {
                         <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                         <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider">Klaar voor planning</span>
                         <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{readyToGo.length}</Badge>
+                        {readyToGo.length === 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-[9px] gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 ml-auto px-2"
+                            onClick={() => {
+                              setSelectedId(readyToGo[0].id);
+                              const f = formData[readyToGo[0].id];
+                              if (f) createOrderMutation.mutate({ id: readyToGo[0].id, form: f });
+                            }}
+                          >
+                            <Zap className="h-2.5 w-2.5" /> Direct inplannen
+                          </Button>
+                        )}
                       </div>
                       {readyToGo.map(renderInboxItem)}
                     </div>
