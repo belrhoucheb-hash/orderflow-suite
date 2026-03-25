@@ -517,13 +517,74 @@ function FollowUpPanel({ selected }: { selected: OrderDraft }) {
   );
 }
 
-function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onParseResult: (data: Partial<FormState>) => void }) {
+function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState }) {
+  const items = [
+    { label: "Klant", value: order.client_name },
+    { label: "Ophaaladres", value: form.pickupAddress },
+    { label: "Afleveradres", value: form.deliveryAddress },
+    { label: "Lading", value: form.quantity ? `${form.quantity} ${form.unit}` : null },
+    { label: "Gewicht", value: form.weight ? `${form.weight} kg${form.perUnit ? " per eenheid" : ""}` : null },
+    { label: "Afmetingen", value: form.dimensions },
+    { label: "Vereisten", value: form.requirements.length > 0 ? form.requirements.join(", ") : null },
+    { label: "Type", value: form.transportType === "warehouse-air" ? "Warehouse → Air" : "Direct" },
+  ].filter(i => i.value);
+
+  if (items.length === 0) return null;
+
+  // Find matching vehicles based on availability
+  const matchingVehicles = mockVehicles.filter(v => v.status === "beschikbaar");
+
+  return (
+    <div className="p-5 space-y-4">
+      <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/30 p-4 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="h-5 w-5 rounded-md bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+          </div>
+          <h4 className="text-[11px] font-bold text-emerald-800 uppercase tracking-[0.08em]">Dit hebben we begrepen</h4>
+        </div>
+        <div className="grid gap-1.5">
+          {items.map((item) => (
+            <div key={item.label} className="flex items-baseline gap-2 text-[12px]">
+              <span className="text-emerald-600/70 font-medium min-w-[80px]">{item.label}</span>
+              <span className="text-foreground font-semibold">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {matchingVehicles.length > 0 && (
+        <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <Truck className="h-3.5 w-3.5 text-primary" />
+            <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Beschikbare capaciteit</h4>
+          </div>
+          <div className="space-y-1.5">
+            {matchingVehicles.slice(0, 3).map((v) => (
+              <div key={v.id} className="flex items-center gap-2 text-[11px] rounded-lg bg-card border border-border/20 px-3 py-2">
+                <Truck className="h-3 w-3 text-muted-foreground" />
+                <span className="font-semibold text-foreground">{v.name}</span>
+                <span className="text-muted-foreground">({v.plate})</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-auto">{v.type}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourcePanel({ selected, form, onParseResult }: { selected: OrderDraft; form: FormState | null; onParseResult: (data: Partial<FormState>) => void }) {
   const [activeTab, setActiveTab] = useState<"email" | "attachment">("email");
   const [isParsing, setIsParsing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const attachments = (selected.attachments || []) as { name: string; url: string; type: string }[];
   const hasAttachments = attachments.length > 0;
+  const hasMissing = (selected.missing_fields || []).length > 0;
+  const hasFollowUp = !!selected.follow_up_draft;
+  const showSummary = !hasMissing && !hasFollowUp && form && selected.confidence_score && selected.confidence_score >= 60;
 
   const handleParseWithAI = async () => {
     setIsParsing(true);
@@ -658,6 +719,9 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
         
         {/* Follow-up Draft Panel - under source email */}
         <FollowUpPanel selected={selected} />
+
+        {/* Extraction Summary - when order is complete */}
+        {showSummary && form && <ExtractionSummary order={selected} form={form} />}
       </ScrollArea>
     </div>
   );
@@ -935,11 +999,19 @@ export default function Inbox() {
           <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
             {draft.client_name || "Nieuwe aanvraag"}
           </span>
-          {threadConfig && (
-            <span className={cn("inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>
-              {threadConfig.listLabel}
-            </span>
-          )}
+          {(() => {
+            // Action-specific badge instead of generic thread type
+            const hasMissing = (draft.missing_fields || []).length > 0;
+            const noScore = !draft.confidence_score;
+            const lowScore = (draft.confidence_score || 0) > 0 && (draft.confidence_score || 0) < 80;
+            
+            if (isDuplicate) return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-amber-700 bg-amber-500/15 border-amber-500/25">Duplicaat?</span>;
+            if (threadType !== "new" && threadConfig) return <span className={cn("inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0", threadConfig.listColor)}>{threadConfig.listLabel}</span>;
+            if (hasMissing) return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-destructive bg-destructive/10 border-destructive/20">Data mist</span>;
+            if (noScore) return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-muted-foreground bg-muted border-border">Nieuw</span>;
+            if (lowScore) return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-amber-700 bg-amber-500/15 border-amber-500/25">Review</span>;
+            return <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-0.5 rounded border shrink-0 text-emerald-700 bg-emerald-500/15 border-emerald-500/25">Gereed</span>;
+          })()}
         </div>
 
         {/* Row 2: Subject */}
@@ -1182,6 +1254,20 @@ export default function Inbox() {
                         <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                         <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider">Klaar voor planning</span>
                         <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{readyToGo.length}</Badge>
+                        {readyToGo.length === 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-[9px] gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 ml-auto px-2"
+                            onClick={() => {
+                              setSelectedId(readyToGo[0].id);
+                              const f = formData[readyToGo[0].id];
+                              if (f) createOrderMutation.mutate({ id: readyToGo[0].id, form: f });
+                            }}
+                          >
+                            <Zap className="h-2.5 w-2.5" /> Direct inplannen
+                          </Button>
+                        )}
                       </div>
                       {readyToGo.map(renderInboxItem)}
                     </div>
@@ -1219,7 +1305,7 @@ export default function Inbox() {
                 Order <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <SourcePanel selected={selected} onParseResult={(data) => {
+            <SourcePanel selected={selected} form={form} onParseResult={(data) => {
               if (!selected) return;
               const { result: enriched, enrichments } = enrichAddresses(data);
               setFormData((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], ...enriched } }));
@@ -1300,57 +1386,72 @@ export default function Inbox() {
                       <Route className="h-3.5 w-3.5 text-primary" />
                       <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Route</h4>
                     </div>
-                    <FormField label="Transport Type" source={form.fieldSources?.transport_type} confidence={form.transportType ? "high" : "missing"}>
-                      <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
-                        <SelectTrigger className="h-9 text-xs rounded-lg bg-card"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="direct">Direct Transport</SelectItem>
-                          <SelectItem value="warehouse-air">Warehouse → Air</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormField>
-                    
-                    <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
-                      confidence={!form.pickupAddress ? "missing" : isAddressIncomplete(form.pickupAddress) ? "low" : "high"}>
-                      <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : isAddressIncomplete(form.pickupAddress) ? "bg-card border-destructive ring-1 ring-destructive/20" : "bg-card")}
-                          value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                              onClick={() => {
-                                const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
-                                if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
-                              }}>
-                              <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </FormField>
+                    {(() => {
+                      const aiScore = selected.confidence_score || 0;
+                      const highAI = aiScore >= 85;
+                      // At high AI confidence, filled fields are trusted
+                      const getConfidence = (val: string | number | undefined | null, useAddressCheck = false): "high" | "medium" | "low" | "missing" => {
+                        if (!val || val === "" || val === 0) return "missing";
+                        if (highAI) return "high";
+                        if (useAddressCheck && typeof val === "string" && isAddressIncomplete(val)) return "low";
+                        return aiScore >= 60 ? "medium" : "low";
+                      };
+                      return (
+                        <>
+                          <FormField label="Transport Type" source={form.fieldSources?.transport_type} confidence={getConfidence(form.transportType)}>
+                            <Select value={form.transportType} onValueChange={(v) => updateField("transportType", v)}>
+                              <SelectTrigger className="h-9 text-xs rounded-lg bg-card"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="direct">Direct Transport</SelectItem>
+                                <SelectItem value="warehouse-air">Warehouse → Air</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormField>
+                          
+                          <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
+                            confidence={getConfidence(form.pickupAddress, true)}>
+                            <div className="relative">
+                              <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                                value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                                    onClick={() => {
+                                      const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
+                                      if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                      else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                    }}>
+                                    <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </FormField>
 
-                    <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
-                      confidence={!form.deliveryAddress ? "missing" : isAddressIncomplete(form.deliveryAddress) ? "low" : "high"}>
-                      <div className="relative">
-                        <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : isAddressIncomplete(form.deliveryAddress) ? "bg-card border-destructive ring-1 ring-destructive/20" : "bg-card")}
-                          value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
-                              onClick={() => {
-                                const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
-                                if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
-                              }}>
-                              <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </FormField>
+                          <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
+                            confidence={getConfidence(form.deliveryAddress, true)}>
+                            <div className="relative">
+                              <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                                value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                                    onClick={() => {
+                                      const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
+                                      if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                      else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                    }}>
+                                    <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </FormField>
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* ── Lading Section ── */}
@@ -1404,27 +1505,37 @@ export default function Inbox() {
                         <span className="text-[9px] text-muted-foreground/60 ml-auto italic">Geen vereisten gedetecteerd in bericht</span>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {requirementOptions.map((req) => {
-                        const active = form.requirements.includes(req.id);
-                        return (
+                    {/* Active requirements shown prominently */}
+                    {form.requirements.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {requirementOptions.filter(r => form.requirements.includes(r.id)).map((req) => (
                           <button
                             key={req.id}
                             onClick={() => toggleRequirement(req.id)}
-                            className={cn(
-                              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-200",
-                              active
-                                ? cn(req.color, "border-current/20 shadow-sm")
-                                : "bg-card text-muted-foreground/50 border-border/20 hover:border-border/60 hover:text-muted-foreground"
-                            )}
+                            className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border shadow-sm transition-all duration-200", req.color, "border-current/20")}
                           >
                             <req.icon className="h-3.5 w-3.5" />
                             {req.label}
-                            {active && <CheckCircle2 className="h-3 w-3 ml-auto" />}
+                            <CheckCircle2 className="h-3 w-3 ml-1" />
                           </button>
-                        );
-                      })}
-                    </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Inactive requirements as compact row */}
+                    {requirementOptions.filter(r => !form.requirements.includes(r.id)).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {requirementOptions.filter(r => !form.requirements.includes(r.id)).map((req) => (
+                          <button
+                            key={req.id}
+                            onClick={() => toggleRequirement(req.id)}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium text-muted-foreground/40 border border-border/15 hover:border-border/40 hover:text-muted-foreground transition-all"
+                          >
+                            <req.icon className="h-3 w-3" />
+                            {req.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* ── Interne Notitie ── */}
