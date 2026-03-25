@@ -1315,17 +1315,20 @@ export default function Inbox() {
                 </div>
               </ScrollArea>
             </div>
-          </div>
+          </ResizablePanel>
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-background">
-          <div className="text-center">
-            <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4"><InboxIcon className="h-7 w-7 text-muted-foreground/30" /></div>
-            <p className="text-sm font-semibold text-muted-foreground mb-1">Alles verwerkt</p>
-            <p className="text-[11px] text-muted-foreground/60">Er zijn geen openstaande aanvragen</p>
+        <ResizablePanel defaultSize={75} minSize={50}>
+          <div className="flex-1 flex items-center justify-center bg-background h-full">
+            <div className="text-center">
+              <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4"><InboxIcon className="h-7 w-7 text-muted-foreground/30" /></div>
+              <p className="text-sm font-semibold text-muted-foreground mb-1">Alles verwerkt</p>
+              <p className="text-[11px] text-muted-foreground/60">Er zijn geen openstaande aanvragen</p>
+            </div>
           </div>
-        </div>
+        </ResizablePanel>
       )}
+      </ResizablePanelGroup>
     </div>
   );
 }
