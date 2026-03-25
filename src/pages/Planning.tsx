@@ -628,21 +628,38 @@ function VehicleDropZone({
       {assigned.length > 0 && (
         <div className="mt-auto px-4 pb-3 pt-2 space-y-1.5">
           <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2.5 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Timer className="h-3 w-3" />
-              <span className="font-medium text-foreground">{formatDuration(stats.totalMinutes)}</span>
-            </span>
-            <span className="flex items-center gap-1 tabular-nums">
-              <Route className="h-3 w-3" />
-              {stats.totalKm} km
-              <span className="text-[10px] opacity-50">(+{stats.returnKm})</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <BarChart3 className="h-3 w-3" />
-              <span className={cn("font-semibold", utilizationPct > 100 ? "text-destructive" : utilizationPct > 90 ? "text-amber-600" : "text-foreground")}>
-                {utilizationPct}%
-              </span>
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-1 cursor-help">
+                  <Timer className="h-3 w-3" />
+                  <span className="font-medium text-foreground">{formatDuration(stats.totalMinutes)}</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="text-[10px] max-w-[200px]">Totale rijtijd inclusief {assigned.length}× {UNLOAD_MINUTES} min lostijd</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-1 tabular-nums cursor-help">
+                  <Route className="h-3 w-3" />
+                  {stats.totalKm} km
+                  <span className="text-[10px] opacity-50">(+{stats.returnKm})</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="text-[10px] max-w-[200px]">Route: {stats.totalKm - stats.returnKm} km heen + {stats.returnKm} km retour naar depot</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-1 cursor-help">
+                  <BarChart3 className="h-3 w-3" />
+                  <span className={cn("font-semibold", utilizationPct > 100 ? "text-destructive" : utilizationPct > 90 ? "text-amber-600" : "text-foreground")}>
+                    {utilizationPct}%
+                  </span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="text-[10px] max-w-[220px]">
+                Capaciteitsbenutting: {Math.round(pctKg)}% gewicht ({totalKg}/{vehicle.capacityKg} kg) · {Math.round(pctPallets)}% pallets ({totalPallets}/{vehicle.capacityPallets})
+              </TooltipContent>
+            </Tooltip>
           </div>
           {stats.exceedsDriveLimit && (
             <div className="flex items-center gap-1.5 rounded-xl bg-destructive/8 border border-destructive/15 px-3 py-2 text-[11px] text-destructive font-medium">
