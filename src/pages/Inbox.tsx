@@ -824,10 +824,10 @@ export default function Inbox() {
             <span className="text-[13px] font-semibold text-foreground truncate leading-tight">
               {draft.client_name || "Nieuwe aanvraag"}
             </span>
-            {conf > 0 && <ConfidenceBadge score={conf} />}
+            {conf > 0 && <ConfidenceDot score={conf} />}
           </div>
           
-          <p className="text-[11px] text-muted-foreground truncate mb-2 leading-snug">
+          <p className="text-[11px] text-muted-foreground truncate mb-1.5 leading-snug">
             {draft.source_email_subject || "Geen onderwerp"}
           </p>
           
