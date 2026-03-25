@@ -30,6 +30,7 @@ import {
   type GeoCoord,
 } from "@/data/geoData";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,8 +67,82 @@ import {
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
-// ─── Mock Drivers ────────────────────────────────────────────────────
-const MOCK_DRIVERS = ["Henk de Vries", "Mo Ajam", "Sanne Jansen", "Piet Pietersen"];
+// ─── Mock Drivers with certifications ────────────────────────────────
+const MOCK_DRIVERS = [
+  { name: "Henk de Vries", certs: ["ADR"] },
+  { name: "Mo Ajam", certs: [] },
+  { name: "Sanne Jansen", certs: ["KOELING"] },
+  { name: "Piet Pietersen", certs: ["ADR", "KOELING"] },
+];
+
+/** Suggest the best driver for a vehicle based on assigned orders' requirements */
+function suggestDriver(assigned: PlanOrder[], vehicleFeatures: string[]): string {
+  const needsADR = assigned.some(o => hasTag(o, "ADR"));
+  const needsKoeling = assigned.some(o => hasTag(o, "KOELING"));
+  const candidates = MOCK_DRIVERS.filter(d => {
+    if (needsADR && !d.certs.includes("ADR")) return false;
+    if (needsKoeling && !d.certs.includes("KOELING")) return false;
+    return true;
+  });
+  return candidates.length > 0 ? candidates[0].name : "";
+}
+
+/** Explain why a vehicle has no orders assigned */
+function getEmptyReason(vehicle: FleetVehicle, allOrders: PlanOrder[], assignedIds: Set<string>): string {
+  const unassigned = allOrders.filter(o => !assignedIds.has(o.id));
+  if (unassigned.length === 0) return "Alle orders zijn al toegewezen.";
+  const fittingOrders = unassigned.filter(o => {
+    if (hasTag(o, "KOELING") && !vehicle.features.includes("KOELING")) return false;
+    if (hasTag(o, "ADR") && !vehicle.features.includes("ADR")) return false;
+    const w = getTotalWeight(o);
+    if (w > vehicle.capacityKg) return false;
+    return true;
+  });
+  if (fittingOrders.length === 0) {
+    const koelOrders = unassigned.filter(o => hasTag(o, "KOELING"));
+    const adrOrders = unassigned.filter(o => hasTag(o, "ADR"));
+    if (koelOrders.length > 0 && !vehicle.features.includes("KOELING")) return "Resterende orders vereisen koeling — dit voertuig heeft geen koelinstallatie.";
+    if (adrOrders.length > 0 && !vehicle.features.includes("ADR")) return "Resterende orders vereisen ADR — dit voertuig is niet ADR-uitgerust.";
+    return "Geen orders passen qua capaciteit of vereisten.";
+  }
+  return `${fittingOrders.length} order(s) kunnen hier — sleep ze hierheen.`;
+}
+
+/** Explain why an unassigned order hasn't been placed on any vehicle */
+function getUnassignedReason(order: PlanOrder, fleetVehicles: FleetVehicle[], assignments: Assignments): string | null {
+  if (!order.delivery_address || order.delivery_address === "Onbekend") return "Afleveradres ontbreekt — niet inplanbaar.";
+  const reasons: string[] = [];
+  for (const v of fleetVehicles) {
+    if (hasTag(order, "KOELING") && !v.features.includes("KOELING")) { reasons.push(`${v.name}: geen koeling`); continue; }
+    if (hasTag(order, "ADR") && !v.features.includes("ADR")) { reasons.push(`${v.name}: geen ADR`); continue; }
+    const current = (assignments[v.id] ?? []).reduce((s, o) => s + getTotalWeight(o), 0);
+    if (current + getTotalWeight(order) > v.capacityKg) { reasons.push(`${v.name}: vol op gewicht`); continue; }
+    const pallets = (assignments[v.id] ?? []).reduce((s, o) => s + (o.quantity ?? 0), 0);
+    if (pallets + (order.quantity ?? 0) > v.capacityPallets) { reasons.push(`${v.name}: vol op pallets`); continue; }
+    return null; // at least one vehicle fits
+  }
+  return reasons.slice(0, 2).join(" · ");
+}
+
+/** Detect groups of combinable unassigned orders */
+function findCombinableGroups(orders: PlanOrder[], assignedIds: Set<string>): { key: string; orders: PlanOrder[]; savings: string }[] {
+  const unassigned = orders.filter(o => !assignedIds.has(o.id));
+  const groups = new Map<string, PlanOrder[]>();
+  for (const o of unassigned) {
+    const city = getCity(o.delivery_address).toLowerCase();
+    const reqs = (o.requirements || []).sort().join(",");
+    const key = `${city}|${reqs}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(o);
+  }
+  return [...groups.entries()]
+    .filter(([, arr]) => arr.length >= 2)
+    .map(([key, arr]) => ({
+      key,
+      orders: arr,
+      savings: `${arr.length} orders naar ${getCity(arr[0].delivery_address)} — combineer tot 1 rit`,
+    }));
+}
 
 const AVG_SPEED_KMH = 60;
 const UNLOAD_MINUTES = 30;
@@ -250,10 +325,12 @@ function DraggableOrder({
   order,
   overlay,
   onHover,
+  whyNotReason,
 }: {
   order: PlanOrder;
   overlay?: boolean;
   onHover?: (orderId: string | null) => void;
+  whyNotReason?: string | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: order.id,
@@ -264,7 +341,9 @@ function DraggableOrder({
     ? undefined
     : { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.3 : 1 };
 
-  return (
+  const isIncomplete = !order.delivery_address || order.delivery_address === "Onbekend" || !order.weight_kg;
+
+  const card = (
     <div
       ref={overlay ? undefined : setNodeRef}
       style={style}
@@ -272,13 +351,19 @@ function DraggableOrder({
       onMouseEnter={() => onHover?.(order.id)}
       onMouseLeave={() => onHover?.(null)}
       className={cn(
-        "rounded-xl border border-border/40 bg-card p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all duration-150 group/card",
-        overlay && "shadow-xl ring-2 ring-primary/30 rotate-1 scale-105"
+        "rounded-xl border bg-card p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all duration-150 group/card",
+        overlay && "shadow-xl ring-2 ring-primary/30 rotate-1 scale-105",
+        isIncomplete ? "border-destructive/40 bg-destructive/[0.02]" : "border-border/40"
       )}
     >
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-[11px] font-mono text-muted-foreground/60 font-medium">#{order.order_number}</span>
         <div className="flex gap-1">
+          {isIncomplete && (
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide bg-destructive/10 text-destructive border border-destructive/20 rounded-md px-1.5 py-0.5">
+              <AlertTriangle className="h-2.5 w-2.5" />INCOMPLEET
+            </span>
+          )}
           {hasTag(order, "ADR") && (
             <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-wide bg-amber-500/10 text-amber-700 border border-amber-200/60 rounded-md px-1.5 py-0.5">
               <AlertTriangle className="h-2.5 w-2.5" />ADR
@@ -292,20 +377,25 @@ function DraggableOrder({
         </div>
       </div>
       <p className="text-sm font-medium truncate text-foreground">{order.client_name || "Onbekend"}</p>
-      <p className="text-[11px] text-muted-foreground/60 truncate mt-0.5 flex items-center gap-1">
+      <p className={cn("text-[11px] truncate mt-0.5 flex items-center gap-1", !order.delivery_address ? "text-destructive" : "text-muted-foreground/60")}>
         <MapPin className="h-2.5 w-2.5 shrink-0" />
-        {getCity(order.delivery_address)}
+        {order.delivery_address ? getCity(order.delivery_address) : "Adres ontbreekt"}
       </p>
       <div className="flex items-center gap-3 mt-2.5 pt-2 border-t border-border/30 text-[11px] text-muted-foreground">
         <span className="tabular-nums">{order.quantity ?? "?"} plt</span>
-        <span className="font-semibold text-foreground tabular-nums">{getTotalWeight(order)} kg</span>
+        <span className={cn("font-semibold tabular-nums", !order.weight_kg ? "text-destructive" : "text-foreground")}>{order.weight_kg ? `${getTotalWeight(order)} kg` : "? kg"}</span>
         <span className="flex items-center gap-0.5 ml-auto text-muted-foreground/60">
           <Clock className="h-2.5 w-2.5" />
           {getTimeWindow(order)}
         </span>
       </div>
+      {whyNotReason && (
+        <p className="text-[9px] text-amber-600 mt-1.5 leading-snug">{whyNotReason}</p>
+      )}
     </div>
   );
+
+  return card;
 }
 
 // ─── Sortable Order Row (inside vehicle card) ────────────────────────
@@ -391,6 +481,7 @@ function VehicleDropZone({
   driver,
   onDriverChange,
   orderCoords,
+  emptyReason,
 }: {
   vehicle: FleetVehicle;
   assigned: PlanOrder[];
@@ -405,6 +496,7 @@ function VehicleDropZone({
   driver: string;
   onDriverChange: (vehicleId: string, driver: string) => void;
   orderCoords: Map<string, GeoCoord>;
+  emptyReason: string;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: vehicle.id });
   const color = vehicleColors[vehicle.id] || "#888";
@@ -469,7 +561,10 @@ function VehicleDropZone({
             </SelectTrigger>
             <SelectContent>
               {MOCK_DRIVERS.map((d) => (
-                <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>
+                <SelectItem key={d.name} value={d.name} className="text-xs">
+                  {d.name}
+                  {d.certs.length > 0 && <span className="text-[9px] text-muted-foreground ml-1">({d.certs.join(", ")})</span>}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -520,10 +615,11 @@ function VehicleDropZone({
         </div>
 
         {assigned.length === 0 ? (
-          <div className="flex items-center justify-center h-14 border-2 border-dashed border-border/40 rounded-xl bg-muted/20">
+          <div className="flex flex-col items-center justify-center h-16 border-2 border-dashed border-border/40 rounded-xl bg-muted/20 px-3">
             <p className="text-[11px] text-muted-foreground/50 italic flex items-center gap-1.5">
               <Package className="h-3.5 w-3.5" />Sleep orders hierheen
             </p>
+            <p className="text-[9px] text-muted-foreground/35 mt-0.5 text-center leading-snug">{emptyReason}</p>
           </div>
         ) : (
           <SortableContext items={assigned.map((o) => o.id)} strategy={verticalListSortingStrategy}>
@@ -549,21 +645,38 @@ function VehicleDropZone({
       {assigned.length > 0 && (
         <div className="mt-auto px-4 pb-3 pt-2 space-y-1.5">
           <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2.5 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Timer className="h-3 w-3" />
-              <span className="font-medium text-foreground">{formatDuration(stats.totalMinutes)}</span>
-            </span>
-            <span className="flex items-center gap-1 tabular-nums">
-              <Route className="h-3 w-3" />
-              {stats.totalKm} km
-              <span className="text-[10px] opacity-50">(+{stats.returnKm})</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <BarChart3 className="h-3 w-3" />
-              <span className={cn("font-semibold", utilizationPct > 100 ? "text-destructive" : utilizationPct > 90 ? "text-amber-600" : "text-foreground")}>
-                {utilizationPct}%
-              </span>
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-1 cursor-help">
+                  <Timer className="h-3 w-3" />
+                  <span className="font-medium text-foreground">{formatDuration(stats.totalMinutes)}</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="text-[10px] max-w-[200px]">Totale rijtijd inclusief {assigned.length}× {UNLOAD_MINUTES} min lostijd</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-1 tabular-nums cursor-help">
+                  <Route className="h-3 w-3" />
+                  {stats.totalKm} km
+                  <span className="text-[10px] opacity-50">(+{stats.returnKm})</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="text-[10px] max-w-[200px]">Route: {stats.totalKm - stats.returnKm} km heen + {stats.returnKm} km retour naar depot</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-1 cursor-help">
+                  <BarChart3 className="h-3 w-3" />
+                  <span className={cn("font-semibold", utilizationPct > 100 ? "text-destructive" : utilizationPct > 90 ? "text-amber-600" : "text-foreground")}>
+                    {utilizationPct}%
+                  </span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="text-[10px] max-w-[220px]">
+                Capaciteitsbenutting: {Math.round(pctKg)}% gewicht ({totalKg}/{vehicle.capacityKg} kg) · {Math.round(pctPallets)}% pallets ({totalPallets}/{vehicle.capacityPallets})
+              </TooltipContent>
+            </Tooltip>
           </div>
           {stats.exceedsDriveLimit && (
             <div className="flex items-center gap-1.5 rounded-xl bg-destructive/8 border border-destructive/15 px-3 py-2 text-[11px] text-destructive font-medium">
@@ -763,6 +876,22 @@ const Planning = () => {
       });
     }
   }, [fleetVehicles]);
+
+  // Auto-suggest drivers when assignments change
+  useEffect(() => {
+    setVehicleDrivers(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const v of fleetVehicles) {
+        const assigned = assignments[v.id] ?? [];
+        if (assigned.length > 0 && !next[v.id]) {
+          const suggested = suggestDriver(assigned, v.features);
+          if (suggested) { next[v.id] = suggested; changed = true; }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [assignments, fleetVehicles]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -1145,15 +1274,26 @@ const Planning = () => {
 
     setAssignments(newAssignments);
 
-    // Efficiency reporting
+    // Efficiency reporting with scenario stats
     const usedVehicles = sortedVehicles.filter((v) => (newAssignments[v.id]?.length ?? 0) > 0);
-    const smallVehiclesUsed = usedVehicles.filter((v) => v.capacityKg <= 5000).length;
     const notPlaced = sortedOrders.length - placed.size;
+
+    // Calculate total km and cost estimate
+    let totalKm = 0;
+    for (const v of usedVehicles) {
+      const vOrders = newAssignments[v.id] ?? [];
+      if (vOrders.length > 0) {
+        const stats = computeRouteStats("07:00", vOrders, orderCoords);
+        totalKm += stats.totalKm;
+      }
+    }
+    const costEstimate = Math.round(totalKm * 2.85); // ~€2.85/km average
+
     toast({
-      title: `⚡ ${placed.size} orders ingepland over ${usedVehicles.length} voertuig(en)`,
+      title: `⚡ ${placed.size} orders → ${usedVehicles.length} ritten · ${totalKm} km · €${costEstimate.toLocaleString("nl-NL")}`,
       description: notPlaced > 0
         ? `${notPlaced} order(s) konden niet geplaatst worden (capaciteit/vereisten).`
-        : `Optimalisatie gereed. ${smallVehiclesUsed} kleine voertuig(en) maximaal benut.`,
+        : `Optimalisatie gereed. Geschatte kosten: €${costEstimate.toLocaleString("nl-NL")} (${totalKm} km × €2,85/km).`,
       variant: notPlaced > 0 ? "destructive" : undefined,
     });
   }, [orders, assignedIds, assignments, orderCoords, toast]);
@@ -1380,6 +1520,25 @@ const Planning = () => {
               </div>
             </div>
 
+            {/* Combine suggestion banner */}
+            {(() => {
+              const combineGroups = findCombinableGroups(orders, assignedIds);
+              if (combineGroups.length === 0) return null;
+              return (
+                <div className="space-y-1.5 mb-2">
+                  {combineGroups.slice(0, 2).map(g => (
+                    <div key={g.key} className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[10px]">
+                      <div className="flex items-center gap-1.5 text-primary font-semibold">
+                        <Route className="h-3 w-3" />
+                        Combineerbaar
+                      </div>
+                      <p className="text-muted-foreground mt-0.5">{g.savings}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             <UnassignedDropZone>
               {groupedUnassigned.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm">
@@ -1400,7 +1559,7 @@ const Planning = () => {
                     </div>
                     <div className="space-y-1.5 mb-2">
                       {group.orders.map((order) => (
-                        <DraggableOrder key={order.id} order={order} onHover={setHoveredOrderId} />
+                        <DraggableOrder key={order.id} order={order} onHover={setHoveredOrderId} whyNotReason={getUnassignedReason(order, fleetVehicles, assignments)} />
                       ))}
                     </div>
                   </div>
@@ -1408,8 +1567,16 @@ const Planning = () => {
               )}
             </UnassignedDropZone>
 
-            <div className="text-[11px] text-muted-foreground/60 pt-2 border-t border-border/30 tabular-nums">
-              {totalUnassigned} beschikbaar · {totalAssigned} ingepland
+            <div className="text-[11px] text-muted-foreground/60 pt-2 border-t border-border/30 tabular-nums space-y-0.5">
+              <div>{totalUnassigned} beschikbaar · {totalAssigned} ingepland</div>
+              <div>{(() => {
+                const withSpace = fleetVehicles.filter(v => {
+                  const a = assignments[v.id] ?? [];
+                  const kg = a.reduce((s, o) => s + getTotalWeight(o), 0);
+                  return kg < v.capacityKg * 0.95;
+                }).length;
+                return `${withSpace} van ${fleetVehicles.length} voertuigen hebben ruimte`;
+              })()}</div>
             </div>
           </div>
 
@@ -1432,6 +1599,7 @@ const Planning = () => {
                   driver={vehicleDrivers[vehicle.id] ?? ""}
                   onDriverChange={(vId, d) => setVehicleDrivers((p) => ({ ...p, [vId]: d }))}
                   orderCoords={orderCoords}
+                  emptyReason={getEmptyReason(vehicle, orders, assignedIds)}
                 />
               ))}
             </div>
