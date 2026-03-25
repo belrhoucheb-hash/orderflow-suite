@@ -76,9 +76,11 @@ const Orders = () => {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">Orders</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{orders.length} orders in totaal</p>
         </div>
-        <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
-          <Plus className="h-4 w-4" /> Nieuwe order
-        </Button>
+        <Link to="/orders/nieuw">
+          <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
+            <Plus className="h-4 w-4" /> Nieuwe order
+          </Button>
+        </Link>
       </div>
 
       {/* Stats Bar */}
