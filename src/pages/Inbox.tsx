@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Mail, Clock, Sparkles, Trash2, Plus, Search, ThermometerSnowflake, AlertTriangle, Truck, FileCheck, DatabaseZap, Loader2, FileText, Eye, Download, Image as ImageIcon, Paperclip, Upload, FlaskConical, MapPin, ArrowLeft, CheckCircle2, Zap, Package, Route, ShieldCheck, Scale, Ruler, Bot, Inbox as InboxIcon, ChevronRight, MailOpen, Timer, Users, Merge, StickyNote, TriangleAlert, FileType, Send, CircleAlert } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -855,9 +856,10 @@ export default function Inbox() {
 
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-0 -m-4 md:-m-6">
+      <ResizablePanelGroup direction="horizontal" className="h-full">
       {/* ─── Left: Inbox List ─── */}
-      <div className={cn(
-        "w-full md:w-[360px] md:min-w-[320px] border-r border-border/40 flex flex-col bg-card",
+      <ResizablePanel defaultSize={25} minSize={15} maxSize={40} className={cn(
+        "flex flex-col bg-card",
         mobileView !== "list" && "hidden md:flex"
       )}>
         {/* Header */}
@@ -1000,13 +1002,15 @@ export default function Inbox() {
             )}
           </div>
         </ScrollArea>
-      </div>
+      </ResizablePanel>
+
+      <ResizableHandle withHandle />
 
       {/* ─── Middle: Source Email ─── */}
       {selected && form ? (
         <>
-          <div className={cn(
-            "w-full md:w-[400px] lg:w-[420px] flex flex-col min-w-0",
+          <ResizablePanel defaultSize={35} minSize={20} maxSize={50} className={cn(
+            "flex flex-col min-w-0",
             mobileView !== "source" && "hidden md:flex"
           )}>
             {/* Mobile back + next buttons */}
@@ -1024,11 +1028,13 @@ export default function Inbox() {
               setFormData((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], ...enriched } }));
               if (enrichments.length > 0) toast({ title: "Adresboek verrijking", description: enrichments.join(". ") });
             }} />
-          </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle />
 
           {/* ─── Right: Order Form ─── */}
-          <div className={cn(
-            "flex-1 flex flex-col min-w-0 bg-background border-l border-border/30",
+          <ResizablePanel defaultSize={40} minSize={25} className={cn(
+            "flex flex-col min-w-0 bg-background",
             mobileView !== "detail" && "hidden md:flex"
           )}>
             {/* Header Bar */}
@@ -1309,17 +1315,20 @@ export default function Inbox() {
                 </div>
               </ScrollArea>
             </div>
-          </div>
+          </ResizablePanel>
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-background">
-          <div className="text-center">
-            <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4"><InboxIcon className="h-7 w-7 text-muted-foreground/30" /></div>
-            <p className="text-sm font-semibold text-muted-foreground mb-1">Alles verwerkt</p>
-            <p className="text-[11px] text-muted-foreground/60">Er zijn geen openstaande aanvragen</p>
+        <ResizablePanel defaultSize={75} minSize={50}>
+          <div className="flex-1 flex items-center justify-center bg-background h-full">
+            <div className="text-center">
+              <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4"><InboxIcon className="h-7 w-7 text-muted-foreground/30" /></div>
+              <p className="text-sm font-semibold text-muted-foreground mb-1">Alles verwerkt</p>
+              <p className="text-[11px] text-muted-foreground/60">Er zijn geen openstaande aanvragen</p>
+            </div>
           </div>
-        </div>
+        </ResizablePanel>
       )}
+      </ResizablePanelGroup>
     </div>
   );
 }
