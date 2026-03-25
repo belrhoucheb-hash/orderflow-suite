@@ -52,6 +52,10 @@ interface OrderDraft {
   missing_fields: string[] | null;
   follow_up_draft: string | null;
   follow_up_sent_at: string | null;
+  thread_type: string;
+  parent_order_id: string | null;
+  changes_detected: { field: string; old_value: string; new_value: string }[] | null;
+  anomalies: { field: string; value: number; avg_value: number; message: string }[] | null;
 }
 
 type FieldSource = "email" | "pdf" | "both";
@@ -123,6 +127,97 @@ function tryEnrichAddress(address: string, clients: ClientRecord[]): { enriched:
   if (/\d{4}\s?[A-Za-z]{2}/.test(address)) return { enriched: address, matchedClient: null };
   const parts = [match.address, match.zipcode, match.city].filter(Boolean);
   return { enriched: parts.join(", "), matchedClient: match.name };
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  weight_kg: "Gewicht",
+  quantity: "Aantal",
+  pickup_address: "Ophaaladres",
+  delivery_address: "Afleveradres",
+  requirements: "Vereisten",
+  unit: "Eenheid",
+  dimensions: "Afmetingen",
+  transport_type: "Transport type",
+  client_name: "Klantnaam",
+};
+
+const THREAD_TYPE_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  update: { label: "Wijziging", color: "bg-blue-50 text-blue-700 border-blue-200", icon: ArrowLeft },
+  cancellation: { label: "Annulering", color: "bg-destructive/10 text-destructive border-destructive/20", icon: Trash2 },
+  confirmation: { label: "Bevestiging", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
+  question: { label: "Vraag", color: "bg-violet-50 text-violet-700 border-violet-200", icon: CircleAlert },
+};
+
+function ThreadDiffBanner({ order }: { order: OrderDraft }) {
+  if (order.thread_type === "new" || !order.thread_type) return null;
+  const config = THREAD_TYPE_CONFIG[order.thread_type];
+  if (!config) return null;
+  const changes = (order.changes_detected || []) as { field: string; old_value: string; new_value: string }[];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-blue-200/60 bg-blue-50/50 p-4 space-y-2.5"
+    >
+      <div className="flex items-center gap-2">
+        <div className={cn("inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-md border", config.color)}>
+          <config.icon className="h-3 w-3" />
+          E-mail Thread: {config.label}
+        </div>
+        {order.parent_order_id && (
+          <span className="text-[10px] text-muted-foreground">
+            Reactie op bestaande order
+          </span>
+        )}
+      </div>
+
+      {changes.length > 0 && (
+        <div className="space-y-1.5">
+          {changes.map((change, i) => (
+            <div key={i} className="flex items-center gap-2 text-[12px] rounded-lg bg-white/80 border border-blue-100/60 px-3 py-2">
+              <span className="text-muted-foreground font-medium min-w-[80px]">{FIELD_LABELS[change.field] || change.field}</span>
+              <span className="text-destructive/70 line-through">{change.old_value}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="text-emerald-700 font-semibold">{change.new_value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {order.thread_type === "cancellation" && (
+        <p className="text-[11px] text-destructive/80 font-medium">
+          ⚠ Klant wil deze order annuleren. Controleer en verwerk handmatig.
+        </p>
+      )}
+    </motion.div>
+  );
+}
+
+function AnomalyWarnings({ anomalies }: { anomalies: { field: string; value: number; avg_value: number; message: string }[] }) {
+  if (!anomalies || anomalies.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      {anomalies.map((a, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: i * 0.1 }}
+          className="flex items-start gap-2.5 rounded-lg border border-amber-200/50 bg-amber-50/40 px-3 py-2"
+        >
+          <Bot className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-amber-800 font-medium leading-snug">{a.message}</p>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-[10px] text-amber-600/70">Huidige waarde: <strong>{a.value}</strong></span>
+              <span className="text-[10px] text-amber-600/70">Gemiddeld: <strong>{a.avg_value}</strong></span>
+            </div>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
 }
 
 const requirementOptions = [
@@ -440,14 +535,15 @@ function SourcePanel({ selected, onParseResult }: { selected: OrderDraft; onPars
         fieldSources: ext.field_sources || {},
       });
 
-      // Save missing fields and follow-up draft to DB
-      if (data.missing_fields || data.follow_up_draft) {
-        await supabase.from("orders").update({
-          missing_fields: data.missing_fields || [],
-          follow_up_draft: data.follow_up_draft || null,
-        }).eq("id", selected.id);
-        queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
-      }
+      // Save missing fields, follow-up draft, thread info, and anomalies to DB
+      await supabase.from("orders").update({
+        missing_fields: data.missing_fields || [],
+        follow_up_draft: data.follow_up_draft || null,
+        thread_type: data.thread_type || selected.thread_type || "new",
+        changes_detected: data.changes_detected || [],
+        anomalies: data.anomalies || [],
+      }).eq("id", selected.id);
+      queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
 
       toast({ title: "AI Extractie voltooid", description: `Confidence: ${ext.confidence_score}%` });
     } catch (e: any) {
@@ -815,6 +911,26 @@ export default function Inbox() {
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             {conf > 0 && <ConfidenceDot score={conf} />}
+            {draft.thread_type && draft.thread_type !== "new" && (() => {
+              const tc = THREAD_TYPE_CONFIG[draft.thread_type];
+              return tc ? (
+                <span className={cn("inline-flex items-center gap-0.5 text-[8px] font-bold px-1 py-0.5 rounded border shrink-0", tc.color)}>
+                  <tc.icon className="h-2 w-2" />{tc.label}
+                </span>
+              ) : null;
+            })()}
+            {(draft.anomalies as any[])?.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger>
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-amber-100 border border-amber-200">
+                    <Bot className="h-2.5 w-2.5 text-amber-600" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px] max-w-[250px]">
+                  {(draft.anomalies as any[])[0]?.message}
+                </TooltipContent>
+              </Tooltip>
+            )}
             <span className="text-[12px] font-semibold text-foreground truncate leading-tight flex-1">
               {draft.client_name || "Nieuwe aanvraag"}
             </span>
@@ -1093,6 +1209,12 @@ export default function Inbox() {
             <div className="flex-1 flex flex-col overflow-hidden">
               <ScrollArea className="flex-1">
                 <div className="p-4 space-y-4">
+                  {/* Thread Diff Banner */}
+                  <ThreadDiffBanner order={selected} />
+
+                  {/* Anomaly Warnings */}
+                  <AnomalyWarnings anomalies={(selected.anomalies || []) as { field: string; value: number; avg_value: number; message: string }[]} />
+
                   {/* Confidence Ring */}
                   {selected.confidence_score != null && (
                     <div className="rounded-xl border border-border/40 bg-card p-4">

@@ -46,8 +46,10 @@ export type Database = {
       }
       orders: {
         Row: {
+          anomalies: Json | null
           attachments: Json | null
           barcode: string | null
+          changes_detected: Json | null
           client_name: string | null
           confidence_score: number | null
           created_at: string
@@ -61,6 +63,7 @@ export type Database = {
           is_weight_per_unit: boolean
           missing_fields: string[] | null
           order_number: number
+          parent_order_id: string | null
           pickup_address: string | null
           quantity: number | null
           received_at: string | null
@@ -70,6 +73,7 @@ export type Database = {
           source_email_subject: string | null
           status: string
           stop_sequence: number | null
+          thread_type: string
           transport_type: string | null
           unit: string | null
           updated_at: string
@@ -77,8 +81,10 @@ export type Database = {
           weight_kg: number | null
         }
         Insert: {
+          anomalies?: Json | null
           attachments?: Json | null
           barcode?: string | null
+          changes_detected?: Json | null
           client_name?: string | null
           confidence_score?: number | null
           created_at?: string
@@ -92,6 +98,7 @@ export type Database = {
           is_weight_per_unit?: boolean
           missing_fields?: string[] | null
           order_number?: number
+          parent_order_id?: string | null
           pickup_address?: string | null
           quantity?: number | null
           received_at?: string | null
@@ -101,6 +108,7 @@ export type Database = {
           source_email_subject?: string | null
           status?: string
           stop_sequence?: number | null
+          thread_type?: string
           transport_type?: string | null
           unit?: string | null
           updated_at?: string
@@ -108,8 +116,10 @@ export type Database = {
           weight_kg?: number | null
         }
         Update: {
+          anomalies?: Json | null
           attachments?: Json | null
           barcode?: string | null
+          changes_detected?: Json | null
           client_name?: string | null
           confidence_score?: number | null
           created_at?: string
@@ -123,6 +133,7 @@ export type Database = {
           is_weight_per_unit?: boolean
           missing_fields?: string[] | null
           order_number?: number
+          parent_order_id?: string | null
           pickup_address?: string | null
           quantity?: number | null
           received_at?: string | null
@@ -132,13 +143,22 @@ export type Database = {
           source_email_subject?: string | null
           status?: string
           stop_sequence?: number | null
+          thread_type?: string
           transport_type?: string | null
           unit?: string | null
           updated_at?: string
           vehicle_id?: string | null
           weight_kg?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orders_parent_order_id_fkey"
+            columns: ["parent_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
