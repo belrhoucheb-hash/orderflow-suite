@@ -22,6 +22,7 @@ const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Inbox", url: "/inbox", icon: Inbox },
   { title: "Orders", url: "/orders", icon: Package },
+  { title: "Klanten", url: "/klanten", icon: Building2 },
   { title: "Transportplanning", url: "/planning", icon: Truck },
   { title: "Routekaart", url: "/routes", icon: Map },
   { title: "Chauffeurs Rit", url: "/ritten", icon: Route },
