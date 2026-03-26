@@ -1671,11 +1671,6 @@ export default function Inbox() {
                                 Voorstel: {addressSuggestions.delivery[0].address.substring(0, 40)}…
                               </button>
                             )}
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
-                              </Tooltip>
-                            </div>
                           </FormField>
                         </>
                       );
