@@ -1,6 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { ArrowLeft, MapPin, Package, Truck, User, Clock, FileText, MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2, Undo2, Send, Loader2 } from "lucide-react";
+import { ClickableAddress } from "@/components/ClickableAddress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -193,16 +194,14 @@ const OrderDetail = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <p className="text-muted-foreground text-xs uppercase tracking-wide">Ophaaladres</p>
-                  <p className="font-medium flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-                    {order.pickup_address || <span className="text-destructive italic">Ontbreekt</span>}
+                  <p className="font-medium">
+                    <ClickableAddress address={order.pickup_address} iconClassName="text-primary" />
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <p className="text-muted-foreground text-xs uppercase tracking-wide">Afleveradres</p>
-                  <p className="font-medium flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                    {order.delivery_address || <span className="text-destructive italic">Ontbreekt</span>}
+                  <p className="font-medium">
+                    <ClickableAddress address={order.delivery_address} iconClassName="text-emerald-600" />
                   </p>
                 </div>
               </div>
