@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { mockVehicles } from "@/data/mockData";
 import { useAddressSuggestions, type AddressSuggestion } from "@/hooks/useAddressSuggestions";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useCapacityMatch, type CapacityMatch } from "@/hooks/useCapacityMatch";
 
 interface ClientRecord {
