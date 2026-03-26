@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, CheckCheck, Trash2, Clock, MailReply, AlertTriangle, Truck, CalendarClock, Package, X, Inbox } from "lucide-react";
+import { Bell, CheckCheck, Trash2, Clock, Reply, AlertTriangle, Truck, CalendarClock, Package, X, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
