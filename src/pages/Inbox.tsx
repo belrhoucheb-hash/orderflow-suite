@@ -1228,6 +1228,7 @@ export default function Inbox() {
           )}
         </div>
       </motion.button>
+      </div>
     );
   };
 
