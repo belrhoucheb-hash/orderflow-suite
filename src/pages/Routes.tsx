@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ClickableAddress } from "@/components/ClickableAddress";
 import { mockOrders, statusColors, statusLabels } from "@/data/mockData";
-import { mockOrders, statusColors, statusLabels } from "@/data/mockData";
 import "leaflet/dist/leaflet.css";
 
 // Dummy coordinates for demo
