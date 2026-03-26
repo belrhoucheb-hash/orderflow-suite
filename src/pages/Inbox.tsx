@@ -1406,6 +1406,10 @@ export default function Inbox() {
                       <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider">{clientName}</span>
                       <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">{orders.length}</Badge>
                     </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-primary" onClick={() => selectAllSimilar(clientName)}>
+                        <CheckCircle2 className="h-2.5 w-2.5" /> Selecteer alle
+                      </Button>
                     {orders.length >= 2 && (
                       <Tooltip>
                         <TooltipTrigger asChild>
