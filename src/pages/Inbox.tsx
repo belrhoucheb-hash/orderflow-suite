@@ -533,8 +533,13 @@ function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState
 
   if (items.length === 0) return null;
 
-  // Find matching vehicles based on availability
-  const matchingVehicles = mockVehicles.filter(v => v.status === "beschikbaar");
+  const capacityInput = {
+    requirements: form.requirements,
+    weightKg: form.weight ? Number(form.weight) * (form.perUnit ? form.quantity : 1) : 0,
+    quantity: form.quantity,
+    unit: form.unit,
+  };
+  const capacityMatches = useCapacityMatch(capacityInput);
 
   return (
     <div className="p-5 space-y-1">
@@ -560,39 +565,74 @@ function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState
         </div>
       </div>
 
-      {matchingVehicles.length > 0 && (
-        <>
-          {/* Phase 2: Planning */}
-          <div className="flex items-center gap-2 px-1 pt-4 pb-2">
-            <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em]">Fase 2 — Planning</span>
-            <div className="flex-1 h-px bg-border/30" />
-          </div>
-          <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <Truck className="h-3.5 w-3.5 text-primary" />
-              <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Beschikbare capaciteit</h4>
-            </div>
-            <div className="space-y-1.5">
-              {matchingVehicles.slice(0, 3).map((v) => (
-                <div key={v.id} className="flex items-center gap-2 text-[11px] rounded-lg bg-card border border-border/20 px-3 py-2">
-                  <Truck className="h-3 w-3 text-muted-foreground" />
+      {/* Phase 2: Planning — Capacity Match */}
+      <div className="flex items-center gap-2 px-1 pt-4 pb-2">
+        <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em]">Fase 2 — Planning</span>
+        <div className="flex-1 h-px bg-border/30" />
+      </div>
+      <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-2">
+        <div className="flex items-center gap-2 mb-1">
+          <Truck className="h-3.5 w-3.5 text-primary" />
+          <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Beschikbare capaciteit</h4>
+        </div>
+        {capacityMatches.length > 0 ? (
+          <div className="space-y-2">
+            {capacityMatches.slice(0, 3).map((match) => (
+              <div key={match.vehicle.id} className={cn(
+                "rounded-lg border px-3 py-2.5 transition-colors",
+                match.warnings.length > 0 ? "border-amber-200/40 bg-amber-50/20" : "border-border/20 bg-card"
+              )}>
+                <div className="flex items-center gap-2">
+                  <Truck className="h-3 w-3 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-foreground">{v.name}</span>
-                      <span className="text-muted-foreground/60">({v.plate})</span>
+                      <span className="text-[11px] font-semibold text-foreground">{match.vehicle.name}</span>
+                      <span className="text-[10px] text-muted-foreground/60">({match.vehicle.plate})</span>
+                      <span className={cn(
+                        "text-[9px] font-bold px-1.5 py-0.5 rounded ml-auto",
+                        match.score >= 70 ? "bg-emerald-500/10 text-emerald-600" : match.score >= 40 ? "bg-amber-500/10 text-amber-600" : "bg-destructive/10 text-destructive"
+                      )}>
+                        {match.score}%
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <Users className="h-2.5 w-2.5 text-muted-foreground/50" />
-                      <span className="text-[10px] text-muted-foreground">{v.driver}</span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Users className="h-2.5 w-2.5 text-primary/50" />
+                      <span className="text-[10px] font-medium text-foreground">{match.driver.name}</span>
+                      {match.driver.certs.length > 0 && (
+                        <span className="text-[9px] text-primary/70 font-medium">
+                          ({match.driver.certs.join(", ")})
+                        </span>
+                      )}
                     </div>
+                    {match.reasons.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {match.reasons.map((r, i) => (
+                          <span key={i} className="text-[9px] text-emerald-600/80 bg-emerald-500/8 px-1.5 py-0.5 rounded">✓ {r}</span>
+                        ))}
+                      </div>
+                    )}
+                    {match.warnings.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {match.warnings.map((w, i) => (
+                          <span key={i} className="text-[9px] text-amber-600/80 bg-amber-500/8 px-1.5 py-0.5 rounded">⚠ {w}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{v.type}</span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        </>
-      )}
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-[11px] text-muted-foreground">
+              {form.requirements.length > 0
+                ? `Geen voertuig beschikbaar met ${form.requirements.join(" + ")}`
+                : "Geen voertuigen gevonden"}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
