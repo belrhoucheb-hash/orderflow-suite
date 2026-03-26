@@ -17,6 +17,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { mockVehicles } from "@/data/mockData";
+import { useAddressSuggestions, type AddressSuggestion } from "@/hooks/useAddressSuggestions";
+import { useCapacityMatch, type CapacityMatch } from "@/hooks/useCapacityMatch";
 
 interface ClientRecord {
   id: string;
