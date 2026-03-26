@@ -1410,16 +1410,17 @@ export default function Inbox() {
                       <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-primary" onClick={() => selectAllSimilar(clientName)}>
                         <CheckCircle2 className="h-2.5 w-2.5" /> Selecteer alle
                       </Button>
-                    {orders.length >= 2 && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-primary" onClick={() => handleMerge(clientName, orders)}>
-                            <Merge className="h-3 w-3" /> Samenvoegen
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent className="text-[10px]">Combineer tot multi-stop opdracht</TooltipContent>
-                      </Tooltip>
-                    )}
+                      {orders.length >= 2 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-primary" onClick={() => handleMerge(clientName, orders)}>
+                              <Merge className="h-3 w-3" /> Samenvoegen
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-[10px]">Combineer tot multi-stop opdracht</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </div>
                   {orders.map(renderInboxItem)}
                 </div>
