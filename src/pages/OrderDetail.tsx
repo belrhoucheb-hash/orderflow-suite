@@ -1,6 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { ArrowLeft, MapPin, Package, Truck, User, Clock, FileText, MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2, Undo2, Send, Loader2 } from "lucide-react";
+import { ClickableAddress } from "@/components/ClickableAddress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
