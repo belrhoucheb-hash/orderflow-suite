@@ -1711,12 +1711,13 @@ export default function Inbox() {
 
                           <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
                             confidence={getConfidence(form.deliveryAddress, true)}>
-                            <div className="relative">
-                              <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
-                                value={form.deliveryAddress}
-                                onChange={(e) => updateField("deliveryAddress", e.target.value)}
-                                onFocus={() => { if (!form.deliveryAddress && addressSuggestions?.delivery?.length) setShowDeliverySuggestions(true); }}
-                                placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
+                             <div className="relative">
+                               <AddressAutocomplete
+                                 value={form.deliveryAddress}
+                                 onChange={(val) => updateField("deliveryAddress", val)}
+                                 placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."}
+                                 className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                               />
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
