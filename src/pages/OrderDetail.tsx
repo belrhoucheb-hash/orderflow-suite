@@ -194,9 +194,8 @@ const OrderDetail = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <p className="text-muted-foreground text-xs uppercase tracking-wide">Ophaaladres</p>
-                  <p className="font-medium flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-                    {order.pickup_address || <span className="text-destructive italic">Ontbreekt</span>}
+                  <p className="font-medium">
+                    <ClickableAddress address={order.pickup_address} iconClassName="text-primary" />
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
