@@ -908,8 +908,25 @@ export default function Inbox() {
     setLoadingScenario(scenarioIndex);
     try {
       const scenario = TEST_SCENARIOS[scenarioIndex];
+      const subjectLine = `Test: ${scenario.label}`;
+
+      // Check for existing DRAFT with same subject to prevent duplicates
+      const { data: existing } = await supabase
+        .from("orders")
+        .select("id")
+        .eq("status", "DRAFT")
+        .eq("source_email_subject", subjectLine)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        setSelectedId(existing[0].id);
+        toast({ title: "Al aanwezig", description: `Test scenario "${scenario.label}" staat al in de inbox.` });
+        setLoadingScenario(null);
+        return;
+      }
+
       const { data: newOrder, error } = await supabase.from("orders").insert({
-        status: "DRAFT", source_email_from: "test@royaltycargo.nl", source_email_subject: `Test: ${scenario.label}`,
+        status: "DRAFT", source_email_from: "test@royaltycargo.nl", source_email_subject: subjectLine,
         source_email_body: scenario.email, client_name: "Test Scenario",
       }).select().single();
       if (error) throw error;
