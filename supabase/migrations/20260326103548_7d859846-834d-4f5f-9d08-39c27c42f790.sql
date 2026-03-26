@@ -1,0 +1,1 @@
+DELETE FROM orders WHERE id = 'ebdf86a2-4320-4b80-827d-22ebb3a3957d';
