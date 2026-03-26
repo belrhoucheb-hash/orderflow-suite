@@ -14,32 +14,150 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_locations: {
+        Row: {
+          address: string
+          city: string | null
+          client_id: string
+          country: string | null
+          created_at: string
+          id: string
+          label: string
+          location_type: string
+          max_vehicle_length: string | null
+          notes: string | null
+          time_window_end: string | null
+          time_window_start: string | null
+          zipcode: string | null
+        }
+        Insert: {
+          address: string
+          city?: string | null
+          client_id: string
+          country?: string | null
+          created_at?: string
+          id?: string
+          label: string
+          location_type?: string
+          max_vehicle_length?: string | null
+          notes?: string | null
+          time_window_end?: string | null
+          time_window_start?: string | null
+          zipcode?: string | null
+        }
+        Update: {
+          address?: string
+          city?: string | null
+          client_id?: string
+          country?: string | null
+          created_at?: string
+          id?: string
+          label?: string
+          location_type?: string
+          max_vehicle_length?: string | null
+          notes?: string | null
+          time_window_end?: string | null
+          time_window_start?: string | null
+          zipcode?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_locations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_rates: {
+        Row: {
+          amount: number
+          client_id: string
+          created_at: string
+          currency: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          rate_type: string
+        }
+        Insert: {
+          amount?: number
+          client_id: string
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          rate_type: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          rate_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_rates_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           address: string | null
+          btw_number: string | null
           city: string | null
+          contact_person: string | null
           country: string
           created_at: string
+          email: string | null
           id: string
+          is_active: boolean | null
+          kvk_number: string | null
           name: string
+          payment_terms: number | null
+          phone: string | null
           zipcode: string | null
         }
         Insert: {
           address?: string | null
+          btw_number?: string | null
           city?: string | null
+          contact_person?: string | null
           country?: string
           created_at?: string
+          email?: string | null
           id?: string
+          is_active?: boolean | null
+          kvk_number?: string | null
           name: string
+          payment_terms?: number | null
+          phone?: string | null
           zipcode?: string | null
         }
         Update: {
           address?: string | null
+          btw_number?: string | null
           city?: string | null
+          contact_person?: string | null
           country?: string
           created_at?: string
+          email?: string | null
           id?: string
+          is_active?: boolean | null
+          kvk_number?: string | null
           name?: string
+          payment_terms?: number | null
+          phone?: string | null
           zipcode?: string | null
         }
         Relationships: []
