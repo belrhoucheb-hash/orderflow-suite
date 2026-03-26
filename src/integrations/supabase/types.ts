@@ -44,6 +44,42 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          icon: string | null
+          id: string
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          order_id: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          order_id?: string | null
+          title: string
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          order_id?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           anomalies: Json | null
