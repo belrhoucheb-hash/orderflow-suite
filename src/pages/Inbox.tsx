@@ -1583,37 +1583,94 @@ export default function Inbox() {
                             confidence={getConfidence(form.pickupAddress, true)}>
                             <div className="relative">
                               <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
-                                value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
+                                value={form.pickupAddress}
+                                onChange={(e) => updateField("pickupAddress", e.target.value)}
+                                onFocus={() => { if (!form.pickupAddress && addressSuggestions?.pickup?.length) setShowPickupSuggestions(true); }}
+                                placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
                                     onClick={() => {
-                                      const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
-                                      if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                      else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                      if (addressSuggestions?.pickup?.length) {
+                                        setShowPickupSuggestions(prev => !prev);
+                                      } else {
+                                        const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
+                                        if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                        else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                      }
                                     }}>
                                     <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
                                   </button>
                                 </TooltipTrigger>
-                                <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                                <TooltipContent side="left" className="text-[10px]">
+                                  {addressSuggestions?.pickup?.length ? `${addressSuggestions.pickup.length} historische adressen` : "Zoek in adresboek"}
+                                </TooltipContent>
                               </Tooltip>
+                              <AnimatePresence>
+                                <AddressSuggestionsDropdown
+                                  suggestions={addressSuggestions?.pickup || []}
+                                  isOpen={showPickupSuggestions}
+                                  onClose={() => setShowPickupSuggestions(false)}
+                                  onSelect={(addr) => updateField("pickupAddress", addr)}
+                                />
+                              </AnimatePresence>
                             </div>
+                            {!form.pickupAddress && addressSuggestions?.pickup && addressSuggestions.pickup.length > 0 && (
+                              <button
+                                className="mt-1.5 text-[10px] text-primary font-medium hover:underline flex items-center gap-1"
+                                onClick={() => { updateField("pickupAddress", addressSuggestions.pickup[0].address); toast({ title: "Adres ingevuld", description: `Meest gebruikte adres voor deze klant (${addressSuggestions.pickup[0].frequency}× eerder)` }); }}
+                              >
+                                <Sparkles className="h-2.5 w-2.5" />
+                                Voorstel: {addressSuggestions.pickup[0].address.substring(0, 40)}…
+                              </button>
+                            )}
                           </FormField>
 
                           <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
                             confidence={getConfidence(form.deliveryAddress, true)}>
                             <div className="relative">
                               <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
-                                value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
+                                value={form.deliveryAddress}
+                                onChange={(e) => updateField("deliveryAddress", e.target.value)}
+                                onFocus={() => { if (!form.deliveryAddress && addressSuggestions?.delivery?.length) setShowDeliverySuggestions(true); }}
+                                placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
                                     onClick={() => {
-                                      const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
-                                      if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                      else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                      if (addressSuggestions?.delivery?.length) {
+                                        setShowDeliverySuggestions(prev => !prev);
+                                      } else {
+                                        const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
+                                        if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                        else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                      }
                                     }}>
                                     <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="text-[10px]">
+                                  {addressSuggestions?.delivery?.length ? `${addressSuggestions.delivery.length} historische adressen` : "Zoek in adresboek"}
+                                </TooltipContent>
+                              </Tooltip>
+                              <AnimatePresence>
+                                <AddressSuggestionsDropdown
+                                  suggestions={addressSuggestions?.delivery || []}
+                                  isOpen={showDeliverySuggestions}
+                                  onClose={() => setShowDeliverySuggestions(false)}
+                                  onSelect={(addr) => updateField("deliveryAddress", addr)}
+                                />
+                              </AnimatePresence>
+                            </div>
+                            {!form.deliveryAddress && addressSuggestions?.delivery && addressSuggestions.delivery.length > 0 && (
+                              <button
+                                className="mt-1.5 text-[10px] text-primary font-medium hover:underline flex items-center gap-1"
+                                onClick={() => { updateField("deliveryAddress", addressSuggestions.delivery[0].address); toast({ title: "Adres ingevuld", description: `Meest gebruikte adres voor deze klant (${addressSuggestions.delivery[0].frequency}× eerder)` }); }}
+                              >
+                                <Sparkles className="h-2.5 w-2.5" />
+                                Voorstel: {addressSuggestions.delivery[0].address.substring(0, 40)}…
+                              </button>
+                            )}
                                   </button>
                                 </TooltipTrigger>
                                 <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
