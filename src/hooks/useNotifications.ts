@@ -26,9 +26,13 @@ export function useNotifications() {
         .select("*")
         .order("created_at", { ascending: false })
         .limit(50);
-      if (error) throw error;
-      return data as unknown as Notification[];
+      if (error) {
+        console.error("Notifications fetch error:", error);
+        throw error;
+      }
+      return (data ?? []) as unknown as Notification[];
     },
+    refetchInterval: 30_000, // Refetch every 30s as fallback
   });
 
   // Subscribe to realtime inserts
