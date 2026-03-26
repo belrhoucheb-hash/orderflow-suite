@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Truck, Map, Route, LogOut, Users } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import logo from "@/assets/logo.png";
