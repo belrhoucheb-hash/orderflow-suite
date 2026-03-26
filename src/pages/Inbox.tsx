@@ -1332,6 +1332,47 @@ export default function Inbox() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
             <Input placeholder="Zoek op klant of onderwerp..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9 text-xs bg-background border-border/40 rounded-lg" />
           </div>
+
+          {/* Bulk Actions Bar */}
+          <AnimatePresence>
+            {bulkSelected.size > 0 && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="mb-3 rounded-lg border border-primary/20 bg-primary/5 p-2.5 overflow-hidden"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold text-primary">
+                    {bulkSelected.size} geselecteerd
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {(() => {
+                      // "Select all similar" — find client of first selected
+                      const firstId = Array.from(bulkSelected)[0];
+                      const firstDraft = drafts.find(d => d.id === firstId);
+                      const clientName = firstDraft?.client_name;
+                      const similarCount = clientName ? drafts.filter(d => d.client_name === clientName).length : 0;
+                      if (clientName && similarCount > bulkSelected.size) {
+                        return (
+                          <Button variant="outline" size="sm" className="h-6 text-[9px] gap-1" onClick={() => selectAllSimilar(clientName)}>
+                            <Users className="h-2.5 w-2.5" /> Alle {similarCount} van {clientName}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })()}
+                    <Button variant="outline" size="sm" className="h-6 text-[9px] gap-1" onClick={() => setBulkSelected(new Set())}>
+                      Deselecteer
+                    </Button>
+                    <Button size="sm" className="h-6 text-[9px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleBulkApprove}>
+                      <CheckCircle2 className="h-2.5 w-2.5" /> Goedkeuren
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Test Panel */}
