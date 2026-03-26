@@ -16,6 +16,7 @@ import RoutesPage from "@/pages/Routes";
 import ChauffeursRit from "@/pages/ChauffeursRit";
 import Inbox from "@/pages/Inbox";
 import UsersPage from "@/pages/UsersPage";
+import Clients from "@/pages/Clients";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
