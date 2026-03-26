@@ -279,27 +279,11 @@ async function pollInbox(): Promise<Response> {
             uploadedAttachments.push({ name: att.name, url: urlData.publicUrl, type: att.type });
           }
 
-          // Create draft order (link to parent if reply)
-          const { data: order, error: insertError } = await supabase
-            .from("orders")
-            .insert({
-              status: "DRAFT",
-              source_email_from: fromAddr || parsed.from,
-              source_email_subject: subject || parsed.subject,
-              source_email_body: parsed.body,
-              received_at: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : new Date().toISOString(),
-              attachments: uploadedAttachments,
-              thread_type: parentOrder ? "update" : "new",
-              parent_order_id: parentOrder?.id || null,
-            })
-            .select("id, order_number")
-            .single();
-
-          if (insertError) { console.error("Insert error:", insertError); continue; }
-
-          // AI extraction via parse-order
+          // AI extraction via parse-order (do this first to determine thread type)
           const pdfUrls = uploadedAttachments.filter((a) => a.type === "application/pdf").map((a) => a.url);
           let confidence = 0;
+          let extracted: any = null;
+          let parseData: any = null;
 
           if (LOVABLE_API_KEY && (parsed.body || pdfUrls.length > 0)) {
             try {
@@ -311,40 +295,126 @@ async function pollInbox(): Promise<Response> {
               });
 
               if (parseResp.ok) {
-                const parseData = await parseResp.json();
-                const extracted = parseData.extracted;
-                if (extracted) {
-                  confidence = extracted.confidence_score || 0;
-                  const newStatus = confidence > 90 ? "OPEN" : "DRAFT";
-                  const detectedThreadType = parseData.thread_type || (parentOrder ? "update" : "new");
-
-                  await supabase.from("orders").update({
-                    client_name: extracted.client_name || null,
-                    transport_type: extracted.transport_type || null,
-                    pickup_address: extracted.pickup_address || null,
-                    delivery_address: extracted.delivery_address || null,
-                    quantity: extracted.quantity || null,
-                    unit: extracted.unit || null,
-                    weight_kg: extracted.weight_kg || null,
-                    is_weight_per_unit: extracted.is_weight_per_unit || false,
-                    dimensions: extracted.dimensions || null,
-                    requirements: extracted.requirements || [],
-                    confidence_score: confidence,
-                    status: newStatus,
-                    thread_type: detectedThreadType,
-                    changes_detected: parseData.changes_detected || [],
-                    anomalies: parseData.anomalies || [],
-                  }).eq("id", order.id);
-
-                  console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}, thread=${detectedThreadType}, anomalies=${(parseData.anomalies || []).length}`);
-                }
+                parseData = await parseResp.json();
+                extracted = parseData.extracted;
+                if (extracted) confidence = extracted.confidence_score || 0;
               } else {
                 console.error("parse-order failed:", parseResp.status);
-                await parseResp.text(); // consume body
+                await parseResp.text();
               }
             } catch (parseErr) {
               console.error("AI extraction error:", parseErr);
             }
+          }
+
+          const detectedThreadType = parseData?.thread_type || (parentOrder ? "update" : "new");
+
+          // ── Reply Merging: if this is a reply that fills in missing data, update the parent order ──
+          if (parentOrder && (detectedThreadType === "update" || detectedThreadType === "confirmation") && extracted) {
+            console.log(`Reply merging: updating parent order #${parentOrder.order_number} (thread: ${detectedThreadType})`);
+
+            // Build update payload: only fill in fields that were missing on the parent
+            const mergeUpdate: Record<string, any> = {
+              source_email_body: `${parentOrder.source_email_body || ""}\n\n── Reply ${new Date().toISOString()} ──\n${parsed.body}`,
+              thread_type: detectedThreadType,
+              changes_detected: parseData?.changes_detected || [],
+            };
+
+            // Fill missing fields from reply extraction
+            const fieldsToMerge = [
+              "pickup_address", "delivery_address", "weight_kg", "quantity",
+              "unit", "dimensions", "transport_type",
+            ];
+            for (const field of fieldsToMerge) {
+              const parentVal = parentOrder[field];
+              const newVal = extracted[field];
+              // Only fill if parent was empty/null and reply has data
+              if ((!parentVal || parentVal === "" || parentVal === 0) && newVal && newVal !== "" && newVal !== 0) {
+                mergeUpdate[field] = newVal;
+              }
+            }
+            // For requirements, merge arrays
+            if (extracted.requirements?.length > 0) {
+              const existing = parentOrder.requirements || [];
+              const merged = [...new Set([...existing, ...extracted.requirements])];
+              mergeUpdate.requirements = merged;
+            }
+
+            // Recalculate missing fields after merge
+            const requiredFields = ["client_name", "pickup_address", "delivery_address", "quantity", "weight_kg", "dimensions"];
+            const mergedOrder = { ...parentOrder, ...mergeUpdate };
+            const stillMissing = requiredFields.filter(f => {
+              const val = mergedOrder[f];
+              return val === undefined || val === null || val === "" || val === 0;
+            });
+            const missingLabels: Record<string, string> = {
+              client_name: "Klantnaam", pickup_address: "Ophaaladres", delivery_address: "Afleveradres",
+              quantity: "Aantal", weight_kg: "Gewicht", dimensions: "Afmetingen (LxBxH)",
+            };
+            mergeUpdate.missing_fields = stillMissing.map(f => missingLabels[f] || f);
+
+            // If no more missing fields, auto-upgrade status
+            if (stillMissing.length === 0 && confidence > 80) {
+              mergeUpdate.status = "OPEN";
+              mergeUpdate.confidence_score = Math.max(confidence, parentOrder.confidence_score || 0);
+              mergeUpdate.follow_up_draft = null; // Clear follow-up since data is now complete
+            }
+
+            // If thread type is cancellation, mark as cancelled
+            if (detectedThreadType === "cancellation") {
+              mergeUpdate.status = "CANCELLED";
+            }
+
+            await supabase.from("orders").update(mergeUpdate).eq("id", parentOrder.id);
+            console.log(`Parent order #${parentOrder.order_number} updated via reply merge. Still missing: ${stillMissing.length}`);
+
+            await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
+            results.push({ orderNumber: parentOrder.order_number, status: mergeUpdate.status || parentOrder.status, confidence });
+            continue; // Don't create a new draft — we merged into the parent
+          }
+
+          // ── Normal flow: create a new draft order ──
+          const { data: order, error: insertError } = await supabase
+            .from("orders")
+            .insert({
+              status: "DRAFT",
+              source_email_from: fromAddr || parsed.from,
+              source_email_subject: subject || parsed.subject,
+              source_email_body: parsed.body,
+              received_at: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : new Date().toISOString(),
+              attachments: uploadedAttachments,
+              thread_type: detectedThreadType,
+              parent_order_id: parentOrder?.id || null,
+            })
+            .select("id, order_number")
+            .single();
+
+          if (insertError) { console.error("Insert error:", insertError); continue; }
+
+          // Apply extracted data to the new order
+          if (extracted) {
+            const newStatus = confidence > 90 ? "OPEN" : "DRAFT";
+            await supabase.from("orders").update({
+              client_name: extracted.client_name || null,
+              transport_type: extracted.transport_type || null,
+              pickup_address: extracted.pickup_address || null,
+              delivery_address: extracted.delivery_address || null,
+              quantity: extracted.quantity || null,
+              unit: extracted.unit || null,
+              weight_kg: extracted.weight_kg || null,
+              is_weight_per_unit: extracted.is_weight_per_unit || false,
+              dimensions: extracted.dimensions || null,
+              requirements: extracted.requirements || [],
+              confidence_score: confidence,
+              status: newStatus,
+              thread_type: detectedThreadType,
+              changes_detected: parseData?.changes_detected || [],
+              anomalies: parseData?.anomalies || [],
+              missing_fields: parseData?.missing_fields || [],
+              follow_up_draft: parseData?.follow_up_draft || null,
+            }).eq("id", order.id);
+
+            console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}, thread=${detectedThreadType}`);
           }
 
           await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
