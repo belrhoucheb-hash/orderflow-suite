@@ -999,6 +999,33 @@ export default function Inbox() {
   const selected = drafts.find((d) => d.id === selectedId);
   const form = selected ? formData[selected.id] : null;
 
+  // Address suggestions based on selected order's client
+  const { data: addressSuggestions } = useAddressSuggestions(selected?.client_name || null);
+
+  // Bulk selection helpers
+  const toggleBulkSelect = (id: string) => {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllSimilar = (clientName: string) => {
+    const similar = drafts.filter(d => d.client_name === clientName).map(d => d.id);
+    setBulkSelected(new Set(similar));
+    toast({ title: "Selectie", description: `${similar.length} orders van ${clientName} geselecteerd` });
+  };
+
+  const handleBulkApprove = () => {
+    const ids = Array.from(bulkSelected);
+    ids.forEach(id => {
+      const f = formData[id];
+      if (f) createOrderMutation.mutate({ id, form: f });
+    });
+    setBulkSelected(new Set());
+  };
+
   const updateField = (field: keyof FormState, value: any) => {
     if (!selected) return;
     setFormData((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], [field]: value } }));
