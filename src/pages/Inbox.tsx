@@ -1107,17 +1107,28 @@ export default function Inbox() {
     const changes = (draft.changes_detected || []) as { field: string; old_value: string; new_value: string }[];
     const deadline = getDeadlineInfo(draft.received_at);
 
+    const isBulkChecked = bulkSelected.has(draft.id);
+
     return (
-      <motion.button
-        key={draft.id}
-        layoutId={draft.id}
-        onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
-        className={cn(
-          "w-full text-left px-3 py-2 rounded-lg transition-all duration-150 group relative",
-          isSelected ? "bg-primary/[0.06] ring-1 ring-primary/20" : "hover:bg-muted/30",
-          deadline.urgency === "red" && !isSelected && "border-l-2 border-l-destructive"
-        )}
-      >
+      <div key={draft.id} className="flex items-start gap-1">
+        <div className="pt-3 pl-1 shrink-0">
+          <Checkbox
+            className="h-3.5 w-3.5"
+            checked={isBulkChecked}
+            onCheckedChange={() => toggleBulkSelect(draft.id)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+        <motion.button
+          layoutId={draft.id}
+          onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
+          className={cn(
+            "flex-1 text-left px-3 py-2 rounded-lg transition-all duration-150 group relative",
+            isSelected ? "bg-primary/[0.06] ring-1 ring-primary/20" : "hover:bg-muted/30",
+            deadline.urgency === "red" && !isSelected && "border-l-2 border-l-destructive",
+            isBulkChecked && "ring-1 ring-primary/30 bg-primary/[0.04]"
+          )}
+        >
         {/* Row 1: Dot + Client + Thread Badge + SLA */}
         <div className="flex items-center gap-1.5 mb-0.5">
           {conf > 0 && <ConfidenceDot score={conf} />}
