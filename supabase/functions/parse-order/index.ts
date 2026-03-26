@@ -329,6 +329,27 @@ Regels:
     const missingFields = detectMissingFields(extracted);
     const followUpDraft = generateFollowUpDraft(missingFields, extracted);
 
+    // ── Step 4: Confidence score penalty for missing critical fields ──
+    // Critical fields that make an order unplannable if missing
+    const CRITICAL_FIELDS = ["pickup_address", "delivery_address", "client_name"];
+    const missingCritical = CRITICAL_FIELDS.filter(key => {
+      const val = extracted[key];
+      return val === undefined || val === null || val === "" || val === 0;
+    });
+    if (missingCritical.length > 0) {
+      // Penalize 15 points per missing critical field, cap at minimum 20
+      const penalty = missingCritical.length * 15;
+      extracted.confidence_score = Math.max(20, (extracted.confidence_score || 0) - penalty);
+    }
+    // Also penalize for non-critical missing fields (lighter)
+    const nonCriticalMissing = missingFields.filter(f => 
+      !CRITICAL_FIELDS.some(cf => REQUIRED_FIELDS.find(rf => rf.key === cf)?.label === f)
+    );
+    if (nonCriticalMissing.length > 0) {
+      const penalty = nonCriticalMissing.length * 5;
+      extracted.confidence_score = Math.max(20, (extracted.confidence_score || 0) - penalty);
+    }
+
     return new Response(JSON.stringify({
       extracted,
       missing_fields: missingFields,

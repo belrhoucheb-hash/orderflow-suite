@@ -1700,12 +1700,18 @@ export default function Inbox() {
                             </div>
                             {!form.pickupAddress && addressSuggestions?.pickup && addressSuggestions.pickup.length > 0 && (
                               <button
-                                className="mt-1.5 text-[10px] text-primary font-medium hover:underline flex items-center gap-1"
+                                className="mt-1.5 text-[10px] text-primary font-medium hover:underline flex items-center gap-1 bg-primary/5 rounded-md px-2 py-1.5 border border-primary/15 w-full text-left"
                                 onClick={() => { updateField("pickupAddress", addressSuggestions.pickup[0].address); toast({ title: "Adres ingevuld", description: `Meest gebruikte adres voor deze klant (${addressSuggestions.pickup[0].frequency}× eerder)` }); }}
                               >
-                                <Sparkles className="h-2.5 w-2.5" />
-                                Voorstel: {addressSuggestions.pickup[0].address.substring(0, 40)}…
+                                <Sparkles className="h-3 w-3 shrink-0" />
+                                <span className="flex-1 truncate">
+                                  <span className="text-muted-foreground">Voorstel op basis van {addressSuggestions.orderCount || addressSuggestions.pickup[0].frequency} eerdere orders:</span>{" "}
+                                  <span className="font-semibold text-foreground">{addressSuggestions.pickup[0].address}</span>
+                                </span>
                               </button>
+                            )}
+                            {!form.pickupAddress && (!addressSuggestions?.pickup || addressSuggestions.pickup.length === 0) && selected?.client_name && (
+                              <p className="mt-1 text-[10px] text-muted-foreground/60 italic">Geen historische ophaal­adressen gevonden voor {selected.client_name}</p>
                             )}
                           </FormField>
 
@@ -1748,12 +1754,18 @@ export default function Inbox() {
                             </div>
                             {!form.deliveryAddress && addressSuggestions?.delivery && addressSuggestions.delivery.length > 0 && (
                               <button
-                                className="mt-1.5 text-[10px] text-primary font-medium hover:underline flex items-center gap-1"
+                                className="mt-1.5 text-[10px] text-primary font-medium hover:underline flex items-center gap-1 bg-primary/5 rounded-md px-2 py-1.5 border border-primary/15 w-full text-left"
                                 onClick={() => { updateField("deliveryAddress", addressSuggestions.delivery[0].address); toast({ title: "Adres ingevuld", description: `Meest gebruikte adres voor deze klant (${addressSuggestions.delivery[0].frequency}× eerder)` }); }}
                               >
-                                <Sparkles className="h-2.5 w-2.5" />
-                                Voorstel: {addressSuggestions.delivery[0].address.substring(0, 40)}…
+                                <Sparkles className="h-3 w-3 shrink-0" />
+                                <span className="flex-1 truncate">
+                                  <span className="text-muted-foreground">Voorstel op basis van {addressSuggestions.orderCount || addressSuggestions.delivery[0].frequency} eerdere orders:</span>{" "}
+                                  <span className="font-semibold text-foreground">{addressSuggestions.delivery[0].address}</span>
+                                </span>
                               </button>
+                            )}
+                            {!form.deliveryAddress && (!addressSuggestions?.delivery || addressSuggestions.delivery.length === 0) && selected?.client_name && (
+                              <p className="mt-1 text-[10px] text-muted-foreground/60 italic">Geen historische aflever­adressen gevonden voor {selected.client_name}</p>
                             )}
                           </FormField>
                         </>
