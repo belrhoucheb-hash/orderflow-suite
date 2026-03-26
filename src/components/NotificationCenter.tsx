@@ -242,7 +242,7 @@ export function NotificationCenter() {
                   )}
                 </>
               )}
-            </ScrollArea>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
