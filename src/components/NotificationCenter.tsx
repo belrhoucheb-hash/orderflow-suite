@@ -53,8 +53,8 @@ function NotificationItem({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 8, height: 0 }}
       className={cn(
-        "group flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-muted/40",
-        !notification.is_read && "bg-primary/[0.03]"
+        "group flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-muted/50",
+        !notification.is_read && "bg-accent/40"
       )}
       onClick={() => {
         if (!notification.is_read) onRead(notification.id);
@@ -66,7 +66,7 @@ function NotificationItem({
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={cn("text-[12px] font-semibold leading-snug", !notification.is_read ? "text-foreground" : "text-muted-foreground")}>
+          <p className={cn("text-[12px] font-semibold leading-snug text-foreground")}>
             {notification.title}
           </p>
           {!notification.is_read && (
@@ -77,9 +77,9 @@ function NotificationItem({
           {notification.message}
         </p>
         <div className="flex items-center gap-2 mt-1.5">
-          <span className="text-[10px] text-muted-foreground/50">{formatTimeAgo(notification.created_at)}</span>
+          <span className="text-[10px] text-muted-foreground/70">{formatTimeAgo(notification.created_at)}</span>
           {notification.order_id && (
-            <span className="text-[10px] text-primary/60 font-medium">
+            <span className="text-[10px] text-primary font-medium">
               Bekijk order →
             </span>
           )}
@@ -89,7 +89,7 @@ function NotificationItem({
         className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1 p-1 rounded hover:bg-muted"
         onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }}
       >
-        <Trash2 className="h-3 w-3 text-muted-foreground/50" />
+        <Trash2 className="h-3 w-3 text-muted-foreground" />
       </button>
     </motion.div>
   );
