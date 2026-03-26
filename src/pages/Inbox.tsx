@@ -973,10 +973,28 @@ export default function Inbox() {
       }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_, { id }) => {
+    onSuccess: async (_, { id }) => {
       const order = drafts.find((d) => d.id === id);
       toast({ title: "Order opgeslagen", description: `Order #${order?.order_number} status gewijzigd naar OPEN` });
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
+
+      // Send confirmation email to client
+      if (order?.source_email_from) {
+        try {
+          const { data, error: confirmError } = await supabase.functions.invoke("send-confirmation", {
+            body: { orderId: id },
+          });
+          if (confirmError) throw confirmError;
+          if (data?.error && !data?.skipped) throw new Error(data.error);
+          if (data?.success) {
+            toast({ title: "✉️ Bevestiging verzonden", description: `Orderbevestiging gestuurd naar ${order.source_email_from}` });
+          }
+        } catch (e: any) {
+          console.error("Confirmation email error:", e);
+          // Don't block order creation on email failure
+          toast({ title: "Bevestiging niet verzonden", description: e.message || "SMTP niet geconfigureerd", variant: "destructive" });
+        }
+      }
     },
   });
 
