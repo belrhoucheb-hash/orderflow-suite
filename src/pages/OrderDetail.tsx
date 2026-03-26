@@ -200,9 +200,8 @@ const OrderDetail = () => {
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <p className="text-muted-foreground text-xs uppercase tracking-wide">Afleveradres</p>
-                  <p className="font-medium flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                    {order.delivery_address || <span className="text-destructive italic">Ontbreekt</span>}
+                  <p className="font-medium">
+                    <ClickableAddress address={order.delivery_address} iconClassName="text-emerald-600" />
                   </p>
                 </div>
               </div>
