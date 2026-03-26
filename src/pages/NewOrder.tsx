@@ -307,9 +307,9 @@ const NewOrder = () => {
                         <SelectItem value="Lossen">↑ Lossen</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input
+                    <AddressAutocomplete
                       value={line.locatie}
-                      onChange={e => updateFreightLine(line.id, "locatie", e.target.value)}
+                      onChange={v => updateFreightLine(line.id, "locatie", v)}
                       className="h-8 text-xs border-primary/40"
                     />
                     <div className="flex items-center gap-1">
