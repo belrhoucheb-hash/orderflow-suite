@@ -1663,12 +1663,13 @@ export default function Inbox() {
                           
                           <FormField label="Ophaaladres" icon={MapPin} source={form.fieldSources?.pickup_address}
                             confidence={getConfidence(form.pickupAddress, true)}>
-                            <div className="relative">
-                              <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
-                                value={form.pickupAddress}
-                                onChange={(e) => updateField("pickupAddress", e.target.value)}
-                                onFocus={() => { if (!form.pickupAddress && addressSuggestions?.pickup?.length) setShowPickupSuggestions(true); }}
-                                placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
+                             <div className="relative">
+                               <AddressAutocomplete
+                                 value={form.pickupAddress}
+                                 onChange={(val) => updateField("pickupAddress", val)}
+                                 placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."}
+                                 className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
+                               />
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
