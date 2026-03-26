@@ -92,8 +92,8 @@ const Routes = () => {
                     <Badge variant="outline" className={`text-[10px] ${statusColors[order.status]}`}>{statusLabels[order.status]}</Badge>
                   </div>
                   <div className="text-xs text-muted-foreground space-y-1">
-                    <p className="flex items-center gap-1.5"><MapPin className="h-3 w-3 text-primary" />{order.pickupAddress}</p>
-                    <p className="flex items-center gap-1.5"><MapPin className="h-3 w-3 text-emerald-600" />{order.deliveryAddress}</p>
+                    <p className="flex items-center gap-1.5"><ClickableAddress address={order.pickupAddress} iconClassName="text-primary" className="text-xs" /></p>
+                    <p className="flex items-center gap-1.5"><ClickableAddress address={order.deliveryAddress} iconClassName="text-emerald-600" className="text-xs" /></p>
                     <p className="flex items-center gap-1.5"><Clock className="h-3 w-3" />ETA: {new Date(order.estimatedDelivery).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
                 </div>
