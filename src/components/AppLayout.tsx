@@ -1,10 +1,13 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
-import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { NotificationCenter } from "@/components/NotificationCenter";
+import { useSLAMonitor } from "@/hooks/useSLAMonitor";
 
 export function AppLayout() {
+  // Monitor SLA deadlines and auto-create notifications
+  useSLAMonitor();
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -15,10 +18,7 @@ export function AppLayout() {
               <SidebarTrigger />
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-4 w-4" />
-                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary text-[10px] text-primary-foreground flex items-center justify-center">3</span>
-              </Button>
+              <NotificationCenter />
             </div>
           </header>
           <main className="flex-1 overflow-auto p-4 md:p-6">
