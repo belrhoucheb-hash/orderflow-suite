@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
   sla_warning: { icon: Clock, color: "text-amber-600", bg: "bg-amber-500/10" },
   sla_critical: { icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
-  client_reply: { icon: MailReply, color: "text-blue-600", bg: "bg-blue-500/10" },
+  client_reply: { icon: Reply, color: "text-blue-600", bg: "bg-blue-500/10" },
   order_approved: { icon: Package, color: "text-emerald-600", bg: "bg-emerald-500/10" },
   order_cancelled: { icon: X, color: "text-destructive", bg: "bg-destructive/10" },
   planning_conflict: { icon: CalendarClock, color: "text-violet-600", bg: "bg-violet-500/10" },
