@@ -17,6 +17,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { mockVehicles } from "@/data/mockData";
+import { useAddressSuggestions, type AddressSuggestion } from "@/hooks/useAddressSuggestions";
+import { useCapacityMatch, type CapacityMatch } from "@/hooks/useCapacityMatch";
 
 interface ClientRecord {
   id: string;
@@ -531,8 +533,13 @@ function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState
 
   if (items.length === 0) return null;
 
-  // Find matching vehicles based on availability
-  const matchingVehicles = mockVehicles.filter(v => v.status === "beschikbaar");
+  const capacityInput = {
+    requirements: form.requirements,
+    weightKg: form.weight ? Number(form.weight) * (form.perUnit ? form.quantity : 1) : 0,
+    quantity: form.quantity,
+    unit: form.unit,
+  };
+  const capacityMatches = useCapacityMatch(capacityInput);
 
   return (
     <div className="p-5 space-y-1">
@@ -558,39 +565,74 @@ function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState
         </div>
       </div>
 
-      {matchingVehicles.length > 0 && (
-        <>
-          {/* Phase 2: Planning */}
-          <div className="flex items-center gap-2 px-1 pt-4 pb-2">
-            <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em]">Fase 2 — Planning</span>
-            <div className="flex-1 h-px bg-border/30" />
-          </div>
-          <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <Truck className="h-3.5 w-3.5 text-primary" />
-              <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Beschikbare capaciteit</h4>
-            </div>
-            <div className="space-y-1.5">
-              {matchingVehicles.slice(0, 3).map((v) => (
-                <div key={v.id} className="flex items-center gap-2 text-[11px] rounded-lg bg-card border border-border/20 px-3 py-2">
-                  <Truck className="h-3 w-3 text-muted-foreground" />
+      {/* Phase 2: Planning — Capacity Match */}
+      <div className="flex items-center gap-2 px-1 pt-4 pb-2">
+        <span className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em]">Fase 2 — Planning</span>
+        <div className="flex-1 h-px bg-border/30" />
+      </div>
+      <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-2">
+        <div className="flex items-center gap-2 mb-1">
+          <Truck className="h-3.5 w-3.5 text-primary" />
+          <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Beschikbare capaciteit</h4>
+        </div>
+        {capacityMatches.length > 0 ? (
+          <div className="space-y-2">
+            {capacityMatches.slice(0, 3).map((match) => (
+              <div key={match.vehicle.id} className={cn(
+                "rounded-lg border px-3 py-2.5 transition-colors",
+                match.warnings.length > 0 ? "border-amber-200/40 bg-amber-50/20" : "border-border/20 bg-card"
+              )}>
+                <div className="flex items-center gap-2">
+                  <Truck className="h-3 w-3 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-foreground">{v.name}</span>
-                      <span className="text-muted-foreground/60">({v.plate})</span>
+                      <span className="text-[11px] font-semibold text-foreground">{match.vehicle.name}</span>
+                      <span className="text-[10px] text-muted-foreground/60">({match.vehicle.plate})</span>
+                      <span className={cn(
+                        "text-[9px] font-bold px-1.5 py-0.5 rounded ml-auto",
+                        match.score >= 70 ? "bg-emerald-500/10 text-emerald-600" : match.score >= 40 ? "bg-amber-500/10 text-amber-600" : "bg-destructive/10 text-destructive"
+                      )}>
+                        {match.score}%
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <Users className="h-2.5 w-2.5 text-muted-foreground/50" />
-                      <span className="text-[10px] text-muted-foreground">{v.driver}</span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Users className="h-2.5 w-2.5 text-primary/50" />
+                      <span className="text-[10px] font-medium text-foreground">{match.driver.name}</span>
+                      {match.driver.certs.length > 0 && (
+                        <span className="text-[9px] text-primary/70 font-medium">
+                          ({match.driver.certs.join(", ")})
+                        </span>
+                      )}
                     </div>
+                    {match.reasons.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {match.reasons.map((r, i) => (
+                          <span key={i} className="text-[9px] text-emerald-600/80 bg-emerald-500/8 px-1.5 py-0.5 rounded">✓ {r}</span>
+                        ))}
+                      </div>
+                    )}
+                    {match.warnings.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {match.warnings.map((w, i) => (
+                          <span key={i} className="text-[9px] text-amber-600/80 bg-amber-500/8 px-1.5 py-0.5 rounded">⚠ {w}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{v.type}</span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        </>
-      )}
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-[11px] text-muted-foreground">
+              {form.requirements.length > 0
+                ? `Geen voertuig beschikbaar met ${form.requirements.join(" + ")}`
+                : "Geen voertuigen gevonden"}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -767,6 +809,39 @@ function FormField({ label, icon: Icon, children, className, source, warning, co
   );
 }
 
+function AddressSuggestionsDropdown({ suggestions, onSelect, isOpen, onClose }: {
+  suggestions: AddressSuggestion[];
+  onSelect: (address: string) => void;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  if (!isOpen || suggestions.length === 0) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden"
+    >
+      <div className="px-2.5 py-1.5 border-b border-border/30 bg-muted/30">
+        <p className="text-[9px] font-semibold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
+          <Clock className="h-2.5 w-2.5" /> Historische adressen
+        </p>
+      </div>
+      {suggestions.map((s, i) => (
+        <button
+          key={i}
+          className="w-full text-left px-3 py-2 hover:bg-primary/5 transition-colors border-b border-border/10 last:border-0"
+          onClick={() => { onSelect(s.address); onClose(); }}
+        >
+          <p className="text-[11px] font-medium text-foreground truncate">{s.address}</p>
+          <p className="text-[9px] text-muted-foreground/60">{s.frequency}× gebruikt</p>
+        </button>
+      ))}
+    </motion.div>
+  );
+}
+
 export default function Inbox() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -777,6 +852,9 @@ export default function Inbox() {
   const [mobileView, setMobileView] = useState<"list" | "source" | "detail">("list");
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [groupByClient, setGroupByClient] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [showPickupSuggestions, setShowPickupSuggestions] = useState(false);
+  const [showDeliverySuggestions, setShowDeliverySuggestions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Capacity warning
@@ -921,6 +999,33 @@ export default function Inbox() {
   const selected = drafts.find((d) => d.id === selectedId);
   const form = selected ? formData[selected.id] : null;
 
+  // Address suggestions based on selected order's client
+  const { data: addressSuggestions } = useAddressSuggestions(selected?.client_name || null);
+
+  // Bulk selection helpers
+  const toggleBulkSelect = (id: string) => {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllSimilar = (clientName: string) => {
+    const similar = drafts.filter(d => d.client_name === clientName).map(d => d.id);
+    setBulkSelected(new Set(similar));
+    toast({ title: "Selectie", description: `${similar.length} orders van ${clientName} geselecteerd` });
+  };
+
+  const handleBulkApprove = () => {
+    const ids = Array.from(bulkSelected);
+    ids.forEach(id => {
+      const f = formData[id];
+      if (f) createOrderMutation.mutate({ id, form: f });
+    });
+    setBulkSelected(new Set());
+  };
+
   const updateField = (field: keyof FormState, value: any) => {
     if (!selected) return;
     setFormData((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], [field]: value } }));
@@ -1002,17 +1107,28 @@ export default function Inbox() {
     const changes = (draft.changes_detected || []) as { field: string; old_value: string; new_value: string }[];
     const deadline = getDeadlineInfo(draft.received_at);
 
+    const isBulkChecked = bulkSelected.has(draft.id);
+
     return (
-      <motion.button
-        key={draft.id}
-        layoutId={draft.id}
-        onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
-        className={cn(
-          "w-full text-left px-3 py-2 rounded-lg transition-all duration-150 group relative",
-          isSelected ? "bg-primary/[0.06] ring-1 ring-primary/20" : "hover:bg-muted/30",
-          deadline.urgency === "red" && !isSelected && "border-l-2 border-l-destructive"
-        )}
-      >
+      <div key={draft.id} className="flex items-start gap-1">
+        <div className="pt-3 pl-1 shrink-0">
+          <Checkbox
+            className="h-3.5 w-3.5"
+            checked={isBulkChecked}
+            onCheckedChange={() => toggleBulkSelect(draft.id)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+        <motion.button
+          layoutId={draft.id}
+          onClick={() => { setSelectedId(draft.id); setMobileView("source"); }}
+          className={cn(
+            "flex-1 text-left px-3 py-2 rounded-lg transition-all duration-150 group relative",
+            isSelected ? "bg-primary/[0.06] ring-1 ring-primary/20" : "hover:bg-muted/30",
+            deadline.urgency === "red" && !isSelected && "border-l-2 border-l-destructive",
+            isBulkChecked && "ring-1 ring-primary/30 bg-primary/[0.04]"
+          )}
+        >
         {/* Row 1: Dot + Client + Thread Badge + SLA */}
         <div className="flex items-center gap-1.5 mb-0.5">
           {conf > 0 && <ConfidenceDot score={conf} />}
@@ -1112,6 +1228,7 @@ export default function Inbox() {
           )}
         </div>
       </motion.button>
+      </div>
     );
   };
 
@@ -1215,6 +1332,47 @@ export default function Inbox() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
             <Input placeholder="Zoek op klant of onderwerp..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9 text-xs bg-background border-border/40 rounded-lg" />
           </div>
+
+          {/* Bulk Actions Bar */}
+          <AnimatePresence>
+            {bulkSelected.size > 0 && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="mb-3 rounded-lg border border-primary/20 bg-primary/5 p-2.5 overflow-hidden"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold text-primary">
+                    {bulkSelected.size} geselecteerd
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {(() => {
+                      // "Select all similar" — find client of first selected
+                      const firstId = Array.from(bulkSelected)[0];
+                      const firstDraft = drafts.find(d => d.id === firstId);
+                      const clientName = firstDraft?.client_name;
+                      const similarCount = clientName ? drafts.filter(d => d.client_name === clientName).length : 0;
+                      if (clientName && similarCount > bulkSelected.size) {
+                        return (
+                          <Button variant="outline" size="sm" className="h-6 text-[9px] gap-1" onClick={() => selectAllSimilar(clientName)}>
+                            <Users className="h-2.5 w-2.5" /> Alle {similarCount} van {clientName}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })()}
+                    <Button variant="outline" size="sm" className="h-6 text-[9px] gap-1" onClick={() => setBulkSelected(new Set())}>
+                      Deselecteer
+                    </Button>
+                    <Button size="sm" className="h-6 text-[9px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleBulkApprove}>
+                      <CheckCircle2 className="h-2.5 w-2.5" /> Goedkeuren
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Test Panel */}
@@ -1248,16 +1406,21 @@ export default function Inbox() {
                       <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider">{clientName}</span>
                       <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">{orders.length}</Badge>
                     </div>
-                    {orders.length >= 2 && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-primary" onClick={() => handleMerge(clientName, orders)}>
-                            <Merge className="h-3 w-3" /> Samenvoegen
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent className="text-[10px]">Combineer tot multi-stop opdracht</TooltipContent>
-                      </Tooltip>
-                    )}
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-primary" onClick={() => selectAllSimilar(clientName)}>
+                        <CheckCircle2 className="h-2.5 w-2.5" /> Selecteer alle
+                      </Button>
+                      {orders.length >= 2 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 text-[9px] gap-1 text-primary" onClick={() => handleMerge(clientName, orders)}>
+                              <Merge className="h-3 w-3" /> Samenvoegen
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-[10px]">Combineer tot multi-stop opdracht</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </div>
                   {orders.map(renderInboxItem)}
                 </div>
@@ -1466,42 +1629,94 @@ export default function Inbox() {
                             confidence={getConfidence(form.pickupAddress, true)}>
                             <div className="relative">
                               <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.pickupAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
-                                value={form.pickupAddress} onChange={(e) => updateField("pickupAddress", e.target.value)} placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
+                                value={form.pickupAddress}
+                                onChange={(e) => updateField("pickupAddress", e.target.value)}
+                                onFocus={() => { if (!form.pickupAddress && addressSuggestions?.pickup?.length) setShowPickupSuggestions(true); }}
+                                placeholder={!form.pickupAddress ? "⚠ Niet gevonden in bericht" : "Voer ophaaladres in..."} />
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
                                     onClick={() => {
-                                      const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
-                                      if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                      else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                      if (addressSuggestions?.pickup?.length) {
+                                        setShowPickupSuggestions(prev => !prev);
+                                      } else {
+                                        const { enriched, matchedClient } = tryEnrichAddress(form.pickupAddress, clients);
+                                        if (matchedClient) { updateField("pickupAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                        else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                      }
                                     }}>
                                     <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
                                   </button>
                                 </TooltipTrigger>
-                                <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                                <TooltipContent side="left" className="text-[10px]">
+                                  {addressSuggestions?.pickup?.length ? `${addressSuggestions.pickup.length} historische adressen` : "Zoek in adresboek"}
+                                </TooltipContent>
                               </Tooltip>
+                              <AnimatePresence>
+                                <AddressSuggestionsDropdown
+                                  suggestions={addressSuggestions?.pickup || []}
+                                  isOpen={showPickupSuggestions}
+                                  onClose={() => setShowPickupSuggestions(false)}
+                                  onSelect={(addr) => updateField("pickupAddress", addr)}
+                                />
+                              </AnimatePresence>
                             </div>
+                            {!form.pickupAddress && addressSuggestions?.pickup && addressSuggestions.pickup.length > 0 && (
+                              <button
+                                className="mt-1.5 text-[10px] text-primary font-medium hover:underline flex items-center gap-1"
+                                onClick={() => { updateField("pickupAddress", addressSuggestions.pickup[0].address); toast({ title: "Adres ingevuld", description: `Meest gebruikte adres voor deze klant (${addressSuggestions.pickup[0].frequency}× eerder)` }); }}
+                              >
+                                <Sparkles className="h-2.5 w-2.5" />
+                                Voorstel: {addressSuggestions.pickup[0].address.substring(0, 40)}…
+                              </button>
+                            )}
                           </FormField>
 
                           <FormField label="Afleveradres" icon={MapPin} source={form.fieldSources?.delivery_address}
                             confidence={getConfidence(form.deliveryAddress, true)}>
                             <div className="relative">
                               <Input className={cn("h-9 text-xs pr-9 rounded-lg", !form.deliveryAddress ? "bg-destructive/5 border-destructive ring-1 ring-destructive/30 placeholder:text-destructive/50" : "bg-card")}
-                                value={form.deliveryAddress} onChange={(e) => updateField("deliveryAddress", e.target.value)} placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
+                                value={form.deliveryAddress}
+                                onChange={(e) => updateField("deliveryAddress", e.target.value)}
+                                onFocus={() => { if (!form.deliveryAddress && addressSuggestions?.delivery?.length) setShowDeliverySuggestions(true); }}
+                                placeholder={!form.deliveryAddress ? "⚠ Niet gevonden in bericht" : "Voer afleveradres in..."} />
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button type="button" className="absolute right-2.5 top-1/2 -translate-y-1/2"
                                     onClick={() => {
-                                      const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
-                                      if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
-                                      else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                      if (addressSuggestions?.delivery?.length) {
+                                        setShowDeliverySuggestions(prev => !prev);
+                                      } else {
+                                        const { enriched, matchedClient } = tryEnrichAddress(form.deliveryAddress, clients);
+                                        if (matchedClient) { updateField("deliveryAddress", enriched); toast({ title: "Adresboek", description: `Verrijkt via "${matchedClient}"` }); }
+                                        else toast({ title: "Adresboek", description: "Geen match gevonden", variant: "destructive" });
+                                      }
                                     }}>
                                     <DatabaseZap className="h-3.5 w-3.5 text-primary/40 hover:text-primary transition-colors" />
                                   </button>
                                 </TooltipTrigger>
-                                <TooltipContent side="left" className="text-[10px]">Zoek in adresboek</TooltipContent>
+                                <TooltipContent side="left" className="text-[10px]">
+                                  {addressSuggestions?.delivery?.length ? `${addressSuggestions.delivery.length} historische adressen` : "Zoek in adresboek"}
+                                </TooltipContent>
                               </Tooltip>
+                              <AnimatePresence>
+                                <AddressSuggestionsDropdown
+                                  suggestions={addressSuggestions?.delivery || []}
+                                  isOpen={showDeliverySuggestions}
+                                  onClose={() => setShowDeliverySuggestions(false)}
+                                  onSelect={(addr) => updateField("deliveryAddress", addr)}
+                                />
+                              </AnimatePresence>
                             </div>
+                            {!form.deliveryAddress && addressSuggestions?.delivery && addressSuggestions.delivery.length > 0 && (
+                              <button
+                                className="mt-1.5 text-[10px] text-primary font-medium hover:underline flex items-center gap-1"
+                                onClick={() => { updateField("deliveryAddress", addressSuggestions.delivery[0].address); toast({ title: "Adres ingevuld", description: `Meest gebruikte adres voor deze klant (${addressSuggestions.delivery[0].frequency}× eerder)` }); }}
+                              >
+                                <Sparkles className="h-2.5 w-2.5" />
+                                Voorstel: {addressSuggestions.delivery[0].address.substring(0, 40)}…
+                              </button>
+                            )}
                           </FormField>
                         </>
                       );
