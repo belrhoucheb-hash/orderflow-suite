@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { MapPin } from "lucide-react";
+import { MapPin, Globe, History } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -11,14 +11,18 @@ interface AddressAutocompleteProps {
   className?: string;
 }
 
+interface Suggestion {
+  address: string;
+  source: "history" | "google";
+}
+
 export function AddressAutocomplete({ value, onChange, placeholder, className }: AddressAutocompleteProps) {
   const [open, setOpen] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
@@ -27,20 +31,14 @@ export function AddressAutocomplete({ value, onChange, placeholder, className }:
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const search = async (query: string) => {
-    if (query.length < 2) { setSuggestions([]); return; }
-    setLoading(true);
+  const searchHistory = async (query: string): Promise<Suggestion[]> => {
     try {
-      // Search both pickup and delivery addresses
       const { data } = await supabase
         .from("orders")
         .select("pickup_address, delivery_address")
         .or(`pickup_address.ilike.%${query}%,delivery_address.ilike.%${query}%`)
         .limit(30);
-
-      if (!data) { setSuggestions([]); return; }
-
-      // Dedupe and rank by frequency
+      if (!data) return [];
       const counts = new Map<string, number>();
       for (const row of data) {
         for (const addr of [row.pickup_address, row.delivery_address]) {
@@ -49,13 +47,41 @@ export function AddressAutocomplete({ value, onChange, placeholder, className }:
           }
         }
       }
-      const sorted = [...counts.entries()]
+      return [...counts.entries()]
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .map(([addr]) => addr);
+        .slice(0, 5)
+        .map(([address]) => ({ address, source: "history" as const }));
+    } catch {
+      return [];
+    }
+  };
 
-      setSuggestions(sorted);
-      setOpen(sorted.length > 0);
+  const searchGoogle = async (query: string): Promise<Suggestion[]> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("google-places", {
+        body: { input: query },
+      });
+      if (error || !data?.predictions) return [];
+      return data.predictions.map((p: any) => ({
+        address: p.description,
+        source: "google" as const,
+      }));
+    } catch {
+      return [];
+    }
+  };
+
+  const search = async (query: string) => {
+    if (query.length < 2) { setSuggestions([]); setOpen(false); return; }
+    setLoading(true);
+    try {
+      const [history, google] = await Promise.all([searchHistory(query), searchGoogle(query)]);
+      // Merge: history first, then google (deduped)
+      const seen = new Set(history.map(s => s.address.toLowerCase()));
+      const googleFiltered = google.filter(s => !seen.has(s.address.toLowerCase()));
+      const merged = [...history, ...googleFiltered].slice(0, 8);
+      setSuggestions(merged);
+      setOpen(merged.length > 0);
     } catch {
       setSuggestions([]);
     } finally {
@@ -66,7 +92,7 @@ export function AddressAutocomplete({ value, onChange, placeholder, className }:
   const handleChange = (val: string) => {
     onChange(val);
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => search(val), 250);
+    debounceRef.current = setTimeout(() => search(val), 300);
   };
 
   const select = (addr: string) => {
@@ -85,18 +111,25 @@ export function AddressAutocomplete({ value, onChange, placeholder, className }:
       />
       {open && suggestions.length > 0 && (
         <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg overflow-hidden">
-          {suggestions.map((addr, i) => (
+          {suggestions.map((s, i) => (
             <button
-              key={i}
+              key={`${s.source}-${i}`}
               type="button"
-              onClick={() => select(addr)}
+              onClick={() => select(s.address)}
               className={cn(
                 "w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-accent transition-colors",
                 i > 0 && "border-t border-border/40"
               )}
             >
-              <MapPin className="h-3 w-3 text-primary shrink-0" />
-              <span className="truncate">{addr}</span>
+              {s.source === "history" ? (
+                <History className="h-3 w-3 text-primary shrink-0" />
+              ) : (
+                <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+              )}
+              <span className="truncate">{s.address}</span>
+              {s.source === "history" && (
+                <span className="ml-auto text-[9px] text-muted-foreground shrink-0">eerder gebruikt</span>
+              )}
             </button>
           ))}
         </div>
