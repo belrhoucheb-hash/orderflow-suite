@@ -809,6 +809,39 @@ function FormField({ label, icon: Icon, children, className, source, warning, co
   );
 }
 
+function AddressSuggestionsDropdown({ suggestions, onSelect, isOpen, onClose }: {
+  suggestions: AddressSuggestion[];
+  onSelect: (address: string) => void;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  if (!isOpen || suggestions.length === 0) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden"
+    >
+      <div className="px-2.5 py-1.5 border-b border-border/30 bg-muted/30">
+        <p className="text-[9px] font-semibold text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1">
+          <Clock className="h-2.5 w-2.5" /> Historische adressen
+        </p>
+      </div>
+      {suggestions.map((s, i) => (
+        <button
+          key={i}
+          className="w-full text-left px-3 py-2 hover:bg-primary/5 transition-colors border-b border-border/10 last:border-0"
+          onClick={() => { onSelect(s.address); onClose(); }}
+        >
+          <p className="text-[11px] font-medium text-foreground truncate">{s.address}</p>
+          <p className="text-[9px] text-muted-foreground/60">{s.frequency}× gebruikt</p>
+        </button>
+      ))}
+    </motion.div>
+  );
+}
+
 export default function Inbox() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -819,6 +852,9 @@ export default function Inbox() {
   const [mobileView, setMobileView] = useState<"list" | "source" | "detail">("list");
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [groupByClient, setGroupByClient] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [showPickupSuggestions, setShowPickupSuggestions] = useState(false);
+  const [showDeliverySuggestions, setShowDeliverySuggestions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Capacity warning
