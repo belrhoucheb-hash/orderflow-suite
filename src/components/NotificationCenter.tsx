@@ -151,9 +151,9 @@ export function NotificationCenter() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0 }}
-              className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-0.5 rounded-full bg-primary text-[10px] text-primary-foreground flex items-center justify-center font-semibold"
+              className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 rounded-full bg-primary text-[10px] text-primary-foreground flex items-center justify-center font-semibold"
             >
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {unreadCount > 99 ? "99+" : unreadCount}
             </motion.span>
           )}
         </AnimatePresence>
@@ -189,7 +189,7 @@ export function NotificationCenter() {
             </div>
 
             {/* Notification list */}
-            <ScrollArea className="max-h-[420px]">
+            <div className="h-[420px] overflow-y-auto overscroll-contain">
               {notifications.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="h-12 w-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
@@ -242,7 +242,7 @@ export function NotificationCenter() {
                   )}
                 </>
               )}
-            </ScrollArea>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
