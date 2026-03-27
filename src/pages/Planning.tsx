@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { VehicleAvailabilityPanel } from "@/components/planning/VehicleAvailabilityPanel";
 
 // ─── Mock Drivers with certifications ────────────────────────────────
 const MOCK_DRIVERS = [
@@ -1459,6 +1460,9 @@ const Planning = () => {
             )}
           </div>
         </div>
+
+        {/* Vehicle availability panel */}
+        <VehicleAvailabilityPanel />
 
         {/* Main content: sidebar + fleet + optional map */}
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
