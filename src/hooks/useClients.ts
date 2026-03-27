@@ -122,7 +122,7 @@ export function useClientOrders(clientName: string | null) {
       const { data, error } = await supabase
         .from("orders")
         .select("*")
-        .ilike("client_name", clientName || "")
+        .ilike("client_name", `%${clientName}%`)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;

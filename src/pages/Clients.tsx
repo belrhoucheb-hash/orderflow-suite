@@ -16,7 +16,7 @@ export default function Clients() {
   return (
     <div className="flex h-full">
       {/* Main table area */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedClient ? "mr-[480px]" : ""}`}>
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300" style={{ marginRight: selectedClient ? 480 : 0 }}>
         <div className="flex items-center justify-between px-8 py-6">
           <div>
             <h1 className="text-2xl font-semibold text-foreground tracking-tight">Klanten</h1>
