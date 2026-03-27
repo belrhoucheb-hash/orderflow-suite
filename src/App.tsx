@@ -48,6 +48,8 @@ const App = () => (
               <Route path="/planning" element={<Planning />} />
               <Route path="/routes" element={<RoutesPage />} />
               <Route path="/ritten" element={<ChauffeursRit />} />
+              <Route path="/vloot" element={<Fleet />} />
+              <Route path="/vloot/:id" element={<VehicleDetail />} />
               <Route path="/users" element={<UsersPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
