@@ -1,17 +1,10 @@
 import { useMemo } from "react";
 import { useVehicles, type FleetVehicle } from "./useVehicles";
-
-// Mock driver data — in production this would come from a drivers table
-const MOCK_DRIVERS: Record<string, { name: string; certs: string[] }> = {
-  fv1: { name: "Tom Visser", certs: [] },
-  fv2: { name: "Kees Bakker", certs: ["Laadklep"] },
-  fv3: { name: "Ahmed El-Fassi", certs: ["Koeling"] },
-  fv4: { name: "Pieter de Groot", certs: ["ADR", "Laadklep"] },
-};
+import { useDrivers, type Driver } from "./useDrivers";
 
 export interface CapacityMatch {
   vehicle: FleetVehicle;
-  driver: { name: string; certs: string[] };
+  driver: Driver | null;
   score: number; // 0-100, how well it matches
   reasons: string[]; // why this vehicle is a good match
   warnings: string[]; // potential issues
@@ -34,6 +27,7 @@ function normalizeReq(r: string): string {
  */
 export function useCapacityMatch(input: MatchInput | null) {
   const { data: vehicles = [] } = useVehicles();
+  const { data: drivers = [] } = useDrivers();
 
   return useMemo(() => {
     if (!input) return [];
@@ -45,9 +39,9 @@ export function useCapacityMatch(input: MatchInput | null) {
     const palletCount = input.unit === "Pallets" ? input.quantity : 0;
 
     for (const vehicle of vehicles) {
-      const driver = MOCK_DRIVERS[vehicle.id] || { name: "Niet toegewezen", certs: [] };
+      const driver = drivers.find(d => d.current_vehicle_id === vehicle.id) || null;
       const vehicleFeatures = vehicle.features.map(normalizeReq);
-      const driverCerts = driver.certs.map(normalizeReq);
+      const driverCerts = driver ? driver.certifications.map(normalizeReq) : [];
       const allCaps = [...vehicleFeatures, ...driverCerts];
 
       let score = 50;
@@ -102,7 +96,7 @@ export function useCapacityMatch(input: MatchInput | null) {
 
       // Driver cert match
       for (const req of reqsNormalized) {
-        if (driverCerts.includes(req)) {
+        if (driverCerts.includes(req) && driver) {
           reasons.push(`Chauffeur ${driver.name}: ${req.toUpperCase()}-gecertificeerd`);
         }
       }
@@ -121,5 +115,5 @@ export function useCapacityMatch(input: MatchInput | null) {
     }
 
     return matches.sort((a, b) => b.score - a.score);
-  }, [vehicles, input?.requirements?.join(","), input?.weightKg, input?.quantity, input?.unit]);
+  }, [vehicles, drivers, input?.requirements?.join(","), input?.weightKg, input?.quantity, input?.unit]);
 }

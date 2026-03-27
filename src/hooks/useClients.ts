@@ -50,31 +50,35 @@ export function useClients(search?: string) {
   return useQuery({
     queryKey: ["clients", search],
     queryFn: async () => {
-      let query = supabase
+      // 8.10 – Single query: fetch clients and active order counts in parallel
+      // instead of N+1 (one query per client). We fire both requests at once
+      // and join the results in memory by client name.
+      let clientQuery = supabase
         .from("clients")
         .select("*")
         .order("name");
 
       if (search) {
-        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+        clientQuery = clientQuery.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const [clientsResult, countsResult] = await Promise.all([
+        clientQuery,
+        supabase
+          .from("orders")
+          .select("client_name")
+          .not("status", "in", '("DELIVERED","CANCELLED")'),
+      ]);
 
-      // Get active order counts per client
-      const { data: orderCounts } = await supabase
-        .from("orders")
-        .select("client_name")
-        .not("status", "in", '("DELIVERED","CANCELLED")');
+      if (clientsResult.error) throw clientsResult.error;
 
       const countMap: Record<string, number> = {};
-      orderCounts?.forEach((o) => {
+      countsResult.data?.forEach((o) => {
         const name = o.client_name?.toLowerCase();
         if (name) countMap[name] = (countMap[name] || 0) + 1;
       });
 
-      return (data as Client[]).map((c) => ({
+      return (clientsResult.data as Client[]).map((c) => ({
         ...c,
         active_order_count: countMap[c.name.toLowerCase()] || 0,
       }));

@@ -1,73 +1,174 @@
-# Welcome to your Lovable project
+# OrderFlow Suite — Open Source TMS
 
-## Project info
+Multi-tenant Transport Management System built for logistics companies that need modern order management, intelligent planning, and full fleet oversight.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **AI-Powered Inbox** — Automatically parse incoming transport orders from email using Google Gemini AI
+- **Drag-and-Drop Planning** — Visual planning board to assign orders to drivers and vehicles
+- **Fleet Management** — Track vehicles, maintenance schedules, documents, and availability
+- **Driver Management** — Manage driver profiles, assignments, and ride history
+- **Client Management** — Client database with locations, rates, and extraction templates
+- **Reporting** — Dashboards and reports for operational insights
+- **Multi-Tenant** — Full tenant isolation with per-tenant data, members, and roles
+- **Configurable Branding** — Per-tenant branding and settings
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+| Layer | Technology |
+|-------|------------|
+| Build | [Vite](https://vitejs.dev/) |
+| UI | [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) |
+| Styling | [Tailwind CSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
+| Backend | [Supabase](https://supabase.com/) (Postgres, Auth, Edge Functions, RLS) |
+| AI | [Google Gemini AI](https://ai.google.dev/) |
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Quick Start
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+
+- npm or bun
+- A Supabase project
+- A Google Cloud account (for Gemini AI features)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+# Clone the repository
+git clone https://github.com/your-org/orderflow-suite.git
+cd orderflow-suite
 
-Follow these steps:
+# Install dependencies
+npm install
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Copy the example environment file and fill in your values
+cp .env.example .env
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:5173`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Environment Variables
 
-**Use GitHub Codespaces**
+Create a `.env` file in the project root based on `.env.example`:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| Variable | Description |
+|----------|-------------|
+| `VITE_SUPABASE_PROJECT_ID` | Your Supabase project ID |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
+| `VITE_SUPABASE_URL` | Full Supabase project URL (e.g. `https://<id>.supabase.co`) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to your GCP service account JSON file |
+| `GEMINI_API_KEY` | Google Gemini API key for AI features |
 
-## What technologies are used for this project?
+## Project Structure
 
-This project is built with:
+```
+orderflow-suite/
+├── src/
+│   ├── pages/              # Top-level route pages
+│   │   ├── Dashboard.tsx
+│   │   ├── Inbox.tsx
+│   │   ├── Orders.tsx
+│   │   ├── Planning.tsx
+│   │   ├── Fleet.tsx
+│   │   ├── Clients.tsx
+│   │   ├── ChauffeursRit.tsx
+│   │   ├── Rapportage.tsx
+│   │   ├── Settings.tsx
+│   │   └── ...
+│   ├── components/         # Reusable UI components
+│   │   ├── ui/             # shadcn/ui primitives
+│   │   ├── inbox/          # AI inbox components
+│   │   ├── planning/       # Planning board components
+│   │   ├── fleet/          # Fleet management components
+│   │   ├── orders/         # Order components
+│   │   ├── clients/        # Client components
+│   │   ├── dashboard/      # Dashboard widgets
+│   │   ├── settings/       # Settings panels
+│   │   └── ...
+│   └── hooks/              # Custom React hooks
+│       ├── useOrders.ts
+│       ├── useDrivers.ts
+│       ├── useFleet.ts
+│       ├── useClients.ts
+│       ├── useNotifications.ts
+│       └── ...
+├── supabase/
+│   ├── migrations/         # Database migration SQL files
+│   └── functions/          # Supabase Edge Functions
+│       ├── create-order/
+│       ├── parse-order/
+│       ├── poll-inbox/
+│       ├── import-email/
+│       ├── send-confirmation/
+│       ├── send-follow-up/
+│       └── google-places/
+├── .env.example
+├── tailwind.config.ts
+├── vite.config.ts
+└── package.json
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Supabase Setup
 
-## How can I deploy this project?
+OrderFlow Suite uses Supabase as its backend. All database schema changes are tracked as migration files in `supabase/migrations/`.
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+### Running Migrations
 
-## Can I connect a custom domain to my Lovable project?
+```bash
+# Link your Supabase project
+npx supabase link --project-ref <your-project-id>
 
-Yes, you can!
+# Apply all migrations
+npx supabase db push
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Database Tables
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+The migrations create the following tables:
+
+| Table | Purpose |
+|-------|---------|
+| `tenants` | Tenant (organization) records for multi-tenancy |
+| `tenant_members` | Maps users to tenants with roles |
+| `profiles` | User profiles linked to Supabase Auth |
+| `user_roles` | Role assignments for access control |
+| `orders` | Transport orders with status tracking |
+| `clients` | Client companies |
+| `client_locations` | Pickup/delivery addresses per client |
+| `client_rates` | Pricing rates per client |
+| `client_extraction_templates` | AI extraction templates per client |
+| `drivers` | Driver profiles |
+| `vehicles` | Vehicle records |
+| `vehicle_types` | Vehicle type definitions |
+| `vehicle_availability` | Vehicle availability windows |
+| `vehicle_documents` | Vehicle documents (insurance, registration, etc.) |
+| `vehicle_maintenance` | Maintenance logs |
+| `loading_units` | Loading unit definitions |
+| `requirement_types` | Order requirement type definitions |
+| `notifications` | In-app notifications |
+| `activity_log` | Audit trail of actions |
+| `ai_usage_log` | Tracks AI feature usage |
+
+Row Level Security (RLS) policies are applied to all tables to enforce tenant isolation.
+
+### Edge Functions
+
+Supabase Edge Functions handle server-side logic:
+
+- **poll-inbox** — Polls email inboxes for new transport orders
+- **import-email** — Imports raw email content
+- **parse-order** — Uses Gemini AI to extract structured order data from emails
+- **create-order** — Creates orders in the database
+- **send-confirmation** — Sends order confirmation emails
+- **send-follow-up** — Sends follow-up communications
+- **google-places** — Proxies Google Places API for address autocomplete
+
+## License
+
+Copyright 2026 OrderFlow Suite Contributors
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text.

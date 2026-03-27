@@ -4,8 +4,8 @@ export interface GeoCoord {
   lng: number;
 }
 
-// Common Dutch cities/areas with coordinates
-export const cityCoordinates: Record<string, GeoCoord> = {
+// Hardcoded Dutch cities/areas as cache/fallback
+const cityCache: Record<string, GeoCoord> = {
   amsterdam: { lat: 52.37, lng: 4.9 },
   rotterdam: { lat: 51.92, lng: 4.48 },
   "den haag": { lat: 52.07, lng: 4.3 },
@@ -38,8 +38,107 @@ export const cityCoordinates: Record<string, GeoCoord> = {
   duitsland: { lat: 51.5, lng: 7.0 },
   nederland: { lat: 52.13, lng: 5.29 },
   belgie: { lat: 50.85, lng: 4.35 },
-  antwerpen: { lat: 51.22, lng: 4.40 },
+  antwerpen: { lat: 51.22, lng: 4.4 },
 };
+
+// Backwards-compatible export alias
+export const cityCoordinates: Record<string, GeoCoord> = cityCache;
+
+// Session-level geocode result cache (address -> coord)
+const geocodeResultCache: Record<string, GeoCoord | null> = {};
+
+// Rate limiting for Nominatim (1 request per second)
+let lastNominatimCall = 0;
+
+async function waitForNominatimRateLimit(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastNominatimCall;
+  if (elapsed < 1000) {
+    await new Promise((resolve) => setTimeout(resolve, 1000 - elapsed));
+  }
+  lastNominatimCall = Date.now();
+}
+
+/**
+ * Geocode an address string to coordinates.
+ * 1. Check local cache (hardcoded cities + session results)
+ * 2. Try PDOK Locatieserver for NL addresses
+ * 3. Fall back to Nominatim for international addresses
+ * 4. Cache results in memory for the session
+ */
+export async function geocodeAddress(address: string): Promise<GeoCoord | null> {
+  if (!address) return null;
+
+  const lower = address.toLowerCase().trim();
+
+  // 1. Check session result cache (exact match)
+  if (lower in geocodeResultCache) {
+    return geocodeResultCache[lower];
+  }
+
+  // 2. Check hardcoded city cache (substring match, longest first)
+  const sortedCities = Object.keys(cityCache).sort((a, b) => b.length - a.length);
+  for (const city of sortedCities) {
+    if (lower.includes(city)) {
+      const result = { ...cityCache[city] };
+      geocodeResultCache[lower] = result;
+      return result;
+    }
+  }
+
+  // 3. Try PDOK Locatieserver (Dutch addresses)
+  try {
+    const pdokUrl = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?q=${encodeURIComponent(address)}&rows=1`;
+    const pdokRes = await fetch(pdokUrl, { signal: AbortSignal.timeout(5000) });
+    if (pdokRes.ok) {
+      const pdokData = await pdokRes.json();
+      const docs = pdokData?.response?.docs;
+      if (docs && docs.length > 0) {
+        const doc = docs[0];
+        // PDOK returns centroide_ll as "POINT(lng lat)"
+        const pointMatch = doc.centroide_ll?.match(/POINT\(([\d.]+)\s+([\d.]+)\)/);
+        if (pointMatch) {
+          const coord: GeoCoord = {
+            lat: parseFloat(pointMatch[2]),
+            lng: parseFloat(pointMatch[1]),
+          };
+          geocodeResultCache[lower] = coord;
+          return coord;
+        }
+      }
+    }
+  } catch (e) {
+    // PDOK failed, continue to Nominatim
+    console.warn("PDOK geocode failed, falling back to Nominatim:", e);
+  }
+
+  // 4. Fall back to Nominatim (international) with rate limiting
+  try {
+    await waitForNominatimRateLimit();
+    const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+    const nomRes = await fetch(nomUrl, {
+      signal: AbortSignal.timeout(5000),
+      headers: { "User-Agent": "orderflow-suite/1.0" },
+    });
+    if (nomRes.ok) {
+      const nomData = await nomRes.json();
+      if (nomData && nomData.length > 0) {
+        const coord: GeoCoord = {
+          lat: parseFloat(nomData[0].lat),
+          lng: parseFloat(nomData[0].lon),
+        };
+        geocodeResultCache[lower] = coord;
+        return coord;
+      }
+    }
+  } catch (e) {
+    console.warn("Nominatim geocode failed:", e);
+  }
+
+  // Cache negative result to avoid repeated lookups
+  geocodeResultCache[lower] = null;
+  return null;
+}
 
 // Vehicle colors for map markers
 export const vehicleColors: Record<string, string> = {
@@ -51,23 +150,39 @@ export const vehicleColors: Record<string, string> = {
 
 /**
  * Try to resolve coordinates from an address string by matching known city names.
+ * Falls back to async geocoding if no cache hit is found (returns null synchronously,
+ * but triggers a background geocode for future calls).
  */
 export function resolveCoordinates(address: string | null): GeoCoord | null {
   if (!address) return null;
-  const lower = address.toLowerCase();
+  const lower = address.toLowerCase().trim();
+
+  // Check session result cache first (exact match from previous geocodeAddress calls)
+  if (lower in geocodeResultCache && geocodeResultCache[lower]) {
+    const cached = geocodeResultCache[lower]!;
+    const jitter = () => (Math.random() - 0.5) * 0.02;
+    return {
+      lat: cached.lat + jitter(),
+      lng: cached.lng + jitter(),
+    };
+  }
 
   // Try to match known cities (longest match first)
-  const sorted = Object.keys(cityCoordinates).sort((a, b) => b.length - a.length);
+  const sorted = Object.keys(cityCache).sort((a, b) => b.length - a.length);
   for (const city of sorted) {
     if (lower.includes(city)) {
       // Add small random offset to prevent overlapping markers
       const jitter = () => (Math.random() - 0.5) * 0.02;
       return {
-        lat: cityCoordinates[city].lat + jitter(),
-        lng: cityCoordinates[city].lng + jitter(),
+        lat: cityCache[city].lat + jitter(),
+        lng: cityCache[city].lng + jitter(),
       };
     }
   }
+
+  // Trigger background geocode for future calls (fire-and-forget)
+  geocodeAddress(address).catch(() => {});
+
   return null;
 }
 

@@ -7,11 +7,13 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import logo from "@/assets/logo.png";
+import { useTenant } from "@/contexts/TenantContext";
+import defaultLogo from "@/assets/logo.png";
 
 const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { tenant } = useTenant();
   const [loading, setLoading] = useState(false);
 
   // Login state
@@ -66,8 +68,14 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-foreground via-foreground/95 to-foreground/90 px-4">
       <Card className="w-full max-w-md border-border/20 shadow-2xl bg-card">
         <CardHeader className="text-center pb-2 pt-8">
-          <img src={logo} alt="Royalty Cargo Solutions" className="h-20 mx-auto mb-4 object-contain" />
-          <h1 className="font-display text-xl font-bold text-foreground">Royalty Cargo Solutions</h1>
+          <img 
+            src={tenant?.logoUrl || defaultLogo} 
+            alt={tenant?.name || "Royalty Cargo Solutions"} 
+            className="h-20 mx-auto mb-4 object-contain" 
+          />
+          <h1 className="font-display text-xl font-bold text-foreground">
+            {tenant?.name || "Royalty Cargo Solutions"}
+          </h1>
           <p className="text-sm text-muted-foreground">Transportmanagementsysteem</p>
         </CardHeader>
         <CardContent className="pt-4 pb-8">
