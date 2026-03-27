@@ -78,7 +78,7 @@ export function VehicleAvailabilityPanel() {
   const isToday = format(new Date(), "yyyy-MM-dd") === dateStr;
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card shadow-sm relative z-30">
+    <div className="rounded-xl border border-border/40 bg-card shadow-sm relative z-[450]">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors rounded-xl"
@@ -117,7 +117,7 @@ export function VehicleAvailabilityPanel() {
                 {isToday ? "Vandaag" : format(date, "d MMM", { locale: nl })}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 z-[60]" align="end">
+            <PopoverContent className="w-auto p-0 z-[9999]" align="end">
               <Calendar
                 mode="single"
                 selected={date}
