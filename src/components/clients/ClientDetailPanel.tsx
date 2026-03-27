@@ -126,7 +126,7 @@ export function ClientDetailPanel({ client }: Props) {
         ) : (
           <div className="space-y-2">
             {orders.map((order) => (
-              <div key={order.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div key={order.id} onClick={() => navigate(`/orders/${order.id}`)} className="flex items-center justify-between rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/20 transition-colors">
                 <div>
                   <div className="flex items-center gap-2">
                     <FileText className="h-3.5 w-3.5 text-muted-foreground" />
