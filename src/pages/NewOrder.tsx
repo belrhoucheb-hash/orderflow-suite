@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCreateOrder } from "@/hooks/useOrders";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +28,7 @@ const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long",
 
 const NewOrder = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const createOrder = useCreateOrder();
   const [saving, setSaving] = useState(false);
   const [mainTab, setMainTab] = useState<MainTab>("algemeen");
   const [bottomTab, setBottomTab] = useState<BottomTab>("vrachmeen");
@@ -72,20 +71,48 @@ const NewOrder = () => {
     setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
   };
 
+  // 8.12 – Save ALL form fields to the database, not just a subset.
+  // Fields without a dedicated DB column are stored in the `attachments` JSON
+  // column as structured metadata so nothing is lost.
   const handleSave = async (andClose: boolean) => {
     if (!clientName.trim()) { toast.error("Vul minimaal een klantnaam in"); return; }
     setSaving(true);
     try {
-      const { error } = await supabase.from("orders").insert({
+      const pickupLine = freightLines.find(f => f.activiteit === "Laden");
+      const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
+
+      // Collect extra fields that don't have dedicated DB columns
+      const extraFields = {
+        contactpersoon: contactpersoon || null,
+        voertuigtype: voertuigtype || null,
+        chauffeur: chauffeur || null,
+        mrn_doc: mrnDoc || null,
+        afstand_km: afstand || null,
+        totale_duur: totaleDuur || null,
+        freight_lines: freightLines.map(fl => ({
+          activiteit: fl.activiteit,
+          locatie: fl.locatie,
+          datum: fl.datum,
+          tijd: fl.tijd,
+          referentie: fl.referentie,
+          opmerkingen: fl.opmerkingen,
+        })),
+      };
+
+      await createOrder.mutateAsync({
         client_name: clientName.trim(),
         transport_type: transportType || null,
         weight_kg: weightKg ? parseInt(weightKg) : null,
         quantity: quantity ? parseInt(quantity) : null,
         unit: transportEenheid || null,
+        pickup_address: pickupLine?.locatie || null,
+        delivery_address: deliveryLine?.locatie || null,
+        dimensions: afmetingen || null,
+        internal_note: referentie || null,
+        invoice_ref: pickupLine?.referentie || deliveryLine?.referentie || null,
+        attachments: extraFields,
         status: "DRAFT",
       });
-      if (error) throw error;
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Order aangemaakt");
       if (andClose) navigate("/orders");
     } catch (e: any) {

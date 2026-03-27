@@ -124,6 +124,75 @@ function parseEml(raw: string, messageId = ""): ParsedEmail {
   return { messageId: mid, from, subject, date, body, attachments };
 }
 
+// ── Retry helper with exponential backoff for 429 errors ──
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(url, options);
+    if (resp.status === 429 && attempt < maxRetries) {
+      const backoff = Math.pow(2, attempt) * 1000 + Math.random() * 500;
+      console.warn(`429 rate-limited, retrying in ${Math.round(backoff)}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise((r) => setTimeout(r, backoff));
+      continue;
+    }
+    return resp;
+  }
+  return fetch(url, options);
+}
+
+// ── Gemini API helper ──
+function geminiUrl(): string {
+  const key = Deno.env.get("GEMINI_API_KEY");
+  if (!key) throw new Error("GEMINI_API_KEY is not configured");
+  return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+}
+
+function parseGeminiResponse(json: any): string | null {
+  return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+}
+
+// ── Rule-based pre-classification ──
+type EmailClassification = "cancellation" | "confirmation" | "order" | null;
+
+async function ruleBasedClassify(
+  subject: string,
+  fromAddr: string,
+  supabase: any
+): Promise<EmailClassification> {
+  const subjectLower = subject.toLowerCase();
+
+  // Check for cancellation keywords
+  if (subjectLower.includes("annulering") || subjectLower.includes("cancel")) {
+    console.log(`Rule-based: classified as cancellation (subject keyword)`);
+    return "cancellation";
+  }
+
+  // Check for confirmation keywords
+  if (subjectLower.includes("bevestiging") || subjectLower.includes("confirmation")) {
+    console.log(`Rule-based: classified as confirmation (subject keyword)`);
+    return "confirmation";
+  }
+
+  // Check if sender is a known client
+  if (fromAddr) {
+    const { data: knownClient } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("email", fromAddr)
+      .limit(1);
+    if (knownClient && knownClient.length > 0) {
+      console.log(`Rule-based: classified as order (known client: ${fromAddr})`);
+      return "order";
+    }
+  }
+
+  // Ambiguous — needs AI classification
+  return null;
+}
+
 // ── Main handler ──
 
 async function pollInbox(): Promise<Response> {
@@ -227,28 +296,36 @@ async function pollInbox(): Promise<Response> {
 
           const parsed = parseEml(rawEmail, messageId);
 
-          // Quick AI classification: is this a transport/logistics email?
-          const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-          if (LOVABLE_API_KEY && parsed.body) {
+          // Quick classification: rule-based first, then AI for ambiguous emails
+          const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+
+          const ruleResult = await ruleBasedClassify(subject, fromAddr, supabase);
+
+          if (ruleResult) {
+            // Rule-based classification succeeded — skip AI call, email is transport-related
+            console.log(`Rule-based classification: ${ruleResult} — skipping AI classifier`);
+          } else if (GEMINI_API_KEY && parsed.body) {
+            // Ambiguous email — use AI to determine if it's transport-related
             try {
-              const classifyResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+              const classifyResp = await fetchWithRetry(geminiUrl(), {
                 method: "POST",
-                headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  model: "google/gemini-2.5-flash-lite",
-                  messages: [
-                    { role: "system", content: "Je bent een e-mail classifier. Bepaal of een e-mail gaat over transport, logistiek, verzending of orders. Antwoord ALLEEN met 'JA' of 'NEE'." },
-                    { role: "user", content: `Onderwerp: ${subject}\nVan: ${fromAddr}\n\n${parsed.body.substring(0, 500)}` },
-                  ],
+                  systemInstruction: { parts: [{ text: "Je bent een e-mail classifier. Bepaal of een e-mail gaat over transport, logistiek, verzending of orders. Antwoord ALLEEN met JSON: {\"is_transport\": true} of {\"is_transport\": false}" }] },
+                  contents: [{ role: "user", parts: [{ text: `Onderwerp: ${subject}\nVan: ${fromAddr}\n\n${parsed.body.substring(0, 500)}` }] }],
+                  generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
                 }),
               });
               if (classifyResp.ok) {
                 const classifyResult = await classifyResp.json();
-                const answer = classifyResult.choices?.[0]?.message?.content?.trim().toUpperCase() || "";
-                if (answer.startsWith("NEE")) {
-                  console.log(`Skipping non-transport email: ${subject}`);
-                  await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
-                  continue;
+                const text = parseGeminiResponse(classifyResult);
+                if (text) {
+                  const parsed_result = JSON.parse(text);
+                  if (parsed_result.is_transport === false) {
+                    console.log(`Skipping non-transport email: ${subject}`);
+                    await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
+                    continue;
+                  }
                 }
               } else {
                 await classifyResp.text(); // consume
@@ -285,7 +362,7 @@ async function pollInbox(): Promise<Response> {
           let extracted: any = null;
           let parseData: any = null;
 
-          if (LOVABLE_API_KEY && (parsed.body || pdfUrls.length > 0)) {
+          if (GEMINI_API_KEY && (parsed.body || pdfUrls.length > 0)) {
             try {
               const threadContext = parentOrder ? { parentOrder } : undefined;
               const parseResp = await fetch(`${supabaseUrl}/functions/v1/parse-order`, {

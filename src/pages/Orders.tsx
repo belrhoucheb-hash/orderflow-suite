@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Loader2 } from "lucide-react";
+import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Loader2, HelpCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { statusLabels } from "@/data/mockData";
@@ -7,7 +7,6 @@ import { useOrders } from "@/hooks/useOrders";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { TransportOrdersTable } from "@/components/orders/TransportOrdersTable";
 
 const statusStyles: Record<string, string> = {
   nieuw: "bg-blue-500/8 text-blue-700 border-blue-200/60",
@@ -15,6 +14,7 @@ const statusStyles: Record<string, string> = {
   onderweg: "bg-primary/8 text-primary border-primary/20",
   afgeleverd: "bg-emerald-500/8 text-emerald-700 border-emerald-200/60",
   geannuleerd: "bg-muted text-muted-foreground border-border",
+  wacht_op_antwoord: "bg-violet-500/8 text-violet-700 border-violet-200/60",
 };
 
 const statusDotColors: Record<string, string> = {
@@ -23,6 +23,7 @@ const statusDotColors: Record<string, string> = {
   onderweg: "bg-primary",
   afgeleverd: "bg-emerald-500",
   geannuleerd: "bg-muted-foreground/40",
+  wacht_op_antwoord: "bg-violet-500",
 };
 
 const priorityDotColors: Record<string, string> = {
@@ -32,12 +33,9 @@ const priorityDotColors: Record<string, string> = {
   spoed: "text-primary",
 };
 
-const filterOptions = ["alle", "nieuw", "in_behandeling", "onderweg", "afgeleverd"] as const;
-
-type Tab = "openstaand" | "transportopdrachten";
+const filterOptions = ["alle", "nieuw", "wacht_op_antwoord", "in_behandeling", "onderweg", "afgeleverd"] as const;
 
 const Orders = () => {
-  const [activeTab, setActiveTab] = useState<Tab>("openstaand");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
   const { data: orders = [], isLoading } = useOrders();
@@ -73,8 +71,8 @@ const Orders = () => {
       {/* Header */}
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">Orders</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{orders.length} orders in totaal</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">Orderlijst</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{orders.length} transportopdrachten in totaal</p>
         </div>
         <Link to="/orders/nieuw">
           <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
@@ -84,9 +82,10 @@ const Orders = () => {
       </div>
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
         {[
           { label: "Nieuw", value: stats.byStatus["nieuw"] || 0, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
+          { label: "Wachtend", value: stats.byStatus["wacht_op_antwoord"] || 0, icon: HelpCircle, color: "text-violet-600", bg: "bg-violet-500/8" },
           { label: "Onderweg", value: stats.byStatus["onderweg"] || 0, icon: Truck, color: "text-primary", bg: "bg-primary/8" },
           { label: "Afgeleverd", value: stats.byStatus["afgeleverd"] || 0, icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-500/8" },
           { label: "Spoed / Hoog", value: stats.spoedCount, icon: Clock, color: "text-amber-600", bg: "bg-amber-500/8" },
@@ -108,168 +107,134 @@ const Orders = () => {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border/40">
-        <button
-          onClick={() => setActiveTab("openstaand")}
-          className={cn(
-            "flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold transition-colors border-b-2 -mb-px",
-            activeTab === "openstaand"
-              ? "text-primary border-primary"
-              : "text-muted-foreground border-transparent hover:text-foreground hover:border-border"
-          )}
-        >
-          <Package className="h-3.5 w-3.5" />
-          Openstaand
-        </button>
-        <button
-          onClick={() => setActiveTab("transportopdrachten")}
-          className={cn(
-            "flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold transition-colors border-b-2 -mb-px",
-            activeTab === "transportopdrachten"
-              ? "text-primary border-primary"
-              : "text-muted-foreground border-transparent hover:text-foreground hover:border-border"
-          )}
-        >
-          <Truck className="h-3.5 w-3.5" />
-          Transportopdrachten
-        </button>
+      {/* Search & Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+          <input
+            placeholder="Zoek op ordernummer of klant..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full h-10 pl-10 pr-4 rounded-xl border border-border/50 bg-card text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/40 transition-all"
+          />
+        </div>
+        <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 overflow-x-auto max-w-full">
+          {filterOptions.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={cn(
+                "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
+                statusFilter === s
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {s === "alle" ? "Alle" : statusLabels[s as keyof typeof statusLabels]}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Tab content */}
-      {activeTab === "openstaand" ? (
-        <>
-          {/* Search & Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
-              <input
-                placeholder="Zoek op ordernummer of klant..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-10 pl-10 pr-4 rounded-xl border border-border/50 bg-card text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/40 transition-all"
-              />
-            </div>
-            <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5">
-              {filterOptions.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={cn(
-                    "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150",
-                    statusFilter === s
-                      ? "bg-foreground text-background shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {s === "alle" ? "Alle" : statusLabels[s as keyof typeof statusLabels]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Table Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden"
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border/40 bg-muted/30">
-                    <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Order</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Klant</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden lg:table-cell">Ophaaladres</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden md:table-cell">Afleveradres</th>
-                    <th className="px-4 py-2.5 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Gewicht</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Status</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden sm:table-cell">Prioriteit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/20">
-                  <AnimatePresence mode="popLayout">
-                    {filtered.map((order, idx) => (
-                      <motion.tr
-                        key={order.id}
-                        layout
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ delay: idx * 0.02 }}
-                        className="hover:bg-muted/20 transition-colors duration-100 group"
+      {/* Table Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden"
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border/40 bg-muted/30">
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Order</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Klant</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden lg:table-cell">Ophaaladres</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden md:table-cell">Afleveradres</th>
+                <th className="px-4 py-2.5 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Gewicht</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Status</th>
+                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden sm:table-cell">Prioriteit</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/20">
+              <AnimatePresence mode="popLayout">
+                {filtered.map((order, idx) => (
+                  <motion.tr
+                    key={order.id}
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ delay: idx * 0.02 }}
+                    className="hover:bg-muted/20 transition-colors duration-100 group"
+                  >
+                    <td className="px-4 py-2">
+                      <Link
+                        to={`/orders/${order.id}`}
+                        className="font-mono text-[13px] font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
                       >
-                        <td className="px-4 py-2">
-                          <Link
-                            to={`/orders/${order.id}`}
-                            className="font-mono text-[13px] font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
-                          >
-                            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDotColors[order.status])} />
-                            {order.orderNumber}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-2 text-[13px] text-foreground/80">{order.customer}</td>
-                        <td className="px-4 py-2 text-[13px] text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
-                          {order.pickupAddress}
-                        </td>
-                        <td className="px-4 py-2 text-[13px] text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
-                          {order.deliveryAddress}
-                        </td>
-                        <td className="px-4 py-2 text-[13px] text-foreground/80 text-right tabular-nums font-medium">
-                          {order.totalWeight.toLocaleString()} kg
-                        </td>
-                        <td className="px-4 py-2">
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border",
-                              statusStyles[order.status]
-                            )}
-                          >
-                            <span className={cn("h-1 w-1 rounded-full", statusDotColors[order.status])} />
-                            {statusLabels[order.status]}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 hidden sm:table-cell">
-                          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground capitalize">
-                            <Circle
-                              className={cn("h-1.5 w-1.5 fill-current", priorityDotColors[order.priority])}
-                              strokeWidth={0}
-                            />
-                            {order.priority}
-                          </span>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </AnimatePresence>
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-5 py-16 text-center">
-                        <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
-                        <p className="text-sm text-muted-foreground">Geen orders gevonden</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                        <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDotColors[order.status])} />
+                        {order.orderNumber}
+                        </Link>
+                    </td>
+                    <td className="px-4 py-2 text-[13px] text-foreground/80">{order.customer}</td>
+                    <td className="px-4 py-2 text-[13px] text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
+                      {order.pickupAddress}
+                    </td>
+                    <td className="px-4 py-2 text-[13px] text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
+                      {order.deliveryAddress}
+                    </td>
+                    <td className="px-4 py-2 text-[13px] text-foreground/80 text-right tabular-nums font-medium">
+                      {order.totalWeight.toLocaleString()} kg
+                    </td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border",
+                          statusStyles[order.status]
+                        )}
+                      >
+                        <span className={cn("h-1 w-1 rounded-full", statusDotColors[order.status])} />
+                        {statusLabels[order.status]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 hidden sm:table-cell">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground capitalize">
+                        <Circle
+                          className={cn("h-1.5 w-1.5 fill-current", priorityDotColors[order.priority])}
+                          strokeWidth={0}
+                        />
+                        {order.priority}
+                      </span>
+                    </td>
+                  </motion.tr>
+                ))}
+              </AnimatePresence>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-16 text-center">
+                    <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">Geen orders gevonden</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
-              <p className="text-[11px] text-muted-foreground">
-                {filtered.length} van {orders.length} orders
-              </p>
-              <p className="text-[11px] text-muted-foreground tabular-nums">
-                Totaal: {filtered.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
-              </p>
-            </div>
-          </motion.div>
-        </>
-      ) : (
-        <TransportOrdersTable />
-      )}
+        {/* Footer */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
+          <p className="text-[11px] text-muted-foreground">
+            {filtered.length} van {orders.length} transportopdrachten
+          </p>
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            Totaal: {filtered.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
+          </p>
+        </div>
+      </motion.div>
     </div>
   );
 };
 
 export default Orders;
+

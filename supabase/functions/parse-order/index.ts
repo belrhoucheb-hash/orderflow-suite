@@ -7,6 +7,52 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Retry helper with exponential backoff for 429 errors ──
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(url, options);
+    if (resp.status === 429 && attempt < maxRetries) {
+      const backoff = Math.pow(2, attempt) * 1000 + Math.random() * 500;
+      console.warn(`429 rate-limited, retrying in ${Math.round(backoff)}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise((r) => setTimeout(r, backoff));
+      continue;
+    }
+    return resp;
+  }
+  // Should never reach here, but satisfy TS
+  return fetch(url, options);
+}
+
+// ── Gemini API helper ──
+function geminiUrl(): string {
+  const key = Deno.env.get("GEMINI_API_KEY");
+  if (!key) throw new Error("GEMINI_API_KEY is not configured");
+  return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+}
+
+function buildGeminiBody(systemPrompt: string, userText: string, jsonSchema?: Record<string, any>) {
+  const body: any = {
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: "user", parts: [{ text: userText }] }],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: "application/json",
+    },
+  };
+  if (jsonSchema) {
+    body.generationConfig.responseSchema = jsonSchema;
+  }
+  return body;
+}
+
+function parseGeminiResponse(json: any): string | null {
+  return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+}
+
 const REQUIRED_FIELDS: { key: string; label: string }[] = [
   { key: "client_name", label: "Klantnaam" },
   { key: "pickup_address", label: "Ophaaladres" },
@@ -94,8 +140,8 @@ serve(async (req) => {
   try {
     const { emailBody, pdfUrls, threadContext } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -111,15 +157,7 @@ serve(async (req) => {
     if (hasEmail && threadContext?.parentOrder) {
       // We have a parent order — classify the intent
       try {
-        const classifyResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              {
-                role: "system",
-                content: `Je bent een e-mail thread classifier voor een transport/logistiek bedrijf.
+        const classifySystemPrompt = `Je bent een e-mail thread classifier voor een transport/logistiek bedrijf.
 Analyseer de e-mail en bepaal het type:
 - "update": klant wil een bestaande order wijzigen (gewicht, adres, aantal, datum, etc.)
 - "cancellation": klant wil annuleren
@@ -134,46 +172,21 @@ Bestaande ordergegevens:
 - Gewicht: ${threadContext.parentOrder.weight_kg || "onbekend"} kg
 - Aantal: ${threadContext.parentOrder.quantity || "onbekend"} ${threadContext.parentOrder.unit || ""}
 - Ophaaladres: ${threadContext.parentOrder.pickup_address || "onbekend"}
-- Afleveradres: ${threadContext.parentOrder.delivery_address || "onbekend"}`,
-              },
-              { role: "user", content: emailBody },
-            ],
-            tools: [{
-              type: "function",
-              function: {
-                name: "classify_thread",
-                description: "Classify email thread intent and detect changes",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    thread_type: { type: "string", enum: ["update", "cancellation", "confirmation", "question", "new"] },
-                    changes: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          field: { type: "string", description: "Veld dat wijzigt (weight_kg, quantity, pickup_address, delivery_address, requirements, etc.)" },
-                          old_value: { type: "string", description: "Oude waarde" },
-                          new_value: { type: "string", description: "Nieuwe waarde" },
-                        },
-                        required: ["field", "old_value", "new_value"],
-                      },
-                      description: "Gedetecteerde wijzigingen (alleen bij type=update)",
-                    },
-                  },
-                  required: ["thread_type", "changes"],
-                },
-              },
-            }],
-            tool_choice: { type: "function", function: { name: "classify_thread" } },
-          }),
+- Afleveradres: ${threadContext.parentOrder.delivery_address || "onbekend"}
+
+Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|new", "changes": [{"field": "...", "old_value": "...", "new_value": "..."}]}`;
+
+        const classifyResp = await fetchWithRetry(geminiUrl(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildGeminiBody(classifySystemPrompt, emailBody)),
         });
 
         if (classifyResp.ok) {
           const classResult = await classifyResp.json();
-          const toolCall = classResult.choices?.[0]?.message?.tool_calls?.[0];
-          if (toolCall?.function?.arguments) {
-            const parsed = JSON.parse(toolCall.function.arguments);
+          const text = parseGeminiResponse(classResult);
+          if (text) {
+            const parsed = JSON.parse(text);
             threadType = parsed.thread_type || "new";
             changes = parsed.changes || [];
           }
@@ -212,15 +225,7 @@ Bestaande ordergegevens:
       ? `Je hebt TWEE bronnen: een e-mail body EN een of meer PDF-bijlagen. Voor elk veld dat je extraheert, geef aan uit welke bron het komt: "email", "pdf", of "both".`
       : hasPdfs ? `Alle velden komen uit "pdf".` : `Alle velden komen uit "email".`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "system",
-            content: `Je bent een logistiek data-extractie assistent voor een Transport Management Systeem (TMS) in Nederland.
+    const extractionSystemPrompt = `Je bent een logistiek data-extractie assistent voor een Transport Management Systeem (TMS) in Nederland.
 Je analyseert e-mails en PDF-bijlagen en extraheert gestructureerde ordergegevens.
 
 ${sourceInstructions}
@@ -233,68 +238,51 @@ Regels:
 - Unit: "Pallets", "Colli", of "Box"
 - Requirements: kies uit ["Koeling", "ADR", "Laadklep", "Douane"]
 - Als een veld niet gevonden kan worden, geef een lege string of 0 terug
-- confidence_score: 0-100, hoe zeker je bent over de extractie`,
-          },
-          { role: "user", content: userContent },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "extract_order_data",
-            description: "Extract structured order data from email and/or PDF content",
-            parameters: {
-              type: "object",
-              properties: {
-                client_name: { type: "string" },
-                transport_type: { type: "string", enum: ["direct", "warehouse-air"] },
-                pickup_address: { type: "string" },
-                delivery_address: { type: "string" },
-                quantity: { type: "number" },
-                unit: { type: "string", enum: ["Pallets", "Colli", "Box"] },
-                weight_kg: { type: "number" },
-                is_weight_per_unit: { type: "boolean" },
-                dimensions: { type: "string" },
-                requirements: { type: "array", items: { type: "string", enum: ["Koeling", "ADR", "Laadklep", "Douane"] } },
-                confidence_score: { type: "number" },
-                field_sources: {
-                  type: "object",
-                  properties: {
-                    client_name: { type: "string", enum: ["email", "pdf", "both"] },
-                    transport_type: { type: "string", enum: ["email", "pdf", "both"] },
-                    pickup_address: { type: "string", enum: ["email", "pdf", "both"] },
-                    delivery_address: { type: "string", enum: ["email", "pdf", "both"] },
-                    quantity: { type: "string", enum: ["email", "pdf", "both"] },
-                    unit: { type: "string", enum: ["email", "pdf", "both"] },
-                    weight_kg: { type: "string", enum: ["email", "pdf", "both"] },
-                    dimensions: { type: "string", enum: ["email", "pdf", "both"] },
-                    requirements: { type: "string", enum: ["email", "pdf", "both"] },
-                  },
-                  required: ["client_name", "transport_type", "pickup_address", "delivery_address", "quantity", "unit", "weight_kg", "dimensions", "requirements"],
-                },
-              },
-              required: ["client_name", "transport_type", "pickup_address", "delivery_address", "quantity", "unit", "weight_kg", "is_weight_per_unit", "dimensions", "requirements", "confidence_score", "field_sources"],
-            },
-          },
-        }],
-        tool_choice: { type: "function", function: { name: "extract_order_data" } },
-      }),
+- confidence_score: 0-100, hoe zeker je bent over de extractie
+
+Antwoord als JSON met deze velden:
+{
+  "client_name": "string",
+  "transport_type": "direct|warehouse-air",
+  "pickup_address": "string",
+  "delivery_address": "string",
+  "quantity": number,
+  "unit": "Pallets|Colli|Box",
+  "weight_kg": number,
+  "is_weight_per_unit": boolean,
+  "dimensions": "string (LxBxH in cm)",
+  "requirements": ["Koeling"|"ADR"|"Laadklep"|"Douane"],
+  "confidence_score": number (0-100),
+  "field_sources": { "client_name": "email|pdf|both", "transport_type": "email|pdf|both", ... }
+}`;
+
+    // Build the user content as a single text string for Gemini
+    const userTextParts: string[] = [];
+    for (const part of userContent) {
+      if (part.type === "text") userTextParts.push(part.text);
+      else if (part.type === "image_url") userTextParts.push("[PDF bijlage - inhoud wordt meegestuurd als tekst indien beschikbaar]");
+    }
+
+    const response = await fetchWithRetry(geminiUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildGeminiBody(extractionSystemPrompt, userTextParts.join("\n\n"))),
     });
 
     if (!response.ok) {
       if (response.status === 429) return new Response(JSON.stringify({ error: "Te veel verzoeken" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (response.status === 402) return new Response(JSON.stringify({ error: "Krediet op" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      console.error("Gemini API error:", response.status, t);
       return new Response(JSON.stringify({ error: "AI parsing mislukt" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const result = await response.json();
-    const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall?.function?.arguments) {
+    const extractedText = parseGeminiResponse(result);
+    if (!extractedText) {
       return new Response(JSON.stringify({ error: "Geen data geëxtraheerd" }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const extracted = JSON.parse(toolCall.function.arguments);
+    const extracted = JSON.parse(extractedText);
 
     // ── Step 3: Anomaly detection against client history ──
     let anomalies: { field: string; value: number; avg_value: number; message: string }[] = [];
