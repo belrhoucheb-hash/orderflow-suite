@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Search, Plus, Building2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,18 @@ export default function Clients() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const { data: clients, isLoading } = useClients(search);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectedClient) return;
+    function handleClick(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setSelectedClient(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [selectedClient]);
 
   return (
     <div className="flex h-full">
@@ -108,7 +120,7 @@ export default function Clients() {
 
       {/* Detail panel */}
       {selectedClient && (
-        <div className="fixed right-0 top-0 bottom-0 w-[480px] bg-card border-l border-border shadow-xl z-30 overflow-y-auto">
+        <div ref={panelRef} className="fixed right-0 top-14 bottom-0 w-[480px] bg-card border-l border-border shadow-xl z-40 overflow-y-auto">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card z-10">
             <h2 className="text-base font-semibold text-foreground">{selectedClient.name}</h2>
             <Button variant="ghost" size="icon" onClick={() => setSelectedClient(null)}>
