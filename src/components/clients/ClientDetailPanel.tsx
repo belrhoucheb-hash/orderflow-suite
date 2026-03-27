@@ -9,6 +9,7 @@ interface Props {
 }
 
 export function ClientDetailPanel({ client }: Props) {
+  const navigate = useNavigate();
   const { data: locations } = useClientLocations(client.id);
   const { data: rates } = useClientRates(client.id);
   const { data: orders } = useClientOrders(client.name);
