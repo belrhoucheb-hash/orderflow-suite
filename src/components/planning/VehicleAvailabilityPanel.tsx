@@ -117,7 +117,7 @@ export function VehicleAvailabilityPanel() {
                 {isToday ? "Vandaag" : format(date, "d MMM", { locale: nl })}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
+            <PopoverContent className="w-auto p-0 z-[60]" align="end">
               <Calendar
                 mode="single"
                 selected={date}
