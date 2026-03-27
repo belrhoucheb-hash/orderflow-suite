@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { type Client, useClientLocations, useClientRates, useClientOrders } from "@/hooks/useClients";
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function ClientDetailPanel({ client }: Props) {
+  const navigate = useNavigate();
   const { data: locations } = useClientLocations(client.id);
   const { data: rates } = useClientRates(client.id);
   const { data: orders } = useClientOrders(client.name);
@@ -124,7 +126,7 @@ export function ClientDetailPanel({ client }: Props) {
         ) : (
           <div className="space-y-2">
             {orders.map((order) => (
-              <div key={order.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div key={order.id} onClick={() => navigate(`/orders/${order.id}`)} className="flex items-center justify-between rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/20 transition-colors">
                 <div>
                   <div className="flex items-center gap-2">
                     <FileText className="h-3.5 w-3.5 text-muted-foreground" />
