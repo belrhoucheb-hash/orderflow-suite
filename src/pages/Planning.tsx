@@ -1461,6 +1461,9 @@ const Planning = () => {
           </div>
         </div>
 
+        {/* Vehicle availability panel */}
+        <VehicleAvailabilityPanel />
+
         {/* Main content: sidebar + fleet + optional map */}
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
           {/* Left: Order list with region headers */}
