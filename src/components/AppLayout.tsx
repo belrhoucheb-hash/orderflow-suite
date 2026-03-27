@@ -3,10 +3,13 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { useSLAMonitor } from "@/hooks/useSLAMonitor";
+import { useOrdersSubscription } from "@/hooks/useOrders";
 
 export function AppLayout() {
   // Monitor SLA deadlines and auto-create notifications
   useSLAMonitor();
+  // Listen for realtime database changes for orders
+  useOrdersSubscription();
 
   return (
     <SidebarProvider>

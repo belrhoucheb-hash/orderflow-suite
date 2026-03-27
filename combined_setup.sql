@@ -1,3 +1,531 @@
+
+-- Create clients table (address book)
+CREATE TABLE public.clients (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  address TEXT,
+  zipcode TEXT,
+  city TEXT,
+  country TEXT NOT NULL DEFAULT 'NL',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Enable RLS on clients
+ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+
+-- Clients are readable by anyone (public address book)
+CREATE POLICY "Clients are publicly readable"
+  ON public.clients FOR SELECT
+  USING (true);
+
+-- Only authenticated users can insert/update/delete clients
+CREATE POLICY "Authenticated users can insert clients"
+  ON public.clients FOR INSERT
+  WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Authenticated users can update clients"
+  ON public.clients FOR UPDATE
+  USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Authenticated users can delete clients"
+  ON public.clients FOR DELETE
+  USING (auth.uid() IS NOT NULL);
+
+-- Create orders table
+CREATE TABLE public.orders (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  order_number SERIAL,
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  source_email_from TEXT,
+  source_email_subject TEXT,
+  source_email_body TEXT,
+  confidence_score INTEGER,
+  transport_type TEXT,
+  pickup_address TEXT,
+  delivery_address TEXT,
+  quantity INTEGER,
+  unit TEXT,
+  weight_kg INTEGER,
+  is_weight_per_unit BOOLEAN NOT NULL DEFAULT false,
+  dimensions TEXT,
+  requirements TEXT[] DEFAULT '{}',
+  client_name TEXT,
+  received_at TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Enable RLS on orders
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+
+-- Orders are readable by anyone (no auth yet, internal tool)
+CREATE POLICY "Orders are publicly readable"
+  ON public.orders FOR SELECT
+  USING (true);
+
+CREATE POLICY "Anyone can insert orders"
+  ON public.orders FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Anyone can update orders"
+  ON public.orders FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Anyone can delete orders"
+  ON public.orders FOR DELETE
+  USING (true);
+
+-- Trigger for updated_at
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SET search_path = public;
+
+CREATE TRIGGER update_orders_updated_at
+  BEFORE UPDATE ON public.orders
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+
+
+-- Add attachments column to orders table as JSONB array
+ALTER TABLE public.orders ADD COLUMN attachments JSONB DEFAULT '[]'::jsonb;
+
+
+
+-- Create the email-attachments storage bucket (public)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('email-attachments', 'email-attachments', true);
+
+-- Allow public read access
+CREATE POLICY "Public read access for email attachments"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'email-attachments');
+
+-- Allow authenticated uploads
+CREATE POLICY "Authenticated users can upload email attachments"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'email-attachments');
+
+-- Allow authenticated updates
+CREATE POLICY "Authenticated users can update email attachments"
+ON storage.objects FOR UPDATE
+USING (bucket_id = 'email-attachments');
+
+-- Allow authenticated deletes
+CREATE POLICY "Authenticated users can delete email attachments"
+ON storage.objects FOR DELETE
+USING (bucket_id = 'email-attachments');
+
+
+
+-- Drop existing restrictive policies on clients
+DROP POLICY IF EXISTS "Clients are publicly readable" ON public.clients;
+DROP POLICY IF EXISTS "Authenticated users can insert clients" ON public.clients;
+DROP POLICY IF EXISTS "Authenticated users can update clients" ON public.clients;
+DROP POLICY IF EXISTS "Authenticated users can delete clients" ON public.clients;
+
+-- Recreate as PERMISSIVE policies
+CREATE POLICY "Clients are publicly readable"
+ON public.clients FOR SELECT
+USING (true);
+
+CREATE POLICY "Authenticated users can insert clients"
+ON public.clients FOR INSERT
+WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Authenticated users can update clients"
+ON public.clients FOR UPDATE
+USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Authenticated users can delete clients"
+ON public.clients FOR DELETE
+USING (auth.uid() IS NOT NULL);
+
+-- Also fix orders policies (same issue)
+DROP POLICY IF EXISTS "Orders are publicly readable" ON public.orders;
+DROP POLICY IF EXISTS "Anyone can insert orders" ON public.orders;
+DROP POLICY IF EXISTS "Anyone can update orders" ON public.orders;
+DROP POLICY IF EXISTS "Anyone can delete orders" ON public.orders;
+
+CREATE POLICY "Orders are publicly readable"
+ON public.orders FOR SELECT
+USING (true);
+
+CREATE POLICY "Anyone can insert orders"
+ON public.orders FOR INSERT
+WITH CHECK (true);
+
+CREATE POLICY "Anyone can update orders"
+ON public.orders FOR UPDATE
+USING (true);
+
+CREATE POLICY "Anyone can delete orders"
+ON public.orders FOR DELETE
+USING (true);
+
+
+
+-- Add vehicle_id column to orders for planning assignments
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS vehicle_id text;
+
+
+ALTER TABLE public.orders ADD COLUMN stop_sequence integer;
+
+
+CREATE TABLE public.vehicles (
+  id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  plate text NOT NULL,
+  type text NOT NULL,
+  capacity_kg integer NOT NULL DEFAULT 0,
+  capacity_pallets integer NOT NULL DEFAULT 0,
+  features text[] NOT NULL DEFAULT '{}',
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Vehicles are publicly readable" ON public.vehicles FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can insert vehicles" ON public.vehicles FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can update vehicles" ON public.vehicles FOR UPDATE USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can delete vehicles" ON public.vehicles FOR DELETE USING (auth.uid() IS NOT NULL);
+
+CREATE TRIGGER update_vehicles_updated_at
+  BEFORE UPDATE ON public.vehicles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+INSERT INTO public.vehicles (code, name, plate, type, capacity_kg, capacity_pallets, features) VALUES
+  ('fv1', 'Busje 01', 'NL-BJ-01', 'Sneltransport', 800, 2, '{}'),
+  ('fv2', 'Bakwagen 02', 'NL-BK-02', 'Distributie', 5000, 12, '{"LAADKLEP"}'),
+  ('fv3', 'Koelwagen 03', 'NL-KW-03', 'Koeltransport', 12000, 18, '{"KOELING"}'),
+  ('fv4', 'Trekker 04', 'NL-TK-04', 'Internationaal', 24000, 33, '{"ADR"}');
+
+
+
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
+CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+
+
+
+-- 1. Create app_role enum
+CREATE TYPE public.app_role AS ENUM ('admin', 'medewerker');
+
+-- 2. Create profiles table
+CREATE TABLE public.profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  display_name TEXT,
+  avatar_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view all profiles"
+  ON public.profiles FOR SELECT
+  TO authenticated
+  USING (true);
+
+CREATE POLICY "Users can update own profile"
+  ON public.profiles FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own profile"
+  ON public.profiles FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE TRIGGER update_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+-- 3. Create user_roles table
+CREATE TABLE public.user_roles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role app_role NOT NULL,
+  UNIQUE (user_id, role)
+);
+
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can view roles"
+  ON public.user_roles FOR SELECT
+  TO authenticated
+  USING (true);
+
+-- Only admins can manage roles (via has_role function created below)
+
+-- 4. Create has_role security definer function
+CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role app_role)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = _user_id AND role = _role
+  )
+$$;
+
+-- 5. Admin-only policies for user_roles management
+CREATE POLICY "Admins can insert roles"
+  ON public.user_roles FOR INSERT
+  TO authenticated
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins can delete roles"
+  ON public.user_roles FOR DELETE
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- 6. Auto-create profile + default role on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (user_id, display_name)
+  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data ->> 'display_name', NEW.email));
+
+  INSERT INTO public.user_roles (user_id, role)
+  VALUES (NEW.id, 'medewerker');
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
+
+-- 7. Tighten existing RLS policies on orders (replace public with authenticated)
+DROP POLICY IF EXISTS "Anyone can delete orders" ON public.orders;
+DROP POLICY IF EXISTS "Anyone can insert orders" ON public.orders;
+DROP POLICY IF EXISTS "Anyone can update orders" ON public.orders;
+DROP POLICY IF EXISTS "Orders are publicly readable" ON public.orders;
+
+CREATE POLICY "Authenticated users can read orders"
+  ON public.orders FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated users can insert orders"
+  ON public.orders FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Authenticated users can update orders"
+  ON public.orders FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "Authenticated users can delete orders"
+  ON public.orders FOR DELETE TO authenticated USING (true);
+
+-- 8. Tighten clients RLS (SELECT was public, keep that but restrict mutations)
+DROP POLICY IF EXISTS "Clients are publicly readable" ON public.clients;
+CREATE POLICY "Authenticated users can read clients"
+  ON public.clients FOR SELECT TO authenticated USING (true);
+
+
+-- Add internal note field for planner-to-planner notes
+ALTER TABLE public.orders ADD COLUMN internal_note TEXT DEFAULT NULL;
+
+-- Add columns for AI follow-up email feature
+ALTER TABLE public.orders
+ADD COLUMN IF NOT EXISTS missing_fields text[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS follow_up_draft text,
+ADD COLUMN IF NOT EXISTS follow_up_sent_at timestamptz;
+
+ALTER TABLE public.orders 
+  ADD COLUMN IF NOT EXISTS invoice_ref TEXT,
+  ADD COLUMN IF NOT EXISTS barcode TEXT;
+
+
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS thread_type text NOT NULL DEFAULT 'new',
+  ADD COLUMN IF NOT EXISTS parent_order_id uuid REFERENCES public.orders(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS changes_detected jsonb DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS anomalies jsonb DEFAULT '[]'::jsonb;
+
+COMMENT ON COLUMN public.orders.thread_type IS 'Type of email thread: new, update, cancellation, confirmation, question';
+COMMENT ON COLUMN public.orders.parent_order_id IS 'Links reply emails to their original order';
+COMMENT ON COLUMN public.orders.changes_detected IS 'Array of {field, old_value, new_value} diffs when thread_type=update';
+COMMENT ON COLUMN public.orders.anomalies IS 'Array of {field, value, avg_value, message} anomaly flags';
+
+
+
+-- Notifications table
+CREATE TABLE public.notifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type text NOT NULL DEFAULT 'info',
+  title text NOT NULL,
+  message text NOT NULL,
+  icon text DEFAULT 'bell',
+  order_id uuid DEFAULT NULL,
+  is_read boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  metadata jsonb DEFAULT '{}'::jsonb
+);
+
+-- Enable RLS
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+-- All authenticated users can read notifications
+CREATE POLICY "Authenticated users can read notifications"
+  ON public.notifications FOR SELECT TO authenticated
+  USING (true);
+
+-- Authenticated users can update (mark as read)
+CREATE POLICY "Authenticated users can update notifications"
+  ON public.notifications FOR UPDATE TO authenticated
+  USING (true);
+
+-- Authenticated users can insert notifications
+CREATE POLICY "Authenticated users can insert notifications"
+  ON public.notifications FOR INSERT TO authenticated
+  WITH CHECK (true);
+
+-- Authenticated users can delete notifications
+CREATE POLICY "Authenticated users can delete notifications"
+  ON public.notifications FOR DELETE TO authenticated
+  USING (true);
+
+-- Enable realtime for notifications
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+
+
+DELETE FROM orders WHERE id = 'ebdf86a2-4320-4b80-827d-22ebb3a3957d';
+
+-- Extend clients table with additional fields
+ALTER TABLE public.clients
+  ADD COLUMN IF NOT EXISTS contact_person text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS kvk_number text,
+  ADD COLUMN IF NOT EXISTS btw_number text,
+  ADD COLUMN IF NOT EXISTS payment_terms integer DEFAULT 30,
+  ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
+
+-- Client locations table
+CREATE TABLE IF NOT EXISTS public.client_locations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  label text NOT NULL,
+  address text NOT NULL,
+  zipcode text,
+  city text,
+  country text DEFAULT 'NL',
+  location_type text NOT NULL DEFAULT 'pickup',
+  time_window_start text,
+  time_window_end text,
+  max_vehicle_length text,
+  notes text,
+  created_at timestamptz DEFAULT now() NOT NULL
+);
+
+ALTER TABLE public.client_locations ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read client_locations" ON public.client_locations FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated users can insert client_locations" ON public.client_locations FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can update client_locations" ON public.client_locations FOR UPDATE TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can delete client_locations" ON public.client_locations FOR DELETE TO authenticated USING (auth.uid() IS NOT NULL);
+
+-- Client rates table
+CREATE TABLE IF NOT EXISTS public.client_rates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  rate_type text NOT NULL,
+  description text,
+  amount numeric(10,2) NOT NULL DEFAULT 0,
+  currency text DEFAULT 'EUR',
+  is_active boolean DEFAULT true,
+  created_at timestamptz DEFAULT now() NOT NULL
+);
+
+ALTER TABLE public.client_rates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read client_rates" ON public.client_rates FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated users can insert client_rates" ON public.client_rates FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can update client_rates" ON public.client_rates FOR UPDATE TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can delete client_rates" ON public.client_rates FOR DELETE TO authenticated USING (auth.uid() IS NOT NULL);
+
+
+-- Extend vehicles table with additional fields
+ALTER TABLE public.vehicles
+  ADD COLUMN IF NOT EXISTS brand text,
+  ADD COLUMN IF NOT EXISTS build_year integer,
+  ADD COLUMN IF NOT EXISTS cargo_length_cm integer,
+  ADD COLUMN IF NOT EXISTS cargo_width_cm integer,
+  ADD COLUMN IF NOT EXISTS cargo_height_cm integer,
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'beschikbaar',
+  ADD COLUMN IF NOT EXISTS assigned_driver text,
+  ADD COLUMN IF NOT EXISTS fuel_consumption numeric;
+
+-- Vehicle documents (APK, insurance, ADR, tachograph)
+CREATE TABLE public.vehicle_documents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vehicle_id uuid NOT NULL REFERENCES public.vehicles(id) ON DELETE CASCADE,
+  doc_type text NOT NULL,
+  expiry_date date,
+  file_url text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.vehicle_documents ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read vehicle_documents" ON public.vehicle_documents FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated users can insert vehicle_documents" ON public.vehicle_documents FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can update vehicle_documents" ON public.vehicle_documents FOR UPDATE TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can delete vehicle_documents" ON public.vehicle_documents FOR DELETE TO authenticated USING (auth.uid() IS NOT NULL);
+
+-- Vehicle maintenance log
+CREATE TABLE public.vehicle_maintenance (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vehicle_id uuid NOT NULL REFERENCES public.vehicles(id) ON DELETE CASCADE,
+  maintenance_type text NOT NULL DEFAULT 'regulier',
+  description text,
+  mileage_km integer,
+  scheduled_date date,
+  completed_date date,
+  cost numeric,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.vehicle_maintenance ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read vehicle_maintenance" ON public.vehicle_maintenance FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated users can insert vehicle_maintenance" ON public.vehicle_maintenance FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can update vehicle_maintenance" ON public.vehicle_maintenance FOR UPDATE TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can delete vehicle_maintenance" ON public.vehicle_maintenance FOR DELETE TO authenticated USING (auth.uid() IS NOT NULL);
+
+-- Vehicle availability blocks
+CREATE TABLE public.vehicle_availability (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  vehicle_id uuid NOT NULL REFERENCES public.vehicles(id) ON DELETE CASCADE,
+  date date NOT NULL,
+  status text NOT NULL DEFAULT 'beschikbaar',
+  reason text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.vehicle_availability ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can read vehicle_availability" ON public.vehicle_availability FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Authenticated users can insert vehicle_availability" ON public.vehicle_availability FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can update vehicle_availability" ON public.vehicle_availability FOR UPDATE TO authenticated USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Authenticated users can delete vehicle_availability" ON public.vehicle_availability FOR DELETE TO authenticated USING (auth.uid() IS NOT NULL);
+
+
 -- ==============================================================================
 --   FASE 1 — Multi-Tenant Foundation
 --   Creates tenant infrastructure, drivers, stamgegevens,
@@ -751,3 +1279,5 @@ SET raw_app_meta_data = COALESCE(u.raw_app_meta_data, '{}'::jsonb)
   || jsonb_build_object('tenant_id', tm.tenant_id)
 FROM public.tenant_members tm
 WHERE u.id = tm.user_id;
+
+

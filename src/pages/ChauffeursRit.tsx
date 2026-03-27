@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { type FleetVehicle } from "@/hooks/useVehicles";
+import { useDrivers } from "@/hooks/useDrivers";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,12 +52,7 @@ interface TripStop {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
-const MOCK_DRIVERS: Record<string, string> = {
-  driver1: "Henk de Vries",
-  driver2: "Mo Ajam",
-  driver3: "Sanne Jansen",
-  driver4: "Piet Pietersen",
-};
+// Drivers fetched via useDrivers instead of mock data
 
 const AVG_SPEED_KMH = 60;
 const LOAD_MINUTES = 30;
@@ -276,6 +272,8 @@ const ChauffeursRit = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
+  const { data: drivers = [], isLoading: driversLoading } = useDrivers();
+
   const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
     queryKey: ["trip-vehicles"],
     queryFn: async () => {
@@ -311,7 +309,7 @@ const ChauffeursRit = () => {
     },
   });
 
-  const isLoading = vehiclesLoading || ordersLoading;
+  const isLoading = vehiclesLoading || ordersLoading || driversLoading;
 
   // Group orders by vehicle
   const tripsByVehicle = useMemo(() => {
@@ -358,8 +356,10 @@ const ChauffeursRit = () => {
     () => selectedOrders.length > 0 ? buildStops(selectedOrders, startTime) : [],
     [selectedOrders, startTime]
   );
-  const driverIdx = selectedVehicleId ? Math.abs(selectedVehicleId.charCodeAt(0) % Object.keys(MOCK_DRIVERS).length) : 0;
-  const selectedDriver = Object.values(MOCK_DRIVERS)[driverIdx];
+  
+  const selectedDriver = selectedVehicleId
+    ? drivers.find(d => d.current_vehicle_id === selectedVehicleId)?.name || "Niet toegewezen"
+    : "Niet toegewezen";
 
   // Map
   useEffect(() => {
@@ -486,13 +486,13 @@ const ChauffeursRit = () => {
             ) : (
               filteredVehicles.map((v) => {
                 const orders = tripsByVehicle.get(v.id) || [];
-                const dIdx = Math.abs(v.id.charCodeAt(0) % Object.keys(MOCK_DRIVERS).length);
+                const driverName = drivers.find(d => d.current_vehicle_id === v.id)?.name || "Geen chauffeur";
                 return (
                   <TripCard
                     key={v.id}
                     vehicle={v}
                     orders={orders}
-                    driverName={Object.values(MOCK_DRIVERS)[dIdx]}
+                    driverName={driverName}
                     isSelected={v.id === selectedVehicleId}
                     onClick={() => setSelectedVehicleId(v.id)}
                   />

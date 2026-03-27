@@ -1,9 +1,10 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
-import logo from "@/assets/logo.png";
+import defaultLogo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTenant } from "@/contexts/TenantContext";
 
 import {
   Sidebar,
@@ -23,14 +24,15 @@ const mainItems = [
   { title: "Inbox", url: "/inbox", icon: Inbox },
   { title: "Orders", url: "/orders", icon: Package },
   { title: "Klanten", url: "/klanten", icon: Building2 },
-  { title: "Transportplanning", url: "/planning", icon: Truck },
-  { title: "Routekaart", url: "/routes", icon: Map },
-  { title: "Chauffeurs Rit", url: "/ritten", icon: Route },
+  { title: "Planbord", url: "/planning", icon: Truck },
+  { title: "Ritoverzicht", url: "/ritten", icon: Route },
   { title: "Vloot", url: "/vloot", icon: Truck },
+  { title: "Rapportage", url: "/rapportage", icon: BarChart3 },
 ];
 
 const adminItems = [
   { title: "Gebruikers", url: "/users", icon: Users },
+  { title: "Instellingen", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -39,6 +41,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, user, signOut, isAdmin } = useAuth();
+  const { tenant } = useTenant();
 
   const isActive = (url: string) => {
     if (url === "/") return location.pathname === "/";
@@ -48,11 +51,19 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <div className="flex items-center gap-3 px-5 py-6">
-        <img src={logo} alt="Royalty Cargo Solutions" className="h-9 w-9 rounded-lg object-contain bg-sidebar-accent" />
+        <img 
+          src={tenant?.logoUrl || defaultLogo} 
+          alt={tenant?.name || "TMS"} 
+          className="h-9 w-9 rounded-lg object-contain bg-white/10 p-1" 
+        />
         {!collapsed && (
-          <div className="flex flex-col">
-            <span className="text-[13px] font-semibold text-white tracking-tight leading-tight">Royalty Cargo</span>
-            <span className="text-[11px] text-sidebar-foreground/50 font-light">Solutions</span>
+          <div className="flex flex-col min-w-0 pr-2">
+            <span className="text-[13px] font-semibold text-white tracking-tight leading-tight truncate">
+              {tenant?.name || "Royalty Cargo"}
+            </span>
+            <span className="text-[10px] text-white/50 font-light uppercase tracking-wider">
+              TMS Platform
+            </span>
           </div>
         )}
       </div>
