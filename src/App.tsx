@@ -17,6 +17,8 @@ import ChauffeursRit from "@/pages/ChauffeursRit";
 import Inbox from "@/pages/Inbox";
 import UsersPage from "@/pages/UsersPage";
 import Clients from "@/pages/Clients";
+import Fleet from "@/pages/Fleet";
+import VehicleDetail from "@/pages/VehicleDetail";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +48,8 @@ const App = () => (
               <Route path="/planning" element={<Planning />} />
               <Route path="/routes" element={<RoutesPage />} />
               <Route path="/ritten" element={<ChauffeursRit />} />
+              <Route path="/vloot" element={<Fleet />} />
+              <Route path="/vloot/:id" element={<VehicleDetail />} />
               <Route path="/users" element={<UsersPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />

@@ -359,43 +359,184 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_availability: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          reason: string | null
+          status: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          reason?: string | null
+          status?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          reason?: string | null
+          status?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_availability_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_documents: {
+        Row: {
+          created_at: string
+          doc_type: string
+          expiry_date: string | null
+          file_url: string | null
+          id: string
+          notes: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          doc_type: string
+          expiry_date?: string | null
+          file_url?: string | null
+          id?: string
+          notes?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          doc_type?: string
+          expiry_date?: string | null
+          file_url?: string | null
+          id?: string
+          notes?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_documents_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_maintenance: {
+        Row: {
+          completed_date: string | null
+          cost: number | null
+          created_at: string
+          description: string | null
+          id: string
+          maintenance_type: string
+          mileage_km: number | null
+          scheduled_date: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          completed_date?: string | null
+          cost?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          maintenance_type?: string
+          mileage_km?: number | null
+          scheduled_date?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          completed_date?: string | null
+          cost?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          maintenance_type?: string
+          mileage_km?: number | null
+          scheduled_date?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_maintenance_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
+          assigned_driver: string | null
+          brand: string | null
+          build_year: number | null
           capacity_kg: number
           capacity_pallets: number
+          cargo_height_cm: number | null
+          cargo_length_cm: number | null
+          cargo_width_cm: number | null
           code: string
           created_at: string
           features: string[]
+          fuel_consumption: number | null
           id: string
           is_active: boolean
           name: string
           plate: string
+          status: string
           type: string
           updated_at: string
         }
         Insert: {
+          assigned_driver?: string | null
+          brand?: string | null
+          build_year?: number | null
           capacity_kg?: number
           capacity_pallets?: number
+          cargo_height_cm?: number | null
+          cargo_length_cm?: number | null
+          cargo_width_cm?: number | null
           code: string
           created_at?: string
           features?: string[]
+          fuel_consumption?: number | null
           id?: string
           is_active?: boolean
           name: string
           plate: string
+          status?: string
           type: string
           updated_at?: string
         }
         Update: {
+          assigned_driver?: string | null
+          brand?: string | null
+          build_year?: number | null
           capacity_kg?: number
           capacity_pallets?: number
+          cargo_height_cm?: number | null
+          cargo_length_cm?: number | null
+          cargo_width_cm?: number | null
           code?: string
           created_at?: string
           features?: string[]
+          fuel_consumption?: number | null
           id?: string
           is_active?: boolean
           name?: string
           plate?: string
+          status?: string
           type?: string
           updated_at?: string
         }

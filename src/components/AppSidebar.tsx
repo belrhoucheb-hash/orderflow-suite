@@ -26,6 +26,7 @@ const mainItems = [
   { title: "Transportplanning", url: "/planning", icon: Truck },
   { title: "Routekaart", url: "/routes", icon: Map },
   { title: "Chauffeurs Rit", url: "/ritten", icon: Route },
+  { title: "Vloot", url: "/vloot", icon: Truck },
 ];
 
 const adminItems = [
