@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { VehicleAvailabilityPanel } from "@/components/planning/VehicleAvailabilityPanel";
 
 // ─── Mock Drivers with certifications ────────────────────────────────
 const MOCK_DRIVERS = [
