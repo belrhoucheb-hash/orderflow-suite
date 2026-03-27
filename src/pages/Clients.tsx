@@ -120,7 +120,7 @@ export default function Clients() {
 
       {/* Detail panel */}
       {selectedClient && (
-        <div className="fixed right-0 top-0 bottom-0 w-[480px] bg-card border-l border-border shadow-xl z-30 overflow-y-auto">
+        <div ref={panelRef} className="fixed right-0 top-14 bottom-0 w-[480px] bg-card border-l border-border shadow-xl z-40 overflow-y-auto">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card z-10">
             <h2 className="text-base font-semibold text-foreground">{selectedClient.name}</h2>
             <Button variant="ghost" size="icon" onClick={() => setSelectedClient(null)}>
