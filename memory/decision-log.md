@@ -21,6 +21,11 @@ Alle CEO-besluiten en significante managementbeslissingen.
 | 2026-04-02 | Geofence aankomstdetectie (< 200m) met HITL bevestiging | Operations | Automatische statusupdate bij aankomst, maar chauffeur bevestigt (HITL) | Doorgevoerd |
 | 2026-04-02 | 2-opt route optimalisatie als post-processing | AI Systems | Nearest-neighbor geeft goede maar niet optimale routes; 2-opt verbetert met 3-5% | Doorgevoerd |
 | 2026-04-02 | Client extraction templates na 5+ orders | AI Systems | Terugkerende klanten hebben voorspelbare formaten; templates verhogen accuracy | Doorgevoerd |
+| 2026-04-02 | Mail "Versturen" hernoemen naar "Opslaan als concept" | CEO (Badr) | Knop verstuurt niet, ondermijnt productvertrouwen; echte verzending later | Doorgevoerd |
+| 2026-04-02 | Placeholder-knoppen sweep: verwijderd of disabled | CEO (Badr) | Archive/Delete/Filter toonden success-toasts zonder actie; systematisch misleidend | Doorgevoerd |
+| 2026-04-02 | Inbox = "AI Inbox" (orderverwerking), Mail = "E-mail" (communicatie) | CEO (Badr) | Twee overlappende pagina's zonder helder onderscheid; nu scherp gelabeld | Doorgevoerd |
+| 2026-04-02 | Multi-tenant isolatie sweep: 5 gaps gedicht | CEO (Badr) | tenant_id ontbrak in create-order, bulk import, poll-inbox, ai_corrections types, planning query | Doorgevoerd |
+| 2026-04-02 | Driver PIN hashen met SHA-256 + salt | CEO (Badr) | Plaintext "0000" in database is security-risico; auto-migratie bij eerste login | Doorgevoerd |
 
 ---
 
