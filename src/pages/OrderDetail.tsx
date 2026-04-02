@@ -1,9 +1,10 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { 
-  ArrowLeft, MapPin, Package, Truck, User, Clock, FileText, 
-  MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2, 
-  Undo2, Send, Loader2, Printer, Warehouse, ScrollText, Image 
+import {
+  ArrowLeft, MapPin, Package, Truck, User, Clock, FileText,
+  MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2,
+  Undo2, Send, Loader2, Printer, Warehouse, ScrollText, Image,
+  Save, X
 } from "lucide-react";
 import { ClickableAddress } from "@/components/ClickableAddress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,8 @@ import { StatusBadge, type OrderStatus } from "@/components/ui/StatusBadge";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -25,6 +28,7 @@ import PodViewer from "@/components/orders/PodViewer";
 import CMRDocument from "@/components/orders/CMRDocument";
 import LabelWorkshop from "@/components/orders/LabelWorkshop";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
+import { useUpdateOrder } from "@/hooks/useOrders";
 import { Receipt } from "lucide-react";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -49,6 +53,79 @@ const OrderDetail = () => {
   const [isGeneratingCmr, setIsGeneratingCmr] = useState(false);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const createInvoiceMutation = useCreateInvoice();
+
+  // ─── Inline Editing State ───
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [showEditWarning, setShowEditWarning] = useState(false);
+  const updateOrderMutation = useUpdateOrder();
+
+  const startEditing = () => {
+    if (!order) return;
+    // If status is PLANNED or beyond, show warning first
+    const plannedOrBeyond = ["PLANNED", "IN_TRANSIT", "DELIVERED"].includes(order.status);
+    if (plannedOrBeyond) {
+      setShowEditWarning(true);
+      return;
+    }
+    enterEditMode();
+  };
+
+  const enterEditMode = () => {
+    if (!order) return;
+    setEditForm({
+      client_name: order.client_name || "",
+      pickup_address: order.pickup_address || "",
+      delivery_address: order.delivery_address || "",
+      quantity: order.quantity ?? "",
+      unit: order.unit || "",
+      weight_kg: order.weight_kg ?? "",
+      dimensions: order.dimensions || "",
+      requirements: (order.requirements || []).join(", "),
+      transport_type: order.transport_type || "",
+    });
+    setIsEditing(true);
+    setShowEditWarning(false);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditForm({});
+  };
+
+  const handleSaveEdit = async () => {
+    if (!order) return;
+    // Parse requirements back to array
+    const reqArray = editForm.requirements
+      ? editForm.requirements.split(",").map((r: string) => r.trim()).filter(Boolean)
+      : [];
+
+    const updates: Record<string, any> = {
+      client_name: editForm.client_name || null,
+      pickup_address: editForm.pickup_address || null,
+      delivery_address: editForm.delivery_address || null,
+      quantity: editForm.quantity ? Number(editForm.quantity) : null,
+      unit: editForm.unit || null,
+      weight_kg: editForm.weight_kg ? Number(editForm.weight_kg) : null,
+      dimensions: editForm.dimensions || null,
+      requirements: reqArray,
+      transport_type: editForm.transport_type || null,
+    };
+
+    try {
+      await updateOrderMutation.mutateAsync({ id: order.id, updates });
+      toast.success("Order bijgewerkt", { description: `Order #${order.order_number} is opgeslagen` });
+      setIsEditing(false);
+      setEditForm({});
+      queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
+    } catch (e: any) {
+      toast.error("Opslaan mislukt", { description: e.message });
+    }
+  };
+
+  const updateEditField = (field: string, value: any) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const { data: order, isLoading } = useQuery({
     queryKey: ["order-detail", id],
@@ -380,45 +457,141 @@ const OrderDetail = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Client name — editable */}
+              {isEditing && (
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Klantnaam</p>
+                  <Input
+                    value={editForm.client_name ?? ""}
+                    onChange={(e) => updateEditField("client_name", e.target.value)}
+                    className="h-8 text-sm"
+                    placeholder="Klantnaam"
+                  />
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <p className="text-muted-foreground text-xs uppercase tracking-wide">Ophaaladres</p>
-                  <p className="font-medium">
-                    <ClickableAddress address={order.pickup_address} iconClassName="text-primary" />
-                  </p>
+                  {isEditing ? (
+                    <Input
+                      value={editForm.pickup_address ?? ""}
+                      onChange={(e) => updateEditField("pickup_address", e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="Ophaaladres"
+                    />
+                  ) : (
+                    <p className="font-medium">
+                      <ClickableAddress address={order.pickup_address} iconClassName="text-primary" />
+                    </p>
+                  )}
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                   <p className="text-muted-foreground text-xs uppercase tracking-wide">Afleveradres</p>
-                  <p className="font-medium">
-                    <ClickableAddress address={order.delivery_address} iconClassName="text-emerald-600" />
-                  </p>
+                  {isEditing ? (
+                    <Input
+                      value={editForm.delivery_address ?? ""}
+                      onChange={(e) => updateEditField("delivery_address", e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="Afleveradres"
+                    />
+                  ) : (
+                    <p className="font-medium">
+                      <ClickableAddress address={order.delivery_address} iconClassName="text-emerald-600" />
+                    </p>
+                  )}
                 </div>
               </div>
               <Separator />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Aantal</p>
-                  <p className="font-semibold">{order.quantity || "—"} {order.unit || ""}</p>
+                  {isEditing ? (
+                    <div className="flex gap-1">
+                      <Input
+                        type="number"
+                        value={editForm.quantity ?? ""}
+                        onChange={(e) => updateEditField("quantity", e.target.value)}
+                        className="h-8 text-sm w-20"
+                        placeholder="0"
+                      />
+                      <Input
+                        value={editForm.unit ?? ""}
+                        onChange={(e) => updateEditField("unit", e.target.value)}
+                        className="h-8 text-sm w-20"
+                        placeholder="pallets"
+                      />
+                    </div>
+                  ) : (
+                    <p className="font-semibold">{order.quantity || "—"} {order.unit || ""}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Gewicht</p>
-                  <p className="font-semibold">
-                    {order.weight_kg ? `${order.weight_kg} kg${order.is_weight_per_unit ? " /stuk" : ""}` : "—"}
-                  </p>
+                  {isEditing ? (
+                    <Input
+                      type="number"
+                      value={editForm.weight_kg ?? ""}
+                      onChange={(e) => updateEditField("weight_kg", e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="kg"
+                    />
+                  ) : (
+                    <p className="font-semibold">
+                      {order.weight_kg ? `${order.weight_kg} kg${order.is_weight_per_unit ? " /stuk" : ""}` : "—"}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Afmetingen</p>
-                  <p className="font-semibold">{order.dimensions || "—"}</p>
+                  {isEditing ? (
+                    <Input
+                      value={editForm.dimensions ?? ""}
+                      onChange={(e) => updateEditField("dimensions", e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="120x80x150"
+                    />
+                  ) : (
+                    <p className="font-semibold">{order.dimensions || "—"}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Type</p>
-                  <p className="font-semibold">
-                    {order.transport_type === "WAREHOUSE_AIR" || order.transport_type === "warehouse-air"
-                      ? "Warehouse → Air" : "Direct"}
-                  </p>
+                  {isEditing ? (
+                    <Select value={editForm.transport_type || ""} onValueChange={(v) => updateEditField("transport_type", v)}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecteer..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="FTL">FTL</SelectItem>
+                        <SelectItem value="LTL">LTL</SelectItem>
+                        <SelectItem value="koel">Koel</SelectItem>
+                        <SelectItem value="retour">Retour</SelectItem>
+                        <SelectItem value="express">Express</SelectItem>
+                        <SelectItem value="WAREHOUSE_AIR">Warehouse → Air</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="font-semibold">
+                      {order.transport_type === "WAREHOUSE_AIR" || order.transport_type === "warehouse-air"
+                        ? "Warehouse → Air" : order.transport_type || "Direct"}
+                    </p>
+                  )}
                 </div>
               </div>
-              {requirements.length > 0 && (
+              {/* Requirements */}
+              {isEditing ? (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-muted-foreground text-xs mb-2">Vereisten (komma-gescheiden)</p>
+                    <Input
+                      value={editForm.requirements ?? ""}
+                      onChange={(e) => updateEditField("requirements", e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="ADR, koelwagen, laadklep"
+                    />
+                  </div>
+                </>
+              ) : requirements.length > 0 ? (
                 <>
                   <Separator />
                   <div>
@@ -433,7 +606,7 @@ const OrderDetail = () => {
                     </div>
                   </div>
                 </>
-              )}
+              ) : null}
             </CardContent>
           </Card>
 
@@ -511,7 +684,28 @@ const OrderDetail = () => {
 
           {/* Actions */}
           <div className="flex flex-col gap-2">
-            {isActive && (
+            {/* Edit button — shown when order is not cancelled and not already in edit mode */}
+            {!isCancelled && !isEditing && (
+              <Button variant="outline" className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5"
+                onClick={startEditing}>
+                <Edit className="h-4 w-4" />
+                Bewerken
+              </Button>
+            )}
+            {/* Save / Cancel buttons in edit mode */}
+            {isEditing && (
+              <>
+                <Button className="w-full gap-2" onClick={handleSaveEdit} disabled={updateOrderMutation.isPending}>
+                  {updateOrderMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Opslaan
+                </Button>
+                <Button variant="outline" className="w-full gap-2" onClick={cancelEditing}>
+                  <X className="h-4 w-4" />
+                  Annuleren
+                </Button>
+              </>
+            )}
+            {isActive && !isEditing && (
               <>
                 <Button className="w-full gap-2" onClick={handleSendConfirmation} disabled={isSendingConfirmation}>
                   {isSendingConfirmation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -619,6 +813,30 @@ const OrderDetail = () => {
             >
               {cancelMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
               Annuleer Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Warning Dialog — shown for PLANNED+ orders */}
+      <Dialog open={showEditWarning} onOpenChange={setShowEditWarning}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Order is al ingepland
+            </DialogTitle>
+            <DialogDescription>
+              Deze order heeft status <strong>{statusInfo.label}</strong>. Wijzigingen kunnen gevolgen hebben voor de planning en het transport. Weet je zeker dat je wilt bewerken?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditWarning(false)}>
+              Annuleren
+            </Button>
+            <Button className="gap-1.5" onClick={enterEditMode}>
+              <Edit className="h-4 w-4" />
+              Toch bewerken
             </Button>
           </DialogFooter>
         </DialogContent>
