@@ -428,3 +428,185 @@ export function formatDateNL(date: string | Date): string {
   const year = d.getFullYear();
   return `${day}-${month}-${year}`;
 }
+
+// ─── CSV Export ─────────────────────────────────────────────────────
+
+/**
+ * Export an array of invoices as a semicolon-separated CSV string (Dutch format).
+ * Returns the CSV content as a string.
+ */
+export function generateInvoicesCSV(invoices: Invoice[]): string {
+  const header = "Factuurnummer;Klant;Datum;Vervaldatum;Subtotaal;BTW;Totaal;Status";
+  const rows = invoices.map((inv) => {
+    const datum = formatDateNL(inv.invoice_date);
+    const vervaldatum = inv.due_date ? formatDateNL(inv.due_date) : "";
+    const subtotaal = inv.subtotal.toFixed(2).replace(".", ",");
+    const btw = inv.btw_amount.toFixed(2).replace(".", ",");
+    const totaal = inv.total.toFixed(2).replace(".", ",");
+    return `${inv.invoice_number};${inv.client_name};${datum};${vervaldatum};${subtotaal};${btw};${totaal};${inv.status}`;
+  });
+
+  return [header, ...rows].join("\n");
+}
+
+/**
+ * Download invoices as a CSV file.
+ */
+export function downloadInvoicesCSV(invoices: Invoice[]): void {
+  const csv = generateInvoicesCSV(invoices);
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `facturen-export-${formatDateNL(new Date())}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ─── UBL XML Export ─────────────────────────────────────────────────
+
+/**
+ * Format a date as ISO date string (yyyy-mm-dd) for UBL.
+ */
+function formatDateISO(date: string | Date): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toISOString().split("T")[0];
+}
+
+/**
+ * Escape special XML characters.
+ */
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/**
+ * Generate a UBL 2.1 Invoice XML for a single invoice.
+ * This is a simplified UBL that is compatible with Dutch bookkeeping import tools.
+ */
+export function generateUBL(invoice: Invoice & { invoice_lines?: InvoiceLine[] }): string {
+  const lines = invoice.invoice_lines ?? [];
+  const issueDate = formatDateISO(invoice.invoice_date);
+  const dueDate = invoice.due_date ? formatDateISO(invoice.due_date) : issueDate;
+
+  const invoiceLines = lines.map((line, idx) => `
+    <cac:InvoiceLine>
+      <cbc:ID>${idx + 1}</cbc:ID>
+      <cbc:InvoicedQuantity unitCode="${escapeXml(line.unit)}">${line.quantity}</cbc:InvoicedQuantity>
+      <cbc:LineExtensionAmount currencyID="EUR">${line.total.toFixed(2)}</cbc:LineExtensionAmount>
+      <cac:Item>
+        <cbc:Name>${escapeXml(line.description)}</cbc:Name>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="EUR">${line.unit_price.toFixed(2)}</cbc:PriceAmount>
+      </cac:Price>
+    </cac:InvoiceLine>`).join("");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:ID>${escapeXml(invoice.invoice_number)}</cbc:ID>
+  <cbc:IssueDate>${issueDate}</cbc:IssueDate>
+  <cbc:DueDate>${dueDate}</cbc:DueDate>
+  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>Royalty Cargo B.V.</cbc:Name>
+      </cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>Industrieweg 42</cbc:StreetName>
+        <cbc:CityName>Rotterdam</cbc:CityName>
+        <cbc:PostalZone>3044 AT</cbc:PostalZone>
+        <cac:Country>
+          <cbc:IdentificationCode>NL</cbc:IdentificationCode>
+        </cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>NL001234567B01</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>VAT</cbc:ID>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>Royalty Cargo B.V.</cbc:RegistrationName>
+        <cbc:CompanyID>12345678</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>${escapeXml(invoice.client_name)}</cbc:Name>
+      </cac:PartyName>${invoice.client_address ? `
+      <cac:PostalAddress>
+        <cbc:StreetName>${escapeXml(invoice.client_address)}</cbc:StreetName>
+        <cac:Country>
+          <cbc:IdentificationCode>NL</cbc:IdentificationCode>
+        </cac:Country>
+      </cac:PostalAddress>` : ""}${invoice.client_btw_number ? `
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>${escapeXml(invoice.client_btw_number)}</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>VAT</cbc:ID>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>` : ""}${invoice.client_kvk_number ? `
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${escapeXml(invoice.client_name)}</cbc:RegistrationName>
+        <cbc:CompanyID>${escapeXml(invoice.client_kvk_number)}</cbc:CompanyID>
+      </cac:PartyLegalEntity>` : ""}
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="EUR">${invoice.btw_amount.toFixed(2)}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="EUR">${invoice.subtotal.toFixed(2)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="EUR">${invoice.btw_amount.toFixed(2)}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:ID>S</cbc:ID>
+        <cbc:Percent>${invoice.btw_percentage}</cbc:Percent>
+        <cac:TaxScheme>
+          <cbc:ID>VAT</cbc:ID>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="EUR">${invoice.subtotal.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="EUR">${invoice.subtotal.toFixed(2)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="EUR">${invoice.total.toFixed(2)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="EUR">${invoice.total.toFixed(2)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+${invoiceLines}
+</Invoice>`;
+}
+
+/**
+ * Download a single invoice as a UBL XML file.
+ */
+export function downloadUBL(invoice: Invoice & { invoice_lines?: InvoiceLine[] }): void {
+  const xml = generateUBL(invoice);
+  const blob = new Blob([xml], { type: "application/xml;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${invoice.invoice_number}.xml`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
