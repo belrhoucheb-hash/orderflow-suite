@@ -583,7 +583,7 @@ export function useInbox() {
 
   const handleMerge = (clientName: string, orders: OrderDraft[]) => {
     if (orders.length < 2) return;
-    toast.success("Orders samenvoegen", { description: `${orders.length} orders van ${clientName} worden samengevoegd tot 1 multi-stop transportopdracht (komt in volgende versie)` });
+    toast.info("Binnenkort beschikbaar", { description: `Samenvoegen van ${orders.length} orders wordt in een volgende versie ondersteund.` });
   };
 
   const handleBulkDelete = () => {
