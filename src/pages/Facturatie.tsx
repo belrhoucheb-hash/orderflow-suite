@@ -571,20 +571,14 @@ const Facturatie = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/20">
-              <AnimatePresence mode="popLayout">
                 {filtered.map((invoice, idx) => {
                   const overdue = isOverdue(invoice.due_date, invoice.status);
                   const effectiveStatus = overdue ? "vervallen" : invoice.status;
 
                   return (
-                    <motion.tr
+                    <tr
                       key={invoice.id}
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ delay: idx * 0.02 }}
-                      onClick={() => navigate(`/facturatie/${invoice.id}`)}
+                      onClick={() => { console.log("Navigating to", `/facturatie/${invoice.id}`); navigate(`/facturatie/${invoice.id}`); }}
                       className="hover:bg-muted/20 transition-colors duration-100 group cursor-pointer"
                     >
                       <td className="px-4 py-2">
@@ -654,10 +648,9 @@ const Facturatie = () => {
                           )}
                         </div>
                       </td>
-                    </motion.tr>
+                    </tr>
                   );
                 })}
-              </AnimatePresence>
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-16 text-center">
