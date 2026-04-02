@@ -186,6 +186,7 @@ serve(async (req) => {
     const { data: order, error: insertError } = await supabase
       .from("orders")
       .insert({
+        tenant_id: tenantIdStr,
         status: "DRAFT",
         source_email_from: parsed.from,
         source_email_subject: parsed.subject,

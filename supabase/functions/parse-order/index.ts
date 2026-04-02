@@ -572,7 +572,16 @@ Antwoord als JSON met deze velden:
       return new Response(JSON.stringify({ error: "Geen data geëxtraheerd" }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const extracted = JSON.parse(extractedText);
+    let extracted: any;
+    try {
+      extracted = JSON.parse(extractedText);
+    } catch (parseErr) {
+      console.error("JSON parse error on AI output:", parseErr, "Raw text:", extractedText.substring(0, 500));
+      return new Response(
+        JSON.stringify({ error: "AI retourneerde ongeldig JSON", raw_text: extractedText.substring(0, 1000) }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // ── Normalise confidence_score: AI may return 0-1 float instead of 0-100 ──
     if (
