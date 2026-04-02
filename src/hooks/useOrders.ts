@@ -59,18 +59,38 @@ function normalizeStatus(dbStatus: string): OrderStatus {
   return (legacyStatusMap[dbStatus] ?? dbStatus) as OrderStatus;
 }
 
-export function useOrders() {
+export interface UseOrdersOptions {
+  page?: number;
+  pageSize?: number;
+  statusFilter?: string;
+  search?: string;
+}
+
+export function useOrders(options: UseOrdersOptions = {}) {
+  const { page = 0, pageSize = 25, statusFilter, search } = options;
+
   return useQuery({
-    queryKey: ["orders"],
+    queryKey: ["orders", { page, pageSize, statusFilter, search }],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (statusFilter && statusFilter !== "alle") {
+        query = query.eq("status", statusFilter);
+      }
+
+      if (search) {
+        query = query.or(`client_name.ilike.%${search}%,order_number::text.ilike.%${search}%`);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) throw error;
 
-      return (data ?? []).map((o): Order => ({
+      const orders = (data ?? []).map((o): Order => ({
         id: o.id,
         orderNumber: `RCS-${new Date(o.created_at).getFullYear()}-${String(o.order_number).padStart(4, "0")}`,
         customer: o.client_name || "Onbekend",
@@ -87,6 +107,8 @@ export function useOrders() {
         estimatedDelivery: "",
         notes: o.internal_note || "",
       }));
+
+      return { orders, totalCount: count ?? 0 };
     },
   });
 }

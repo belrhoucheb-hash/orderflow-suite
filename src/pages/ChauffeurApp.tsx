@@ -18,7 +18,120 @@ export default function ChauffeurApp() {
   const [activeDriverId, setActiveDriverId] = useState<string | null>(
     localStorage.getItem("orderflow_driver_id")
   );
-  
+
+  // PIN authentication state
+  const [pendingDriverId, setPendingDriverId] = useState<string | null>(null);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinAttempts, setPinAttempts] = useState(0);
+  const [pinLockedUntil, setPinLockedUntil] = useState<number | null>(null);
+  const [pinLockCountdown, setPinLockCountdown] = useState(0);
+  const [pinVerifying, setPinVerifying] = useState(false);
+  const [showChangePin, setShowChangePin] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [confirmNewPin, setConfirmNewPin] = useState("");
+
+  // Lockout countdown timer
+  useEffect(() => {
+    if (!pinLockedUntil) { setPinLockCountdown(0); return; }
+    const tick = () => {
+      const remaining = Math.ceil((pinLockedUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setPinLockedUntil(null);
+        setPinLockCountdown(0);
+        setPinAttempts(0);
+      } else {
+        setPinLockCountdown(remaining);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [pinLockedUntil]);
+
+  const handleDriverSelect = (driverId: string) => {
+    setPendingDriverId(driverId);
+    setPinInput("");
+    setPinError("");
+    setPinAttempts(0);
+    setPinLockedUntil(null);
+  };
+
+  const handlePinSubmit = async () => {
+    if (pinLockedUntil && Date.now() < pinLockedUntil) return;
+    if (pinInput.length !== 4) { setPinError("PIN moet 4 cijfers zijn"); return; }
+    if (!pendingDriverId) return;
+
+    setPinVerifying(true);
+    try {
+      const { data, error } = await supabase
+        .from("drivers" as any)
+        .select("pin_hash, must_change_pin")
+        .eq("id", pendingDriverId)
+        .single();
+
+      if (error) throw error;
+
+      const storedPin = (data as any)?.pin_hash || "0000";
+      if (pinInput !== storedPin) {
+        const newAttempts = pinAttempts + 1;
+        setPinAttempts(newAttempts);
+        if (newAttempts >= 3) {
+          const lockUntil = Date.now() + 5 * 60 * 1000;
+          setPinLockedUntil(lockUntil);
+          setPinError("Te veel pogingen. Geblokkeerd voor 5 minuten.");
+        } else {
+          setPinError(`Onjuiste PIN. Nog ${3 - newAttempts} poging(en).`);
+        }
+        setPinInput("");
+        return;
+      }
+
+      // PIN correct
+      if ((data as any)?.must_change_pin) {
+        setShowChangePin(true);
+      } else {
+        setActiveDriverId(pendingDriverId);
+        setPendingDriverId(null);
+      }
+    } catch (err) {
+      // If pin_hash column doesn't exist yet, accept default "0000"
+      if (pinInput === "0000") {
+        setActiveDriverId(pendingDriverId);
+        setPendingDriverId(null);
+      } else {
+        setPinError("Onjuiste PIN");
+        setPinInput("");
+      }
+    } finally {
+      setPinVerifying(false);
+    }
+  };
+
+  const handleChangePin = async () => {
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      setPinError("Nieuwe PIN moet 4 cijfers zijn"); return;
+    }
+    if (newPin !== confirmNewPin) {
+      setPinError("PIN-codes komen niet overeen"); return;
+    }
+    try {
+      await supabase
+        .from("drivers" as any)
+        .update({ pin_hash: newPin, must_change_pin: false })
+        .eq("id", pendingDriverId);
+
+      toast.success("PIN succesvol gewijzigd");
+      setActiveDriverId(pendingDriverId);
+      setPendingDriverId(null);
+      setShowChangePin(false);
+      setNewPin("");
+      setConfirmNewPin("");
+    } catch {
+      setPinError("Kon PIN niet wijzigen. Probeer opnieuw.");
+    }
+  };
+
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
@@ -128,6 +241,10 @@ export default function ChauffeurApp() {
 
   const handleLogout = () => {
     setActiveDriverId(null);
+    setPendingDriverId(null);
+    setPinInput("");
+    setPinError("");
+    setShowChangePin(false);
   };
 
   // -- Reset PoD state --
@@ -350,7 +467,122 @@ export default function ChauffeurApp() {
     return <div className="h-screen w-full flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
 
-  // LOGIN SCREEN
+  // PIN CHANGE SCREEN
+  if (showChangePin && pendingDriverId) {
+    const pendingDriver = drivers?.find(d => d.id === pendingDriverId);
+    return (
+      <div className="h-screen w-full bg-slate-50 flex flex-col p-6 items-center justify-center">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="h-16 w-16 bg-amber-500 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-amber-500/30 mb-6">
+              <Fingerprint className="h-8 w-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-display font-bold text-slate-900 tracking-tight">PIN wijzigen</h1>
+            <p className="text-muted-foreground mt-2">
+              Welkom {pendingDriver?.name}! Stel een nieuwe PIN in.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700">Nieuwe PIN (4 cijfers)</label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={newPin}
+                onChange={e => { setNewPin(e.target.value.replace(/\D/g, "")); setPinError(""); }}
+                placeholder="----"
+                className="text-center text-2xl tracking-[0.5em] font-mono h-14 mt-1"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700">Bevestig PIN</label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={confirmNewPin}
+                onChange={e => { setConfirmNewPin(e.target.value.replace(/\D/g, "")); setPinError(""); }}
+                placeholder="----"
+                className="text-center text-2xl tracking-[0.5em] font-mono h-14 mt-1"
+              />
+            </div>
+            {pinError && <p className="text-sm text-red-500 text-center">{pinError}</p>}
+            <Button
+              className="w-full h-12 text-base"
+              onClick={handleChangePin}
+              disabled={newPin.length !== 4 || confirmNewPin.length !== 4}
+            >
+              PIN opslaan
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // PIN INPUT SCREEN
+  if (pendingDriverId && !activeDriverId) {
+    const pendingDriver = drivers?.find(d => d.id === pendingDriverId);
+    return (
+      <div className="h-screen w-full bg-slate-50 flex flex-col p-6 items-center justify-center">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="h-16 w-16 bg-primary rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-primary/30 mb-6">
+              <Fingerprint className="h-8 w-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-display font-bold text-slate-900 tracking-tight">PIN invoeren</h1>
+            <p className="text-muted-foreground mt-2">
+              {pendingDriver?.name} - Voer je 4-cijferige PIN in
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <Input
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={pinInput}
+              onChange={e => { setPinInput(e.target.value.replace(/\D/g, "")); setPinError(""); }}
+              onKeyDown={e => { if (e.key === "Enter") handlePinSubmit(); }}
+              placeholder="----"
+              className="text-center text-3xl tracking-[0.5em] font-mono h-16"
+              disabled={!!pinLockedUntil && Date.now() < pinLockedUntil}
+              autoFocus
+            />
+
+            {pinError && (
+              <p className="text-sm text-red-500 text-center">{pinError}</p>
+            )}
+            {pinLockCountdown > 0 && (
+              <p className="text-sm text-amber-600 text-center font-medium">
+                Geblokkeerd: {Math.floor(pinLockCountdown / 60)}:{(pinLockCountdown % 60).toString().padStart(2, "0")} resterend
+              </p>
+            )}
+
+            <Button
+              className="w-full h-12 text-base"
+              onClick={handlePinSubmit}
+              disabled={pinInput.length !== 4 || pinVerifying || (!!pinLockedUntil && Date.now() < pinLockedUntil)}
+            >
+              {pinVerifying ? "Verifying..." : "Inloggen"}
+            </Button>
+
+            <button
+              onClick={() => { setPendingDriverId(null); setPinInput(""); setPinError(""); }}
+              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Terug naar chauffeur selectie
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // LOGIN SCREEN (driver selection)
   if (!activeDriverId) {
     return (
       <div className="h-screen w-full bg-slate-50 flex flex-col p-6 items-center justify-center">
@@ -362,12 +594,12 @@ export default function ChauffeurApp() {
             <h1 className="text-3xl font-display font-bold text-slate-900 tracking-tight">OrderFlow PWA</h1>
             <p className="text-muted-foreground mt-2">Driver Portal - Selecteer je profiel</p>
           </div>
-          
+
           <div className="space-y-3">
             {drivers?.slice(0, 6).map(driver => (
               <button
                 key={driver.id}
-                onClick={() => setActiveDriverId(driver.id)}
+                onClick={() => handleDriverSelect(driver.id)}
                 className="w-full bg-white p-4 rounded-2xl border border-slate-200 flex items-center gap-4 hover:border-primary/50 hover:shadow-md transition-all active:scale-95"
               >
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">

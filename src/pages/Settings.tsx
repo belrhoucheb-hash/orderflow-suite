@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { MasterDataSection } from "@/components/settings/MasterDataSection";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
+import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
 
 const Settings = () => {
   const location = useLocation();
@@ -99,6 +100,71 @@ const Settings = () => {
     samsara: { enabled: false, apiKey: "" },
     transfollow: { enabled: false, apiKey: "" },
   });
+
+  // -- Settings persistence hooks --
+  const { data: savedIntegrations } = useLoadSettings<typeof integrations>("integrations");
+  const { data: savedNotifications } = useLoadSettings<typeof notifications>("notifications");
+  const { data: savedSms } = useLoadSettings<Record<string, any>>("sms");
+
+  const saveIntegrations = useSaveSettings("integrations");
+  const saveNotifications = useSaveSettings("notifications");
+  const saveSms = useSaveSettings("sms");
+
+  // Load saved settings into state when fetched
+  useEffect(() => {
+    if (savedIntegrations && Object.keys(savedIntegrations).length > 0) {
+      setIntegrations(prev => ({ ...prev, ...savedIntegrations }));
+    }
+  }, [savedIntegrations]);
+
+  useEffect(() => {
+    if (savedNotifications && Object.keys(savedNotifications).length > 0) {
+      setNotifications(prev => ({ ...prev, ...savedNotifications }));
+    }
+  }, [savedNotifications]);
+
+  useEffect(() => {
+    if (savedSms && Object.keys(savedSms).length > 0) {
+      if (savedSms.smsProvider) setSmsProvider(savedSms.smsProvider);
+      if (savedSms.twilioAccountSid) setTwilioAccountSid(savedSms.twilioAccountSid);
+      if (savedSms.twilioAuthToken) setTwilioAuthToken(savedSms.twilioAuthToken);
+      if (savedSms.twilioFromNumber) setTwilioFromNumber(savedSms.twilioFromNumber);
+      if (savedSms.messageBirdApiKey) setMessageBirdApiKey(savedSms.messageBirdApiKey);
+      if (savedSms.messageBirdOriginator) setMessageBirdOriginator(savedSms.messageBirdOriginator);
+      if (savedSms.smsEvents) setSmsEvents(prev => ({ ...prev, ...savedSms.smsEvents }));
+      if (savedSms.smsTemplate) setSmsTemplate(savedSms.smsTemplate);
+    }
+  }, [savedSms]);
+
+  const handleSaveIntegrations = async () => {
+    try {
+      await saveIntegrations.mutateAsync(integrations as any);
+      toast({ title: "Integratie-instellingen opgeslagen" });
+    } catch {
+      toast({ title: "Fout bij opslaan", description: "Probeer het opnieuw.", variant: "destructive" });
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    try {
+      await saveNotifications.mutateAsync(notifications as any);
+      toast({ title: "Notificatie-instellingen opgeslagen" });
+    } catch {
+      toast({ title: "Fout bij opslaan", description: "Probeer het opnieuw.", variant: "destructive" });
+    }
+  };
+
+  const handleSaveSms = async () => {
+    try {
+      await saveSms.mutateAsync({
+        smsProvider, twilioAccountSid, twilioAuthToken, twilioFromNumber,
+        messageBirdApiKey, messageBirdOriginator, smsEvents, smsTemplate,
+      });
+      toast({ title: "SMS instellingen opgeslagen" });
+    } catch {
+      toast({ title: "Fout bij opslaan", description: "Probeer het opnieuw.", variant: "destructive" });
+    }
+  };
 
   const toggleIntegration = (key: keyof typeof integrations) => {
     setIntegrations((prev) => ({
@@ -387,6 +453,12 @@ const Settings = () => {
                  </div>
                  <Switch checked={notifications.weeklyReport} onCheckedChange={() => toggleNotification("weeklyReport")} />
                </div>
+
+               <div className="pt-4 border-t border-border/40 mt-4">
+                 <Button onClick={handleSaveNotifications} disabled={saveNotifications.isPending}>
+                   {saveNotifications.isPending ? "Opslaan..." : "Notificaties Opslaan"}
+                 </Button>
+               </div>
              </CardContent>
            </Card>
         </TabsContent>
@@ -549,18 +621,9 @@ const Settings = () => {
 
               {/* Save button */}
               <div className="pt-4 border-t border-border/40">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-block">
-                        <Button onClick={() => toast({ title: "SMS instellingen opgeslagen" })}>Opslaan</Button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Binnenkort beschikbaar</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Button onClick={handleSaveSms} disabled={saveSms.isPending}>
+                  {saveSms.isPending ? "Opslaan..." : "Opslaan"}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -776,6 +839,11 @@ const Settings = () => {
                     </div>
                   )}
                 </div>
+              </div>
+              <div className="pt-6 border-t border-border/40 mt-6">
+                <Button onClick={handleSaveIntegrations} disabled={saveIntegrations.isPending}>
+                  {saveIntegrations.isPending ? "Opslaan..." : "Integraties Opslaan"}
+                </Button>
               </div>
             </CardContent>
           </Card>

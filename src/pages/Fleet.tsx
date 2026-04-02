@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useFleetVehicles, type Vehicle } from "@/hooks/useFleet";
+import { useFleetVehicles, useVehicleUtilization, type Vehicle } from "@/hooks/useFleet";
 import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -28,6 +28,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 
 export default function Fleet() {
   const { data: vehicles, isLoading, isError, refetch } = useFleetVehicles();
+  const { data: utilization } = useVehicleUtilization();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -63,11 +64,10 @@ export default function Fleet() {
     return groups;
   }, [filtered]);
 
-  // Simple loading utilization (mock based on status)
+  // Real utilization based on active trip weights vs vehicle capacity
   const getUtilization = (v: Vehicle) => {
-    if (v.status === "onderweg") return 75;
     if (v.status === "onderhoud" || v.status === "defect") return 0;
-    return 30;
+    return utilization?.[v.id] ?? 0;
   };
 
   return (
