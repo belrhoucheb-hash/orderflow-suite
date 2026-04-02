@@ -334,6 +334,12 @@ Regels:
 - Gebruik altijd Nederlandse plaatsnamen waar mogelijk
 - Gewicht altijd in kg (als gewicht per stuk/pallet vermeld wordt, bereken het totaal OF zet is_weight_per_unit op true)
 - Afmetingen in cm formaat: LxBxH
+- STANDAARD AFMETINGEN (gebruik deze als er geen specifieke afmetingen worden vermeld):
+  - Europallet / pallet / EUR-pallet: 120x80x150 cm (LxBxH)
+  - Blokpallet / industriepallet: 120x100x150 cm (LxBxH)
+  - Rolcontainer / rollcontainer: 80x67x170 cm (LxBxH)
+  Als de unit "Pallets" of "europallets" is en er geen afmetingen zijn vermeld, vul dan automatisch "120x80x150" in.
+  Als de unit "Box" is en het gaat om een rolcontainer zonder afmetingen, vul dan automatisch "80x67x170" in.
 - Transport type: "direct" of "warehouse-air"
 - Unit: map naar een van deze waarden:
   - "Pallets" (ook: europallets, blokpallets, pallets, pallet, plt)
@@ -355,6 +361,7 @@ Regels:
   - Score 90-100: veld is duidelijk en expliciet vermeld
   - Score 60-89: veld is afgeleid of enigszins onduidelijk
   - Score 0-59: veld is een gok of grotendeels ontbrekend
+- ADRESVALIDATIE: Een geldig adres MOET minimaal een straatnaam + huisnummer + stad bevatten. Alleen een stad (bijv. "Groningen", "Amsterdam", "Rotterdam") is GEEN geldig adres. Als alleen een stad wordt gevonden zonder straatnaam en huisnummer, geef het adresveld dan een field_confidence score van maximaal 40. Probeer altijd het volledige adres te extraheren uit de context van de e-mail.
 - BELANGRIJK: Extraheer ALLES wat je kunt vinden. Laat liever geen veld leeg als er informatie beschikbaar is.
 ${aiContextBlock}
 
@@ -520,7 +527,43 @@ Antwoord als JSON met deze velden:
       }
     }
 
+    // ── Step 3b: Apply standard dimensions if derivable ──
+    if (!extracted.dimensions || extracted.dimensions === "") {
+      const unitLower = (extracted.unit || "").toLowerCase();
+      if (unitLower === "pallets" || unitLower === "europallets" || unitLower === "pallet") {
+        extracted.dimensions = "120x80x150";
+      } else if (unitLower === "box" || unitLower === "rolcontainer") {
+        extracted.dimensions = "80x67x170";
+      }
+    }
+
+    // ── Step 3c: Address validation — detect city-only addresses ──
+    const addressContainsStreet = (addr: string | null | undefined): boolean => {
+      if (!addr || addr.trim().length === 0) return false;
+      // A valid address should contain at least one digit (house number)
+      return /\d/.test(addr);
+    };
+
+    const incompleteAddresses: string[] = [];
+    if (extracted.pickup_address && !addressContainsStreet(extracted.pickup_address)) {
+      incompleteAddresses.push("Ophaaladres (alleen stad, geen straat + huisnummer)");
+      if (extracted.field_confidence) {
+        extracted.field_confidence.pickup_address = Math.min(extracted.field_confidence.pickup_address || 100, 40);
+      }
+    }
+    if (extracted.delivery_address && !addressContainsStreet(extracted.delivery_address)) {
+      incompleteAddresses.push("Afleveradres (alleen stad, geen straat + huisnummer)");
+      if (extracted.field_confidence) {
+        extracted.field_confidence.delivery_address = Math.min(extracted.field_confidence.delivery_address || 100, 40);
+      }
+    }
+
     const missingFields = detectMissingFields(extracted);
+    // Add incomplete addresses to missing fields
+    incompleteAddresses.forEach(ia => {
+      if (!missingFields.includes(ia)) missingFields.push(ia);
+    });
+
     const followUpDraft = generateFollowUpDraft(missingFields, extracted);
 
     // ── Step 4: Confidence score penalty for missing critical fields ──
@@ -535,10 +578,25 @@ Antwoord als JSON met deze velden:
       const penalty = missingCritical.length * 15;
       extracted.confidence_score = Math.max(20, (extracted.confidence_score || 0) - penalty);
     }
+
+    // Penalize -20 per incomplete (city-only) address
+    if (incompleteAddresses.length > 0) {
+      const addrPenalty = incompleteAddresses.length * 20;
+      extracted.confidence_score = Math.max(20, (extracted.confidence_score || 0) - addrPenalty);
+    }
+
     // Also penalize for non-critical missing fields (lighter)
-    const nonCriticalMissing = missingFields.filter(f => 
-      !CRITICAL_FIELDS.some(cf => REQUIRED_FIELDS.find(rf => rf.key === cf)?.label === f)
-    );
+    // BUT skip "Afmetingen (LxBxH)" if dimensions were derived from standard sizes
+    const dimensionsDerived = !!extracted.dimensions && extracted.dimensions !== "";
+    const nonCriticalMissing = missingFields.filter(f => {
+      // Skip fields that are in CRITICAL_FIELDS
+      if (CRITICAL_FIELDS.some(cf => REQUIRED_FIELDS.find(rf => rf.key === cf)?.label === f)) return false;
+      // Skip incomplete-address messages (already penalized above)
+      if (incompleteAddresses.includes(f)) return false;
+      // Skip dimensions if they were derived from standard sizes
+      if (f === "Afmetingen (LxBxH)" && dimensionsDerived) return false;
+      return true;
+    });
     if (nonCriticalMissing.length > 0) {
       const penalty = nonCriticalMissing.length * 5;
       extracted.confidence_score = Math.max(20, (extracted.confidence_score || 0) - penalty);
