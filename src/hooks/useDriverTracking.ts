@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import type { TripStop, StopStatus } from "@/types/dispatch";
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface GPSPosition {
@@ -264,4 +266,262 @@ function calculateTotalHours(entries: TimeEntry[]): number {
   }
 
   return totalMs / (1000 * 60 * 60); // convert to hours
+}
+
+// ─── Haversine distance (meters) ────────────────────────────────────
+function haversineMeters(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number,
+): number {
+  const R = 6_371_000; // Earth radius in meters
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ─── Hook 3: useGeofenceCheck ───────────────────────────────────────
+const GEOFENCE_RADIUS_M = 200;
+const GEOFENCE_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
+interface GeofenceMatch {
+  stop: TripStop;
+  distanceM: number;
+}
+
+/**
+ * Checks whether the driver's current GPS position is within 200m of any
+ * GEPLAND/ONDERWEG stop. When a match is found, shows a toast with a
+ * confirmation button (HITL — human-in-the-loop). A cooldown prevents
+ * re-triggering the same stop within 5 minutes.
+ */
+export function useGeofenceCheck(
+  currentPosition: GPSPosition | null,
+  stops: TripStop[],
+  onConfirmArrival: (stopId: string) => void,
+) {
+  // Map of stopId -> timestamp of last trigger
+  const cooldownMap = useRef<Record<string, number>>({});
+
+  // Only consider eligible stops
+  const eligibleStops = useMemo(
+    () =>
+      stops.filter(
+        (s) =>
+          (s.stop_status === "GEPLAND" || s.stop_status === "ONDERWEG") &&
+          s.planned_latitude != null &&
+          s.planned_longitude != null,
+      ),
+    [stops],
+  );
+
+  useEffect(() => {
+    if (!currentPosition) return;
+
+    const now = Date.now();
+
+    for (const stop of eligibleStops) {
+      // Skip if still in cooldown
+      const lastTrigger = cooldownMap.current[stop.id] ?? 0;
+      if (now - lastTrigger < GEOFENCE_COOLDOWN_MS) continue;
+
+      const dist = haversineMeters(
+        currentPosition.latitude,
+        currentPosition.longitude,
+        stop.planned_latitude!,
+        stop.planned_longitude!,
+      );
+
+      if (dist < GEOFENCE_RADIUS_M) {
+        // Set cooldown immediately to prevent duplicate toasts
+        cooldownMap.current[stop.id] = now;
+
+        const address = stop.planned_address || `Stop #${stop.stop_sequence}`;
+
+        toast(`U bent bij ${address}. Aankomst registreren?`, {
+          duration: 15_000,
+          action: {
+            label: "Bevestig aankomst",
+            onClick: () => onConfirmArrival(stop.id),
+          },
+        });
+      }
+    }
+  }, [currentPosition, eligibleStops, onConfirmArrival]);
+}
+
+// ─── Hook 4: useDriveTime ──────────────────────────────────────────
+// EU 561/2006 limits
+const MAX_CONTINUOUS_DRIVE_H = 4.5;
+const MAX_DAILY_DRIVE_H = 9;
+const WARNING_THRESHOLD_H = 4; // 30 min before mandatory break
+
+interface DriveTimeState {
+  /** Continuous driving time in hours (resets on break/clock-out) */
+  continuousDriveH: number;
+  /** Total driving time today in hours */
+  dailyDriveH: number;
+  /** Status color: "green" | "orange" | "red" */
+  statusColor: "green" | "orange" | "red";
+  /** Warning message, if any */
+  warning: string | null;
+  /** Whether the mandatory break limit is exceeded */
+  mandatoryBreak: boolean;
+  /** Whether the daily limit is exceeded */
+  dailyLimitReached: boolean;
+}
+
+/**
+ * Computes continuous and daily driving time from today's time entries.
+ * "Driving" = clocked in AND not on break.
+ * The timer runs live via a 1-second interval when actively driving.
+ */
+export function useDriveTime(
+  isClocked: boolean,
+  isOnBreak: boolean,
+  todayEntries: TimeEntry[],
+): DriveTimeState {
+  const [tick, setTick] = useState(0);
+
+  // Tick every second while actively driving
+  useEffect(() => {
+    if (!isClocked || isOnBreak) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isClocked, isOnBreak]);
+
+  return useMemo(() => {
+    const { continuous, daily } = calculateDriveTime(todayEntries);
+
+    let statusColor: DriveTimeState["statusColor"] = "green";
+    let warning: string | null = null;
+    let mandatoryBreak = false;
+    let dailyLimitReached = false;
+
+    if (continuous >= MAX_CONTINUOUS_DRIVE_H) {
+      statusColor = "red";
+      warning = "VERPLICHTE PAUZE — Rij niet verder";
+      mandatoryBreak = true;
+    } else if (continuous >= WARNING_THRESHOLD_H) {
+      statusColor = "orange";
+      const minutesLeft = Math.round((MAX_CONTINUOUS_DRIVE_H - continuous) * 60);
+      warning = `Let op: over ${minutesLeft} minuten verplichte pauze`;
+    } else if (continuous >= 3.5) {
+      statusColor = "orange";
+    }
+
+    if (daily >= MAX_DAILY_DRIVE_H) {
+      statusColor = "red";
+      warning = "DAGELIJKSE RIJTIJDLIMIET BEREIKT (9u)";
+      dailyLimitReached = true;
+    }
+
+    return {
+      continuousDriveH: continuous,
+      dailyDriveH: daily,
+      statusColor,
+      warning,
+      mandatoryBreak,
+      dailyLimitReached,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayEntries, tick]);
+}
+
+/**
+ * Calculate continuous (since last break/clock-in) and daily drive time
+ * from chronological time entries. "Drive time" = time clocked in minus breaks.
+ */
+function calculateDriveTime(entries: TimeEntry[]): {
+  continuous: number;
+  daily: number;
+} {
+  let dailyMs = 0;
+  let continuousMs = 0;
+  let clockInTime: number | null = null;
+  let breakStartTime: number | null = null;
+  let segmentBreakMs = 0;
+  // Track the start of the current continuous block (after last break end or clock in)
+  let continuousBlockStart: number | null = null;
+  let continuousBlockBreakMs = 0;
+
+  for (const entry of entries) {
+    const t = new Date(entry.recorded_at).getTime();
+
+    switch (entry.entry_type) {
+      case "clock_in":
+        clockInTime = t;
+        segmentBreakMs = 0;
+        continuousBlockStart = t;
+        continuousBlockBreakMs = 0;
+        break;
+
+      case "clock_out":
+        if (clockInTime !== null) {
+          dailyMs += t - clockInTime - segmentBreakMs;
+          clockInTime = null;
+          segmentBreakMs = 0;
+          continuousBlockStart = null;
+          continuousBlockBreakMs = 0;
+        }
+        break;
+
+      case "break_start":
+        breakStartTime = t;
+        // End of continuous block — compute it
+        if (continuousBlockStart !== null) {
+          continuousMs = t - continuousBlockStart - continuousBlockBreakMs;
+        }
+        break;
+
+      case "break_end":
+        if (breakStartTime !== null) {
+          const breakLen = t - breakStartTime;
+          segmentBreakMs += breakLen;
+          breakStartTime = null;
+          // A break >= 45 min resets continuous drive time per EU 561
+          if (breakLen >= 45 * 60 * 1000) {
+            continuousBlockStart = t;
+            continuousBlockBreakMs = 0;
+            continuousMs = 0;
+          } else {
+            // Short break: continuous block continues but break time is subtracted
+            continuousBlockBreakMs += breakLen;
+          }
+        }
+        break;
+
+      case "drive_start":
+      case "drive_end":
+        // Optional granular events — not used in base calculation
+        break;
+    }
+  }
+
+  // If still clocked in, count up to now
+  const now = Date.now();
+  if (clockInTime !== null) {
+    let currentBreakMs = segmentBreakMs;
+    if (breakStartTime !== null) {
+      currentBreakMs += now - breakStartTime;
+    }
+    dailyMs += now - clockInTime - currentBreakMs;
+
+    // Continuous
+    if (continuousBlockStart !== null) {
+      let contBreak = continuousBlockBreakMs;
+      if (breakStartTime !== null) {
+        contBreak += now - breakStartTime;
+      }
+      continuousMs = now - continuousBlockStart - contBreak;
+    }
+  }
+
+  return {
+    continuous: Math.max(0, continuousMs / (1000 * 60 * 60)),
+    daily: Math.max(0, dailyMs / (1000 * 60 * 60)),
+  };
 }

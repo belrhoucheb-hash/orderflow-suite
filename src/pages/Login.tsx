@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { Truck, Eye, EyeOff, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Truck, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Login = () => {
@@ -16,6 +16,11 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
+
+  // Forgot password
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Login fields
   const [loginEmail, setLoginEmail] = useState("");
@@ -85,6 +90,31 @@ const Login = () => {
     });
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetLoading(true);
+    setErrorText("");
+    setSuccessText("");
+
+    if (!resetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail)) {
+      setErrorText("Vul een geldig e-mailadres in");
+      setResetLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: window.location.origin + "/login",
+    });
+    setResetLoading(false);
+
+    if (error) {
+      setErrorText(error.message);
+    } else {
+      setSuccessText(`Reset link verstuurd naar ${resetEmail}`);
+      setResetEmail("");
+    }
+  };
+
   // Demo login removed for security — use a real test account instead
 
   return (
@@ -125,9 +155,9 @@ const Login = () => {
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-slate-200 mb-6">
+          <div className={cn("flex border-b border-slate-200 mb-6", showForgotPassword && "hidden")}>
             <button
-              onClick={() => { setTab("login"); setErrorText(""); setSuccessText(""); }}
+              onClick={() => { setTab("login"); setErrorText(""); setSuccessText(""); setShowForgotPassword(false); }}
               className={cn(
                 "flex-1 pb-3 text-sm font-semibold transition-colors border-b-2",
                 tab === "login" ? "text-slate-900 border-[#dc2626]" : "text-slate-400 border-transparent hover:text-slate-600"
@@ -155,7 +185,7 @@ const Login = () => {
           )}
 
           {/* ─── Login Form ─── */}
-          {tab === "login" && (
+          {tab === "login" && !showForgotPassword && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="login-email" className="text-sm font-semibold text-slate-900">E-mailadres</Label>
@@ -207,9 +237,67 @@ const Login = () => {
               </Button>
 
               <div className="pt-2 text-center">
-                <a href="#" className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => { setShowForgotPassword(true); setErrorText(""); setSuccessText(""); setResetEmail(loginEmail); }}
+                  className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors"
+                >
                   Wachtwoord vergeten?
-                </a>
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* ─── Forgot Password Form ─── */}
+          {showForgotPassword && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Mail className="h-4 w-4 text-slate-400" />
+                <h3 className="text-sm font-bold text-slate-900">Wachtwoord resetten</h3>
+              </div>
+              <p className="text-xs text-slate-500">
+                Vul je e-mailadres in en we sturen je een link om je wachtwoord te resetten.
+              </p>
+
+              <div className="space-y-2">
+                <Label htmlFor="reset-email" className="text-sm font-semibold text-slate-900">E-mailadres</Label>
+                <Input
+                  id="reset-email" type="email" placeholder="naam@bedrijf.nl"
+                  value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} required
+                  className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300"
+                  autoFocus
+                />
+              </div>
+
+              {errorText && (
+                <div className="flex items-center gap-2 text-[#dc2626] text-sm font-medium pt-1">
+                  <AlertCircle className="h-4 w-4 fill-[#dc2626] text-white" />
+                  <span>{errorText}</span>
+                </div>
+              )}
+
+              {successText && (
+                <div className="flex items-start gap-2 text-emerald-700 text-sm font-medium bg-emerald-50 border border-emerald-200 rounded p-3">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{successText}</span>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <Button type="submit" className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white rounded-sm h-11 text-sm font-semibold" disabled={resetLoading}>
+                  {resetLoading ? "Bezig..." : "Verstuur reset link"}
+                </Button>
+              </div>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => { setShowForgotPassword(false); setErrorText(""); setSuccessText(""); }}
+                  className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Terug naar inloggen
+                </button>
               </div>
             </form>
           )}

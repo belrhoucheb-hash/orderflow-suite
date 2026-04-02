@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCreateOrder } from "@/hooks/useOrders";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type MainTab = "algemeen" | "financieel" | "facturen" | "callbacks" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
@@ -235,7 +236,7 @@ const NewOrder = () => {
       {/* ── Header bar ── */}
       <div className="bg-sidebar-background text-sidebar-foreground h-10 px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold tracking-wide">Transport order Nieuw</span>
+          <span className="text-sm font-semibold tracking-wide">Nieuwe Order</span>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <Button

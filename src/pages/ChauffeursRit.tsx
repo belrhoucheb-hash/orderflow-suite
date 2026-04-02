@@ -23,6 +23,8 @@ import {
   Snowflake, AlertTriangle, Warehouse, Send, Printer, ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { motion, AnimatePresence } from "framer-motion";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -440,27 +442,17 @@ const ChauffeursRit = () => {
   }, [stops]);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadingState message="Ritten laden..." />;
   }
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display flex items-center gap-2">
-            <Route className="h-6 w-6 text-primary" />
-            Chauffeurs Rit
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Ritdetails per chauffeur met stops, tijden en ladinginfo
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Chauffeurs Rit"
+        subtitle="Ritdetails per chauffeur met stops, tijden en ladinginfo"
+        actions={
+          <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5 text-xs border-blue-200 text-blue-700 hover:bg-blue-50" onClick={() => window.print()}>
             <ScrollText className="h-3.5 w-3.5" />CMR
           </Button>
@@ -505,8 +497,9 @@ const ChauffeursRit = () => {
             {isDispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
             Verstuur naar chauffeur
           </Button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left: Trip list */}

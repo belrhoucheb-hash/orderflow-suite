@@ -44,6 +44,8 @@ export interface TripStop {
   stop_sequence: number;
   stop_status: StopStatus;
   planned_address: string | null;
+  planned_latitude: number | null;
+  planned_longitude: number | null;
   planned_time: string | null;
   actual_arrival_time: string | null;
   actual_departure_time: string | null;

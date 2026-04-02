@@ -22,6 +22,7 @@ import {
   type GeoCoord,
 } from "@/data/geoData";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "sonner";
 import {
   Truck,
@@ -584,15 +585,10 @@ const Planning = () => {
       <div className="flex flex-col h-[calc(100vh-5rem)] gap-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
-          <div>
-            <h1 className="font-display text-2xl font-semibold tracking-tight flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Truck className="h-4.5 w-4.5 text-primary" />
-              </div>
-              Smart Planning
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Sleep orders naar voertuigen · {totalUnassigned} beschikbaar · {totalAssigned} ingepland</p>
-          </div>
+          <PageHeader
+            title="Smart Planning"
+            subtitle={`Sleep orders naar voertuigen \u00B7 ${totalUnassigned} beschikbaar \u00B7 ${totalAssigned} ingepland`}
+          />
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant={showMap ? "default" : "outline"}

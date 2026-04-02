@@ -1,17 +1,19 @@
-import { useState, useEffect, useRef } from "react";
-import { Truck, MapPin, Package, CheckCircle2, Navigation, LogOut, Check, Phone, Fingerprint, Camera, X, User, MessageSquare, Image, Clock, Coffee, Play, Square } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Truck, MapPin, Package, CheckCircle2, Navigation, LogOut, Check, Phone, Fingerprint, Camera, X, User, MessageSquare, Image, Clock, Coffee, Play, Square, WifiOff, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useDrivers } from "@/hooks/useDrivers";
-import { useGPSTracking, useTimeTracking } from "@/hooks/useDriverTracking";
+import { useGPSTracking, useTimeTracking, useGeofenceCheck, useDriveTime } from "@/hooks/useDriverTracking";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { TripFlow } from "@/components/chauffeur/TripFlow";
 import { useDriverTrips, useUpdateStopStatus, useSavePOD } from "@/hooks/useTrips";
+import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
+import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineStore";
 
 export default function ChauffeurApp() {
   const { data: drivers, isLoading: driversLoading } = useDrivers();
@@ -147,9 +149,78 @@ export default function ChauffeurApp() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
+  // -- Offline POD state --
+  const [pendingPODCount, setPendingPODCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const pending = await getPendingPODs();
+      setPendingPODCount(pending.length);
+    } catch {
+      // IndexedDB not available — ignore
+    }
+  }, []);
+
+  const handleSyncPending = useCallback(async () => {
+    if (isSyncing || !navigator.onLine) return;
+    setIsSyncing(true);
+    try {
+      const result = await syncPendingPODs();
+      if (result.synced > 0) {
+        toast.success(`${result.synced} POD(s) gesynchroniseerd`);
+      }
+      if (result.failed > 0) {
+        toast.error(`${result.failed} POD(s) konden niet worden gesynchroniseerd`);
+      }
+      await refreshPendingCount();
+    } catch {
+      toast.error("Synchronisatie mislukt");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, refreshPendingCount]);
+
+  // On mount: check pending PODs and sync if online
+  useEffect(() => {
+    refreshPendingCount();
+    if (navigator.onLine) {
+      handleSyncPending();
+    }
+
+    const handleOnline = () => {
+      toast.info("Verbinding hersteld, bezig met synchroniseren...");
+      handleSyncPending();
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [refreshPendingCount, handleSyncPending]);
+
   // -- GPS & Time Tracking --
   const { isTracking, currentPosition, startTracking, stopTracking, error: gpsError } = useGPSTracking(activeDriverId);
-  const { isClocked, isOnBreak, clockIn, clockOut, startBreak, endBreak, totalHoursToday } = useTimeTracking(activeDriverId);
+  const { isClocked, isOnBreak, clockIn, clockOut, startBreak, endBreak, totalHoursToday, todayEntries } = useTimeTracking(activeDriverId);
+
+  // -- Drive Time Monitor (EU 561/2006) --
+  const driveTime = useDriveTime(isClocked, isOnBreak, todayEntries);
+
+  // -- Geofence Arrival Detection --
+  const { data: driverTrips = [] } = useDriverTrips(activeDriverId);
+  const updateStopStatus = useUpdateStopStatus();
+  const allActiveStops: TripStop[] = driverTrips.flatMap(
+    (trip: any) => (trip.trip_stops || []) as TripStop[]
+  );
+
+  const handleGeofenceArrival = useCallback(async (stopId: string) => {
+    try {
+      await updateStopStatus.mutateAsync({ stopId, status: "AANGEKOMEN" });
+      toast.success("Aankomst geregistreerd!");
+    } catch {
+      toast.error("Kon aankomst niet registreren");
+    }
+  }, [updateStopStatus]);
+
+  useGeofenceCheck(currentPosition, allActiveStops, handleGeofenceArrival);
 
   const handleToggleGPS = () => {
     if (isTracking) {
@@ -451,8 +522,36 @@ export default function ChauffeurApp() {
       setSelectedOrder(null);
       if (activeDriverId) fetchDriverOrders(activeDriverId);
     } catch(err) {
-      toast.error("Kon aflevering niet voltooien.");
-      console.error(err);
+      console.error("Online POD submit failed, saving offline:", err);
+
+      // Fallback: save to IndexedDB for later sync
+      try {
+        const canvas = canvasRef.current;
+        const signatureDataUrl = canvas && !isCanvasEmpty() ? canvas.toDataURL("image/png") : "";
+
+        await savePendingPOD({
+          id: `pod-${selectedOrder.id}-${Date.now()}`,
+          tripStopId: selectedOrder._tripStopId || selectedOrder.id,
+          orderId: selectedOrder.id,
+          recipientName: podSignedBy || "",
+          signatureDataUrl,
+          photoDataUrls: [...podPhotos],
+          notes: podNotes || "",
+          createdAt: new Date().toISOString(),
+        });
+
+        await refreshPendingCount();
+
+        toast.info("Opgeslagen offline, wordt gesynchroniseerd bij verbinding", {
+          icon: "📴",
+          duration: 5000,
+        });
+        resetPodState();
+        setSelectedOrder(null);
+      } catch (offlineErr) {
+        console.error("Offline save also failed:", offlineErr);
+        toast.error("Kon aflevering niet voltooien en niet offline opslaan.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -656,6 +755,28 @@ export default function ChauffeurApp() {
         </div>
       </header>
 
+      {/* Offline POD Banner */}
+      {pendingPODCount > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <WifiOff className="h-4 w-4 text-amber-600" />
+            <span className="text-sm font-medium text-amber-800">
+              {pendingPODCount} ongesynchroniseerde POD{pendingPODCount > 1 ? "s" : ""}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSyncPending}
+            disabled={isSyncing || !navigator.onLine}
+            className="text-amber-700 hover:text-amber-900 hover:bg-amber-100 h-8 px-3 text-xs font-semibold"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "Bezig..." : "Synchroniseer"}
+          </Button>
+        </div>
+      )}
+
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
         {/* Clock In/Out & Time Tracking */}
@@ -719,6 +840,15 @@ export default function ChauffeurApp() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Drive Time Monitor (EU 561/2006) */}
+        <DriveTimeMonitor
+          continuousDriveH={driveTime.continuousDriveH}
+          dailyDriveH={driveTime.dailyDriveH}
+          statusColor={driveTime.statusColor}
+          warning={driveTime.warning}
+          isVisible={isClocked && !isOnBreak}
+        />
 
         {/* Trip-based workflow (new) */}
         {activeDriverId && (

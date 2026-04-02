@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { MasterDataSection } from "@/components/settings/MasterDataSection";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
@@ -196,17 +197,10 @@ const Settings = () => {
 
   return (
     <div className="flex flex-col gap-6 h-full pb-12">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-display font-bold tracking-tight text-foreground flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <SettingsIcon className="h-5 w-5 text-primary" strokeWidth={1.5} />
-          </div>
-          Instellingen
-        </h1>
-        <p className="text-sm text-muted-foreground ml-13">
-          Beheer uw TMS platform configuratie en stamgegevens.
-        </p>
-      </div>
+      <PageHeader
+        title="Instellingen"
+        subtitle="Beheer uw TMS platform configuratie en stamgegevens."
+      />
 
       <Tabs 
         defaultValue={getActiveTab()} 
