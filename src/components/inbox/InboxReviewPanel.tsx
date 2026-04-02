@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import type { OrderDraft, FormState } from "./types";
 import { requirementOptions } from "./types";
@@ -309,9 +310,27 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
           {isCreatePending ? <Loader2 className="h-4 w-4 animate-spin" /> : "MAAK DE ORDER AAN"}
         </Button>
         <div className="mt-3 text-center">
-          <button onClick={onDelete} className="text-[11px] font-bold text-gray-400 hover:text-primary transition-colors hover:underline underline-offset-4">
-            Afwijzen & archiveren
-          </button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button className="text-[11px] font-bold text-gray-400 hover:text-primary transition-colors hover:underline underline-offset-4">
+                Afwijzen & archiveren
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>E-mail verwijderen?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Weet je zeker dat je deze e-mail wilt afwijzen en archiveren? Deze actie kan niet ongedaan worden gemaakt.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuleren</AlertDialogCancel>
+                <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Verwijderen
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </div>
