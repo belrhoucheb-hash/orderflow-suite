@@ -79,6 +79,7 @@ const Facturatie = () => {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const { data: invoices = [], isLoading, isError, refetch } = useInvoices();
   const queryClient = useQueryClient();
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   // ─── New Invoice Dialog State ───
   const [showNewInvoice, setShowNewInvoice] = useState(false);
@@ -494,7 +495,7 @@ const Facturatie = () => {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: idx * 0.02 }}
-                      onClick={() => navigate(`/facturatie/${invoice.id}`)}
+                      onClick={() => setSelectedInvoice(invoice)}
                       className="hover:bg-muted/20 transition-colors duration-100 group cursor-pointer"
                     >
                       <td className="px-4 py-2">
@@ -545,13 +546,12 @@ const Facturatie = () => {
                       </td>
                       <td className="px-4 py-2 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Link
-                            to={`/facturatie/${invoice.id}`}
-                            onClick={(e) => e.stopPropagation()}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedInvoice(invoice); }}
                             className="p-1.5 rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
                           >
                             <Eye className="h-3.5 w-3.5" />
-                          </Link>
+                          </button>
                           {invoice.pdf_url && (
                             <a
                               href={invoice.pdf_url}
@@ -593,6 +593,61 @@ const Facturatie = () => {
           </p>
         </div>
       </motion.div>
+
+      {/* Invoice Detail Dialog */}
+      <Dialog open={!!selectedInvoice} onOpenChange={(open) => !open && setSelectedInvoice(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Factuur {selectedInvoice?.invoice_number}</DialogTitle>
+          </DialogHeader>
+          {selectedInvoice && (
+            <div className="space-y-4 mt-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Klant</p>
+                  <p className="font-medium">{selectedInvoice.client_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border", statusStyles[isOverdue(selectedInvoice.due_date, selectedInvoice.status) ? "vervallen" : selectedInvoice.status])}>
+                    {statusLabels[isOverdue(selectedInvoice.due_date, selectedInvoice.status) ? "vervallen" : selectedInvoice.status]}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Factuurdatum</p>
+                  <p>{formatDate(selectedInvoice.invoice_date)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Vervaldatum</p>
+                  <p className={isOverdue(selectedInvoice.due_date, selectedInvoice.status) ? "text-red-600 font-medium" : ""}>
+                    {selectedInvoice.due_date ? formatDate(selectedInvoice.due_date) : "—"}
+                  </p>
+                </div>
+              </div>
+              <div className="border-t border-border/30 pt-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotaal</span>
+                  <span>{formatCurrency(selectedInvoice.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-muted-foreground">BTW ({selectedInvoice.btw_percentage}%)</span>
+                  <span>{formatCurrency(selectedInvoice.btw_amount)}</span>
+                </div>
+                <div className="flex justify-between text-sm font-semibold mt-2 pt-2 border-t border-border/30">
+                  <span>Totaal</span>
+                  <span>{formatCurrency(selectedInvoice.total)}</span>
+                </div>
+              </div>
+              {selectedInvoice.notes && (
+                <div className="text-sm">
+                  <p className="text-xs text-muted-foreground mb-1">Notities</p>
+                  <p className="text-muted-foreground">{selectedInvoice.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* New Invoice Dialog */}
       <Dialog open={showNewInvoice} onOpenChange={setShowNewInvoice}>

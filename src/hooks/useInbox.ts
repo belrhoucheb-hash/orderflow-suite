@@ -560,6 +560,85 @@ export function useInbox() {
     setBulkSelected(new Set());
   };
 
+  // ─── Auto-extract AI when selecting unprocessed email ───
+  const [autoExtracting, setAutoExtracting] = useState(false);
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.status !== "DRAFT") return;
+    // Already extracted — has confidence or form data
+    if (selected.confidence_score && selected.confidence_score > 0) return;
+    if (formData[selected.id]?.pickupAddress || formData[selected.id]?.deliveryAddress) return;
+    // No email body to parse
+    if (!selected.source_email_body) return;
+    // Prevent re-trigger
+    if (autoExtracting) return;
+
+    const runExtraction = async () => {
+      setAutoExtracting(true);
+      try {
+        const tenantId = tenant?.id || "00000000-0000-0000-0000-000000000001";
+        const { data: parseResponse, error: parseError } = await supabase.functions.invoke("parse-order", {
+          body: { emailBody: selected.source_email_body, pdfUrls: [], threadContext: null, tenantId },
+        });
+        if (parseError) throw new Error(parseError.message);
+        const parseData = parseResponse;
+        const ext = parseData?.extracted || parseData;
+
+        const normalizedConfidence =
+          typeof ext.confidence_score === "number" && ext.confidence_score > 0 && ext.confidence_score <= 1
+            ? Math.round(ext.confidence_score * 100)
+            : ext.confidence_score;
+
+        const parsedForm: FormState = {
+          transportType: ext.transport_type || "direct",
+          pickupAddress: ext.pickup_address || "",
+          deliveryAddress: ext.delivery_address || "",
+          quantity: ext.quantity || 0,
+          unit: ext.unit || "Pallets",
+          weight: ext.weight_kg?.toString() || "",
+          dimensions: ext.dimensions || "",
+          requirements: normaliseRequirements(ext.requirements || []),
+          perUnit: ext.is_weight_per_unit || false,
+          internalNote: "",
+          fieldSources: ext.field_sources || {},
+          fieldConfidence: ext.field_confidence || {},
+        };
+        const { result: enriched, enrichments } = enrichAddresses(parsedForm);
+        setFormData((prev) => ({ ...prev, [selected.id]: enriched as FormState }));
+
+        await supabase
+          .from("orders")
+          .update({
+            confidence_score: normalizedConfidence,
+            client_name: ext.client_name || selected.client_name,
+            transport_type: ext.transport_type,
+            pickup_address: (enriched as FormState).pickupAddress,
+            delivery_address: (enriched as FormState).deliveryAddress,
+            quantity: ext.quantity,
+            unit: ext.unit,
+            weight_kg: ext.weight_kg,
+            is_weight_per_unit: ext.is_weight_per_unit,
+            dimensions: ext.dimensions,
+            requirements: ext.requirements,
+            missing_fields: parseData.missing_fields || [],
+            follow_up_draft: parseData.follow_up_draft || null,
+          })
+          .eq("id", selected.id);
+
+        await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
+        if (enrichments.length > 0) toast.success("Adresboek verrijking", { description: enrichments.join(". ") });
+        toast.success("AI Extractie voltooid", { description: `Confidence: ${normalizedConfidence}%` });
+      } catch (e: any) {
+        console.error("Auto-extraction error:", e);
+        toast.error("AI extractie mislukt", { description: e.message });
+      } finally {
+        setAutoExtracting(false);
+      }
+    };
+
+    runExtraction();
+  }, [selected?.id]); // Only trigger on selection change
+
   // ─── Keyboard Navigation ───
   const filteredRef = useRef(filtered);
   filteredRef.current = filtered;
@@ -608,6 +687,7 @@ export function useInbox() {
     bulkSelected,
     setBulkSelected,
     loadingScenario,
+    autoExtracting,
     fileInputRef,
 
     // Data

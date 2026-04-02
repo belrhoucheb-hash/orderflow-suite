@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { 
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { type FleetVehicle } from "@/hooks/useVehicles";
 import { type Driver } from "@/hooks/useDrivers";
 import { type GeoCoord, vehicleColors } from "@/data/geoData";
+import { MapPin, Weight } from "lucide-react";
 import { type PlanOrder, UNLOAD_MINUTES } from "./types";
 import { 
   getTotalWeight, 
@@ -66,6 +67,7 @@ export function PlanningVehicleCard({
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: vehicle.id });
   const color = vehicleColors[vehicle.id] || "#888";
+  const [activeTab, setActiveTab] = useState<"route" | "ingepland">("route");
 
   const totalKg = assigned.reduce((s, o) => s + getTotalWeight(o), 0);
   const totalPallets = assigned.reduce((s, o) => s + (o.quantity ?? 0), 0);
@@ -178,6 +180,36 @@ export function PlanningVehicleCard({
           </div>
         </div>
 
+        {/* Tabs: ROUTE / INGEPLAND */}
+        {assigned.length > 0 && (
+          <div className="inline-flex rounded-lg bg-muted/50 p-0.5 w-full">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setActiveTab("route"); }}
+              className={cn(
+                "flex-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 relative z-10",
+                activeTab === "route"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              ROUTE
+            </button>
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setActiveTab("ingepland"); }}
+              className={cn(
+                "flex-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 relative z-10",
+                activeTab === "ingepland"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              INGEPLAND ({assigned.length})
+            </button>
+          </div>
+        )}
+
         {assigned.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-16 border-2 border-dashed border-border/40 rounded-xl bg-muted/20 px-3">
             <p className="text-xs text-muted-foreground/50 italic flex items-center gap-1.5">
@@ -185,7 +217,7 @@ export function PlanningVehicleCard({
             </p>
             <p className="text-xs text-muted-foreground/35 mt-0.5 text-center leading-snug">{emptyReason}</p>
           </div>
-        ) : (
+        ) : activeTab === "route" ? (
           <SortableContext items={assigned.map((o) => o.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-1">
               {assigned.map((o, idx) => (
@@ -202,6 +234,49 @@ export function PlanningVehicleCard({
               ))}
             </div>
           </SortableContext>
+        ) : (
+          /* INGEPLAND tab: summary list of assigned orders */
+          <div className="space-y-1.5">
+            {assigned.map((o, idx) => {
+              const wKg = o.is_weight_per_unit
+                ? (o.weight_kg ?? 0) * (o.quantity ?? 1)
+                : (o.weight_kg ?? 0);
+              return (
+                <div
+                  key={o.id}
+                  className="rounded-lg border border-border/30 bg-muted/20 px-3 py-2 text-xs space-y-1"
+                  onMouseEnter={() => onHoverOrder(o.id)}
+                  onMouseLeave={() => onHoverOrder(null)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-foreground truncate">
+                      {o.client_name || `Order #${o.order_number}`}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">
+                      Stop {idx + 1}
+                    </Badge>
+                  </div>
+                  <div className="flex items-start gap-1 text-muted-foreground">
+                    <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
+                    <span className="truncate">{o.delivery_address || "Geen adres"}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Weight className="h-3 w-3" />
+                      {wKg} kg
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Package className="h-3 w-3" />
+                      {o.quantity ?? 0} stuks
+                    </span>
+                    {o.requirements && o.requirements.length > 0 && (
+                      <span className="text-amber-600 font-medium">{o.requirements.join(", ")}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </CardContent>
 

@@ -130,9 +130,9 @@ export function useCreateInvoice() {
       if (userErr) throw userErr;
       if (!user) throw new Error("Niet ingelogd");
 
-      // Look up tenant_id from tenant_users
+      // Look up tenant_id from tenant_members
       const { data: tenantUser, error: tuErr } = await supabase
-        .from("tenant_users")
+        .from("tenant_members")
         .select("tenant_id")
         .eq("user_id", user.id)
         .single();
