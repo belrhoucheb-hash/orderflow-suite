@@ -5,6 +5,7 @@ export interface PlanOrder {
   id: string;
   order_number: number;
   client_name: string | null;
+  pickup_address: string | null;
   delivery_address: string | null;
   quantity: number | null;
   weight_kg: number | null;
@@ -16,6 +17,10 @@ export interface PlanOrder {
   pickup_time_to: string | null;
   delivery_time_from: string | null;
   delivery_time_to: string | null;
+  geocoded_pickup_lat: number | null;
+  geocoded_pickup_lng: number | null;
+  geocoded_delivery_lat: number | null;
+  geocoded_delivery_lng: number | null;
 }
 
 export type Assignments = Record<string, PlanOrder[]>;

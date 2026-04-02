@@ -530,8 +530,35 @@ async function pollInbox(): Promise<Response> {
               console.log(`Low confidence (${confidence}) — requires human review`);
             }
 
+            // ── Resolve client_id from client_name ──
+            let clientId: string | null = null;
+            if (extracted.client_name) {
+              const { data: existingClient } = await supabase
+                .from("clients")
+                .select("id")
+                .ilike("name", `%${extracted.client_name}%`)
+                .eq("tenant_id", tenantId)
+                .limit(1);
+
+              if (existingClient && existingClient.length > 0) {
+                clientId = existingClient[0].id;
+              } else {
+                const { data: newClient, error: clientErr } = await supabase
+                  .from("clients")
+                  .insert({ name: extracted.client_name, tenant_id: tenantId })
+                  .select("id")
+                  .single();
+                if (clientErr) {
+                  console.error("Failed to create client:", clientErr);
+                } else {
+                  clientId = newClient.id;
+                }
+              }
+            }
+
             await supabase.from("orders").update({
               client_name: extracted.client_name || null,
+              client_id: clientId,
               transport_type: extracted.transport_type || null,
               pickup_address: extracted.pickup_address || null,
               delivery_address: extracted.delivery_address || null,
