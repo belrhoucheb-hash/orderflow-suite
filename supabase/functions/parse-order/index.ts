@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
+// TODO: replace with tenant_settings lookup when multi-tenant is wired up
+const COMPANY_NAME = "Royalty Cargo";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -90,7 +93,7 @@ function generateFollowUpDraft(missing: string[], extracted: Record<string, any>
     ? `Wij hebben uw aanvraag voor ${understood.join(", ")} ontvangen.`
     : `Wij hebben uw transportaanvraag ontvangen.`;
 
-  return `Beste ${clientName},\n\n${understoodText} Om dit correct in te plannen hebben wij nog het volgende nodig:\n\n${missingList}\n\nKunt u deze informatie zo spoedig mogelijk aanleveren? Dan plannen wij uw transport direct in.\n\nMet vriendelijke groet,\nRoyalty Cargo Planning`;
+  return `Beste ${clientName},\n\n${understoodText} Om dit correct in te plannen hebben wij nog het volgende nodig:\n\n${missingList}\n\nKunt u deze informatie zo spoedig mogelijk aanleveren? Dan plannen wij uw transport direct in.\n\nMet vriendelijke groet,\n${COMPANY_NAME} Planning`;
 }
 
 // ── Anomaly detection against client history ──

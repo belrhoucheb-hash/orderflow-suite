@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Truck, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -148,7 +149,7 @@ const Login = () => {
         <div className="bg-white w-full max-w-[420px] rounded shadow-2xl p-8 sm:p-10">
 
           <div className="text-center space-y-1 mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">{tenant?.name || "Royalty Cargo"}</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{tenant?.name || DEFAULT_COMPANY.name}</h1>
             <p className="text-xs font-bold text-[#dc2626] tracking-[0.2em] uppercase">
               TMS Platform
             </p>

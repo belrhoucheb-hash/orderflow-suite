@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Session, User } from "@supabase/supabase-js";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -261,7 +262,7 @@ export default function ClientPortal() {
             </div>
             <div>
               <span className="text-lg font-bold tracking-tight text-gray-900">
-                Royalty Cargo
+                {DEFAULT_COMPANY.name}
               </span>
               <span className="hidden sm:inline text-sm text-gray-400 ml-2">Klantportaal</span>
             </div>
@@ -493,7 +494,7 @@ export default function ClientPortal() {
                   <Package className="h-10 w-10 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-500 font-medium">Geen klantprofiel gekoppeld</p>
                   <p className="text-gray-400 text-sm mt-1">
-                    Neem contact op met Royalty Cargo om uw account te koppelen.
+                    Neem contact op met {DEFAULT_COMPANY.name} om uw account te koppelen.
                   </p>
                 </div>
               ) : orders.length === 0 ? (
@@ -570,7 +571,7 @@ export default function ClientPortal() {
       <footer className="border-t border-gray-100 mt-12">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
           <p className="text-xs text-gray-400 text-center">
-            &copy; {new Date().getFullYear()} Royalty Cargo. Alle rechten voorbehouden.
+            &copy; {new Date().getFullYear()} {DEFAULT_COMPANY.name}. Alle rechten voorbehouden.
           </p>
         </div>
       </footer>

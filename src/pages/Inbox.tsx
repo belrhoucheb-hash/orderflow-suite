@@ -8,6 +8,7 @@ import { InboxListItem } from "@/components/inbox/InboxListItem";
 import { InboxReviewPanel } from "@/components/inbox/InboxReviewPanel";
 import { TEST_SCENARIOS, getFormErrors } from "@/components/inbox/utils";
 import { useInbox } from "@/hooks/useInbox";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 export default function Inbox() {
   const {
@@ -77,7 +78,7 @@ export default function Inbox() {
       <div className="w-56 bg-white border-r border-gray-200 flex flex-col p-4 gap-2 shrink-0 hidden lg:flex">
         <div className="mb-4 px-2">
           <p className="text-primary font-black tracking-tighter text-sm uppercase">AI Inbox</p>
-          <p className="text-[11px] text-gray-400">{tenant?.name || "Royalty Cargo"}</p>
+          <p className="text-[11px] text-gray-400">{tenant?.name || DEFAULT_COMPANY.name}</p>
         </div>
         <nav className="flex flex-col gap-0.5 flex-1">
           {[

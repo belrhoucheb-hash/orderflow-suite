@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { Package, Search, MapPin, Truck, CheckCircle2, Circle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 interface TrackOrder {
   order_number: number;
@@ -118,7 +119,7 @@ export default function TrackTrace() {
             <Truck className="h-5 w-5 text-white" />
           </div>
           <span className="text-xl font-bold tracking-tight text-gray-900">
-            Royalty Cargo
+            {DEFAULT_COMPANY.name}
           </span>
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mt-6">Track &amp; Trace</h1>
@@ -308,7 +309,7 @@ export default function TrackTrace() {
 
       {/* Footer */}
       <p className="mt-12 text-xs text-gray-400">
-        &copy; {new Date().getFullYear()} Royalty Cargo. Alle rechten voorbehouden.
+        &copy; {new Date().getFullYear()} {DEFAULT_COMPANY.name}. Alle rechten voorbehouden.
       </p>
     </div>
   );
