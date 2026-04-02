@@ -53,66 +53,7 @@ import { PlanningDateNav, toDateString, type ViewMode } from "@/components/plann
 import { PlanningWeekView } from "@/components/planning/PlanningWeekView";
 import { useTenant } from "@/contexts/TenantContext";
 import { solveVRP } from "@/lib/vrpSolver";
-import { useLoadPlanningDraft, useSavePlanningDraft, useDeletePlanningDraft } from "@/hooks/usePlanningDrafts";
-
-// ── Per-day localStorage helpers ──
-function getDraftKey(dateStr: string) { return `planning-draft-${dateStr}`; }
-function getStartTimesKey(dateStr: string) { return `planning-draft-startTimes-${dateStr}`; }
-function getDriversKey(dateStr: string) { return `planning-draft-drivers-${dateStr}`; }
-
-function loadDraft(dateStr: string): { assignments: Assignments; startTimes: Record<string, string>; drivers: Record<string, string> } | null {
-  try {
-    const saved = localStorage.getItem(getDraftKey(dateStr));
-    if (!saved) return null;
-    const assignments = JSON.parse(saved) as Assignments;
-    const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
-    if (!hasOrders) return null;
-    const startTimes = JSON.parse(localStorage.getItem(getStartTimesKey(dateStr)) || "{}");
-    const drivers = JSON.parse(localStorage.getItem(getDriversKey(dateStr)) || "{}");
-    return { assignments, startTimes, drivers };
-  } catch {
-    return null;
-  }
-}
-
-function saveDraft(dateStr: string, assignments: Assignments, startTimes: Record<string, string>, drivers: Record<string, string>) {
-  const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
-  if (hasOrders) {
-    localStorage.setItem(getDraftKey(dateStr), JSON.stringify(assignments));
-  } else {
-    localStorage.removeItem(getDraftKey(dateStr));
-  }
-  if (Object.keys(startTimes).length > 0) {
-    localStorage.setItem(getStartTimesKey(dateStr), JSON.stringify(startTimes));
-  }
-  if (Object.keys(drivers).length > 0) {
-    localStorage.setItem(getDriversKey(dateStr), JSON.stringify(drivers));
-  }
-}
-
-function clearDraft(dateStr: string) {
-  localStorage.removeItem(getDraftKey(dateStr));
-  localStorage.removeItem(getStartTimesKey(dateStr));
-  localStorage.removeItem(getDriversKey(dateStr));
-}
-
-/** Collect all draft assignments from localStorage for the week view */
-function collectWeekDrafts(weekStart: string): Record<string, Assignments> {
-  const monday = new Date(weekStart + "T00:00:00");
-  const day = monday.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  monday.setDate(monday.getDate() + diff);
-
-  const result: Record<string, Assignments> = {};
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    const ds = toDateString(d);
-    const draft = loadDraft(ds);
-    if (draft) result[ds] = draft.assignments;
-  }
-  return result;
-}
+import { useLoadPlanningDraft, useSavePlanningDraft, useDeletePlanningDraft, collectWeekDrafts } from "@/hooks/usePlanningDrafts";
 
 const Planning = () => {
   const { data: fleetVehicles = [] } = useVehicles();
@@ -145,7 +86,7 @@ const Planning = () => {
   const [draftRestored, setDraftRestored] = useState(false);
   const dbDraftAppliedRef = useRef<string | null>(null);
 
-  // Apply DB draft when it arrives (or fall back to localStorage)
+  // Apply draft when it arrives (Supabase with localStorage fallback handled by the hook)
   useEffect(() => {
     // Prevent re-applying the same date's draft
     if (dbDraftAppliedRef.current === selectedDate) return;
@@ -154,57 +95,19 @@ const Planning = () => {
     dbDraftAppliedRef.current = selectedDate;
 
     if (dbDraft) {
-      // DB draft exists — hydrate. The assignments from DB contain order ID strings,
-      // but we need PlanOrder objects. We'll hydrate from the orders query once available.
       setVehicleStartTimes(prev => ({ ...prev, ...dbDraft.startTimes }));
       setVehicleDrivers(prev => ({ ...prev, ...dbDraft.drivers }));
       // Store raw order IDs for hydration (assignments is Record<vehicleId, string[]> from DB)
       (window as any).__pendingDraftOrderIds = dbDraft.assignments;
       setDraftRestored(true);
-      toast.success("Planning hersteld", { description: `Conceptplanning voor ${selectedDate} hersteld uit database.` });
-    } else {
-      // Fallback: try localStorage
-      const draft = loadDraft(selectedDate);
-      if (draft) {
-        setAssignments(draft.assignments);
-        setVehicleStartTimes(prev => ({ ...prev, ...draft.startTimes }));
-        setVehicleDrivers(prev => ({ ...prev, ...draft.drivers }));
-        setDraftRestored(true);
-        toast.success("Planning hersteld", { description: `Conceptplanning voor ${selectedDate} hersteld (lokaal).` });
-      }
+      toast.success("Planning hersteld", { description: `Conceptplanning voor ${selectedDate} hersteld.` });
     }
-
-    // Also migrate old format drafts (without date) on first load
-    try {
-      const oldDraft = localStorage.getItem("planning-draft");
-      if (oldDraft && !loadDraft(toDateString(new Date()))) {
-        const parsed = JSON.parse(oldDraft) as Assignments;
-        const hasOrders = Object.values(parsed).some(arr => arr.length > 0);
-        if (hasOrders) {
-          const todayStr = toDateString(new Date());
-          localStorage.setItem(getDraftKey(todayStr), oldDraft);
-          const oldStartTimes = localStorage.getItem("planning-draft-startTimes");
-          const oldDrivers = localStorage.getItem("planning-draft-drivers");
-          if (oldStartTimes) localStorage.setItem(getStartTimesKey(todayStr), oldStartTimes);
-          if (oldDrivers) localStorage.setItem(getDriversKey(todayStr), oldDrivers);
-          localStorage.removeItem("planning-draft");
-          localStorage.removeItem("planning-draft-startTimes");
-          localStorage.removeItem("planning-draft-drivers");
-          if (selectedDate === todayStr && !dbDraft) {
-            setAssignments(parsed);
-            setDraftRestored(true);
-          }
-        }
-      }
-    } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbDraftLoaded, dbDraft, selectedDate]);
 
   // ── Save current draft and load new when date changes ──
   const handleDateChange = useCallback((newDate: string) => {
-    // Save current day's draft to localStorage
-    saveDraft(prevDateRef.current, assignments, vehicleStartTimes, vehicleDrivers);
-    // Also save to DB immediately (flush debounce)
+    // Flush debounce and save to Supabase + localStorage immediately
     if (dbSaveTimerRef.current) clearTimeout(dbSaveTimerRef.current);
     if (tenant?.id) {
       const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
@@ -231,12 +134,8 @@ const Planning = () => {
     setSelectedDate(newDate);
   }, [assignments, vehicleStartTimes, vehicleDrivers, tenant?.id, saveDraftMutation]);
 
-  // ── Auto-save assignments to localStorage + database (debounced 2s) ──
+  // ── Auto-save assignments to Supabase (debounced 2s, localStorage written through by hook) ──
   useEffect(() => {
-    // Always save to localStorage immediately (offline fallback)
-    saveDraft(selectedDate, assignments, vehicleStartTimes, vehicleDrivers);
-
-    // Debounced save to database
     if (dbSaveTimerRef.current) clearTimeout(dbSaveTimerRef.current);
     if (tenant?.id) {
       dbSaveTimerRef.current = setTimeout(() => {
@@ -259,8 +158,7 @@ const Planning = () => {
   }, [assignments, vehicleStartTimes, vehicleDrivers, selectedDate, tenant?.id]);
 
   const handleClearDraft = useCallback(() => {
-    clearDraft(selectedDate);
-    // Also delete from database
+    // Delete from Supabase + localStorage (handled by the hook)
     if (tenant?.id) {
       deleteDraftMutation.mutate({ tenantId: tenant.id, date: selectedDate });
     }
@@ -776,8 +674,7 @@ const Planning = () => {
       }
 
       toast.success("Planning bevestigd", { description: `${totalAssigned} orders ingepland in ${tripsCreated} ${tripsCreated === 1 ? "rit" : "ritten"} voor ${selectedDate}.` });
-      // Clear draft from localStorage and database after successful confirm
-      clearDraft(selectedDate);
+      // Clear draft from Supabase + localStorage (handled by the hook)
       if (tenant?.id) {
         deleteDraftMutation.mutate({ tenantId: tenant.id, date: selectedDate });
       }

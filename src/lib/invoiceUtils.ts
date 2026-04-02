@@ -611,3 +611,115 @@ export function downloadUBL(invoice: Invoice & { invoice_lines?: InvoiceLine[] }
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+// ─── Invoice Line Builder (multi-order) ────────────────────────────
+
+export interface BuildLineOrder {
+  id: string;
+  order_number: number | string;
+  pickup_address?: string | null;
+  delivery_address?: string | null;
+  quantity?: number | null;
+}
+
+export interface BuildLineRate {
+  rate_type: string;
+  amount: number;
+  description?: string | null;
+}
+
+export interface BuiltInvoiceLine {
+  order_id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total: number;
+  sort_order: number;
+}
+
+/**
+ * Build invoice lines from multiple orders and a set of client rates.
+ * If no rates are configured, a placeholder line (zero-amount) is created per order.
+ * Mirrors the logic previously inline in Facturatie.tsx.
+ */
+export function buildInvoiceLines(
+  orders: BuildLineOrder[],
+  rates: BuildLineRate[],
+): BuiltInvoiceLine[] {
+  const lines: BuiltInvoiceLine[] = [];
+  let sortOrder = 0;
+
+  for (const order of orders) {
+    if (rates.length === 0) {
+      // No rates configured - placeholder line
+      lines.push({
+        order_id: order.id,
+        description: `Transport #${order.order_number} \u2014 ${order.pickup_address?.split(",")[0] || "?"} \u2192 ${order.delivery_address?.split(",")[0] || "?"}`,
+        quantity: 1,
+        unit: "rit",
+        unit_price: 0,
+        total: 0,
+        sort_order: sortOrder++,
+      });
+    } else {
+      for (const rate of rates) {
+        let qty = 1;
+        let unitLabel = "stuk";
+        let include = false;
+
+        switch (rate.rate_type) {
+          case "per_km": {
+            qty = 150;
+            unitLabel = "km";
+            include = true;
+            break;
+          }
+          case "per_pallet": {
+            const pallets = order.quantity ?? 0;
+            if (pallets > 0) {
+              qty = pallets;
+              unitLabel = "pallet";
+              include = true;
+            }
+            break;
+          }
+          case "per_rit": {
+            qty = 1;
+            unitLabel = "rit";
+            include = true;
+            break;
+          }
+          case "toeslag":
+          case "surcharge": {
+            qty = 1;
+            unitLabel = "stuk";
+            include = true;
+            break;
+          }
+          default: {
+            qty = 1;
+            unitLabel = "stuk";
+            include = true;
+            break;
+          }
+        }
+
+        if (include) {
+          const lineTotal = Math.round(qty * rate.amount * 100) / 100;
+          lines.push({
+            order_id: order.id,
+            description: `Order #${order.order_number}: ${rate.description || rate.rate_type}`,
+            quantity: qty,
+            unit: unitLabel,
+            unit_price: rate.amount,
+            total: lineTotal,
+            sort_order: sortOrder++,
+          });
+        }
+      }
+    }
+  }
+
+  return lines;
+}

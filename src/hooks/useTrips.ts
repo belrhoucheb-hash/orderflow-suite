@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { checkTripCompletion } from "@/hooks/useBillingStatus";
 import { toast } from "sonner";
 import type { Trip, TripStop, TripStatus, StopStatus, canTransitionTrip, canTransitionStop } from "@/types/dispatch";
+import { logAudit } from "@/lib/auditLog";
 
 // ─── Fetch trips for a date ─────────────────────────────────
 export function useTrips(date?: string) {
@@ -172,11 +173,20 @@ export function useUpdateTripStatus() {
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["trips"] });
       queryClient.invalidateQueries({ queryKey: ["trip"] });
       queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+      // Fire-and-forget audit trail for trip status change
+      logAudit({
+        table_name: "trips",
+        record_id: variables.tripId,
+        action: "UPDATE",
+        new_data: { dispatch_status: variables.status },
+        changed_fields: ["dispatch_status"],
+      });
     },
   });
 }
@@ -354,6 +364,37 @@ export function useCreateDeliveryException() {
       queryClient.invalidateQueries({ queryKey: ["delivery-exceptions"] });
     },
   });
+}
+
+// ─── Realtime ───────────────────────────────────────────────
+/**
+ * Subscribe to all changes on the `trips` table and invalidate
+ * the relevant React Query caches so every connected user sees
+ * updates in near-real-time.
+ *
+ * Mount once at the app/layout level alongside useAutoCompleteTripCheck.
+ */
+export function useTripsRealtime() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("trips-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trips" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["trips"] });
+          queryClient.invalidateQueries({ queryKey: ["trip"] });
+          queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 }
 
 // ─── Auto trip-completion via Realtime subscription ─────────

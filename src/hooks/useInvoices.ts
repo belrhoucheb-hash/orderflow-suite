@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ClientRate } from "@/hooks/useClients";
+import { logAudit } from "@/lib/auditLog";
 
 // ─── Interfaces ─────────────────────────────────────────────────────
 
@@ -58,22 +59,128 @@ export interface OrderCostResult {
 
 // ─── Hooks ──────────────────────────────────────────────────────────
 
+export interface UseInvoicesOptions {
+  page?: number;
+  pageSize?: number;
+  statusFilter?: string;
+  search?: string;
+}
+
 /**
- * Fetch all invoices for the tenant, ordered by invoice_date DESC.
+ * Fetch invoices for the tenant with pagination, ordered by invoice_date DESC.
  */
-export function useInvoices() {
+export function useInvoices(options: UseInvoicesOptions = {}) {
+  const { page = 0, pageSize = 25, statusFilter, search } = options;
+
   return useQuery({
-    queryKey: ["invoices"],
+    queryKey: ["invoices", { page, pageSize, statusFilter, search }],
     staleTime: 15_000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("invoices")
-        .select("*")
+        .select("*", { count: "exact" })
         .order("invoice_date", { ascending: false })
-        .limit(100);
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (statusFilter && statusFilter !== "alle") {
+        query = query.eq("status", statusFilter);
+      }
+
+      if (search) {
+        query = query.or(`invoice_number.ilike.%${search}%,client_name.ilike.%${search}%`);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) throw error;
-      return (data ?? []) as Invoice[];
+      return { invoices: (data ?? []) as Invoice[], totalCount: count ?? 0 };
+    },
+  });
+}
+
+/**
+ * Update invoice lines and recalculate totals.
+ * Only allowed for concept invoices.
+ */
+export function useUpdateInvoiceLines() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      invoiceId,
+      lines,
+      btw_percentage,
+    }: {
+      invoiceId: string;
+      lines: Omit<InvoiceLine, "created_at">[];
+      btw_percentage: number;
+    }) => {
+      // Verify invoice is concept
+      const { data: invoice, error: fetchErr } = await supabase
+        .from("invoices")
+        .select("status")
+        .eq("id", invoiceId)
+        .single();
+
+      if (fetchErr) throw fetchErr;
+      if (!invoice) throw new Error("Factuur niet gevonden");
+      if (invoice.status !== "concept") {
+        throw new Error("Alleen concept-facturen kunnen worden bewerkt");
+      }
+
+      // Delete existing lines
+      const { error: deleteErr } = await supabase
+        .from("invoice_lines")
+        .delete()
+        .eq("invoice_id", invoiceId);
+
+      if (deleteErr) throw deleteErr;
+
+      // Insert new lines
+      if (lines.length > 0) {
+        const lineInserts = lines.map((line, idx) => ({
+          id: line.id.startsWith("new-") ? undefined : line.id,
+          invoice_id: invoiceId,
+          order_id: line.order_id ?? null,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_price: line.unit_price,
+          total: line.total,
+          sort_order: line.sort_order ?? idx,
+        }));
+
+        const { error: insertErr } = await supabase
+          .from("invoice_lines")
+          .insert(lineInserts);
+
+        if (insertErr) throw insertErr;
+      }
+
+      // Recalculate totals
+      const subtotal = lines.reduce((sum, l) => sum + l.total, 0);
+      const btwAmount = Math.round(subtotal * (btw_percentage / 100) * 100) / 100;
+      const total = Math.round((subtotal + btwAmount) * 100) / 100;
+
+      // Update invoice totals
+      const { data: updated, error: updateErr } = await supabase
+        .from("invoices")
+        .update({
+          subtotal,
+          btw_amount: btwAmount,
+          total,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", invoiceId)
+        .select()
+        .single();
+
+      if (updateErr) throw updateErr;
+      return updated as Invoice;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices", variables.invoiceId] });
     },
   });
 }
@@ -251,6 +358,15 @@ export function useUpdateInvoiceStatus() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["invoices", variables.id] });
+
+      // Fire-and-forget audit trail for invoice status change
+      logAudit({
+        table_name: "invoices",
+        record_id: variables.id,
+        action: "UPDATE",
+        new_data: { status: variables.status },
+        changed_fields: ["status"],
+      });
     },
   });
 }
@@ -496,7 +612,7 @@ export function useAutoInvoiceGeneration(enabled = true) {
         // Find orders ready for invoicing that have no invoice yet
         const { data: orders, error: fetchErr } = await supabase
           .from("orders")
-          .select("id, client_id, client_name, order_number, tenant_id, quantity")
+          .select("id, client_id, client_name, order_number, tenant_id, quantity, distance_km")
           .eq("billing_status", "GEREED")
           .is("invoice_id", null)
           .limit(20);
@@ -553,8 +669,7 @@ export function useAutoInvoiceGeneration(enabled = true) {
 
                 switch (rate.rate_type) {
                   case "per_km": {
-                    // Use 150km Dutch average fallback (no geocode data in order list query)
-                    qty = 150;
+                    qty = (order as any).distance_km ?? 0;
                     unitLabel = "km";
                     include = true;
                     break;
