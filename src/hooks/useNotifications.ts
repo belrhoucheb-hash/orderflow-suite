@@ -43,6 +43,7 @@ export function useNotifications() {
       return (data ?? []) as unknown as Notification[];
     },
     enabled: !!userId,
+    staleTime: 5_000,
     refetchInterval: 30_000, // Refetch every 30s as fallback
   });
 

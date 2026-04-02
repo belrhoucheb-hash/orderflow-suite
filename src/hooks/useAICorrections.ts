@@ -173,9 +173,20 @@ export function useSaveCorrection() {
       fieldName: string;
       aiValue: string;
       correctedValue: string;
+      tenantId?: string;
     }) => {
       if (!params.correctedValue || params.aiValue === params.correctedValue) {
         return null;
+      }
+      // Resolve tenant_id from order if not provided
+      let tenantId = params.tenantId;
+      if (!tenantId) {
+        const { data: order } = await supabase
+          .from("orders")
+          .select("tenant_id")
+          .eq("id", params.orderId)
+          .single();
+        tenantId = order?.tenant_id ?? undefined;
       }
       const { error } = await supabase.from("ai_corrections").insert({
         order_id: params.orderId,
@@ -183,6 +194,7 @@ export function useSaveCorrection() {
         field_name: params.fieldName,
         ai_value: params.aiValue,
         corrected_value: params.correctedValue,
+        ...(tenantId ? { tenant_id: tenantId } : {}),
       });
       if (error) throw error;
     },

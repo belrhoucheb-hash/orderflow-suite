@@ -15,6 +15,7 @@ export interface FleetVehicle {
 export function useVehicles() {
   return useQuery({
     queryKey: ["vehicles"],
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")

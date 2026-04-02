@@ -71,6 +71,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
   return useQuery({
     queryKey: ["orders", { page, pageSize, statusFilter, search }],
+    staleTime: 5_000,
     queryFn: async () => {
       let query = supabase
         .from("orders")
@@ -90,23 +91,37 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
       if (error) throw error;
 
-      const orders = (data ?? []).map((o): Order => ({
-        id: o.id,
-        orderNumber: `RCS-${new Date(o.created_at).getFullYear()}-${String(o.order_number).padStart(4, "0")}`,
-        customer: o.client_name || "Onbekend",
-        email: o.source_email_from || "",
-        phone: "",
-        pickupAddress: o.pickup_address || "",
-        deliveryAddress: o.delivery_address || "",
-        status: normalizeStatus(o.status),
-        priority: "normaal",
-        items: [],
-        totalWeight: o.weight_kg ?? 0,
-        vehicle: o.vehicle_id ?? undefined,
-        createdAt: o.created_at,
-        estimatedDelivery: "",
-        notes: o.internal_note || "",
-      }));
+      const orders = (data ?? []).map((o): Order => {
+        // Compute estimatedDelivery from available data
+        let estimatedDelivery = "";
+        if (o.time_window_end) {
+          estimatedDelivery = o.time_window_end;
+        } else {
+          // Fallback: created_at + offset based on priority
+          const created = new Date(o.created_at);
+          const priority = (o.priority || "normaal").toLowerCase();
+          const hoursOffset = (priority === "spoed" || priority === "hoog") ? 4 : 24;
+          estimatedDelivery = new Date(created.getTime() + hoursOffset * 60 * 60 * 1000).toISOString();
+        }
+
+        return {
+          id: o.id,
+          orderNumber: `RCS-${new Date(o.created_at).getFullYear()}-${String(o.order_number).padStart(4, "0")}`,
+          customer: o.client_name || "Onbekend",
+          email: o.source_email_from || "",
+          phone: "",
+          pickupAddress: o.pickup_address || "",
+          deliveryAddress: o.delivery_address || "",
+          status: normalizeStatus(o.status),
+          priority: (o.priority as Order["priority"]) || "normaal",
+          items: [],
+          totalWeight: o.weight_kg ?? 0,
+          vehicle: o.vehicle_id ?? undefined,
+          createdAt: o.created_at,
+          estimatedDelivery,
+          notes: o.internal_note || "",
+        };
+      });
 
       return { orders, totalCount: count ?? 0 };
     },
@@ -137,6 +152,7 @@ export function useOrdersSubscription() {
 export function useOrder(id: string) {
   return useQuery({
     queryKey: ["orders", id],
+    staleTime: 5_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
@@ -147,6 +163,17 @@ export function useOrder(id: string) {
       if (error) throw error;
       if (!data) return null;
 
+      // Compute estimatedDelivery
+      let estimatedDelivery = "";
+      if (data.time_window_end) {
+        estimatedDelivery = data.time_window_end;
+      } else {
+        const created = new Date(data.created_at);
+        const priority = (data.priority || "normaal").toLowerCase();
+        const hoursOffset = (priority === "spoed" || priority === "hoog") ? 4 : 24;
+        estimatedDelivery = new Date(created.getTime() + hoursOffset * 60 * 60 * 1000).toISOString();
+      }
+
       return {
         id: data.id,
         orderNumber: `RCS-${new Date(data.created_at).getFullYear()}-${String(data.order_number).padStart(4, "0")}`,
@@ -156,12 +183,12 @@ export function useOrder(id: string) {
         pickupAddress: data.pickup_address || "",
         deliveryAddress: data.delivery_address || "",
         status: normalizeStatus(data.status),
-        priority: "normaal" as const,
+        priority: (data.priority as Order["priority"]) || "normaal",
         items: [],
         totalWeight: data.weight_kg ?? 0,
         vehicle: data.vehicle_id ?? undefined,
         createdAt: data.created_at,
-        estimatedDelivery: "",
+        estimatedDelivery,
         notes: data.internal_note || "",
       } as Order;
     },
