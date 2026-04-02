@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { Mail as MailIcon, Send, FileEdit, Inbox, Search, Star, StarOff, Paperclip, Clock, ChevronLeft, Reply, Forward, Trash2, Archive, MoreHorizontal, RefreshCw, Plus, Filter, Bot, CheckCircle2 } from "lucide-react";
+import { Mail as MailIcon, Send, FileEdit, Inbox, Search, Star, StarOff, Paperclip, Clock, ChevronLeft, Reply, Forward, RefreshCw, Plus, Bot, CheckCircle2, Save } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -215,9 +215,7 @@ export default function Mail() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => refetch()}>
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toast.success("Filters komen binnenkort")}>
-                <Filter className="h-3.5 w-3.5" />
-              </Button>
+              {/* Filter: binnenkort beschikbaar */}
             </div>
           </div>
           <div className="relative">
@@ -323,12 +321,7 @@ export default function Mail() {
                 <Button variant="ghost" size="icon" className="h-8 w-8 lg:hidden" onClick={() => setSelectedId("")}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { toast.success("E-mail gearchiveerd"); setSelectedId(""); }}>
-                  <Archive className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { toast.success("E-mail verwijderd"); setSelectedId(""); }}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {/* Archiveren & verwijderen: binnenkort beschikbaar */}
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5"
@@ -347,9 +340,7 @@ export default function Mail() {
                   }}>
                   <Forward className="h-3.5 w-3.5" /> Doorsturen
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.success("Meer opties komen binnenkort")}>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
+                {/* Meer opties: binnenkort beschikbaar */}
               </div>
             </div>
 
@@ -483,7 +474,7 @@ export default function Mail() {
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30">
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.success("Bijlagen worden binnenkort ondersteund")}><Paperclip className="h-4 w-4" /></Button>
+                {/* Bijlagen: binnenkort beschikbaar */}
               </div>
               <Button size="sm" className="h-9 px-5 gap-1.5" disabled={isSending || !composeTo.trim() || !composeSubject.trim()}
                 onClick={async () => {
@@ -511,7 +502,7 @@ export default function Mail() {
                     setIsSending(false);
                   }
                 }}>
-                <Send className="h-3.5 w-3.5" /> Versturen
+                <Save className="h-3.5 w-3.5" /> Opslaan als concept
               </Button>
             </div>
           </div>
