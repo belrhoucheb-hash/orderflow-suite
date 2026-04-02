@@ -15,9 +15,18 @@
   <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c7e5052e-d64a-43cb-8780-25c62bd97cc9/id-preview-92fa784d--4a8bf948-3d85-4558-b9dc-fea1f2dadc84.lovable.app-1774615736244.png">
   <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c7e5052e-d64a-43cb-8780-25c62bd97cc9/id-preview-92fa784d--4a8bf948-3d85-4558-b9dc-fea1f2dadc84.lovable.app-1774615736244.png">
   <meta name="twitter:card" content="summary_large_image">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#dc2626">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+      }
+    </script>
   </body>
 </html>

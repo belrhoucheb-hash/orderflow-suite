@@ -1,29 +1,31 @@
-import { useState, useMemo } from "react";
-import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Loader2, HelpCircle } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Loader2, HelpCircle, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { statusLabels } from "@/data/mockData";
 import { useOrders } from "@/hooks/useOrders";
+import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import SmartLabel from "@/components/orders/SmartLabel";
 
 const statusStyles: Record<string, string> = {
-  nieuw: "bg-blue-500/8 text-blue-700 border-blue-200/60",
-  in_behandeling: "bg-amber-500/8 text-amber-700 border-amber-200/60",
-  onderweg: "bg-primary/8 text-primary border-primary/20",
-  afgeleverd: "bg-emerald-500/8 text-emerald-700 border-emerald-200/60",
-  geannuleerd: "bg-muted text-muted-foreground border-border",
-  wacht_op_antwoord: "bg-violet-500/8 text-violet-700 border-violet-200/60",
+  DRAFT: "bg-blue-500/8 text-blue-700 border-blue-200/60",
+  PENDING: "bg-amber-500/8 text-amber-700 border-amber-200/60",
+  PLANNED: "bg-violet-500/8 text-violet-700 border-violet-200/60",
+  IN_TRANSIT: "bg-primary/8 text-primary border-primary/20",
+  DELIVERED: "bg-emerald-500/8 text-emerald-700 border-emerald-200/60",
+  CANCELLED: "bg-muted text-muted-foreground border-border",
 };
 
 const statusDotColors: Record<string, string> = {
-  nieuw: "bg-blue-500",
-  in_behandeling: "bg-amber-500",
-  onderweg: "bg-primary",
-  afgeleverd: "bg-emerald-500",
-  geannuleerd: "bg-muted-foreground/40",
-  wacht_op_antwoord: "bg-violet-500",
+  DRAFT: "bg-blue-500",
+  PENDING: "bg-amber-500",
+  PLANNED: "bg-violet-500",
+  IN_TRANSIT: "bg-primary",
+  DELIVERED: "bg-emerald-500",
+  CANCELLED: "bg-muted-foreground/40",
 };
 
 const priorityDotColors: Record<string, string> = {
@@ -33,12 +35,35 @@ const priorityDotColors: Record<string, string> = {
   spoed: "text-primary",
 };
 
-const filterOptions = ["alle", "nieuw", "wacht_op_antwoord", "in_behandeling", "onderweg", "afgeleverd"] as const;
+const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED"] as const;
 
 const Orders = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
-  const { data: orders = [], isLoading } = useOrders();
+  const { data: orders = [], isLoading, isError, refetch } = useOrders();
+  const [printOrder, setPrintOrder] = useState<any>(null);
+  const [printLoading, setPrintLoading] = useState<string | null>(null);
+
+  const handleQuickPrint = async (orderId: string) => {
+    setPrintLoading(orderId);
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("id", orderId)
+        .single();
+      if (error) throw error;
+      setPrintOrder(data);
+      // Wait for React to render the SmartLabel, then print
+      setTimeout(() => {
+        window.print();
+        setPrintOrder(null);
+        setPrintLoading(null);
+      }, 200);
+    } catch {
+      setPrintLoading(null);
+    }
+  };
 
   const filtered = orders.filter((o) => {
     const matchesSearch =
@@ -66,6 +91,16 @@ const Orders = () => {
     );
   }
 
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center">
+        <p className="text-sm font-semibold text-foreground mb-1">Kan orders niet laden</p>
+        <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
+        <button onClick={() => refetch()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -84,10 +119,10 @@ const Orders = () => {
       {/* Stats Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
         {[
-          { label: "Nieuw", value: stats.byStatus["nieuw"] || 0, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
-          { label: "Wachtend", value: stats.byStatus["wacht_op_antwoord"] || 0, icon: HelpCircle, color: "text-violet-600", bg: "bg-violet-500/8" },
-          { label: "Onderweg", value: stats.byStatus["onderweg"] || 0, icon: Truck, color: "text-primary", bg: "bg-primary/8" },
-          { label: "Afgeleverd", value: stats.byStatus["afgeleverd"] || 0, icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-500/8" },
+          { label: "Nieuw", value: stats.byStatus["DRAFT"] || 0, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
+          { label: "In behandeling", value: stats.byStatus["PENDING"] || 0, icon: HelpCircle, color: "text-violet-600", bg: "bg-violet-500/8" },
+          { label: "Onderweg", value: (stats.byStatus["IN_TRANSIT"] || 0) + (stats.byStatus["PLANNED"] || 0), icon: Truck, color: "text-primary", bg: "bg-primary/8" },
+          { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: Circle, color: "text-emerald-600", bg: "bg-emerald-500/8" },
           { label: "Spoed / Hoog", value: stats.spoedCount, icon: Clock, color: "text-amber-600", bg: "bg-amber-500/8" },
         ].map((stat) => (
           <motion.div
@@ -101,7 +136,7 @@ const Orders = () => {
             </div>
             <div>
               <p className="text-xl font-semibold font-display tabular-nums">{stat.value}</p>
-              <p className="text-[11px] text-muted-foreground">{stat.label}</p>
+              <p className="text-xs text-muted-foreground">{stat.label}</p>
             </div>
           </motion.div>
         ))}
@@ -147,13 +182,14 @@ const Orders = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/40 bg-muted/30">
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Order</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Klant</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden lg:table-cell">Ophaaladres</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden md:table-cell">Afleveradres</th>
-                <th className="px-4 py-2.5 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Gewicht</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Status</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden sm:table-cell">Prioriteit</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 w-[100px]">Order</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Klant</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden lg:table-cell">Ophaaladres</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">Afleveradres</th>
+                <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 w-[90px]">Gewicht</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 w-[100px]">Status</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden sm:table-cell w-[90px]">Prioriteit</th>
+                <th className="px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 w-16">Label</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/20">
@@ -171,26 +207,26 @@ const Orders = () => {
                     <td className="px-4 py-2">
                       <Link
                         to={`/orders/${order.id}`}
-                        className="font-mono text-[13px] font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
+                        className="font-mono text-sm font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
                       >
                         <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDotColors[order.status])} />
                         {order.orderNumber}
                         </Link>
                     </td>
-                    <td className="px-4 py-2 text-[13px] text-foreground/80">{order.customer}</td>
-                    <td className="px-4 py-2 text-[13px] text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
+                    <td className="px-4 py-2 text-sm text-foreground/80">{order.customer}</td>
+                    <td className="px-4 py-2 text-sm text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
                       {order.pickupAddress}
                     </td>
-                    <td className="px-4 py-2 text-[13px] text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
+                    <td className="px-4 py-2 text-sm text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
                       {order.deliveryAddress}
                     </td>
-                    <td className="px-4 py-2 text-[13px] text-foreground/80 text-right tabular-nums font-medium">
+                    <td className="px-4 py-2 text-sm text-foreground/80 text-right tabular-nums font-medium">
                       {order.totalWeight.toLocaleString()} kg
                     </td>
                     <td className="px-4 py-2">
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border",
+                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border",
                           statusStyles[order.status]
                         )}
                       >
@@ -199,7 +235,7 @@ const Orders = () => {
                       </span>
                     </td>
                     <td className="px-4 py-2 hidden sm:table-cell">
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground capitalize">
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground capitalize">
                         <Circle
                           className={cn("h-1.5 w-1.5 fill-current", priorityDotColors[order.priority])}
                           strokeWidth={0}
@@ -207,12 +243,26 @@ const Orders = () => {
                         {order.priority}
                       </span>
                     </td>
+                    <td className="px-4 py-2 text-center">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleQuickPrint(order.id); }}
+                        disabled={printLoading === order.id}
+                        className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+                        title="Print label"
+                      >
+                        {printLoading === order.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Printer className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </td>
                   </motion.tr>
                 ))}
               </AnimatePresence>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-5 py-16 text-center">
                     <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
                     <p className="text-sm text-muted-foreground">Geen orders gevonden</p>
                   </td>
@@ -224,14 +274,17 @@ const Orders = () => {
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {filtered.length} van {orders.length} transportopdrachten
           </p>
-          <p className="text-[11px] text-muted-foreground tabular-nums">
+          <p className="text-xs text-muted-foreground tabular-nums">
             Totaal: {filtered.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
           </p>
         </div>
       </motion.div>
+
+      {/* Hidden label for printing */}
+      {printOrder && <SmartLabel order={printOrder} />}
     </div>
   );
 };

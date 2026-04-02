@@ -19,6 +19,10 @@ export interface OrderDraft {
   received_at: string | null;
   created_at: string;
   attachments: { name: string; url: string; type: string }[] | null;
+  pickup_time_from: string | null;
+  pickup_time_to: string | null;
+  delivery_time_from: string | null;
+  delivery_time_to: string | null;
   internal_note: string | null;
   missing_fields: string[] | null;
   follow_up_draft: string | null;

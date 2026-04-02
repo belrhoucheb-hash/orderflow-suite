@@ -108,19 +108,19 @@ export function PlanningVehicleCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-[10px] gap-1"
+                className="h-6 px-2 text-xs gap-1"
                 onClick={(e) => { e.stopPropagation(); onOptimize(vehicle.id); }}
               >
                 <RotateCw className="h-3 w-3" />Optimaliseer
               </Button>
             )}
-            <Badge variant="secondary" className="text-[10px]">{vehicle.type}</Badge>
+            <Badge variant="secondary" className="text-xs">{vehicle.type}</Badge>
           </div>
         </div>
         <div className="flex items-center gap-2 mt-1.5">
           <p className="text-xs text-muted-foreground shrink-0">{vehicle.plate}</p>
           <Select value={driverId} onValueChange={(v) => onDriverChange(vehicle.id, v)}>
-            <SelectTrigger className="h-6 text-[11px] px-2 w-[130px] bg-background">
+            <SelectTrigger className="h-6 text-xs px-2 w-[130px] bg-background">
               <User className="h-3 w-3 mr-1 text-muted-foreground" />
               <SelectValue placeholder="Chauffeur..." />
             </SelectTrigger>
@@ -128,7 +128,7 @@ export function PlanningVehicleCard({
               {drivers.map((d) => (
                 <SelectItem key={d.id} value={d.id} className="text-xs">
                   {d.name}
-                  {d.certifications && d.certifications.length > 0 && <span className="text-[9px] text-muted-foreground ml-1">({d.certifications.join(", ")})</span>}
+                  {d.certifications && d.certifications.length > 0 && <span className="text-xs text-muted-foreground ml-1">({d.certifications.join(", ")})</span>}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -139,7 +139,7 @@ export function PlanningVehicleCard({
               type="time"
               value={startTime}
               onChange={(e) => onStartTimeChange(vehicle.id, e.target.value)}
-              className="h-6 w-[80px] text-[11px] px-1.5 text-center bg-background"
+              className="h-6 w-[80px] text-xs px-1.5 text-center bg-background"
             />
           </div>
         </div>
@@ -147,7 +147,7 @@ export function PlanningVehicleCard({
       <CardContent className="space-y-2 px-4 pb-0 flex-1">
         <div className="space-y-1.5">
           <div>
-            <div className="flex justify-between text-[11px] mb-0.5">
+            <div className="flex justify-between text-xs mb-0.5">
               <span className={cn("text-muted-foreground", capacityColor(pctKg))}>Gewicht</span>
               <span className={cn("font-medium", pctKg > 100 && "text-destructive")}>{totalKg} / {vehicle.capacityKg} kg</span>
             </div>
@@ -162,7 +162,7 @@ export function PlanningVehicleCard({
             </div>
           </div>
           <div>
-            <div className="flex justify-between text-[11px] mb-0.5">
+            <div className="flex justify-between text-xs mb-0.5">
               <span className={cn("text-muted-foreground", capacityColor(pctPallets))}>Pallets</span>
               <span className={cn("font-medium", pctPallets > 100 && "text-destructive")}>{totalPallets} / {vehicle.capacityPallets}</span>
             </div>
@@ -180,10 +180,10 @@ export function PlanningVehicleCard({
 
         {assigned.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-16 border-2 border-dashed border-border/40 rounded-xl bg-muted/20 px-3">
-            <p className="text-[11px] text-muted-foreground/50 italic flex items-center gap-1.5">
+            <p className="text-xs text-muted-foreground/50 italic flex items-center gap-1.5">
               <Package className="h-3.5 w-3.5" />Sleep orders hierheen
             </p>
-            <p className="text-[9px] text-muted-foreground/35 mt-0.5 text-center leading-snug">{emptyReason}</p>
+            <p className="text-xs text-muted-foreground/35 mt-0.5 text-center leading-snug">{emptyReason}</p>
           </div>
         ) : (
           <SortableContext items={assigned.map((o) => o.id)} strategy={verticalListSortingStrategy}>
@@ -207,7 +207,7 @@ export function PlanningVehicleCard({
 
       {assigned.length > 0 && (
         <div className="mt-auto px-4 pb-3 pt-2 space-y-1.5">
-          <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="flex items-center gap-1 cursor-help">
@@ -215,17 +215,17 @@ export function PlanningVehicleCard({
                   <span className="font-medium text-foreground">{formatDuration(stats.totalMinutes)}</span>
                 </span>
               </TooltipTrigger>
-              <TooltipContent className="text-[10px] max-w-[200px]">Totale rijtijd inclusief {assigned.length}× {UNLOAD_MINUTES} min lostijd</TooltipContent>
+              <TooltipContent className="text-xs max-w-[200px]">Totale rijtijd inclusief {assigned.length}× {UNLOAD_MINUTES} min lostijd</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="flex items-center gap-1 tabular-nums cursor-help">
                   <Route className="h-3 w-3" />
                   {stats.totalKm} km
-                  <span className="text-[10px] opacity-50">(+{stats.returnKm})</span>
+                  <span className="text-xs opacity-50">(+{stats.returnKm})</span>
                 </span>
               </TooltipTrigger>
-              <TooltipContent className="text-[10px] max-w-[200px]">Route: {stats.totalKm - stats.returnKm} km heen + {stats.returnKm} km retour naar depot</TooltipContent>
+              <TooltipContent className="text-xs max-w-[200px]">Route: {stats.totalKm - stats.returnKm} km heen + {stats.returnKm} km retour naar depot</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -236,13 +236,13 @@ export function PlanningVehicleCard({
                   </span>
                 </span>
               </TooltipTrigger>
-              <TooltipContent className="text-[10px] max-w-[220px]">
+              <TooltipContent className="text-xs max-w-[220px]">
                 Capaciteitsbenutting: {Math.round(pctKg)}% gewicht ({totalKg}/{vehicle.capacityKg} kg) · {Math.round(pctPallets)}% pallets ({totalPallets}/{vehicle.capacityPallets})
               </TooltipContent>
             </Tooltip>
           </div>
           {stats.exceedsDriveLimit && (
-            <div className="flex items-center gap-1.5 rounded-xl bg-destructive/8 border border-destructive/15 px-3 py-2 text-[11px] text-destructive font-medium">
+            <div className="flex items-center gap-1.5 rounded-xl bg-destructive/8 border border-destructive/15 px-3 py-2 text-xs text-destructive font-medium">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               <span>Rijtijdenwet: {formatDuration(stats.totalMinutes)} overschrijdt 9 uur!</span>
             </div>

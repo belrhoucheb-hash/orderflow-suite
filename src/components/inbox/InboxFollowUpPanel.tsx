@@ -33,21 +33,29 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
     }
     setIsSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("send-follow-up", {
-        body: {
-          orderId: selected.id,
-          toEmail,
-          subject: `Re: ${selected.source_email_subject || "Uw transportaanvraag"} - Aanvullende informatie nodig`,
-          body: draft,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      toast({ title: "Follow-up verzonden", description: `E-mail gestuurd naar ${toEmail}` });
+      const subject = encodeURIComponent(`Re: ${selected.source_email_subject || "Uw transportaanvraag"} - Aanvullende informatie nodig`);
+      const body = encodeURIComponent(draft);
+
+      // Try edge function first, fallback to mailto
+      try {
+        const { data, error } = await supabase.functions.invoke("send-follow-up", {
+          body: { orderId: selected.id, toEmail, subject: decodeURIComponent(subject), body: draft },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        toast({ title: "Follow-up verzonden", description: `E-mail gestuurd naar ${toEmail}` });
+      } catch {
+        // Fallback: open mailto link
+        window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`);
+        toast({ title: "E-mail client geopend", description: `Follow-up klaar om te versturen naar ${toEmail}` });
+      }
+
+      // Mark as sent
+      await supabase.from("orders").update({ follow_up_sent_at: new Date().toISOString() }).eq("id", selected.id);
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
     } catch (e: any) {
       console.error("Send follow-up error:", e);
-      toast({ title: "Verzenden mislukt", description: e.message || "Controleer SMTP configuratie", variant: "destructive" });
+      toast({ title: "Verzenden mislukt", description: e.message, variant: "destructive" });
     } finally {
       setIsSending(false);
     }
@@ -58,15 +66,15 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
   };
 
   return (
-    <div className="border-t border-border/30">
-      <div className="px-5 py-3">
+    <div className="border-t border-border/30" style={{ minWidth: 0, overflow: "hidden" }}>
+      <div className="px-4 py-3" style={{ minWidth: 0 }}>
         <div className="flex items-center gap-2 mb-3">
           <div className="h-5 w-5 rounded-md bg-amber-500/10 flex items-center justify-center">
             <CircleAlert className="h-3 w-3 text-amber-600" />
           </div>
-          <h4 className="text-[11px] font-bold text-foreground uppercase tracking-[0.08em]">Ontbrekende Gegevens</h4>
+          <h4 className="text-xs font-bold text-foreground uppercase tracking-[0.08em]">Ontbrekende Gegevens</h4>
           {alreadySent && (
-            <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md ml-auto flex items-center gap-1">
+            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md ml-auto flex items-center gap-1">
               <CheckCircle2 className="h-2.5 w-2.5" />
               Verzonden {new Date(selected.follow_up_sent_at!).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
             </span>
@@ -76,7 +84,7 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
         {hasMissing && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {(selected.missing_fields || []).map((field) => (
-              <span key={field} className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60">
+              <span key={field} className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60">
                 {field}
               </span>
             ))}
@@ -85,19 +93,19 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] text-muted-foreground font-medium">Concept follow-up mail aan {toEmail || "onbekend"}</p>
+            <p className="text-xs text-muted-foreground font-medium">Concept follow-up mail aan {toEmail || "onbekend"}</p>
           </div>
           <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={saveDraft}
-            className="text-[12px] min-h-[120px] rounded-lg resize-none bg-background border-border/40 leading-relaxed"
+            className="text-sm min-h-[120px] rounded-lg resize-none bg-background border-border/40 leading-relaxed"
             placeholder="Concept follow-up mail..."
           />
           <div className="flex items-center gap-2">
             <Button
               size="sm"
-              className="h-8 text-[11px] gap-1.5"
+              className="h-8 text-xs gap-1.5"
               onClick={handleSend}
               disabled={isSending || !draft || alreadySent}
             >
@@ -105,7 +113,7 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
               {alreadySent ? "Al verzonden" : "Verstuur Follow-up"}
             </Button>
             {alreadySent && (
-              <Button variant="outline" size="sm" className="h-8 text-[11px] gap-1.5" onClick={handleSend} disabled={isSending}>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleSend} disabled={isSending}>
                 <Send className="h-3.5 w-3.5" />
                 Opnieuw versturen
               </Button>

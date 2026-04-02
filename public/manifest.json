@@ -1,0 +1,16 @@
+{
+  "name": "Royalty Cargo TMS",
+  "short_name": "RC TMS",
+  "description": "Transport Management System - Order & Fleet Management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#dc2626",
+  "orientation": "any",
+  "icons": [
+    { "src": "/favicon.ico", "sizes": "64x64", "type": "image/x-icon" },
+    { "src": "/favicon.ico", "sizes": "192x192", "type": "image/x-icon", "purpose": "any maskable" }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "nl"
+}

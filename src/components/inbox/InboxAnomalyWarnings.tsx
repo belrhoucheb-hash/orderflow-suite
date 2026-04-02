@@ -15,10 +15,10 @@ export function AnomalyWarnings({ anomalies }: { anomalies: { field: string; val
         >
           <Bot className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] text-amber-800 font-medium leading-snug">{a.message}</p>
+            <p className="text-xs text-amber-800 font-medium leading-snug">{a.message}</p>
             <div className="flex items-center gap-3 mt-1">
-              <span className="text-[10px] text-amber-600/70">Huidige waarde: <strong>{a.value}</strong></span>
-              <span className="text-[10px] text-amber-600/70">Gemiddeld: <strong>{a.avg_value}</strong></span>
+              <span className="text-xs text-amber-600/70">Huidige waarde: <strong>{a.value}</strong></span>
+              <span className="text-xs text-amber-600/70">Gemiddeld: <strong>{a.avg_value}</strong></span>
             </div>
           </div>
         </motion.div>

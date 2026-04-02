@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, Plus, Building2, X } from "lucide-react";
+import { Search, Plus, Building2, X, ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ export default function Clients() {
   const [search, setSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const { data: clients, isLoading } = useClients(search);
+  const { data: clients, isLoading, isError, refetch } = useClients(search);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,8 +28,8 @@ export default function Clients() {
   return (
     <div className="flex h-full">
       {/* Main table area */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300" style={{ marginRight: selectedClient ? 480 : 0 }}>
-        <div className="flex items-center justify-between px-8 py-6">
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedClient ? "lg:mr-[420px]" : ""}`}>
+        <div className="flex items-center justify-between px-4 md:px-6 py-6">
           <div>
             <h1 className="text-2xl font-semibold text-foreground tracking-tight">Klanten</h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -45,7 +45,7 @@ export default function Clients() {
           </Button>
         </div>
 
-        <div className="px-8 pb-4">
+        <div className="px-4 md:px-6 pb-4">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -57,22 +57,30 @@ export default function Clients() {
           </div>
         </div>
 
-        <div className="px-8 flex-1 overflow-auto pb-8">
+        <div className="px-4 md:px-6 flex-1 overflow-auto pb-8">
           <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">Klantnaam</th>
-                  <th className="text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">Contactpersoon</th>
-                  <th className="text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">Email</th>
-                  <th className="text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">Telefoon</th>
-                  <th className="text-center text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">Actieve Orders</th>
-                  <th className="text-center text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">Status</th>
+                  <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Klantnaam</th>
+                  <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Contactpersoon</th>
+                  <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Email</th>
+                  <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Telefoon</th>
+                  <th className="text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Actieve Orders</th>
+                  <th className="text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Laden...</td></tr>
+                ) : isError ? (
+                  <tr><td colSpan={6}>
+                    <div className="flex flex-col items-center justify-center h-64 text-center">
+                      <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
+                      <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
+                      <button onClick={() => refetch()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
+                    </div>
+                  </td></tr>
                 ) : clients?.length === 0 ? (
                   <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Geen klanten gevonden</td></tr>
                 ) : (
@@ -118,11 +126,24 @@ export default function Clients() {
         </div>
       </div>
 
+      {/* Backdrop for mobile */}
+      {selectedClient && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          onClick={() => setSelectedClient(null)}
+        />
+      )}
+
       {/* Detail panel */}
       {selectedClient && (
-        <div ref={panelRef} className="fixed right-0 top-14 bottom-0 w-[480px] bg-card border-l border-border shadow-xl z-40 overflow-y-auto">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card z-10">
-            <h2 className="text-base font-semibold text-foreground">{selectedClient.name}</h2>
+        <div ref={panelRef} className="fixed inset-y-0 right-0 w-full sm:w-96 lg:w-[420px] bg-card border-l border-border shadow-xl z-40 overflow-y-auto">
+          <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border sticky top-0 bg-card z-10">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSelectedClient(null)}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <h2 className="text-base font-semibold text-foreground">{selectedClient.name}</h2>
+            </div>
             <Button variant="ghost" size="icon" onClick={() => setSelectedClient(null)}>
               <X className="h-4 w-4" />
             </Button>

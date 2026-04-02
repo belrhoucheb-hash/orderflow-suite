@@ -12,6 +12,10 @@ export interface PlanOrder {
   is_weight_per_unit: boolean;
   time_window_start: string | null;
   time_window_end: string | null;
+  pickup_time_from: string | null;
+  pickup_time_to: string | null;
+  delivery_time_from: string | null;
+  delivery_time_to: string | null;
 }
 
 export type Assignments = Record<string, PlanOrder[]>;

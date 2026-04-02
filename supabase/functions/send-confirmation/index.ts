@@ -28,7 +28,7 @@ serve(async (req) => {
     // Fetch the order
     const { data: order, error: fetchError } = await supabase
       .from("orders")
-      .select("*")
+      .select("*, tenants(name, email)")
       .eq("id", orderId)
       .single();
 
@@ -101,12 +101,15 @@ serve(async (req) => {
     lines.push(``);
     lines.push(`Heeft u vragen of wijzigingen? Reageer dan op deze e-mail met vermelding van ordernummer #${orderNum}.`);
     lines.push(``);
+    const tenantName = order.tenants?.name || "Royalty Cargo";
+    const tenantEmail = order.tenants?.email || "planning@royaltycargo.nl";
+
     lines.push(`Met vriendelijke groet,`);
-    lines.push(`Royalty Cargo Planning`);
-    lines.push(`planning@royaltycargo.nl`);
+    lines.push(`${tenantName} Planning`);
+    lines.push(`${tenantEmail}`);
 
     const body = lines.join("\n");
-    const subject = `Bevestiging transportorder #${orderNum} — Royalty Cargo`;
+    const subject = `Bevestiging transportorder #${orderNum} — ${tenantName}`;
 
     // Send via SMTP
     const encoder = new TextEncoder();
@@ -203,7 +206,7 @@ serve(async (req) => {
       await readResponse();
 
       const emailContent = [
-        `From: Royalty Cargo Planning <${smtpUser}>`,
+        `From: ${tenantName} Planning <${smtpUser}>`,
         `To: ${toEmail}`,
         `Subject: ${subject}`,
         `Content-Type: text/plain; charset=UTF-8`,

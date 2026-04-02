@@ -134,7 +134,7 @@ const UsersPage = () => {
             </div>
             <div>
               <p className="text-lg font-semibold font-display tabular-nums leading-tight">{stat.value}</p>
-              <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+              <p className="text-xs text-muted-foreground">{stat.label}</p>
             </div>
           </motion.div>
         ))}
@@ -151,11 +151,11 @@ const UsersPage = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/40 bg-muted/30">
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Gebruiker</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Rol</th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden sm:table-cell">Geregistreerd</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Gebruiker</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Rol</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden sm:table-cell">Geregistreerd</th>
                 {isAdmin && (
-                  <th className="px-4 py-2.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Acties</th>
+                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Acties</th>
                 )}
               </tr>
             </thead>
@@ -170,12 +170,12 @@ const UsersPage = () => {
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-[11px] font-semibold text-white shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-xs font-semibold text-white shrink-0">
                         {(user.display_name || "?").slice(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-[13px] font-medium text-foreground">{user.display_name || "Onbekend"}</p>
-                        <p className="text-[11px] text-muted-foreground">{user.user_id.slice(0, 8)}...</p>
+                        <p className="text-sm font-medium text-foreground">{user.display_name || "Onbekend"}</p>
+                        <p className="text-xs text-muted-foreground">{user.user_id.slice(0, 8)}...</p>
                       </div>
                     </div>
                   </td>
@@ -185,7 +185,7 @@ const UsersPage = () => {
                         <Badge
                           key={role}
                           variant="outline"
-                          className={cn("text-[10px] px-2 py-0.5 capitalize", roleStyles[role] || roleStyles.medewerker)}
+                          className={cn("text-xs px-2 py-0.5 capitalize", roleStyles[role] || roleStyles.medewerker)}
                         >
                           {role === "admin" && <Shield className="h-2.5 w-2.5 mr-1" />}
                           {role}
@@ -194,7 +194,7 @@ const UsersPage = () => {
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="text-[12px] text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {new Date(user.created_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
                     </span>
                   </td>
@@ -205,7 +205,7 @@ const UsersPage = () => {
                         onValueChange={(val) => handleRoleChange(user.user_id, val)}
                         disabled={changingRole === user.user_id}
                       >
-                        <SelectTrigger className="h-8 w-[140px] text-[12px]">
+                        <SelectTrigger className="h-8 w-[140px] text-sm">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -230,7 +230,7 @@ const UsersPage = () => {
         </div>
 
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
-          <p className="text-[11px] text-muted-foreground">{users.length} gebruiker{users.length !== 1 ? "s" : ""}</p>
+          <p className="text-xs text-muted-foreground">{users.length} gebruiker{users.length !== 1 ? "s" : ""}</p>
         </div>
       </motion.div>
     </div>

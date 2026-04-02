@@ -10,12 +10,12 @@ interface Props {
 
 export function OperationalForecastWidget({ vehicles, orders }: Props) {
   const totalVehicles = vehicles.length || 1;
-  // Orders with status "onderweg" = planned/active
-  const plannedCount = orders.filter((o) => o.status === "onderweg" || o.status === "in_behandeling").length;
+  // Orders with status IN_TRANSIT or PLANNED = planned/active
+  const plannedCount = orders.filter((o) => o.status === "IN_TRANSIT" || o.status === "PLANNED").length;
   const freeCount = Math.max(totalVehicles - plannedCount, 0);
 
-  // Pallet count from orders
-  const palletOrders = orders.filter((o) => o.status !== "afgeleverd" && o.status !== "geannuleerd");
+  // Pallet count from orders (exclude completed/cancelled)
+  const palletOrders = orders.filter((o) => o.status !== "DELIVERED" && o.status !== "CANCELLED");
   const totalPallets = palletOrders.reduce((s, o) => s + (o.items?.length || 0), 0);
 
   return (
@@ -31,22 +31,22 @@ export function OperationalForecastWidget({ vehicles, orders }: Props) {
         </div>
         <div>
           <h2 className="text-sm font-semibold font-display">Operationele Forecast</h2>
-          <p className="text-[10px] text-muted-foreground">Planner view</p>
+          <p className="text-xs text-muted-foreground">Planner view</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg bg-muted/30 p-3">
-          <p className="text-[10px] text-muted-foreground mb-2">Capaciteit</p>
+          <p className="text-xs text-muted-foreground mb-2">Capaciteit</p>
           <div className="flex items-center gap-1.5 mb-1">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="text-[11px] text-muted-foreground">Vrij</span>
-            <span className="text-[13px] font-bold font-display tabular-nums ml-auto">{freeCount}</span>
+            <span className="text-xs text-muted-foreground">Vrij</span>
+            <span className="text-sm font-bold font-display tabular-nums ml-auto">{freeCount}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-primary" />
-            <span className="text-[11px] text-muted-foreground">Gepland</span>
-            <span className="text-[13px] font-bold font-display tabular-nums ml-auto">{plannedCount}</span>
+            <span className="text-xs text-muted-foreground">Gepland</span>
+            <span className="text-sm font-bold font-display tabular-nums ml-auto">{plannedCount}</span>
           </div>
           <div className="flex gap-0.5 mt-2.5 h-1.5 rounded-full overflow-hidden">
             <div className="bg-emerald-500 rounded-l-full" style={{ width: `${(freeCount / totalVehicles) * 100}%` }} />
@@ -55,14 +55,14 @@ export function OperationalForecastWidget({ vehicles, orders }: Props) {
         </div>
 
         <div className="rounded-lg bg-muted/30 p-3">
-          <p className="text-[10px] text-muted-foreground mb-2">Totaal gewicht actief</p>
+          <p className="text-xs text-muted-foreground mb-2">Totaal gewicht actief</p>
           <div className="flex items-center gap-3">
             <Container className="h-8 w-8 text-muted-foreground/30" />
             <div>
               <p className="text-lg font-bold font-display tabular-nums">
                 {orders.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
               </p>
-              <p className="text-[9px] text-muted-foreground/60">{orders.length} orders</p>
+              <p className="text-xs text-muted-foreground/60">{orders.length} orders</p>
             </div>
           </div>
         </div>

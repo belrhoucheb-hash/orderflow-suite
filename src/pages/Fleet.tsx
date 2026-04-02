@@ -27,7 +27,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 };
 
 export default function Fleet() {
-  const { data: vehicles, isLoading } = useFleetVehicles();
+  const { data: vehicles, isLoading, isError, refetch } = useFleetVehicles();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -72,7 +72,7 @@ export default function Fleet() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
-      <div className="flex items-center justify-between px-8 py-6">
+      <div className="flex items-center justify-between px-4 md:px-6 py-6">
         <div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">Vloot</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -86,7 +86,7 @@ export default function Fleet() {
       </div>
 
       {/* Filters */}
-      <div className="px-8 pb-4 flex flex-wrap items-center gap-3">
+      <div className="px-4 md:px-6 pb-4 flex flex-wrap items-center gap-3">
         <div className="relative max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Zoek op naam of kenteken..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
@@ -120,9 +120,15 @@ export default function Fleet() {
       </div>
 
       {/* Cards grouped by type */}
-      <div className="px-8 flex-1 overflow-auto pb-8 space-y-8">
+      <div className="px-4 md:px-6 flex-1 overflow-auto pb-8 space-y-8">
         {isLoading ? (
           <p className="text-center py-12 text-muted-foreground text-sm">Laden...</p>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
+            <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
+            <button onClick={() => refetch()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
+          </div>
         ) : Object.keys(grouped).length === 0 ? (
           <p className="text-center py-12 text-muted-foreground text-sm">Geen voertuigen gevonden</p>
         ) : (
@@ -161,7 +167,7 @@ export default function Fleet() {
                             <>
                               <span>·</span>
                               {v.features.slice(0, 2).map((f) => (
-                                <Badge key={f} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                <Badge key={f} variant="secondary" className="text-xs px-1.5 py-0">
                                   {f}
                                 </Badge>
                               ))}
