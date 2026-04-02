@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Order, OrderStatus } from "@/data/mockData";
+import { logAudit } from "@/lib/auditLog";
 
 // ─── 8.11 Order Status State Machine ─────────────────────────────────
 // Valid status transitions (matches the intended Supabase check constraint):
@@ -251,6 +252,16 @@ export function useUpdateOrder() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["orders", variables.id] });
+
+      // Fire-and-forget audit trail for order updates (including status changes)
+      const changedFields = Object.keys(variables.updates);
+      logAudit({
+        table_name: "orders",
+        record_id: variables.id,
+        action: "UPDATE",
+        new_data: variables.updates,
+        changed_fields: changedFields,
+      });
     },
   });
 }

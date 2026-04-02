@@ -5,6 +5,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { QueryError } from "@/components/QueryError";
 import { useDrivers, type Driver } from "@/hooks/useDrivers";
 import { NewDriverDialog } from "@/components/drivers/NewDriverDialog";
 import { toast } from "sonner";
@@ -151,11 +152,7 @@ export default function Chauffeurs() {
              <p className="text-sm text-muted-foreground italic">Gegevens ophalen...</p>
           </div>
         ) : isError ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
-            <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
-            <button onClick={() => refetch()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
-          </div>
+          <QueryError message="Kan chauffeurs niet laden. Probeer het opnieuw." onRetry={() => refetch()} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-20 bg-card/30 rounded-3xl border border-dashed border-border/60">
             <Users className="h-12 w-12 mx-auto text-muted-foreground/20 mb-4" />
