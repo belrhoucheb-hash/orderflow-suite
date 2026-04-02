@@ -57,19 +57,39 @@ export function optimizeRoute(
 }
 
 /**
+ * Check if a given ETA (HH:mm string) falls within the order's time window.
+ * Returns true if within window or if no time window is set.
+ */
+export function isWithinTimeWindow(eta: string, order: PlanOrder): boolean {
+  const [etaH, etaM] = eta.split(":").map(Number);
+  const etaMinutes = etaH * 60 + etaM;
+  if (order.time_window_start) {
+    const [sh, sm] = order.time_window_start.split(":").map(Number);
+    // We allow arriving up to 30 min early (driver can wait), but flag it
+    // For strict check, early is fine (driver waits)
+  }
+  if (order.time_window_end) {
+    const [eh, em] = order.time_window_end.split(":").map(Number);
+    if (etaMinutes > eh * 60 + em) return false;
+  }
+  return true;
+}
+
+/**
  * Compute ETA for each stop given a start time, ordered stops, and a
- * coordinate map. Returns an ETA string and how many minutes late the
- * arrival is relative to the order's time window end (0 if on time).
+ * coordinate map. Returns an ETA string, how many minutes late the
+ * arrival is relative to the order's time window end (0 if on time),
+ * and how many minutes the driver must wait if arriving early.
  */
 export function computeETAs(
   startTime: string,
   stops: PlanOrder[],
   coordMap: Map<string, GeoCoord>,
-): { eta: string; lateMinutes: number }[] {
+): { eta: string; lateMinutes: number; waitMinutes: number }[] {
   const [startH, startM] = startTime.split(":").map(Number);
   let currentMinutes = startH * 60 + startM;
   let currentPos: GeoCoord = WAREHOUSE;
-  const results: { eta: string; lateMinutes: number }[] = [];
+  const results: { eta: string; lateMinutes: number; waitMinutes: number }[] = [];
 
   for (const order of stops) {
     const coord = coordMap.get(order.id);
@@ -78,6 +98,18 @@ export function computeETAs(
       const driveMin = (dist / AVG_SPEED_KMH) * 60;
       currentMinutes += driveMin;
     }
+
+    // Wait time: if we arrive before time_window_start, we must wait
+    let waitMin = 0;
+    if (order.time_window_start) {
+      const [swH, swM] = order.time_window_start.split(":").map(Number);
+      const windowStart = swH * 60 + swM;
+      if (currentMinutes < windowStart) {
+        waitMin = Math.round(windowStart - currentMinutes);
+        currentMinutes = windowStart; // driver waits until window opens
+      }
+    }
+
     const etaH = Math.floor(currentMinutes / 60) % 24;
     const etaM = Math.floor(currentMinutes % 60);
     const etaStr = `${String(etaH).padStart(2, "0")}:${String(etaM).padStart(2, "0")}`;
@@ -90,7 +122,7 @@ export function computeETAs(
       late = currentMinutes > windowEnd ? Math.round(currentMinutes - windowEnd) : 0;
     }
 
-    results.push({ eta: etaStr, lateMinutes: late });
+    results.push({ eta: etaStr, lateMinutes: late, waitMinutes: waitMin });
 
     // Add unload time
     currentMinutes += UNLOAD_MINUTES;
