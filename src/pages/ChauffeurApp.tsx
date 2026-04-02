@@ -15,6 +15,15 @@ import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
 import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineStore";
 
+const ORDERFLOW_PIN_SALT = "orderflow-salt";
+
+async function hashPin(pin: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + ORDERFLOW_PIN_SALT);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export default function ChauffeurApp() {
   const { data: drivers, isLoading: driversLoading } = useDrivers();
   const [activeDriverId, setActiveDriverId] = useState<string | null>(
@@ -74,8 +83,14 @@ export default function ChauffeurApp() {
 
       if (error) throw error;
 
-      const storedPin = (data as any)?.pin_hash || "0000";
-      if (pinInput !== storedPin) {
+      const storedHash = (data as any)?.pin_hash || "0000";
+      const inputHash = await hashPin(pinInput);
+
+      // Check hashed match, or plaintext fallback for legacy "0000"
+      const isPlaintextLegacy = storedHash === pinInput && storedHash === "0000";
+      const isHashMatch = inputHash === storedHash;
+
+      if (!isHashMatch && !isPlaintextLegacy) {
         const newAttempts = pinAttempts + 1;
         setPinAttempts(newAttempts);
         if (newAttempts >= 3) {
@@ -87,6 +102,14 @@ export default function ChauffeurApp() {
         }
         setPinInput("");
         return;
+      }
+
+      // Auto-migrate plaintext "0000" to hashed version
+      if (isPlaintextLegacy) {
+        await supabase
+          .from("drivers" as any)
+          .update({ pin_hash: inputHash })
+          .eq("id", pendingDriverId);
       }
 
       // PIN correct
@@ -118,9 +141,10 @@ export default function ChauffeurApp() {
       setPinError("PIN-codes komen niet overeen"); return;
     }
     try {
+      const hashedNewPin = await hashPin(newPin);
       await supabase
         .from("drivers" as any)
-        .update({ pin_hash: newPin, must_change_pin: false })
+        .update({ pin_hash: hashedNewPin, must_change_pin: false })
         .eq("id", pendingDriverId);
 
       toast.success("PIN succesvol gewijzigd");
