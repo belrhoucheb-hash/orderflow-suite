@@ -7,12 +7,18 @@ import { MobileNav } from "@/components/MobileNav";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useSLAMonitor } from "@/hooks/useSLAMonitor";
 import { useOrdersSubscription } from "@/hooks/useOrders";
+import { useAutoCompleteTripCheck } from "@/hooks/useTrips";
+import { useAutoInvoiceGeneration } from "@/hooks/useInvoices";
 
 export function AppLayout() {
   // Monitor SLA deadlines and auto-create notifications
   useSLAMonitor();
   // Listen for realtime database changes for orders
   useOrdersSubscription();
+  // Auto-complete trips when all stops reach terminal status (via Realtime)
+  useAutoCompleteTripCheck();
+  // Auto-generate concept invoices for billing-ready orders
+  useAutoInvoiceGeneration();
 
   return (
     <SidebarProvider>

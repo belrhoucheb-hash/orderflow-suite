@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { checkTripCompletion } from "@/hooks/useBillingStatus";
 import { toast } from "sonner";
@@ -73,7 +73,7 @@ export function useCreateTrip() {
       driver_id: string | null;
       planned_date: string;
       planned_start_time?: string;
-      stops: { order_id: string; stop_type: "PICKUP" | "DELIVERY"; planned_address: string; stop_sequence: number }[];
+      stops: { order_id: string; stop_type: "PICKUP" | "DELIVERY"; planned_address: string; stop_sequence: number; planned_latitude?: number | null; planned_longitude?: number | null }[];
     }) => {
       // Create trip
       const { data: trip, error: tripErr } = await supabase
@@ -98,6 +98,8 @@ export function useCreateTrip() {
         stop_sequence: s.stop_sequence,
         planned_address: s.planned_address,
         stop_status: "GEPLAND" as const,
+        planned_latitude: s.planned_latitude ?? null,
+        planned_longitude: s.planned_longitude ?? null,
       }));
 
       const { error: stopsErr } = await supabase.from("trip_stops").insert(stopInserts);
@@ -129,11 +131,49 @@ export function useUpdateTripStatus() {
 
       const { error } = await supabase.from("trips").update(updates).eq("id", tripId);
       if (error) throw error;
+
+      // When trip goes ACTIEF, set all linked orders to IN_TRANSIT
+      if (status === "ACTIEF") {
+        const { data: stops } = await supabase
+          .from("trip_stops")
+          .select("order_id")
+          .eq("trip_id", tripId);
+
+        if (stops && stops.length > 0) {
+          const orderIds = stops.map(s => s.order_id).filter(Boolean) as string[];
+          if (orderIds.length > 0) {
+            await supabase
+              .from("orders")
+              .update({ status: "IN_TRANSIT" })
+              .in("id", orderIds);
+          }
+        }
+      }
+
+      // When trip goes VOLTOOID, set all linked orders to DELIVERED
+      // (checkTripCompletion handles this via realtime, but also handle explicit VOLTOOID transitions)
+      if (status === "VOLTOOID") {
+        const { data: stops } = await supabase
+          .from("trip_stops")
+          .select("order_id, stop_status")
+          .eq("trip_id", tripId);
+
+        if (stops && stops.length > 0) {
+          for (const stop of stops) {
+            if (!stop.order_id) continue;
+            if (stop.stop_status === "AFGELEVERD") {
+              await supabase.from("orders").update({ status: "DELIVERED" }).eq("id", stop.order_id);
+            }
+            // MISLUKT orders stay as-is — exception handles resolution
+          }
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trips"] });
       queryClient.invalidateQueries({ queryKey: ["trip"] });
       queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
   });
 }
@@ -334,8 +374,8 @@ export function useAutoCompleteTripCheck() {
     [queryClient],
   );
 
-  // Subscribe on mount, cleanup on unmount
-  const subscribe = useCallback(() => {
+  // Auto-subscribe on mount, cleanup on unmount
+  useEffect(() => {
     const channel = supabase
       .channel("auto-trip-completion")
       .on(
@@ -349,7 +389,4 @@ export function useAutoCompleteTripCheck() {
       supabase.removeChannel(channel);
     };
   }, [handleStopChange]);
-
-  // Use effect equivalent — caller should invoke in useEffect
-  return { subscribe };
 }

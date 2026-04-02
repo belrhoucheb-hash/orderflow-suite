@@ -297,6 +297,45 @@ export function useInbox() {
   // ─── Mutations ───
   const createOrderMutation = useMutation({
     mutationFn: async ({ id, form }: { id: string; form: FormState }) => {
+      // ── Resolve client_id from client_name ──
+      const { data: orderData } = await supabase
+        .from("orders")
+        .select("client_name, tenant_id")
+        .eq("id", id)
+        .single();
+
+      let clientId: string | null = null;
+      const clientName = orderData?.client_name;
+      const orderTenantId = orderData?.tenant_id || tenant?.id;
+
+      if (clientName) {
+        // Try to find existing client
+        const { data: existingClient } = await supabase
+          .from("clients")
+          .select("id")
+          .ilike("name", `%${clientName}%`)
+          .limit(1);
+
+        if (existingClient && existingClient.length > 0) {
+          clientId = existingClient[0].id;
+        } else {
+          // Create new client
+          const { data: newClient, error: clientError } = await supabase
+            .from("clients")
+            .insert({
+              name: clientName,
+              ...(orderTenantId ? { tenant_id: orderTenantId } : {}),
+            })
+            .select("id")
+            .single();
+          if (clientError) {
+            console.error("Failed to create client:", clientError);
+          } else {
+            clientId = newClient.id;
+          }
+        }
+      }
+
       const { error } = await supabase
         .from("orders")
         .update({
@@ -311,6 +350,7 @@ export function useInbox() {
           dimensions: form.dimensions || null,
           requirements: form.requirements,
           internal_note: form.internalNote || null,
+          ...(clientId ? { client_id: clientId } : {}),
         })
         .eq("id", id);
       if (error) throw error;
