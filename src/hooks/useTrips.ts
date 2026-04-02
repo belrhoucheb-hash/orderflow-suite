@@ -9,6 +9,7 @@ import type { Trip, TripStop, TripStatus, StopStatus, canTransitionTrip, canTran
 export function useTrips(date?: string) {
   return useQuery({
     queryKey: ["trips", date],
+    staleTime: 10_000,
     queryFn: async () => {
       let query = supabase
         .from("trips")
@@ -30,6 +31,7 @@ export function useTrips(date?: string) {
 export function useTripById(tripId: string | null) {
   return useQuery({
     queryKey: ["trip", tripId],
+    staleTime: 10_000,
     queryFn: async () => {
       if (!tripId) return null;
       const { data, error } = await supabase
@@ -48,6 +50,7 @@ export function useTripById(tripId: string | null) {
 export function useDriverTrips(driverId: string | null) {
   return useQuery({
     queryKey: ["driver-trips", driverId],
+    staleTime: 10_000,
     queryFn: async () => {
       if (!driverId) return [];
       const { data, error } = await supabase
@@ -257,14 +260,27 @@ export function useDispatchTrip() {
       }).eq("id", tripId);
       if (updateErr) throw updateErr;
 
-      // Create notification for driver
-      await supabase.from("notifications").insert({
-        type: "trip_dispatched",
-        title: "Nieuwe rit ontvangen",
-        message: `Rit met ${stops.length} stops is naar je verstuurd`,
-        metadata: { trip_id: tripId },
-        is_read: false,
-      }).then(() => {});
+      // Create notification for driver (target their user_id if linked)
+      let driverUserId: string | null = null;
+      if (trip.driver_id) {
+        const { data: driverRow } = await supabase
+          .from("drivers" as any)
+          .select("user_id")
+          .eq("id", trip.driver_id)
+          .single();
+        driverUserId = (driverRow as any)?.user_id ?? null;
+      }
+
+      if (driverUserId) {
+        await supabase.from("notifications").insert({
+          type: "DISPATCH",
+          title: "Nieuwe rit toegewezen",
+          message: `Rit ${tripId.slice(0, 8)} is aan u toegewezen. ${stops.length} stop${stops.length !== 1 ? "s" : ""}.`,
+          metadata: { trip_id: tripId },
+          user_id: driverUserId,
+          is_read: false,
+        }).then(() => {});
+      }
 
       return { success: true };
     },
