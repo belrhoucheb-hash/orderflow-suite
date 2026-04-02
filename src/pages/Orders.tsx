@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight } from "lucide-react";
+import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getStatusColor } from "@/lib/statusColors";
 import { useOrders } from "@/hooks/useOrders";
@@ -15,6 +15,7 @@ import { KPIStrip, type KPIItem } from "@/components/ui/KPIStrip";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { OrderStatus } from "@/components/ui/StatusBadge";
+import { BulkImportDialog } from "@/components/orders/BulkImportDialog";
 
 const priorityDotColors: Record<string, string> = {
   laag: "text-muted-foreground/40",
@@ -33,6 +34,7 @@ const Orders = () => {
   const [printOrder, setPrintOrder] = useState<any>(null);
   const [printLoading, setPrintLoading] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const handleSort = (field: string) => {
     setSortConfig((prev) =>
@@ -143,11 +145,16 @@ const Orders = () => {
         title="Orderlijst"
         subtitle={`${totalCount} transportopdrachten in totaal`}
         actions={
-          <Link to="/orders/nieuw">
-            <Button className="btn-primary">
-              <Plus className="h-4 w-4" /> Nieuwe order
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" /> Import
             </Button>
-          </Link>
+            <Link to="/orders/nieuw">
+              <Button className="btn-primary">
+                <Plus className="h-4 w-4" /> Nieuwe order
+              </Button>
+            </Link>
+          </div>
         }
       />
 
@@ -342,6 +349,9 @@ const Orders = () => {
 
       {/* Hidden label for printing */}
       {printOrder && <SmartLabel order={printOrder} />}
+
+      {/* Bulk Import Dialog */}
+      <BulkImportDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 };
