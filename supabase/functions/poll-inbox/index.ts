@@ -215,6 +215,10 @@ async function pollInbox(): Promise<Response> {
   let client: ImapFlow | null = null;
   const results: { orderNumber: number; status: string; confidence: number }[] = [];
 
+  // Fetch a default tenant for incoming emails
+  const { data: defaultTenant } = await supabase.from("tenants").select("id").eq("is_active", true).limit(1);
+  const tenantId = defaultTenant?.[0]?.id || "00000000-0000-0000-0000-000000000001";
+
   try {
     client = new ImapFlow({
       host: imapHost,
@@ -318,6 +322,23 @@ async function pollInbox(): Promise<Response> {
               });
               if (classifyResp.ok) {
                 const classifyResult = await classifyResp.json();
+                
+                // Log AI Usage
+                const usage = classifyResult.usageMetadata;
+                if (usage && tenantId) {
+                  const inputTokens = usage.promptTokenCount || 0;
+                  const outputTokens = usage.candidatesTokenCount || 0;
+                  const cost = (inputTokens / 1_000_000) * 0.075 + (outputTokens / 1_000_000) * 0.3;
+                  await supabase.from("ai_usage_log").insert({
+                    tenant_id: tenantId,
+                    function_name: "poll-inbox-classify",
+                    model: "gemini-2.5-flash",
+                    input_tokens: inputTokens,
+                    output_tokens: outputTokens,
+                    cost_estimate: cost
+                  });
+                }
+
                 const text = parseGeminiResponse(classifyResult);
                 if (text) {
                   const parsed_result = JSON.parse(text);
@@ -368,7 +389,7 @@ async function pollInbox(): Promise<Response> {
               const parseResp = await fetch(`${supabaseUrl}/functions/v1/parse-order`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
-                body: JSON.stringify({ emailBody: parsed.body, pdfUrls, threadContext }),
+                body: JSON.stringify({ emailBody: parsed.body, pdfUrls, threadContext, tenantId }),
               });
 
               if (parseResp.ok) {
@@ -454,6 +475,7 @@ async function pollInbox(): Promise<Response> {
           const { data: order, error: insertError } = await supabase
             .from("orders")
             .insert({
+              tenant_id: tenantId,
               status: "DRAFT",
               source_email_from: fromAddr || parsed.from,
               source_email_subject: subject || parsed.subject,
@@ -469,8 +491,45 @@ async function pollInbox(): Promise<Response> {
           if (insertError) { console.error("Insert error:", insertError); continue; }
 
           // Apply extracted data to the new order
+          let orderStatus = "DRAFT";
+          let orderAutoApproved = false;
           if (extracted) {
-            const newStatus = confidence > 90 ? "OPEN" : "DRAFT";
+            // Auto-approve logic:
+            //   confidence >= 95 + known client = PENDING (auto-approved)
+            //   confidence >= 80 but unknown client = DRAFT (human review)
+            //   confidence < 80 = DRAFT (human review)
+            let newStatus = "DRAFT";
+            let autoApproved = false;
+
+            if (confidence >= 80) {
+              // Check if client is known in the database
+              let isKnownClient = false;
+              if (extracted.client_name) {
+                const { data: knownClient } = await supabase
+                  .from("clients")
+                  .select("id")
+                  .ilike("name", `%${extracted.client_name}%`)
+                  .eq("tenant_id", tenantId)
+                  .limit(1);
+                isKnownClient = !!(knownClient && knownClient.length > 0);
+              }
+
+              if (confidence >= 95 && isKnownClient) {
+                newStatus = "PENDING";
+                autoApproved = true;
+                console.log(`Auto-approved: confidence=${confidence}, known client="${extracted.client_name}"`);
+              } else {
+                newStatus = "DRAFT";
+                if (confidence >= 95 && !isKnownClient) {
+                  console.log(`High confidence (${confidence}) but unknown client "${extracted.client_name}" — requires human review`);
+                } else {
+                  console.log(`Moderate confidence (${confidence}) — requires human review`);
+                }
+              }
+            } else {
+              console.log(`Low confidence (${confidence}) — requires human review`);
+            }
+
             await supabase.from("orders").update({
               client_name: extracted.client_name || null,
               transport_type: extracted.transport_type || null,
@@ -484,6 +543,7 @@ async function pollInbox(): Promise<Response> {
               requirements: extracted.requirements || [],
               confidence_score: confidence,
               status: newStatus,
+              auto_approved: autoApproved,
               thread_type: detectedThreadType,
               changes_detected: parseData?.changes_detected || [],
               anomalies: parseData?.anomalies || [],
@@ -491,11 +551,13 @@ async function pollInbox(): Promise<Response> {
               follow_up_draft: parseData?.follow_up_draft || null,
             }).eq("id", order.id);
 
-            console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}, thread=${detectedThreadType}`);
+            orderStatus = newStatus;
+            orderAutoApproved = autoApproved;
+            console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}, auto_approved=${autoApproved}, thread=${detectedThreadType}`);
           }
 
           await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
-          results.push({ orderNumber: order.order_number, status: confidence > 90 ? "OPEN" : "DRAFT", confidence });
+          results.push({ orderNumber: order.order_number, status: orderStatus, confidence });
         } catch (msgErr) {
           console.error(`Error processing uid ${uid}:`, msgErr);
         }

@@ -1,6 +1,6 @@
 import React from "react";
 import { useDroppable } from "@dnd-kit/core";
-import { Package, MapPin, Search, Filter, Route } from "lucide-react";
+import { Package, MapPin, Search, Route, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,15 +17,14 @@ export function PlanningUnassignedSidebar({
   onSearchChange,
   filterTag,
   onFilterTagChange,
-  onInjectTest,
   onCombineTrips,
   onAutoPlan,
+  onClearPlanning,
   onHoverOrder,
   fleetVehicles,
   assignments,
   totalUnassigned,
   totalAssigned,
-  testOrdersLoaded,
 }: {
   orders: PlanOrder[];
   assignedIds: Set<string>;
@@ -34,15 +33,14 @@ export function PlanningUnassignedSidebar({
   onSearchChange: (val: string) => void;
   filterTag: string | null;
   onFilterTagChange: (tag: string | null) => void;
-  onInjectTest: () => void;
   onCombineTrips: () => void;
   onAutoPlan: () => void;
+  onClearPlanning: () => void;
   onHoverOrder: (id: string | null) => void;
   fleetVehicles: FleetVehicle[];
   assignments: Assignments;
   totalUnassigned: number;
   totalAssigned: number;
-  testOrdersLoaded: boolean;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: "unassigned" });
 
@@ -59,57 +57,53 @@ export function PlanningUnassignedSidebar({
           className="pl-9 h-9 text-sm rounded-lg border-border/40"
         />
       </div>
-      <div className="flex gap-1.5 flex-wrap">
+      {/* Filters */}
+      <div className="flex gap-1.5 flex-wrap items-center">
         {["ADR", "KOELING"].map((tag) => (
-          <Button
+          <button
             key={tag}
-            variant={filterTag === tag ? "default" : "outline"}
-            size="sm"
-            className="h-7 text-[11px] gap-1 rounded-lg"
             onClick={() => onFilterTagChange(filterTag === tag ? null : tag)}
+            className={cn(
+              "h-6 px-2.5 rounded-md text-xs font-medium border transition-colors",
+              filterTag === tag
+                ? "bg-foreground text-background border-foreground"
+                : "bg-transparent text-muted-foreground border-border/50 hover:border-border"
+            )}
           >
-            <Filter className="h-3 w-3" />{tag}
-          </Button>
+            {tag}
+          </button>
         ))}
         {filterTag && (
-          <Button variant="ghost" size="sm" className="h-7 text-[11px] rounded-lg" onClick={() => onFilterTagChange(null)}>
-            Reset
-          </Button>
+          <button onClick={() => onFilterTagChange(null)} className="h-6 px-1.5 rounded-md text-muted-foreground hover:text-foreground">
+            <X className="h-3 w-3" />
+          </button>
         )}
-        <div className="flex gap-1.5 ml-auto">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-[11px] gap-1 rounded-lg"
-            onClick={onInjectTest}
-            disabled={testOrdersLoaded}
-          >
-            🧪 Test
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-[11px] gap-1 rounded-lg"
-            onClick={onCombineTrips}
-            disabled={Object.values(assignments).filter((a) => a.length > 0).length < 2}
-          >
-            🔗 Combineer
-          </Button>
-          <Button
-            size="sm"
-            className="h-7 text-[11px] gap-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
-            onClick={onAutoPlan}
-            disabled={totalUnassigned === 0}
-          >
-            ⚡ Auto-Plan
-          </Button>
-        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-1.5 flex-wrap items-center">
+        <Button
+          size="sm"
+          className="h-7 text-xs rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground"
+          onClick={onAutoPlan}
+          disabled={totalUnassigned === 0}
+        >
+          Auto-plan
+        </Button>
+        <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={onCombineTrips}
+          disabled={Object.values(assignments).filter((a) => a.length > 0).length < 2}>
+          Combineer
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={onClearPlanning} disabled={totalAssigned === 0}>
+          Wissen
+        </Button>
       </div>
 
       {combineGroups.length > 0 && (
         <div className="space-y-1.5 mb-2">
           {combineGroups.slice(0, 2).map(g => (
-            <div key={g.key} className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[10px]">
+            <div key={g.key} className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
               <div className="flex items-center gap-1.5 text-primary font-semibold">
                 <Route className="h-3 w-3" />
                 Combineerbaar
@@ -130,27 +124,27 @@ export function PlanningUnassignedSidebar({
         {groupedUnassigned.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm">
             <Package className="h-8 w-8 mb-2 opacity-30" />
-            <p className="text-[11px]">Geen openstaande orders</p>
+            <p className="text-xs">Geen openstaande orders</p>
           </div>
         ) : (
           groupedUnassigned.map((group) => (
             <div key={group.region}>
               <div className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 py-1.5 px-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1.5">
                   <MapPin className="h-2.5 w-2.5" />
                   {group.label}
-                  <span className="text-[9px] bg-muted rounded-md px-1.5 py-0.5 ml-auto tabular-nums font-medium">
+                  <span className="text-xs bg-muted rounded-md px-1.5 py-0.5 ml-auto tabular-nums font-medium">
                     {group.orders.length}
                   </span>
                 </p>
               </div>
               <div className="space-y-1.5 mb-2">
                 {group.orders.map((order) => (
-                  <PlanningOrderCard 
-                    key={order.id} 
-                    order={order} 
-                    onHover={onHoverOrder} 
-                    whyNotReason={getUnassignedReason(order, fleetVehicles, assignments)} 
+                  <PlanningOrderCard
+                    key={order.id}
+                    order={order}
+                    onHover={onHoverOrder}
+                    whyNotReason={getUnassignedReason(order, fleetVehicles, assignments)}
                   />
                 ))}
               </div>
@@ -159,12 +153,14 @@ export function PlanningUnassignedSidebar({
         )}
       </div>
 
-      <div className="text-[11px] text-muted-foreground/60 pt-2 border-t border-border/30 tabular-nums space-y-0.5">
-        <div>{totalUnassigned} beschikbaar · {totalAssigned} ingepland</div>
+      <div className="text-xs text-muted-foreground/60 pt-2 border-t border-border/30 tabular-nums space-y-1">
+        <div className="flex justify-between items-center">
+          <span>{totalUnassigned} beschikbaar · {totalAssigned} ingepland</span>
+        </div>
         <div>{(() => {
           const withSpace = fleetVehicles.filter(v => {
             const a = assignments[v.id] ?? [];
-            const kg = a.reduce((s, o) => s + (o.weight_kg ?? 0), 0); // Simplified for calculation
+            const kg = a.reduce((s, o) => s + (o.weight_kg ?? 0), 0);
             return kg < v.capacityKg * 0.95;
           }).length;
           return `${withSpace} van ${fleetVehicles.length} voertuigen hebben ruimte`;
