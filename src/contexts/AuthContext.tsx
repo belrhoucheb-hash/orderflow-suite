@@ -4,12 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 type AppRole = "admin" | "medewerker";
+type EffectiveRole = "admin" | "planner" | "chauffeur";
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   profile: { display_name: string | null; avatar_url: string | null } | null;
   roles: AppRole[];
+  effectiveRole: EffectiveRole;
   isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -70,11 +72,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem('debug_bypass');
+    localStorage.removeItem('chauffeur_mode');
     setSession(null);
     setUser(null);
     setProfile(null);
     setRoles([]);
   };
+
+  // Derive effective role: admin > planner > chauffeur
+  // DB app_role enum: "admin" | "medewerker"
+  // "medewerker" maps to "planner"; a user with only a "chauffeur" flag
+  // (stored in localStorage after chauffeur login) maps to "chauffeur".
+  // Future: add "chauffeur" to app_role enum in DB.
+  const effectiveRole: EffectiveRole = (() => {
+    if (roles.includes("admin")) return "admin";
+    // Check localStorage for chauffeur mode (set during chauffeur-specific login)
+    if (typeof window !== "undefined" && localStorage.getItem("chauffeur_mode") === "true") return "chauffeur";
+    // "medewerker" or no roles -> default to planner
+    return "planner";
+  })();
 
   return (
     <AuthContext.Provider
@@ -83,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         profile,
         roles,
+        effectiveRole,
         isAdmin: roles.includes("admin"),
         loading,
         signOut,
