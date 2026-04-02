@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
-import { Plus, Users, Search, Filter, Mail, Phone, MoreHorizontal, Edit2, Trash2, Smartphone } from "lucide-react";
+import { Plus, Users, Filter, Mail, Phone, MoreHorizontal, Edit2, Trash2, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -111,15 +111,12 @@ export default function Chauffeurs() {
 
       {/* Filters */}
       <div className="px-4 md:px-6 pb-4 flex flex-wrap items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-          <Input 
-            placeholder="Zoek op naam, email of rijbewijs..." 
-            value={search} 
-            onChange={(e) => setSearch(e.target.value)} 
-            className="pl-10 h-10 rounded-xl border-border/50 bg-card/30" 
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Zoek op naam, email of rijbewijs..."
+          className="max-w-sm flex-1"
+        />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px] h-10 rounded-xl border-border/50 bg-card/30">
             <Filter className="h-3.5 w-3.5 mr-2 text-muted-foreground/50" />

@@ -35,7 +35,9 @@ interface Props {
 }
 
 export function InboxReviewPanel({ selected, form, isCreatePending, addressSuggestions, onUpdateField, onToggleRequirement, onAutoSave, onCreateOrder, onDelete }: Props) {
-  const conf = selected.confidence_score || 0;
+  // Normalise confidence: AI may return 0-1 float instead of 0-100 integer
+  const rawConf = selected.confidence_score || 0;
+  const conf = rawConf > 0 && rawConf <= 1 ? Math.round(rawConf * 100) : Math.round(rawConf);
   const formErrors = getFormErrors(form);
   const filledCount = getFilledCount(form);
   const totalFields = getTotalFields();

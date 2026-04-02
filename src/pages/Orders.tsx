@@ -1,32 +1,20 @@
 import { useState, useMemo } from "react";
-import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { statusLabels } from "@/data/mockData";
+import { getStatusColor } from "@/lib/statusColors";
 import { useOrders } from "@/hooks/useOrders";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import SmartLabel from "@/components/orders/SmartLabel";
-
-const statusStyles: Record<string, string> = {
-  DRAFT: "bg-blue-500/8 text-blue-700 border-blue-200/60",
-  PENDING: "bg-amber-500/8 text-amber-700 border-amber-200/60",
-  PLANNED: "bg-violet-500/8 text-violet-700 border-violet-200/60",
-  IN_TRANSIT: "bg-primary/8 text-primary border-primary/20",
-  DELIVERED: "bg-emerald-500/8 text-emerald-700 border-emerald-200/60",
-  CANCELLED: "bg-muted text-muted-foreground border-border",
-};
-
-const statusDotColors: Record<string, string> = {
-  DRAFT: "bg-blue-500",
-  PENDING: "bg-amber-500",
-  PLANNED: "bg-violet-500",
-  IN_TRANSIT: "bg-primary",
-  DELIVERED: "bg-emerald-500",
-  CANCELLED: "bg-muted-foreground/40",
-};
+import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { KPIStrip, type KPIItem } from "@/components/ui/KPIStrip";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { EmptyState } from "@/components/ui/EmptyState";
+import type { OrderStatus } from "@/components/ui/StatusBadge";
 
 const priorityDotColors: Record<string, string> = {
   laag: "text-muted-foreground/40",
@@ -44,6 +32,15 @@ const Orders = () => {
   const [pageSize] = useState(25);
   const [printOrder, setPrintOrder] = useState<any>(null);
   const [printLoading, setPrintLoading] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+
+  const handleSort = (field: string) => {
+    setSortConfig((prev) =>
+      prev?.field === field
+        ? { field, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { field, direction: "asc" }
+    );
+  };
 
   // Reset page when filters change
   const handleSearchChange = (value: string) => {
@@ -63,9 +60,29 @@ const Orders = () => {
     search: search || undefined,
   });
 
-  const orders = data?.orders ?? [];
+  const rawOrders = data?.orders ?? [];
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const orders = useMemo(() => {
+    if (!sortConfig) return rawOrders;
+    const { field, direction } = sortConfig;
+    const sorted = [...rawOrders].sort((a, b) => {
+      let aVal: string | number = "";
+      let bVal: string | number = "";
+      switch (field) {
+        case "customer": aVal = a.customer.toLowerCase(); bVal = b.customer.toLowerCase(); break;
+        case "totalWeight": aVal = a.totalWeight; bVal = b.totalWeight; break;
+        case "status": aVal = a.status; bVal = b.status; break;
+        case "createdAt": aVal = new Date(a.createdAt).getTime(); bVal = new Date(b.createdAt).getTime(); break;
+        default: return 0;
+      }
+      if (aVal < bVal) return direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return direction === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [rawOrders, sortConfig]);
 
   const handleQuickPrint = async (orderId: string) => {
     setPrintLoading(orderId);
@@ -99,74 +116,61 @@ const Orders = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="loading-spinner">
+        <Loader2 className="loading-spinner__icon" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <p className="text-sm font-semibold text-foreground mb-1">Kan orders niet laden</p>
-        <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
-        <button onClick={() => refetch()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
-      </div>
+      <EmptyState
+        title="Kan orders niet laden"
+        description="Controleer je verbinding en probeer opnieuw."
+        action={
+          <button onClick={() => refetch()} className="text-xs text-primary hover:underline">
+            Opnieuw proberen
+          </button>
+        }
+      />
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="page-container">
       {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">Orderlijst</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{totalCount} transportopdrachten in totaal</p>
-        </div>
-        <Link to="/orders/nieuw">
-          <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
-            <Plus className="h-4 w-4" /> Nieuwe order
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Orderlijst"
+        subtitle={`${totalCount} transportopdrachten in totaal`}
+        actions={
+          <Link to="/orders/nieuw">
+            <Button className="btn-primary">
+              <Plus className="h-4 w-4" /> Nieuwe order
+            </Button>
+          </Link>
+        }
+      />
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-        {[
-          { label: "Nieuw", value: stats.byStatus["DRAFT"] || 0, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
-          { label: "In behandeling", value: stats.byStatus["PENDING"] || 0, icon: HelpCircle, color: "text-violet-600", bg: "bg-violet-500/8" },
-          { label: "Onderweg", value: (stats.byStatus["IN_TRANSIT"] || 0) + (stats.byStatus["PLANNED"] || 0), icon: Truck, color: "text-primary", bg: "bg-primary/8" },
-          { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: Circle, color: "text-emerald-600", bg: "bg-emerald-500/8" },
-          { label: "Spoed / Hoog", value: stats.spoedCount, icon: Clock, color: "text-amber-600", bg: "bg-amber-500/8" },
-        ].map((stat) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-card rounded-xl border border-border/40 p-4 flex items-center gap-3"
-          >
-            <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center", stat.bg)}>
-              <stat.icon className={cn("h-4.5 w-4.5", stat.color)} />
-            </div>
-            <div>
-              <p className="text-xl font-semibold font-display tabular-nums">{stat.value}</p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+      <KPIStrip
+        columns={5}
+        items={[
+          { label: "Nieuw", value: stats.byStatus["DRAFT"] || 0, icon: Package, iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+          { label: "In behandeling", value: stats.byStatus["PENDING"] || 0, icon: HelpCircle, iconColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+          { label: "Onderweg", value: (stats.byStatus["IN_TRANSIT"] || 0) + (stats.byStatus["PLANNED"] || 0), icon: Truck, iconColor: "text-primary", iconBg: "bg-primary/10" },
+          { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: Circle, iconColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+          { label: "Spoed / Hoog", value: stats.spoedCount, icon: Clock, iconColor: "text-amber-600", iconBg: "bg-amber-500/10" },
+        ]}
+      />
 
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
-          <input
-            placeholder="Zoek op ordernummer of klant..."
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 rounded-xl border border-border/50 bg-card text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/40 transition-all"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={handleSearchChange}
+          placeholder="Zoek op ordernummer of klant..."
+          className="flex-1 max-w-md"
+        />
         <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 overflow-x-auto max-w-full">
           {filterOptions.map((s) => (
             <button
@@ -179,7 +183,7 @@ const Orders = () => {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {s === "alle" ? "Alle" : statusLabels[s as keyof typeof statusLabels]}
+              {s === "alle" ? "Alle" : getStatusColor(s).label}
             </button>
           ))}
         </div>
@@ -193,17 +197,26 @@ const Orders = () => {
         className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden"
       >
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="data-table">
             <thead>
               <tr className="border-b border-border/40 bg-muted/30">
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 w-[100px]">Order</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Klant</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden lg:table-cell">Ophaaladres</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">Afleveradres</th>
-                <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 w-[90px]">Gewicht</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 w-[100px]">Status</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden sm:table-cell w-[90px]">Prioriteit</th>
-                <th className="px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 w-16">Label</th>
+                <th className="table-header w-[100px]">Order</th>
+                <th className="px-4 py-2.5 text-left w-auto">
+                  <SortableHeader label="Klant" field="customer" currentSort={sortConfig} onSort={handleSort} />
+                </th>
+                <th className="table-header hidden lg:table-cell">Ophaaladres</th>
+                <th className="table-header hidden md:table-cell">Afleveradres</th>
+                <th className="px-4 py-2.5 text-right w-[90px]">
+                  <SortableHeader label="Gewicht" field="totalWeight" currentSort={sortConfig} onSort={handleSort} className="justify-end" />
+                </th>
+                <th className="px-4 py-2.5 text-left w-[100px]">
+                  <SortableHeader label="Status" field="status" currentSort={sortConfig} onSort={handleSort} />
+                </th>
+                <th className="table-header hidden sm:table-cell w-[90px]">Prioriteit</th>
+                <th className="px-4 py-2.5 text-left w-[90px] hidden sm:table-cell">
+                  <SortableHeader label="Datum" field="createdAt" currentSort={sortConfig} onSort={handleSort} />
+                </th>
+                <th className="table-header text-center w-16">Label</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/20">
@@ -216,39 +229,30 @@ const Orders = () => {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ delay: idx * 0.02 }}
-                    className="hover:bg-muted/20 transition-colors duration-100 group"
+                    className="table-row group"
                   >
-                    <td className="px-4 py-2">
+                    <td className="table-cell">
                       <Link
                         to={`/orders/${order.id}`}
-                        className="font-mono text-sm font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5"
+                        className="font-mono text-sm font-medium text-foreground hover:text-primary transition-colors"
                       >
-                        <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDotColors[order.status])} />
                         {order.orderNumber}
-                        </Link>
+                      </Link>
                     </td>
-                    <td className="px-4 py-2 text-sm text-foreground/80">{order.customer}</td>
-                    <td className="px-4 py-2 text-sm text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
+                    <td className="table-cell text-foreground/80">{order.customer}</td>
+                    <td className="table-cell text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
                       {order.pickupAddress}
                     </td>
-                    <td className="px-4 py-2 text-sm text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
+                    <td className="table-cell text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
                       {order.deliveryAddress}
                     </td>
-                    <td className="px-4 py-2 text-sm text-foreground/80 text-right tabular-nums font-medium">
+                    <td className="table-cell text-foreground/80 text-right tabular-nums font-medium">
                       {order.totalWeight.toLocaleString()} kg
                     </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border",
-                          statusStyles[order.status]
-                        )}
-                      >
-                        <span className={cn("h-1 w-1 rounded-full", statusDotColors[order.status])} />
-                        {statusLabels[order.status]}
-                      </span>
+                    <td className="table-cell">
+                      <StatusBadge status={order.status as OrderStatus} />
                     </td>
-                    <td className="px-4 py-2 hidden sm:table-cell">
+                    <td className="table-cell hidden sm:table-cell">
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground capitalize">
                         <Circle
                           className={cn("h-1.5 w-1.5 fill-current", priorityDotColors[order.priority])}
@@ -257,7 +261,10 @@ const Orders = () => {
                         {order.priority}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td className="table-cell text-muted-foreground hidden sm:table-cell tabular-nums">
+                      {new Date(order.createdAt).toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                    </td>
+                    <td className="table-cell text-center">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleQuickPrint(order.id); }}
                         disabled={printLoading === order.id}
@@ -276,9 +283,12 @@ const Orders = () => {
               </AnimatePresence>
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
-                    <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
-                    <p className="text-sm text-muted-foreground">Geen orders gevonden</p>
+                  <td colSpan={9}>
+                    <EmptyState
+                      icon={Package}
+                      title="Geen orders gevonden"
+                      description="Pas je filters aan of maak een nieuwe order aan."
+                    />
                   </td>
                 </tr>
               )}

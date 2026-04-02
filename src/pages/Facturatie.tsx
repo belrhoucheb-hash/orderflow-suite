@@ -1,13 +1,17 @@
-import { useState, useMemo } from "react";
-import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check } from "lucide-react";
+import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { useInvoices } from "@/hooks/useInvoices";
+import { toast } from "sonner";
+import { useInvoices, useCreateInvoice, type InvoiceLine } from "@/hooks/useInvoices";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useClients } from "@/hooks/useClients";
 
 interface Invoice {
   id: string;
@@ -72,9 +76,142 @@ function isOverdue(dueDate: string | null, status: string): boolean {
 const Facturatie = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const { data: invoices = [], isLoading, isError, refetch } = useInvoices();
+  const queryClient = useQueryClient();
+
+  // ─── New Invoice Dialog State ───
+  const [showNewInvoice, setShowNewInvoice] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const { data: clients = [] } = useClients();
+  const createInvoiceMutation = useCreateInvoice();
+
+  // Fetch uninvoiced orders for the selected client
+  const { data: clientOrders = [], isLoading: isLoadingClientOrders } = useQuery({
+    queryKey: ["client-uninvoiced-orders", selectedClientId],
+    enabled: !!selectedClientId,
+    queryFn: async () => {
+      // Look up the client name from the selected client ID
+      const client = clients.find((c) => c.id === selectedClientId);
+      if (!client) return [];
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, status")
+        .eq("status", "DELIVERED")
+        .is("invoice_id", null)
+        .ilike("client_name", `%${client.name}%`)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Fetch client rates to calculate line totals
+  const { data: clientRates = [] } = useQuery({
+    queryKey: ["client-rates-for-invoice", selectedClientId],
+    enabled: !!selectedClientId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_rates")
+        .select("*")
+        .eq("client_id", selectedClientId)
+        .eq("is_active", true)
+        .order("rate_type");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const toggleOrderSelection = useCallback((orderId: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }, []);
+
+  const handleCreateInvoice = useCallback(async () => {
+    if (!selectedClientId || selectedOrderIds.size === 0) return;
+
+    // Build invoice lines from selected orders
+    const lines: Omit<InvoiceLine, "id" | "invoice_id" | "created_at">[] = [];
+    let sortOrder = 0;
+    const selectedOrders = clientOrders.filter((o: any) => selectedOrderIds.has(o.id));
+
+    for (const order of selectedOrders) {
+      if (clientRates.length === 0) {
+        // No rates configured - add a placeholder line
+        lines.push({
+          order_id: order.id,
+          description: `Transport #${order.order_number} — ${order.pickup_address?.split(",")[0] || "?"} → ${order.delivery_address?.split(",")[0] || "?"}`,
+          quantity: 1,
+          unit: "rit",
+          unit_price: 0,
+          total: 0,
+          sort_order: sortOrder++,
+        });
+      } else {
+        for (const rate of clientRates) {
+          let qty = 1;
+          let unitLabel = "stuk";
+          let include = false;
+
+          switch (rate.rate_type) {
+            case "per_km": { qty = 150; unitLabel = "km"; include = true; break; }
+            case "per_pallet": {
+              const pallets = order.quantity ?? 0;
+              if (pallets > 0) { qty = pallets; unitLabel = "pallet"; include = true; }
+              break;
+            }
+            case "per_rit": { qty = 1; unitLabel = "rit"; include = true; break; }
+            case "toeslag":
+            case "surcharge": { qty = 1; unitLabel = "stuk"; include = true; break; }
+            default: { qty = 1; unitLabel = "stuk"; include = true; break; }
+          }
+
+          if (include) {
+            const lineTotal = Math.round(qty * rate.amount * 100) / 100;
+            lines.push({
+              order_id: order.id,
+              description: `Order #${order.order_number}: ${rate.description || rate.rate_type}`,
+              quantity: qty,
+              unit: unitLabel,
+              unit_price: rate.amount,
+              total: lineTotal,
+              sort_order: sortOrder++,
+            });
+          }
+        }
+      }
+    }
+
+    try {
+      const invoice = await createInvoiceMutation.mutateAsync({
+        client_id: selectedClientId,
+        lines,
+      });
+      toast.success(`Factuur ${invoice.invoice_number} aangemaakt`, {
+        description: `${selectedOrderIds.size} order(s) gekoppeld`,
+      });
+      setShowNewInvoice(false);
+      setSelectedClientId("");
+      setSelectedOrderIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ["uninvoiced-orders"] });
+    } catch (e: any) {
+      toast.error("Factuur aanmaken mislukt", { description: e.message });
+    }
+  }, [selectedClientId, selectedOrderIds, clientOrders, clientRates, createInvoiceMutation, queryClient]);
+
+  const handleSort = (field: string) => {
+    setSortConfig((prev) =>
+      prev?.field === field
+        ? { field, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { field, direction: "asc" }
+    );
+  };
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   // Auto invoice suggestions: delivered orders without invoice
   const { data: uninvoicedOrders = [] } = useQuery({
@@ -93,7 +230,7 @@ const Facturatie = () => {
   });
 
   const filtered = useMemo(() => {
-    return (invoices as Invoice[]).filter((inv) => {
+    const result = (invoices as Invoice[]).filter((inv) => {
       const matchesSearch =
         inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
         inv.client_name.toLowerCase().includes(search.toLowerCase());
@@ -107,7 +244,29 @@ const Facturatie = () => {
         statusFilter === "alle" || effectiveStatus === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [invoices, search, statusFilter]);
+
+    if (!sortConfig) return result;
+
+    const { field, direction } = sortConfig;
+    return [...result].sort((a, b) => {
+      let aVal: string | number = "";
+      let bVal: string | number = "";
+      switch (field) {
+        case "invoice_number": aVal = a.invoice_number.toLowerCase(); bVal = b.invoice_number.toLowerCase(); break;
+        case "client_name": aVal = a.client_name.toLowerCase(); bVal = b.client_name.toLowerCase(); break;
+        case "total": aVal = a.total; bVal = b.total; break;
+        case "status": {
+          const aStatus = isOverdue(a.due_date, a.status) ? "vervallen" : a.status;
+          const bStatus = isOverdue(b.due_date, b.status) ? "vervallen" : b.status;
+          aVal = aStatus; bVal = bStatus; break;
+        }
+        default: return 0;
+      }
+      if (aVal < bVal) return direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [invoices, search, statusFilter, sortConfig]);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -176,7 +335,7 @@ const Facturatie = () => {
           </p>
         </div>
         <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5"
-          onClick={() => toast({ title: "Nieuwe factuur", description: "Selecteer eerst een afgeleverde order om een factuur aan te maken." })}>
+          onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }}>
           <Plus className="h-4 w-4" /> Nieuwe factuur
         </Button>
       </div>
@@ -298,11 +457,11 @@ const Facturatie = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border/40 bg-muted/30">
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                  Factuurnummer
+                <th className="px-4 py-2.5 text-left">
+                  <SortableHeader label="Factuurnummer" field="invoice_number" currentSort={sortConfig} onSort={handleSort} />
                 </th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                  Klant
+                <th className="px-4 py-2.5 text-left">
+                  <SortableHeader label="Klant" field="client_name" currentSort={sortConfig} onSort={handleSort} />
                 </th>
                 <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">
                   Datum
@@ -310,11 +469,11 @@ const Facturatie = () => {
                 <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">
                   Vervaldatum
                 </th>
-                <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                  Bedrag
+                <th className="px-4 py-2.5 text-right">
+                  <SortableHeader label="Bedrag" field="total" currentSort={sortConfig} onSort={handleSort} className="justify-end" />
                 </th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                  Status
+                <th className="px-4 py-2.5 text-left">
+                  <SortableHeader label="Status" field="status" currentSort={sortConfig} onSort={handleSort} />
                 </th>
                 <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                   Acties
@@ -434,6 +593,109 @@ const Facturatie = () => {
           </p>
         </div>
       </motion.div>
+
+      {/* New Invoice Dialog */}
+      <Dialog open={showNewInvoice} onOpenChange={setShowNewInvoice}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nieuwe factuur aanmaken</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            {/* Client selector */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Klant</label>
+              <select
+                value={selectedClientId}
+                onChange={(e) => { setSelectedClientId(e.target.value); setSelectedOrderIds(new Set()); }}
+                className="w-full h-10 px-3 rounded-lg border border-border/50 bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
+              >
+                <option value="">Selecteer een klant...</option>
+                {clients.filter((c) => c.is_active).map((client) => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Uninvoiced orders for this client */}
+            {selectedClientId && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  Onverfactureerde orders
+                </label>
+                {isLoadingClientOrders ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : clientOrders.length === 0 ? (
+                  <div className="text-center py-6 bg-muted/30 rounded-lg border border-border/30">
+                    <p className="text-sm text-muted-foreground">Geen onverfactureerde orders voor deze klant</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-lg border border-border/30 p-2">
+                    {clientOrders.map((order: any) => (
+                      <label
+                        key={order.id}
+                        className={cn(
+                          "flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors",
+                          selectedOrderIds.has(order.id) ? "bg-primary/5 border border-primary/20" : "hover:bg-muted/40 border border-transparent"
+                        )}
+                      >
+                        <Checkbox
+                          checked={selectedOrderIds.has(order.id)}
+                          onCheckedChange={() => toggleOrderSelection(order.id)}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-mono font-medium">#{order.order_number}</span>
+                            {order.quantity > 0 && (
+                              <span className="text-xs text-muted-foreground">{order.quantity} {order.unit || "stuks"}</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {order.pickup_address?.split(",")[0] || "?"} → {order.delivery_address?.split(",")[0] || "?"}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Summary */}
+            {selectedOrderIds.size > 0 && (
+              <div className="bg-muted/30 rounded-lg p-3 border border-border/30">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{selectedOrderIds.size}</span> order(s) geselecteerd
+                  {clientRates.length === 0 && (
+                    <span className="text-amber-600 ml-2">— geen tarieven geconfigureerd, lege regels worden aangemaakt</span>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowNewInvoice(false)}>
+                Annuleren
+              </Button>
+              <Button
+                onClick={handleCreateInvoice}
+                disabled={!selectedClientId || selectedOrderIds.size === 0 || createInvoiceMutation.isPending}
+                className="gap-2"
+              >
+                {createInvoiceMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                Factuur aanmaken
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

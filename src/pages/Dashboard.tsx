@@ -1,32 +1,34 @@
 import { useMemo } from "react";
 import {
-  Package, Truck, MapPin, CheckCircle2, AlertTriangle, Clock,
-  TrendingUp, ArrowRight, Gauge, CalendarClock, Phone, Mail, Loader2,
+  Truck, MapPin, CheckCircle2, AlertTriangle, Clock,
+  TrendingUp, ArrowRight, CalendarClock, Phone, Mail,
   BarChart3, CircleDot, Navigation, Timer,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { statusLabels, statusColors, priorityColors } from "@/data/mockData";
 import { useOrders } from "@/hooks/useOrders";
 import { useVehicles } from "@/hooks/useVehicles";
 import { Link } from "react-router-dom";
-import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { FinancialKPIWidget } from "@/components/dashboard/FinancialKPIWidget";
 import { OperationalForecastWidget } from "@/components/dashboard/OperationalForecastWidget";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { QueryError } from "@/components/QueryError";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { KPIStrip, type KPIItem } from "@/components/ui/KPIStrip";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import type { OrderStatus } from "@/components/ui/StatusBadge";
 
 const overdueImpacts: Record<string, { label: string; color: string }> = {};
 
 const Dashboard = () => {
   const today = new Date();
-  const { data: ordersData, isLoading: ordersLoading } = useOrders();
+  const { data: ordersData, isLoading: ordersLoading, isError: ordersError, refetch: refetchOrders } = useOrders();
   const orders = ordersData?.orders ?? [];
-  const { data: vehicles = [], isLoading: vehiclesLoading } = useVehicles();
-  const { toast } = useToast();
-
+  const { data: vehicles = [], isLoading: vehiclesLoading, isError: vehiclesError, refetch: refetchVehicles } = useVehicles();
   const isLoading = ordersLoading || vehiclesLoading;
+  const isError = ordersError || vehiclesError;
 
   const stats = useMemo(() => {
     const byStatus = orders.reduce((acc, o) => {
@@ -60,54 +62,38 @@ const Dashboard = () => {
   );
 
   if (isLoading) {
+    return <LoadingState message="Dashboard laden..." />;
+  }
+
+  if (isError) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <QueryError
+        message="Kan dashboardgegevens niet laden."
+        onRetry={() => { refetchOrders(); refetchVehicles(); }}
+      />
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="page-container">
       {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">
-            Operationeel Dashboard
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {today.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Operationeel Dashboard"
+        subtitle={today.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+      />
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-          { label: "Totaal orders", value: orders.length, icon: BarChart3, color: "text-blue-600", bg: "bg-blue-500/10" },
-          { label: "Voertuigen", value: vehicles.length, icon: Truck, color: "text-violet-600", bg: "bg-violet-500/10" },
-          { label: "Nieuw", value: (stats.byStatus["DRAFT"] || 0) + (stats.byStatus["PENDING"] || 0), icon: CircleDot, color: "text-sky-600", bg: "bg-sky-500/10" },
-          { label: "Onderweg", value: stats.byStatus["IN_TRANSIT"] || 0, icon: Navigation, color: "text-primary", bg: "bg-primary/10" },
-          { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-500/10" },
-          { label: "Achterstallig", value: stats.overdueOrders.length, icon: Timer, color: stats.overdueOrders.length > 0 ? "text-destructive" : "text-muted-foreground", bg: stats.overdueOrders.length > 0 ? "bg-destructive/10" : "bg-muted" },
-        ].map((stat, i) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03 }}
-            className="bg-card rounded-xl border border-border/40 p-3.5 flex items-center gap-3"
-          >
-            <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", stat.bg)}>
-              <stat.icon className={cn("h-4 w-4", stat.color)} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-lg font-semibold font-display tabular-nums leading-tight">{stat.value}</p>
-              <p className="text-xs text-muted-foreground truncate">{stat.label}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+      <KPIStrip
+        columns={6}
+        items={[
+          { label: "Totaal orders", value: orders.length, icon: BarChart3, iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+          { label: "Voertuigen", value: vehicles.length, icon: Truck, iconColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+          { label: "Nieuw", value: (stats.byStatus["DRAFT"] || 0) + (stats.byStatus["PENDING"] || 0), icon: CircleDot, iconColor: "text-sky-600", iconBg: "bg-sky-500/10" },
+          { label: "Onderweg", value: stats.byStatus["IN_TRANSIT"] || 0, icon: Navigation, iconColor: "text-primary", iconBg: "bg-primary/10" },
+          { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: CheckCircle2, iconColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+          { label: "Achterstallig", value: stats.overdueOrders.length, icon: Timer, iconColor: stats.overdueOrders.length > 0 ? "text-destructive" : "text-muted-foreground", iconBg: stats.overdueOrders.length > 0 ? "bg-destructive/10" : "bg-muted" },
+        ]}
+      />
 
       {/* Financial & Forecast widgets */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -127,45 +113,43 @@ const Dashboard = () => {
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
             <div className="flex items-center gap-2">
               <CalendarClock className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold font-display">Recente orders</h2>
+              <h2 className="section-title text-sm">Recente orders</h2>
             </div>
             <Link to="/orders" className="text-xs text-primary hover:underline flex items-center gap-1">
               Bekijk alles <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="data-table">
               <thead>
                 <tr className="border-b border-border/30 bg-muted/20">
-                  <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Order</th>
-                  <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Klant</th>
-                  <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">Bezorging</th>
-                  <th className="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden sm:table-cell">Gewicht</th>
-                  <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Status</th>
+                  <th className="table-header">Order</th>
+                  <th className="table-header">Klant</th>
+                  <th className="table-header hidden md:table-cell">Bezorging</th>
+                  <th className="table-header text-right hidden sm:table-cell">Gewicht</th>
+                  <th className="table-header">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
                 {recentOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-muted/20 transition-colors duration-100">
-                    <td className="px-4 py-2">
+                  <tr key={order.id} className="table-row">
+                    <td className="table-cell">
                       <Link to={`/orders/${order.id}`} className="font-mono text-sm font-medium text-foreground hover:text-primary transition-colors">
                         {order.orderNumber}
                       </Link>
                     </td>
-                    <td className="px-4 py-2 text-sm text-foreground/80">{order.customer}</td>
-                    <td className="px-4 py-2 text-sm text-muted-foreground hidden md:table-cell">
+                    <td className="table-cell text-foreground/80">{order.customer}</td>
+                    <td className="table-cell text-muted-foreground hidden md:table-cell">
                       <span className="flex items-center gap-1 truncate max-w-[180px]">
                         <MapPin className="h-3 w-3 shrink-0" />
                         {order.deliveryAddress}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-sm text-foreground/80 text-right tabular-nums font-medium hidden sm:table-cell">
+                    <td className="table-cell text-foreground/80 text-right tabular-nums font-medium hidden sm:table-cell">
                       {order.totalWeight.toLocaleString()} kg
                     </td>
-                    <td className="px-4 py-2">
-                      <Badge variant="outline" className={cn("text-xs px-2 py-0.5", statusColors[order.status])}>
-                        {statusLabels[order.status]}
-                      </Badge>
+                    <td className="table-cell">
+                      <StatusBadge status={order.status as OrderStatus} />
                     </td>
                   </tr>
                 ))}
@@ -192,24 +176,24 @@ const Dashboard = () => {
           >
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold font-display">Samenvatting</h2>
+              <h2 className="section-title text-sm">Samenvatting</h2>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="text-lg font-bold font-display tabular-nums">{orders.length}</p>
-                <p className="text-xs text-muted-foreground">Totaal orders</p>
+                <p className="card-stat__value text-lg">{orders.length}</p>
+                <p className="card-stat__label">Totaal orders</p>
               </div>
               <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="text-lg font-bold font-display tabular-nums">{stats.byStatus["DELIVERED"] || 0}</p>
-                <p className="text-xs text-muted-foreground">Afgeleverd</p>
+                <p className="card-stat__value text-lg">{stats.byStatus["DELIVERED"] || 0}</p>
+                <p className="card-stat__label">Afgeleverd</p>
               </div>
               <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="text-lg font-bold font-display tabular-nums">{stats.totalWeight.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Totaal kg</p>
+                <p className="card-stat__value text-lg">{stats.totalWeight.toLocaleString()}</p>
+                <p className="card-stat__label">Totaal kg</p>
               </div>
               <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="text-lg font-bold font-display tabular-nums">{vehicles.length}</p>
-                <p className="text-xs text-muted-foreground">Voertuigen</p>
+                <p className="card-stat__value text-lg">{vehicles.length}</p>
+                <p className="card-stat__label">Voertuigen</p>
               </div>
             </div>
           </motion.div>
@@ -223,7 +207,7 @@ const Dashboard = () => {
           >
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <h2 className="text-sm font-semibold font-display">Aandachtspunten</h2>
+              <h2 className="section-title text-sm">Aandachtspunten</h2>
             </div>
             <div className="space-y-2">
               {stats.overdueOrders.length > 0 ? (
@@ -249,7 +233,7 @@ const Dashboard = () => {
                             if (order.phone) {
                               window.open(`tel:${order.phone}`, "_self");
                             } else {
-                              toast({ title: "Geen telefoonnummer beschikbaar", variant: "destructive" });
+                              toast.error("Geen telefoonnummer beschikbaar");
                             }
                           }}
                         >
@@ -263,7 +247,7 @@ const Dashboard = () => {
                             if (order.email) {
                               window.open(`mailto:${order.email}`, "_self");
                             } else {
-                              toast({ title: "Geen e-mailadres beschikbaar", variant: "destructive" });
+                              toast.error("Geen e-mailadres beschikbaar");
                             }
                           }}
                         >

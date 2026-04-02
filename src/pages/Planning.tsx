@@ -22,12 +22,13 @@ import {
   type GeoCoord,
 } from "@/data/geoData";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   Truck,
   CheckCircle2,
   MapPin,
   List,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -51,7 +52,6 @@ import { useTenant } from "@/contexts/TenantContext";
 import { solveVRP } from "@/lib/vrpSolver";
 
 const Planning = () => {
-  const { toast } = useToast();
   const { data: fleetVehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
   const [assignments, setAssignments] = useState<Assignments>({});
@@ -66,6 +66,67 @@ const Planning = () => {
   const [vehicleStartTimes, setVehicleStartTimes] = useState<Record<string, string>>({});
   const [vehicleDrivers, setVehicleDrivers] = useState<Record<string, string>>({});
   const { tenant } = useTenant();
+
+  // ── Auto-restore planning draft from localStorage on mount ──
+  const [draftRestored, setDraftRestored] = useState(false);
+  useEffect(() => {
+    try {
+      const savedAssignments = localStorage.getItem("planning-draft");
+      const savedStartTimes = localStorage.getItem("planning-draft-startTimes");
+      const savedDrivers = localStorage.getItem("planning-draft-drivers");
+      let restored = false;
+      if (savedAssignments) {
+        const parsed = JSON.parse(savedAssignments) as Assignments;
+        const hasOrders = Object.values(parsed).some(arr => arr.length > 0);
+        if (hasOrders) {
+          setAssignments(parsed);
+          restored = true;
+        }
+      }
+      if (savedStartTimes) {
+        setVehicleStartTimes(JSON.parse(savedStartTimes));
+      }
+      if (savedDrivers) {
+        setVehicleDrivers(JSON.parse(savedDrivers));
+      }
+      if (restored) {
+        setDraftRestored(true);
+        toast.success("Vorige planning hersteld", { description: "Je conceptplanning is hersteld vanuit lokale opslag." });
+      }
+    } catch {
+      // Ignore corrupt localStorage data
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Auto-save assignments, vehicleStartTimes, vehicleDrivers to localStorage ──
+  useEffect(() => {
+    // Don't save empty state during initial mount before restore
+    const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
+    if (hasOrders) {
+      localStorage.setItem("planning-draft", JSON.stringify(assignments));
+    }
+  }, [assignments]);
+
+  useEffect(() => {
+    if (Object.keys(vehicleStartTimes).length > 0) {
+      localStorage.setItem("planning-draft-startTimes", JSON.stringify(vehicleStartTimes));
+    }
+  }, [vehicleStartTimes]);
+
+  useEffect(() => {
+    if (Object.keys(vehicleDrivers).length > 0) {
+      localStorage.setItem("planning-draft-drivers", JSON.stringify(vehicleDrivers));
+    }
+  }, [vehicleDrivers]);
+
+  const handleClearDraft = useCallback(() => {
+    localStorage.removeItem("planning-draft");
+    localStorage.removeItem("planning-draft-startTimes");
+    localStorage.removeItem("planning-draft-drivers");
+    setAssignments({});
+    toast.success("Concept gewist", { description: "Lokale planninggegevens zijn verwijderd." });
+  }, []);
 
   // Initialize vehicle start times and drivers
   useEffect(() => {
@@ -227,15 +288,12 @@ const Planning = () => {
         if (!exCoord) continue;
         const dist = haversineKm(newCoord, exCoord);
         if (dist > DISTANCE_WARN_KM) {
-          toast({
-            title: "Afstandswaarschuwing!",
-            description: `${getCity(order.delivery_address)} naar ${getCity(ex.delivery_address)}: ${Math.round(dist)} km uit elkaar.`,
-          });
+          toast.warning("Afstandswaarschuwing!", { description: `${getCity(order.delivery_address)} naar ${getCity(ex.delivery_address)}: ${Math.round(dist)} km uit elkaar.` });
           return;
         }
       }
     },
-    [assignments, orderCoords, toast]
+    [assignments, orderCoords]
   );
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -264,7 +322,7 @@ const Planning = () => {
       const sourceVehicle = orderToVehicle.get(activeId);
       if (sourceVehicle) {
         handleRemove(activeId);
-        toast({ title: "Order teruggezet", description: "Order is weer beschikbaar voor planning." });
+        toast.success("Order teruggezet", { description: "Order is weer beschikbaar voor planning." });
       }
       return;
     }
@@ -301,7 +359,7 @@ const Planning = () => {
     if (error) {
       setRejectedVehicle(targetVehicle.id);
       setTimeout(() => setRejectedVehicle(null), 600);
-      toast({ title: "Niet toegestaan", description: error, variant: "destructive" });
+      toast.error("Niet toegestaan", { description: error });
       return;
     }
 
@@ -318,7 +376,7 @@ const Planning = () => {
     });
 
     const fromLabel = activeVehicle ? fleetVehicles.find((v) => v.id === activeVehicle)?.name : "ongepland";
-    toast({ title: "Order verplaatst", description: `${order.client_name} naar ${targetVehicle.name} (van ${fromLabel})` });
+    toast.success("Order verplaatst", { description: `${order.client_name} naar ${targetVehicle.name} (van ${fromLabel})` });
   };
 
   const handleRemove = (orderId: string) => {
@@ -344,14 +402,14 @@ const Planning = () => {
       if (list.length <= 1) return prev;
       return { ...prev, [vehicleId]: optimizeRoute(list, orderCoords) };
     });
-    toast({ title: "Route geoptimaliseerd", description: "Volgorde herberekend via nearest-neighbor." });
-  }, [orderCoords, toast]);
+    toast.success("Route geoptimaliseerd", { description: "Volgorde herberekend via nearest-neighbor." });
+  }, [orderCoords]);
 
   const handleAutoPlan = useCallback(() => {
     const unassigned = orders.filter((o) => !assignedIds.has(o.id));
     
     if (unassigned.length === 0) {
-      toast({ title: "Geen orders", description: "Er zijn geen ongeplande orders om te verdelen." });
+      toast.success("Geen orders", { description: "Er zijn geen ongeplande orders om te verdelen." });
       return;
     }
 
@@ -361,23 +419,16 @@ const Planning = () => {
     const placedCount = Object.values(newAssignments).reduce((s, a) => s + a.length, 0) - assignedIds.size;
     
     if (placedCount > 0) {
-      toast({
-        title: `${placedCount} orders automatisch verdeeld`,
-        description: "Optimalisatie voltooid via slimme VRP solver.",
-      });
+      toast.success(`${placedCount} orders automatisch verdeeld`, { description: "Optimalisatie voltooid via slimme VRP solver." });
     } else {
-      toast({
-        title: "Beperkte capaciteit",
-        description: "Geen van de resterende orders past op de beschikbare voertuigen.",
-        variant: "destructive"
-      });
+      toast.error("Beperkte capaciteit", { description: "Geen van de resterende orders past op de beschikbare voertuigen." });
     }
-  }, [orders, assignedIds, assignments, orderCoords, fleetVehicles, toast]);
+  }, [orders, assignedIds, assignments, orderCoords, fleetVehicles]);
 
   const handleClearPlanning = useCallback(() => {
     setAssignments({});
-    toast({ title: "Planning gewist", description: "Alle ritten zijn leeggemaakt." });
-  }, [toast]);
+    toast.success("Planning gewist", { description: "Alle ritten zijn leeggemaakt." });
+  }, []);
 
   const handleCombineTrips = useCallback(() => {
     const vehiclesWithOrders = fleetVehicles
@@ -388,7 +439,7 @@ const Planning = () => {
       .filter((v) => v.orders.length > 0);
 
     if (vehiclesWithOrders.length < 2) {
-      toast({ title: "Combineer ritten", description: "Onderbezetting — niet genoeg ritten om te combineren." });
+      toast.success("Combineer ritten", { description: "Onderbezetting — niet genoeg ritten om te combineren." });
       return;
     }
 
@@ -441,11 +492,11 @@ const Planning = () => {
 
     if (combinedCount > 0) {
       setAssignments(newAssignments);
-      toast({ title: `${combinedCount} ritten gecombineerd` });
+      toast.success(`${combinedCount} ritten gecombineerd`);
     } else {
-      toast({ title: "Geen ritten gecombineerd", description: "Geen passende combinaties gevonden." });
+      toast.success("Geen ritten gecombineerd", { description: "Geen passende combinaties gevonden." });
     }
-  }, [assignments, orderCoords, fleetVehicles, toast]);
+  }, [assignments, orderCoords, fleetVehicles]);
 
   const handleConfirm = async () => {
     setIsConfirming(true);
@@ -511,19 +562,16 @@ const Planning = () => {
         tripsCreated++;
       }
 
-      toast({
-        title: "Planning bevestigd",
-        description: `${totalAssigned} orders ingepland in ${tripsCreated} ${tripsCreated === 1 ? "rit" : "ritten"}.`,
-      });
+      toast.success("Planning bevestigd", { description: `${totalAssigned} orders ingepland in ${tripsCreated} ${tripsCreated === 1 ? "rit" : "ritten"}.` });
+      // Clear localStorage draft after successful confirm
+      localStorage.removeItem("planning-draft");
+      localStorage.removeItem("planning-draft-startTimes");
+      localStorage.removeItem("planning-draft-drivers");
       setAssignments({});
       refetch();
     } catch (err: any) {
       console.error("Planning confirm error:", err);
-      toast({
-        title: "Fout bij bevestigen",
-        description: err?.message || "Kon planning niet opslaan.",
-        variant: "destructive",
-      });
+      toast.error("Fout bij bevestigen", { description: err?.message || "Kon planning niet opslaan." });
     } finally {
       setIsConfirming(false);
     }
@@ -555,6 +603,17 @@ const Planning = () => {
               {showMap ? <List className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}
               {showMap ? "Verberg kaart" : "Toon kaart"}
             </Button>
+            {draftRestored && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs rounded-lg text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={handleClearDraft}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Wis concept
+              </Button>
+            )}
             {totalAssigned > 0 && (
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
                 <Button

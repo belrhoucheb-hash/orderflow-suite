@@ -4,8 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════
+   OrderFlow Suite — Design System
+   Professional TMS design tokens, component classes, and utilities.
+   ═══════════════════════════════════════════════════════════════ */
+
 @layer base {
   :root {
+    /* ─── Core shadcn palette ─── */
     --background: 0 0% 97%;
     --foreground: 0 0% 8%;
 
@@ -36,6 +42,7 @@
 
     --radius: 0.5rem;
 
+    /* ─── Sidebar ─── */
     --sidebar-background: 0 0% 5%;
     --sidebar-foreground: 0 0% 85%;
     --sidebar-primary: 0 78% 42%;
@@ -45,10 +52,88 @@
     --sidebar-border: 0 0% 15%;
     --sidebar-ring: 0 78% 42%;
 
+    /* ─── Brand accents ─── */
     --taupe: 30 12% 55%;
     --taupe-foreground: 0 0% 100%;
     --royal-red: 0 78% 42%;
     --royal-gold: 38 35% 55%;
+
+    /* ─── Primary scale (red #dc2626 based) ─── */
+    --primary-50: #fef2f2;
+    --primary-100: #fee2e2;
+    --primary-200: #fecaca;
+    --primary-300: #fca5a5;
+    --primary-400: #f87171;
+    --primary-500: #ef4444;
+    --primary-600: #dc2626;
+    --primary-700: #b91c1c;
+    --primary-800: #991b1b;
+    --primary-900: #7f1d1d;
+    --primary-950: #450a0a;
+
+    /* ─── Semantic colors ─── */
+    --color-success: #10b981;
+    --color-success-light: #d1fae5;
+    --color-success-dark: #065f46;
+
+    --color-warning: #f59e0b;
+    --color-warning-light: #fef3c7;
+    --color-warning-dark: #92400e;
+
+    --color-danger: #ef4444;
+    --color-danger-light: #fee2e2;
+    --color-danger-dark: #991b1b;
+
+    --color-info: #3b82f6;
+    --color-info-light: #dbeafe;
+    --color-info-dark: #1e40af;
+
+    /* ─── TMS Order Status colors ─── */
+    --status-draft-bg: #eff6ff;
+    --status-draft-text: #1d4ed8;
+    --status-draft-border: #bfdbfe;
+    --status-draft-dot: #3b82f6;
+
+    --status-pending-bg: #fffbeb;
+    --status-pending-text: #b45309;
+    --status-pending-border: #fde68a;
+    --status-pending-dot: #f59e0b;
+
+    --status-planned-bg: #f5f3ff;
+    --status-planned-text: #6d28d9;
+    --status-planned-border: #ddd6fe;
+    --status-planned-dot: #8b5cf6;
+
+    --status-in-transit-bg: #fef2f2;
+    --status-in-transit-text: #dc2626;
+    --status-in-transit-border: #fecaca;
+    --status-in-transit-dot: #dc2626;
+
+    --status-delivered-bg: #ecfdf5;
+    --status-delivered-text: #047857;
+    --status-delivered-border: #a7f3d0;
+    --status-delivered-dot: #10b981;
+
+    --status-cancelled-bg: #f9fafb;
+    --status-cancelled-text: #6b7280;
+    --status-cancelled-border: #e5e7eb;
+    --status-cancelled-dot: #9ca3af;
+
+    /* ─── Typography tokens ─── */
+    --text-page-title: 1.5rem;       /* 24px */
+    --text-section-title: 1.125rem;  /* 18px */
+    --text-body: 0.875rem;           /* 14px */
+    --text-small: 0.75rem;           /* 12px */
+    --text-caption: 0.6875rem;       /* 11px */
+
+    --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+
+    /* ─── Spacing tokens ─── */
+    --page-padding-x: 1.5rem;  /* 24px, override to 1rem on mobile */
+    --page-padding-y: 1.5rem;
+    --section-gap: 1.25rem;    /* 20px between major sections */
+    --card-padding: 1rem;      /* 16px inside cards */
   }
 
   .dark {
@@ -88,6 +173,31 @@
     --sidebar-accent-foreground: 0 0% 95%;
     --sidebar-border: 0 0% 12%;
     --sidebar-ring: 0 78% 50%;
+
+    /* Dark mode status overrides */
+    --status-draft-bg: rgba(59,130,246,0.12);
+    --status-draft-text: #93c5fd;
+    --status-draft-border: rgba(59,130,246,0.25);
+
+    --status-pending-bg: rgba(245,158,11,0.12);
+    --status-pending-text: #fcd34d;
+    --status-pending-border: rgba(245,158,11,0.25);
+
+    --status-planned-bg: rgba(139,92,246,0.12);
+    --status-planned-text: #c4b5fd;
+    --status-planned-border: rgba(139,92,246,0.25);
+
+    --status-in-transit-bg: rgba(220,38,38,0.12);
+    --status-in-transit-text: #fca5a5;
+    --status-in-transit-border: rgba(220,38,38,0.25);
+
+    --status-delivered-bg: rgba(16,185,129,0.12);
+    --status-delivered-text: #6ee7b7;
+    --status-delivered-border: rgba(16,185,129,0.25);
+
+    --status-cancelled-bg: rgba(107,114,128,0.12);
+    --status-cancelled-text: #9ca3af;
+    --status-cancelled-border: rgba(107,114,128,0.25);
   }
 }
 
@@ -97,12 +207,15 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
-    font-family: 'Inter', sans-serif;
+    @apply bg-background text-foreground;
+    font-family: var(--font-ui);
+    font-size: var(--text-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--font-display);
   }
 
   /* Keyboard focus indicators */
@@ -115,60 +228,260 @@
   }
 }
 
-/* ─── Design Tokens ─── */
-/* Typography: 6-point scale only. Delete all text-[Xpx] usage. */
-/* xs=12px, sm=14px, base=16px, lg=18px, xl=20px, 2xl=24px, 3xl=30px */
-/* Labels/badges: text-xs (12px) minimum — never smaller */
-/* Body: text-sm (14px) */
-/* Headings: text-lg → text-3xl */
+/* ═══════════════════════════════════════════════════════════════
+   Component Classes
+   Reusable patterns for consistent UI across all pages.
+   ═══════════════════════════════════════════════════════════════ */
 
-/* Spacing: 4-point scale */
-/* Padding: p-3 (12), p-4 (16), p-5 (20), p-6 (24) */
-/* Page padding: p-4 mobile, p-6 desktop (already in AppLayout) */
-/* Gaps: gap-2 (8), gap-3 (12), gap-4 (16), gap-6 (24) */
-/* Section spacing: space-y-6 between major sections */
+@layer components {
+
+  /* ─── Page Structure ─── */
+  .page-container {
+    @apply space-y-5;
+  }
+
+  .page-header-row {
+    @apply flex items-end justify-between flex-wrap gap-4;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: var(--text-page-title);
+    @apply font-semibold tracking-tight text-foreground leading-tight;
+  }
+
+  .page-subtitle {
+    font-size: var(--text-body);
+    @apply text-muted-foreground mt-0.5;
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: var(--text-section-title);
+    @apply font-semibold text-foreground;
+  }
+
+  .section-label {
+    font-size: var(--text-caption);
+    @apply font-bold uppercase tracking-wider text-muted-foreground;
+  }
+
+  /* ─── KPI / Stat Cards ─── */
+  .kpi-strip {
+    @apply grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3;
+  }
+
+  .card-stat {
+    @apply bg-card rounded-xl border border-border/40 p-3.5 flex items-center gap-3
+           transition-shadow duration-150;
+  }
+
+  .card-stat:hover {
+    @apply shadow-sm;
+  }
+
+  .card-stat__icon-wrap {
+    @apply h-9 w-9 rounded-lg flex items-center justify-center shrink-0;
+  }
+
+  .card-stat__value {
+    font-family: var(--font-display);
+    @apply text-xl font-semibold tabular-nums leading-tight;
+  }
+
+  .card-stat__label {
+    font-size: var(--text-small);
+    @apply text-muted-foreground truncate;
+  }
+
+  /* ─── Status Badges ─── */
+  .badge-status {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md
+           text-xs font-medium border transition-colors;
+  }
+
+  .badge-status__dot {
+    @apply h-1.5 w-1.5 rounded-full shrink-0;
+  }
+
+  .badge-status--draft {
+    background: var(--status-draft-bg);
+    color: var(--status-draft-text);
+    border-color: var(--status-draft-border);
+  }
+  .badge-status--draft .badge-status__dot { background: var(--status-draft-dot); }
+
+  .badge-status--pending {
+    background: var(--status-pending-bg);
+    color: var(--status-pending-text);
+    border-color: var(--status-pending-border);
+  }
+  .badge-status--pending .badge-status__dot { background: var(--status-pending-dot); }
+
+  .badge-status--planned {
+    background: var(--status-planned-bg);
+    color: var(--status-planned-text);
+    border-color: var(--status-planned-border);
+  }
+  .badge-status--planned .badge-status__dot { background: var(--status-planned-dot); }
+
+  .badge-status--in-transit {
+    background: var(--status-in-transit-bg);
+    color: var(--status-in-transit-text);
+    border-color: var(--status-in-transit-border);
+  }
+  .badge-status--in-transit .badge-status__dot { background: var(--status-in-transit-dot); }
+
+  .badge-status--delivered {
+    background: var(--status-delivered-bg);
+    color: var(--status-delivered-text);
+    border-color: var(--status-delivered-border);
+  }
+  .badge-status--delivered .badge-status__dot { background: var(--status-delivered-dot); }
+
+  .badge-status--cancelled {
+    background: var(--status-cancelled-bg);
+    color: var(--status-cancelled-text);
+    border-color: var(--status-cancelled-border);
+  }
+  .badge-status--cancelled .badge-status__dot { background: var(--status-cancelled-dot); }
+
+  /* ─── Buttons ─── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl
+           bg-primary text-primary-foreground shadow-sm
+           hover:bg-primary/90 active:bg-primary/80
+           h-10 px-5 text-sm font-medium
+           transition-colors duration-150
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl
+           bg-secondary text-secondary-foreground
+           hover:bg-secondary/80 active:bg-secondary/70
+           h-10 px-5 text-sm font-medium
+           transition-colors duration-150
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl
+           text-foreground
+           hover:bg-muted active:bg-muted/70
+           h-10 px-5 text-sm font-medium
+           transition-colors duration-150
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl
+           bg-destructive text-destructive-foreground shadow-sm
+           hover:bg-destructive/90 active:bg-destructive/80
+           h-10 px-5 text-sm font-medium
+           transition-colors duration-150
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  /* ─── Tables ─── */
+  .data-table {
+    @apply w-full;
+  }
+
+  .table-header {
+    font-size: var(--text-caption);
+    @apply px-4 py-2.5 text-left font-semibold uppercase tracking-wide text-muted-foreground/60;
+  }
+
+  .table-row {
+    @apply hover:bg-muted/20 transition-colors duration-100;
+  }
+
+  .table-cell {
+    font-size: var(--text-body);
+    @apply px-4 py-2.5;
+  }
+
+  /* ─── Search Input ─── */
+  .search-input {
+    @apply w-full h-10 pl-10 pr-4 rounded-xl
+           border border-border/50 bg-card
+           text-sm text-foreground
+           placeholder:text-muted-foreground/40
+           focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/40
+           transition-all;
+  }
+
+  .search-input__icon {
+    @apply absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40;
+  }
+
+  /* ─── Empty State ─── */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 text-center;
+  }
+
+  .empty-state__icon {
+    @apply h-10 w-10 mx-auto mb-3 text-muted-foreground/25;
+  }
+
+  .empty-state__title {
+    font-size: var(--text-body);
+    @apply font-semibold text-foreground mb-1;
+  }
+
+  .empty-state__description {
+    font-size: var(--text-small);
+    @apply text-muted-foreground max-w-sm mb-4;
+  }
+
+  /* ─── Loading Spinner ─── */
+  .loading-spinner {
+    @apply flex items-center justify-center h-64;
+  }
+
+  .loading-spinner__icon {
+    @apply h-8 w-8 animate-spin text-primary;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Legacy utility aliases (kept for backward compat)
+   ═══════════════════════════════════════════════════════════════ */
 
 @layer utilities {
-  /* Page header pattern */
+  /* Page header pattern (legacy) */
   .page-header {
     @apply text-2xl font-semibold tracking-tight text-foreground;
-    font-family: 'Space Grotesk', sans-serif;
-  }
-  .page-subtitle {
-    @apply text-sm text-muted-foreground mt-1;
+    font-family: var(--font-display);
   }
 
-  /* Section label pattern (ALL CAPS) */
-  .section-label {
-    @apply text-xs font-bold uppercase tracking-wider text-muted-foreground;
-  }
-
-  /* Stat/KPI card pattern */
+  /* Stat/KPI card pattern (legacy) */
   .stat-card {
     @apply bg-card rounded-xl border border-border/40 p-4 flex items-center gap-3;
   }
   .stat-value {
     @apply text-xl font-semibold tabular-nums leading-tight;
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--font-display);
   }
   .stat-label {
     @apply text-xs text-muted-foreground;
   }
 
-  /* Table header pattern */
-  .table-header {
-    @apply px-4 py-2.5 text-left font-semibold uppercase tracking-wide text-muted-foreground/60;
-    font-size: 11px;
-  }
+  /* Table header pattern (legacy) */
   .td-cell {
     @apply px-4 py-2.5 text-sm;
   }
 
-  /* Badge pattern */
+  /* Badge pattern (legacy) */
   .badge-sm {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Print styles
+   ═══════════════════════════════════════════════════════════════ */
 
 @media print {
   body * {

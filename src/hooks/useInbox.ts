@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useFleetVehicles } from "@/hooks/useFleet";
@@ -20,7 +20,6 @@ import { useTenant } from "@/contexts/TenantContext";
 
 export function useInbox() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const { tenant } = useTenant();
 
   // ─── State ───
@@ -122,12 +121,12 @@ export function useInbox() {
         .single();
 
       if (error) throw error;
-      toast({ title: "E-mail geïmporteerd", description: `"${subject}" van ${clientName}` });
+      toast.success("E-mail geïmporteerd", { description: `"${subject}" van ${clientName}` });
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
       setSelectedId(newOrder.id);
     } catch (e: any) {
       console.error("Import error:", e);
-      toast({ title: "Import mislukt", description: e.message || "Probeer het opnieuw", variant: "destructive" });
+      toast.error("Import mislukt", { description: e.message || "Probeer het opnieuw" });
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -153,7 +152,7 @@ export function useInbox() {
 
         if (existing && existing.length > 0) {
           setSelectedId(existing[0].id);
-          toast({ title: "Al aanwezig", description: `"${scenario.label}" staat al in de inbox.` });
+          toast.success("Al aanwezig", { description: `"${scenario.label}" staat al in de inbox.` });
           setLoadingScenario(null);
           return;
         }
@@ -174,7 +173,7 @@ export function useInbox() {
         if (error) throw error;
         await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
         setSelectedId(newOrder.id);
-        toast({ title: "Test data geladen", description: `${scenario.label} - AI analyse wordt gestart...` });
+        toast.success("Test data geladen", { description: `${scenario.label} - AI analyse wordt gestart...` });
 
         const { data: parseResponse, error: parseError } = await supabase.functions.invoke("parse-order", {
           body: { emailBody: scenario.email, pdfUrls: [], threadContext: null, tenantId },
@@ -199,12 +198,18 @@ export function useInbox() {
         };
         const { result: enriched, enrichments } = enrichAddresses(parsedForm);
         setFormData((prev) => ({ ...prev, [newOrder.id]: enriched as FormState }));
-        if (enrichments.length > 0) toast({ title: "Adresboek verrijking", description: enrichments.join(". ") });
+        if (enrichments.length > 0) toast.success("Adresboek verrijking", { description: enrichments.join(". ") });
         const enrichedForm = enriched as FormState;
+        // Normalise confidence: AI may return 0-1 float instead of 0-100
+        const normalizedConfidence =
+          typeof ext.confidence_score === "number" && ext.confidence_score > 0 && ext.confidence_score <= 1
+            ? Math.round(ext.confidence_score * 100)
+            : ext.confidence_score;
+
         await supabase
           .from("orders")
           .update({
-            confidence_score: ext.confidence_score,
+            confidence_score: normalizedConfidence,
             client_name: ext.client_name || clientName,
             transport_type: ext.transport_type,
             pickup_address: enrichedForm.pickupAddress,
@@ -220,10 +225,10 @@ export function useInbox() {
           })
           .eq("id", newOrder.id);
         await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
-        toast({ title: "AI Extractie voltooid", description: `Confidence: ${ext.confidence_score}%` });
+        toast.success("AI Extractie voltooid", { description: `Confidence: ${normalizedConfidence}%` });
       } catch (e: any) {
         console.error("Test scenario error:", e);
-        toast({ title: "Test scenario fout", description: e.message, variant: "destructive" });
+        toast.error("Test scenario fout", { description: e.message });
       } finally {
         setLoadingScenario(null);
       }
@@ -312,7 +317,7 @@ export function useInbox() {
     },
     onSuccess: async (_, { id }) => {
       const order = drafts.find((d) => d.id === id);
-      toast({ title: "Order aangemaakt", description: `Order #${order?.order_number} is nu actief` });
+      toast.success("Order aangemaakt", { description: `Order #${order?.order_number} is nu actief` });
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
 
       if (order?.source_email_from) {
@@ -323,7 +328,7 @@ export function useInbox() {
           if (confirmError) throw confirmError;
           if (data?.error && !data?.skipped) throw new Error(data.error);
           if (data?.success) {
-            toast({ title: "Bevestiging verzonden", description: `Gestuurd naar ${order.source_email_from}` });
+            toast.success("Bevestiging verzonden", { description: `Gestuurd naar ${order.source_email_from}` });
           }
         } catch (e: any) {
           console.error("Confirmation email error:", e);
@@ -332,11 +337,8 @@ export function useInbox() {
     },
     onError: (error: any) => {
       console.error("Create order error:", error);
-      toast({
-        title: "Order aanmaken mislukt",
-        description: error.message || "Controleer de gegevens en probeer opnieuw",
-        variant: "destructive",
-      });
+      toast.success("Order aanmaken mislukt", { description: error.message || "Controleer de gegevens en probeer opnieuw",
+        variant: "destructive", });
     },
   });
 
@@ -482,7 +484,7 @@ export function useInbox() {
   const selectAllSimilar = (clientName: string) => {
     const similar = drafts.filter((d) => d.client_name === clientName).map((d) => d.id);
     setBulkSelected(new Set(similar));
-    toast({ title: "Selectie", description: `${similar.length} orders van ${clientName} geselecteerd` });
+    toast.success("Selectie", { description: `${similar.length} orders van ${clientName} geselecteerd` });
   };
 
   const handleBulkApprove = () => {
@@ -531,7 +533,7 @@ export function useInbox() {
       { id: selected.id, form },
       {
         onSuccess: () => {
-          toast({ title: "Order aangemaakt", description: `Order #${selected.order_number} is goedgekeurd` });
+          toast.success("Order aangemaakt", { description: `Order #${selected.order_number} is goedgekeurd` });
           const nextItem = filtered[currentIdx + 1] || filtered[currentIdx - 1];
           if (nextItem) setSelectedId(nextItem.id);
           else setSelectedId("");
@@ -542,10 +544,7 @@ export function useInbox() {
 
   const handleMerge = (clientName: string, orders: OrderDraft[]) => {
     if (orders.length < 2) return;
-    toast({
-      title: "Orders samenvoegen",
-      description: `${orders.length} orders van ${clientName} worden samengevoegd tot 1 multi-stop transportopdracht (komt in volgende versie)`,
-    });
+    toast.success("Orders samenvoegen", { description: `${orders.length} orders van ${clientName} worden samengevoegd tot 1 multi-stop transportopdracht (komt in volgende versie)` });
   };
 
   const handleBulkDelete = () => {

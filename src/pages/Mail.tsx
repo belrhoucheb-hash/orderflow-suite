@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface EmailMessage {
   id: string;
@@ -46,7 +46,6 @@ function getInitials(name: string | null): string {
 }
 
 export default function Mail() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const replyRef = useRef<HTMLTextAreaElement>(null);
   const [folder, setFolder] = useState<Folder>("inbox");
@@ -212,7 +211,7 @@ export default function Mail() {
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => refetch()}>
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toast({ title: "Filters komen binnenkort" })}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toast.success("Filters komen binnenkort")}>
                 <Filter className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -320,10 +319,10 @@ export default function Mail() {
                 <Button variant="ghost" size="icon" className="h-8 w-8 lg:hidden" onClick={() => setSelectedId("")}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { toast({ title: "E-mail gearchiveerd" }); setSelectedId(""); }}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { toast.success("E-mail gearchiveerd"); setSelectedId(""); }}>
                   <Archive className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { toast({ title: "E-mail verwijderd" }); setSelectedId(""); }}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { toast.success("E-mail verwijderd"); setSelectedId(""); }}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -344,7 +343,7 @@ export default function Mail() {
                   }}>
                   <Forward className="h-3.5 w-3.5" /> Doorsturen
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast({ title: "Meer opties komen binnenkort" })}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.success("Meer opties komen binnenkort")}>
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </div>
@@ -434,11 +433,11 @@ export default function Mail() {
                       if (data?.error) throw new Error(data.error);
                       queryClient.invalidateQueries({ queryKey: ["mail-emails"] });
                       queryClient.invalidateQueries({ queryKey: ["mail-folder-counts"] });
-                      toast({ title: "Antwoord verzonden", description: `E-mail gestuurd naar ${selected.from}` });
+                      toast.success("Antwoord verzonden", { description: `E-mail gestuurd naar ${selected.from}` });
                       setComposeBody("");
                     } catch (e: any) {
                       console.error("Send reply error:", e);
-                      toast({ title: "Verzenden mislukt", description: e.message || "Probeer opnieuw", variant: "destructive" });
+                      toast.error("Verzenden mislukt", { description: e.message || "Probeer opnieuw" });
                     } finally {
                       setIsSending(false);
                     }
@@ -480,7 +479,7 @@ export default function Mail() {
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30">
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast({ title: "Bijlagen worden binnenkort ondersteund" })}><Paperclip className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast.success("Bijlagen worden binnenkort ondersteund")}><Paperclip className="h-4 w-4" /></Button>
               </div>
               <Button size="sm" className="h-9 px-5 gap-1.5" disabled={isSending || !composeTo.trim() || !composeSubject.trim()}
                 onClick={async () => {
@@ -496,14 +495,14 @@ export default function Mail() {
                     if (error) throw error;
                     queryClient.invalidateQueries({ queryKey: ["mail-emails"] });
                     queryClient.invalidateQueries({ queryKey: ["mail-folder-counts"] });
-                    toast({ title: "Concept opgeslagen", description: "Bericht is opgeslagen als concept" });
+                    toast.success("Concept opgeslagen", { description: "Bericht is opgeslagen als concept" });
                     setShowCompose(false);
                     setComposeTo("");
                     setComposeSubject("");
                     setComposeContent("");
                   } catch (e: any) {
                     console.error("Create draft error:", e);
-                    toast({ title: "Opslaan mislukt", description: e.message || "Probeer opnieuw", variant: "destructive" });
+                    toast.error("Opslaan mislukt", { description: e.message || "Probeer opnieuw" });
                   } finally {
                     setIsSending(false);
                   }

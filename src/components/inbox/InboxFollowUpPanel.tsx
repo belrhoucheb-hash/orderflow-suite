@@ -2,13 +2,12 @@ import { useState, useEffect } from "react";
 import { CircleAlert, CheckCircle2, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OrderDraft } from "./types";
 
 export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(selected.follow_up_draft || "");
   const [isSending, setIsSending] = useState(false);
@@ -28,7 +27,7 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
 
   const handleSend = async () => {
     if (!toEmail) {
-      toast({ title: "Geen e-mailadres", description: "Afzenderadres ontbreekt", variant: "destructive" });
+      toast.error("Geen e-mailadres", { description: "Afzenderadres ontbreekt" });
       return;
     }
     setIsSending(true);
@@ -43,11 +42,11 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
-        toast({ title: "Follow-up verzonden", description: `E-mail gestuurd naar ${toEmail}` });
+        toast.success("Follow-up verzonden", { description: `E-mail gestuurd naar ${toEmail}` });
       } catch {
         // Fallback: open mailto link
         window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`);
-        toast({ title: "E-mail client geopend", description: `Follow-up klaar om te versturen naar ${toEmail}` });
+        toast.success("E-mail client geopend", { description: `Follow-up klaar om te versturen naar ${toEmail}` });
       }
 
       // Mark as sent
@@ -55,7 +54,7 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
     } catch (e: any) {
       console.error("Send follow-up error:", e);
-      toast({ title: "Verzenden mislukt", description: e.message, variant: "destructive" });
+      toast.error("Verzenden mislukt", { description: e.message });
     } finally {
       setIsSending(false);
     }

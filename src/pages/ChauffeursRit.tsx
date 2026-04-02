@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCreateTrip, useDispatchTrip } from "@/hooks/useTrips";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 import { type FleetVehicle } from "@/hooks/useVehicles";
 import { useDrivers } from "@/hooks/useDrivers";
@@ -275,7 +275,6 @@ const ChauffeursRit = () => {
   const [isDispatching, setIsDispatching] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
-  const { toast } = useToast();
   const { tenant } = useTenant();
   const createTripMutation = useCreateTrip();
   const dispatchTripMutation = useDispatchTrip();
@@ -474,7 +473,7 @@ const ChauffeursRit = () => {
               setIsDispatching(true);
               try {
                 const vehicleOrders = orders.filter((o: any) => o.vehicle_id === selectedVehicleId);
-                if (vehicleOrders.length === 0) { toast({ title: "Geen orders", description: "Dit voertuig heeft geen geplande orders", variant: "destructive" }); return; }
+                if (vehicleOrders.length === 0) { toast.error("Geen orders", { description: "Dit voertuig heeft geen geplande orders" }); return; }
                 const vehicle = vehicles.find((v: any) => v.id === selectedVehicleId);
                 const driver = drivers.find((d: any) => d.current_vehicle_id === selectedVehicleId);
                 const tenantId = tenant?.id || "00000000-0000-0000-0000-000000000001";
@@ -496,9 +495,9 @@ const ChauffeursRit = () => {
 
                 // Dispatch trip
                 await dispatchTripMutation.mutateAsync(trip.id);
-                toast({ title: "Rit verzonden", description: `${vehicleOrders.length} stops verstuurd naar ${driver?.name || vehicle?.name || "chauffeur"}` });
+                toast.success("Rit verzonden", { description: `${vehicleOrders.length} stops verstuurd naar ${driver?.name || vehicle?.name || "chauffeur"}` });
               } catch (e: any) {
-                toast({ title: "Verzenden mislukt", description: e.message, variant: "destructive" });
+                toast.error("Verzenden mislukt", { description: e.message });
               } finally {
                 setIsDispatching(false);
               }

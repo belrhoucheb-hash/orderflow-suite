@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -36,7 +36,6 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 const OrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -89,13 +88,13 @@ const OrderDetail = () => {
       }
     },
     onSuccess: () => {
-      toast({ title: "Order geannuleerd", description: `Order #${order?.order_number} is geannuleerd` });
+      toast.success("Order geannuleerd", { description: `Order #${order?.order_number} is geannuleerd` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       setShowCancelDialog(false);
     },
     onError: (e: Error) => {
-      toast({ title: "Fout", description: e.message, variant: "destructive" });
+      toast.error("Fout", { description: e.message });
     },
   });
 
@@ -109,7 +108,7 @@ const OrderDetail = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast({ title: "Order heropend", description: `Order #${order?.order_number} is terug in behandeling` });
+      toast.success("Order heropend", { description: `Order #${order?.order_number} is terug in behandeling` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
@@ -137,10 +136,7 @@ const OrderDetail = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast({ 
-        title: "Export binnen gemeld", 
-        description: `Zending #${order?.order_number} is nu gemarkeerd als ontvangen in het warehouse.` 
-      });
+      toast.success("Export binnen gemeld", { description: `Zending #${order?.order_number} is nu gemarkeerd als ontvangen in het warehouse.` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
     },
   });
@@ -157,12 +153,12 @@ const OrderDetail = () => {
       if (error) throw error;
       if (data?.error && !data?.skipped) throw new Error(data.error);
       if (data?.success) {
-        toast({ title: "Bevestiging verzonden", description: data.message });
+        toast.success("Bevestiging verzonden", { description: data.message });
       } else if (data?.skipped) {
-        toast({ title: "Overgeslagen", description: "Geen geldig e-mailadres", variant: "destructive" });
+        toast.error("Overgeslagen", { description: "Geen geldig e-mailadres" });
       }
     } catch (e: any) {
-      toast({ title: "Verzenden mislukt", description: e.message, variant: "destructive" });
+      toast.error("Verzenden mislukt", { description: e.message });
     } finally {
       setIsSendingConfirmation(false);
     }
@@ -204,11 +200,11 @@ const OrderDetail = () => {
       
       if (error) throw error;
       
-      toast({ title: "CMR Vrachtbrief gegenereerd", description: `Nummer: ${cmrNumber}` });
+      toast.success("CMR Vrachtbrief gegenereerd", { description: `Nummer: ${cmrNumber}` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       setShowCmr(true);
     } catch (e: any) {
-      toast({ title: "Fout", description: e.message, variant: "destructive" });
+      toast.error("Fout", { description: e.message });
     } finally {
       setIsGeneratingCmr(false);
     }
@@ -238,7 +234,7 @@ const OrderDetail = () => {
         }).select("id").single();
         if (clientErr) throw new Error("Klant kon niet worden aangemaakt: " + clientErr.message);
         clientId = newClient.id;
-        toast({ title: "Klant aangemaakt", description: order.client_name || "Onbekende klant" });
+        toast.success("Klant aangemaakt", { description: order.client_name || "Onbekende klant" });
       }
 
       // Build invoice lines
@@ -285,12 +281,12 @@ const OrderDetail = () => {
       await createInvoiceMutation.mutateAsync({ client_id: clientId, lines });
 
       // Link invoice to order
-      toast({ title: "Factuur aangemaakt", description: `Factuur voor order #${order.order_number} — ${lines.length} regel(s)` });
+      toast.success("Factuur aangemaakt", { description: `Factuur voor order #${order.order_number} — ${lines.length} regel(s)` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
     } catch (e: any) {
       console.error("Invoice creation error:", e);
-      toast({ title: "Factuur aanmaken mislukt", description: e.message || "Onbekende fout", variant: "destructive" });
+      toast.error("Factuur aanmaken mislukt", { description: e.message || "Onbekende fout" });
     } finally {
       setIsCreatingInvoice(false);
     }
