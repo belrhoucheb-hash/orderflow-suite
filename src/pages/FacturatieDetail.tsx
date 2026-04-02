@@ -72,12 +72,22 @@ export default function FacturatieDetail() {
   };
 
   if (isLoading) return <LoadingState message="Factuur laden..." />;
-  if (isError || !invoice) {
+  if (isError) {
+    return (
+      <EmptyState
+        icon={Receipt}
+        title="Fout bij laden"
+        description="Er ging iets mis bij het ophalen van de factuur. Probeer het opnieuw."
+        action={<Button variant="outline" onClick={() => navigate("/facturatie")}>Terug naar overzicht</Button>}
+      />
+    );
+  }
+  if (!invoice) {
     return (
       <EmptyState
         icon={Receipt}
         title="Factuur niet gevonden"
-        description="Deze factuur bestaat niet of je hebt geen toegang."
+        description={`Factuur met ID "${id}" bestaat niet of je hebt geen toegang.`}
         action={<Button variant="outline" onClick={() => navigate("/facturatie")}>Terug naar overzicht</Button>}
       />
     );
