@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { checkTripCompletion } from "@/hooks/useBillingStatus";
+import { toast } from "sonner";
 import type { Trip, TripStop, TripStatus, StopStatus, canTransitionTrip, canTransitionStop } from "@/types/dispatch";
 
 // ─── Fetch trips for a date ─────────────────────────────────
@@ -149,11 +152,33 @@ export function useUpdateStopStatus() {
 
       const { error } = await supabase.from("trip_stops").update(updates).eq("id", stopId);
       if (error) throw error;
+
+      // Return the stop's trip_id so onSuccess can check trip completion
+      const { data: stop } = await supabase
+        .from("trip_stops")
+        .select("trip_id")
+        .eq("id", stopId)
+        .single();
+
+      return { tripId: stop?.trip_id ?? null };
     },
-    onSuccess: () => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ["trips"] });
       queryClient.invalidateQueries({ queryKey: ["trip"] });
       queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
+
+      // Auto-complete trip if all stops are terminal
+      if (result?.tripId) {
+        try {
+          const completed = await checkTripCompletion(result.tripId);
+          if (completed) {
+            toast.success("Rit automatisch voltooid — alle stops zijn afgerond");
+            queryClient.invalidateQueries({ queryKey: ["orders"] });
+          }
+        } catch (err) {
+          console.error("Auto trip completion check failed:", err);
+        }
+      }
     },
   });
 }
@@ -273,4 +298,58 @@ export function useCreateDeliveryException() {
       queryClient.invalidateQueries({ queryKey: ["delivery-exceptions"] });
     },
   });
+}
+
+// ─── Auto trip-completion via Realtime subscription ─────────
+/**
+ * Hook that subscribes to trip_stops changes via Supabase Realtime.
+ * When any stop transitions to a terminal status (AFGELEVERD, MISLUKT, OVERGESLAGEN),
+ * it checks whether all stops in that trip are terminal and auto-completes the trip.
+ *
+ * Mount this once at the app/layout level (e.g., in Dispatch page).
+ */
+export function useAutoCompleteTripCheck() {
+  const queryClient = useQueryClient();
+
+  const handleStopChange = useCallback(
+    async (payload: { new: Record<string, any> }) => {
+      const stop = payload.new;
+      const terminalStatuses = ["AFGELEVERD", "MISLUKT", "OVERGESLAGEN"];
+      if (!terminalStatuses.includes(stop.stop_status)) return;
+      if (!stop.trip_id) return;
+
+      try {
+        const completed = await checkTripCompletion(stop.trip_id);
+        if (completed) {
+          toast.success("Rit automatisch voltooid — alle stops zijn afgerond");
+          queryClient.invalidateQueries({ queryKey: ["trips"] });
+          queryClient.invalidateQueries({ queryKey: ["trip"] });
+          queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
+          queryClient.invalidateQueries({ queryKey: ["orders"] });
+        }
+      } catch (err) {
+        console.error("Auto trip completion (realtime) failed:", err);
+      }
+    },
+    [queryClient],
+  );
+
+  // Subscribe on mount, cleanup on unmount
+  const subscribe = useCallback(() => {
+    const channel = supabase
+      .channel("auto-trip-completion")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "trip_stops" },
+        handleStopChange,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [handleStopChange]);
+
+  // Use effect equivalent — caller should invoke in useEffect
+  return { subscribe };
 }

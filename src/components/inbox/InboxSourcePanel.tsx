@@ -155,6 +155,7 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
         requirements: ext.requirements || [],
         perUnit: ext.is_weight_per_unit || false,
         fieldSources: {},
+        fieldConfidence: ext.field_confidence || {},
       });
 
       // Save extracted data to DB

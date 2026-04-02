@@ -46,6 +46,18 @@ const NewOrder = () => {
   const [mainTab, setMainTab] = useState<MainTab>("algemeen");
   const [bottomTab, setBottomTab] = useState<BottomTab>("vrachmeen");
 
+  // Validation errors
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const clearError = (field: string) => {
+    setErrors(prev => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   // Form state
   const [clientName, setClientName] = useState("");
   const [contactpersoon, setContactpersoon] = useState("");
@@ -79,8 +91,8 @@ const NewOrder = () => {
 
   // Freight lines
   const [freightLines, setFreightLines] = useState<FreightLine[]>([
-    { id: "1", activiteit: "Laden", locatie: "", datum: "25 Maart 08:30", tijd: "", referentie: "", opmerkingen: "" },
-    { id: "2", activiteit: "Lossen", locatie: "", datum: "25 Maart 14:30", tijd: "", referentie: "", opmerkingen: "" },
+    { id: "1", activiteit: "Laden", locatie: "", datum: "", tijd: "", referentie: "", opmerkingen: "" },
+    { id: "2", activiteit: "Lossen", locatie: "", datum: "", tijd: "", referentie: "", opmerkingen: "" },
   ]);
 
   const addFreightLine = () => {
@@ -135,12 +147,32 @@ const NewOrder = () => {
   // Fields without a dedicated DB column are stored in the `attachments` JSON
   // column as structured metadata so nothing is lost.
   const handleSave = async (andClose: boolean) => {
-    if (!clientName.trim()) { toast.error("Vul minimaal een klantnaam in"); return; }
+    const pickupLine = freightLines.find(f => f.activiteit === "Laden");
+    const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
+
+    // -- Validation --
+    const validUnits = ["Pallets", "Colli", "Box"];
+    const newErrors: Record<string, string> = {};
+
+    if (!clientName.trim()) newErrors.client_name = "Klantnaam is verplicht";
+    if (!pickupLine?.locatie?.trim()) newErrors.pickup_address = "Ophaaladres is verplicht";
+    if (!deliveryLine?.locatie?.trim()) newErrors.delivery_address = "Afleveradres is verplicht";
+    if (!quantity || parseInt(quantity) <= 0) newErrors.quantity = "Aantal moet groter zijn dan 0";
+    if (!weightKg || parseFloat(weightKg) <= 0) newErrors.weight_kg = "Gewicht moet groter zijn dan 0";
+    if (!transportEenheid || !validUnits.includes(transportEenheid)) newErrors.unit = `Eenheid moet een van ${validUnits.join(", ")} zijn`;
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      const count = Object.keys(newErrors).length;
+      toast.error(`Formulier bevat ${count} validatiefout${count > 1 ? "en" : ""}`, {
+        description: Object.values(newErrors).join(" | "),
+      });
+      return;
+    }
+
+    setErrors({});
     setSaving(true);
     try {
-      const pickupLine = freightLines.find(f => f.activiteit === "Laden");
-      const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
-
       // Collect extra fields that don't have dedicated DB columns
       const extraFields = {
         contactpersoon: contactpersoon || null,
@@ -285,10 +317,11 @@ const NewOrder = () => {
                     <span className="text-xs text-muted-foreground font-medium">Klantgegevens</span>
                     <Input
                       value={clientName}
-                      onChange={e => setClientName(e.target.value)}
+                      onChange={e => { setClientName(e.target.value); clearError("client_name"); }}
                       placeholder="Zoek klant of relatie..."
-                      className="h-8 text-xs mt-0.5"
+                      className={cn("h-8 text-xs mt-0.5", errors.client_name && "border-red-500")}
                     />
+                    {errors.client_name && <span className="text-xs text-red-500">{errors.client_name}</span>}
                   </div>
                   <div>
                     <span className="text-xs text-muted-foreground font-medium">Contactpersoon</span>
@@ -402,14 +435,23 @@ const NewOrder = () => {
                     </Select>
                     <AddressAutocomplete
                       value={line.locatie}
-                      onChange={v => updateFreightLine(line.id, "locatie", v)}
-                      className="h-8 text-xs border-primary/40"
+                      onChange={v => {
+                        updateFreightLine(line.id, "locatie", v);
+                        if (line.activiteit === "Laden") clearError("pickup_address");
+                        if (line.activiteit === "Lossen") clearError("delivery_address");
+                      }}
+                      className={cn(
+                        "h-8 text-xs border-primary/40",
+                        line.activiteit === "Laden" && errors.pickup_address && "border-red-500",
+                        line.activiteit === "Lossen" && errors.delivery_address && "border-red-500"
+                      )}
                     />
                     <div className="flex items-center gap-1">
                       <Input
+                        type="datetime-local"
                         value={line.datum}
                         onChange={e => updateFreightLine(line.id, "datum", e.target.value)}
-                        placeholder="Datum & tijd"
+                        placeholder="Selecteer datum & tijd"
                         className="h-8 text-xs flex-1"
                       />
                       <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -494,19 +536,20 @@ const NewOrder = () => {
               <div className="bg-card border border-border rounded-lg p-3 flex items-end gap-3 flex-wrap">
                 <div className="space-y-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Aantal eenheden</span>
-                  <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="" className="h-8 text-xs w-24" />
+                  <Input type="number" value={quantity} onChange={e => { setQuantity(e.target.value); clearError("quantity"); }} placeholder="" className={cn("h-8 text-xs w-24", errors.quantity && "border-red-500")} />
+                  {errors.quantity && <span className="text-xs text-red-500">{errors.quantity}</span>}
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Transporteenheid type</span>
-                  <Select value={transportEenheid} onValueChange={setTransportEenheid}>
-                    <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="—" /></SelectTrigger>
+                  <Select value={transportEenheid} onValueChange={v => { setTransportEenheid(v); clearError("unit"); }}>
+                    <SelectTrigger className={cn("h-8 text-xs w-44", errors.unit && "border-red-500")}><SelectValue placeholder="Selecteer..." /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="europallet">Europallet</SelectItem>
-                      <SelectItem value="blokpallet">Blokpallet</SelectItem>
-                      <SelectItem value="colli">Colli</SelectItem>
-                      <SelectItem value="container">Container</SelectItem>
+                      <SelectItem value="Pallets">Pallets</SelectItem>
+                      <SelectItem value="Colli">Colli</SelectItem>
+                      <SelectItem value="Box">Box</SelectItem>
                     </SelectContent>
                   </Select>
+                  {errors.unit && <span className="text-xs text-red-500">{errors.unit}</span>}
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Voertuigtype</span>
@@ -520,7 +563,8 @@ const NewOrder = () => {
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Gewicht (kg)</span>
-                  <Input type="number" value={weightKg} onChange={e => setWeightKg(e.target.value)} className="h-8 text-xs w-24" />
+                  <Input type="number" value={weightKg} onChange={e => { setWeightKg(e.target.value); clearError("weight_kg"); }} className={cn("h-8 text-xs w-24", errors.weight_kg && "border-red-500")} />
+                  {errors.weight_kg && <span className="text-xs text-red-500">{errors.weight_kg}</span>}
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-xs text-muted-foreground font-medium">Afstand (km)</span>

@@ -8,6 +8,18 @@ import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { cn } from "@/lib/utils";
 import type { OrderDraft, FormState } from "./types";
 import { requirementOptions } from "./types";
+
+/** Renders a small colored confidence indicator per field with native tooltip */
+function FieldConfidenceIndicator({ score }: { score: number | undefined }) {
+  if (score === undefined || score === null) return null;
+  if (score >= 90) {
+    return <span title={`AI confidence: ${score}%`} className="inline-flex items-center cursor-help"><CheckCircle2 className="h-3.5 w-3.5 text-green-500" /></span>;
+  }
+  if (score >= 60) {
+    return <span title={`AI confidence: ${score}%`} className="inline-flex items-center cursor-help"><AlertTriangle className="h-3.5 w-3.5 text-yellow-500" /></span>;
+  }
+  return <span title={`AI confidence: ${score}%`} className="inline-flex items-center cursor-help"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>;
+}
 import { getFilledCount, getTotalFields, getRequiredFilledCount, getFormErrors, formatDate } from "./utils";
 
 interface Props {
@@ -63,22 +75,33 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
               <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black tabular-nums">{conf}%</span>
             </div>
             {showConfidence && (
-              <div className="absolute top-full right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-50">
-                <p className="text-[10px] font-bold text-gray-500 mb-2 border-b pb-1">Confidence Details</p>
+              <div className="absolute top-full right-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-50">
+                <p className="text-[10px] font-bold text-gray-500 mb-2 border-b pb-1">Per-veld Confidence</p>
                 {[
-                  { label: "Ophaaladres", val: form.pickupAddress ? 99 : 20 },
-                  { label: "Afleveradres", val: form.deliveryAddress ? 98 : 15 },
-                  { label: "Lading", val: form.quantity ? 95 : 10 },
-                  { label: "Gewicht", val: form.weight ? 92 : 10 },
-                  { label: "Afmetingen", val: form.dimensions ? 85 : 45 },
-                ].map(f => (
-                  <div key={f.label} className="flex justify-between text-[10px] py-0.5">
-                    <span>{f.label}</span>
-                    <span className={cn("font-bold", f.val >= 80 ? "text-green-600" : f.val >= 50 ? "text-amber-600" : "text-red-600")}>
-                      {f.val}% {f.val >= 80 ? "✓" : "⚠"}
-                    </span>
-                  </div>
-                ))}
+                  { label: "Klantnaam", key: "client_name" },
+                  { label: "Ophaaladres", key: "pickup_address" },
+                  { label: "Afleveradres", key: "delivery_address" },
+                  { label: "Aantal", key: "quantity" },
+                  { label: "Gewicht", key: "weight_kg" },
+                  { label: "Eenheid", key: "unit" },
+                  { label: "Ophaaldatum", key: "pickup_date" },
+                  { label: "Leverdatum", key: "delivery_date" },
+                ].map(f => {
+                  const fc = form.fieldConfidence || {};
+                  const val = fc[f.key] ?? null;
+                  return (
+                    <div key={f.key} className="flex justify-between text-[10px] py-0.5">
+                      <span>{f.label}</span>
+                      {val !== null ? (
+                        <span className={cn("font-bold", val >= 90 ? "text-green-600" : val >= 60 ? "text-amber-600" : "text-red-600")}>
+                          {val}% {val >= 90 ? "✓" : val >= 60 ? "⚠" : "✗"}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -160,7 +183,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                 <div className="absolute -left-[15px] top-1 h-2.5 w-2.5 rounded-full bg-primary border-2 border-white shadow-sm" />
                 <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm group hover:border-primary/40 transition-colors">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] text-gray-400 font-medium">Ophalen</span>
+                    <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Ophalen <FieldConfidenceIndicator score={form.fieldConfidence?.pickup_address} /></span>
                   </div>
                   <AddressAutocomplete value={form.pickupAddress} onChange={(v) => { onUpdateField("pickupAddress", v); onAutoSave(); }}
                     placeholder="Ophaaladres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-0", !form.pickupAddress && "text-red-400 italic font-normal")} />
@@ -175,7 +198,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                 <div className="absolute -left-[15px] top-1 h-2.5 w-2.5 rounded-full bg-primary/70 border-2 border-white shadow-sm" />
                 <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm group hover:border-primary/40 transition-colors">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] text-gray-400 font-medium">Lossen</span>
+                    <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Lossen <FieldConfidenceIndicator score={form.fieldConfidence?.delivery_address} /></span>
                   </div>
                   <AddressAutocomplete value={form.deliveryAddress} onChange={(v) => { onUpdateField("deliveryAddress", v); onAutoSave(); }}
                     placeholder="Afleveradres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-0", !form.deliveryAddress && "text-red-400 italic font-normal")} />
@@ -195,7 +218,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               {/* Aantal */}
               <div className="flex justify-between items-center p-3 hover:bg-gray-50 transition-colors">
-                <span className="text-xs text-gray-500 font-medium">Aantal</span>
+                <span className="text-xs text-gray-500 font-medium flex items-center gap-1">Aantal <FieldConfidenceIndicator score={form.fieldConfidence?.quantity} /></span>
                 <div className="flex items-center gap-1.5">
                   <Input type="number" value={form.quantity} onChange={(e) => onUpdateField("quantity", Number(e.target.value))} onBlur={onAutoSave}
                     className="h-7 w-14 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-0" />
@@ -207,7 +230,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
               </div>
               {/* Gewicht */}
               <div className="flex justify-between items-start p-3 bg-gray-50 hover:bg-gray-100 transition-colors border-y border-gray-200">
-                <span className="text-xs text-gray-500 font-medium mt-0.5">Gewicht</span>
+                <span className="text-xs text-gray-500 font-medium mt-0.5 flex items-center gap-1">Gewicht <FieldConfidenceIndicator score={form.fieldConfidence?.weight_kg} /></span>
                 <div className="text-right">
                   <div className="flex items-center gap-1">
                     <Input value={form.weight} onChange={(e) => onUpdateField("weight", e.target.value)} onBlur={onAutoSave} placeholder="—"

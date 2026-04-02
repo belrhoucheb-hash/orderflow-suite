@@ -198,3 +198,77 @@ export function useUpdateVehicle() {
     },
   });
 }
+
+/**
+ * Fetches real utilization data per vehicle based on active trips.
+ * Calculates: total weight of orders on active trips / vehicle max_weight * 100
+ */
+export function useVehicleUtilization() {
+  return useQuery({
+    queryKey: ["vehicle-utilization"],
+    queryFn: async () => {
+      // Get all active trips (ACTIEF or VERZONDEN) with their stops and linked orders
+      const { data: trips, error: tripsError } = await supabase
+        .from("trips")
+        .select("vehicle_id, trip_stops(order_id)")
+        .in("dispatch_status", ["ACTIEF", "VERZONDEN", "ONTVANGEN", "GEACCEPTEERD"]);
+
+      if (tripsError) throw tripsError;
+      if (!trips || trips.length === 0) return {} as Record<string, number>;
+
+      // Collect all order_ids grouped by vehicle_id
+      const vehicleOrderIds: Record<string, Set<string>> = {};
+      for (const trip of trips) {
+        const vid = trip.vehicle_id;
+        if (!vid) continue;
+        if (!vehicleOrderIds[vid]) vehicleOrderIds[vid] = new Set();
+        const stops = (trip as any).trip_stops || [];
+        for (const stop of stops) {
+          if (stop.order_id) vehicleOrderIds[vid].add(stop.order_id);
+        }
+      }
+
+      // Get all unique order IDs
+      const allOrderIds = [...new Set(Object.values(vehicleOrderIds).flatMap(s => [...s]))];
+      if (allOrderIds.length === 0) return {} as Record<string, number>;
+
+      // Fetch weight for those orders
+      const { data: orders, error: ordersError } = await supabase
+        .from("orders")
+        .select("id, weight_kg")
+        .in("id", allOrderIds);
+
+      if (ordersError) throw ordersError;
+
+      const orderWeights: Record<string, number> = {};
+      for (const o of orders || []) {
+        orderWeights[o.id] = o.weight_kg || 0;
+      }
+
+      // Fetch vehicle capacities
+      const vehicleIds = Object.keys(vehicleOrderIds);
+      const { data: vehicles, error: vError } = await supabase
+        .from("vehicles")
+        .select("id, capacity_kg")
+        .in("id", vehicleIds);
+
+      if (vError) throw vError;
+
+      const capacities: Record<string, number> = {};
+      for (const v of vehicles || []) {
+        capacities[v.id] = v.capacity_kg || 0;
+      }
+
+      // Calculate utilization per vehicle
+      const utilization: Record<string, number> = {};
+      for (const [vid, orderIds] of Object.entries(vehicleOrderIds)) {
+        const totalWeight = [...orderIds].reduce((sum, oid) => sum + (orderWeights[oid] || 0), 0);
+        const capacity = capacities[vid] || 0;
+        utilization[vid] = capacity > 0 ? Math.min(100, Math.round((totalWeight / capacity) * 100)) : 0;
+      }
+
+      return utilization;
+    },
+    refetchInterval: 30_000, // refresh every 30s
+  });
+}
