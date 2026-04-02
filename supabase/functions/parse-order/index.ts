@@ -57,6 +57,8 @@ const REQUIRED_FIELDS: { key: string; label: string }[] = [
   { key: "client_name", label: "Klantnaam" },
   { key: "pickup_address", label: "Ophaaladres" },
   { key: "delivery_address", label: "Afleveradres" },
+  { key: "pickup_date", label: "Ophaaldatum" },
+  { key: "delivery_date", label: "Leverdatum" },
   { key: "quantity", label: "Aantal" },
   { key: "weight_kg", label: "Gewicht" },
   { key: "dimensions", label: "Afmetingen (LxBxH)" },
@@ -172,12 +174,16 @@ serve(async (req) => {
     async function fetchCorrections(clientName: string): Promise<string> {
       if (!clientName) return "";
       try {
-        const { data } = await supabase
+        let query = supabase
           .from("ai_corrections")
           .select("field_name, ai_value, corrected_value")
           .ilike("client_name", `%${clientName}%`)
           .order("created_at", { ascending: false })
           .limit(15);
+        if (tenantIdStr) {
+          query = query.eq("tenant_id", tenantIdStr);
+        }
+        const { data } = await query;
         if (!data || data.length === 0) return "";
         const lines = data.map(c =>
           `- Veld "${c.field_name}": AI zei "${c.ai_value}" → dispatcher corrigeerde naar "${c.corrected_value}"`
@@ -320,6 +326,7 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
 
     const extractionSystemPrompt = `Je bent een logistiek data-extractie assistent voor een Transport Management Systeem (TMS) in Nederland.
 Je analyseert e-mails en PDF-bijlagen en extraheert gestructureerde ordergegevens.
+Vandaag is het ${new Date().toISOString().split("T")[0]}.
 
 ${sourceInstructions}
 
@@ -338,16 +345,35 @@ Regels:
   - "ADR" als er gevaarlijke stoffen/chemisch/ADR wordt genoemd
   - "Laadklep" als er laadklep/klep/heftruck nodig/geen dock wordt genoemd
   - "Douane" als er douane/customs/invoer/uitvoer wordt genoemd
+- Datums: probeer altijd een datum te extraheren. Als er "morgen", "overmorgen", "donderdag", etc. staat, bereken de juiste ISO 8601 datum op basis van vandaag. Als er geen datum gevonden kan worden, geef een lege string.
+- Tijdvenster: als er "voor 12:00", "tussen 8 en 10", "uiterlijk 14:00", etc. staat, extraheer start- en eindtijd in HH:mm formaat. "Voor 14:00" = start leeg, end "14:00". "Tussen 8 en 10" = start "08:00", end "10:00". Als geen tijdvenster gevonden, lege strings.
+- Referentienummer: zoek naar ordernummers, PO-nummers, referenties, bestelnummers van de klant. Als niet gevonden, lege string.
+- Contactpersoon: naam van contactpersoon bij ophaal of aflevering. Als niet gevonden, lege string.
 - Als een veld ECHT niet gevonden kan worden, geef een lege string of 0 terug
 - confidence_score: 0-100, hoe zeker je bent over de extractie
 - BELANGRIJK: Extraheer ALLES wat je kunt vinden. Laat liever geen veld leeg als er informatie beschikbaar is.
 ${aiContextBlock}
+
+VOORBEELD 1:
+Input: "Beste, graag 2 pallets (totaal 800kg, 120x80x150cm) ophalen bij Janssen BV, Industrieweg 5 Eindhoven en leveren bij AH DC, Transportweg 10 Zaandam. Graag morgen voor 14:00. Ref: PO-2024-445. Contactpersoon: Piet de Vries."
+Output: {"client_name":"Janssen BV","transport_type":"direct","pickup_address":"Industrieweg 5, Eindhoven","delivery_address":"Transportweg 10, Zaandam","pickup_date":"2026-04-03","delivery_date":"2026-04-03","time_window_start":"","time_window_end":"14:00","reference_number":"PO-2024-445","contact_name":"Piet de Vries","quantity":2,"unit":"Pallets","weight_kg":800,"is_weight_per_unit":false,"dimensions":"120x80x150","requirements":[],"confidence_score":95,"field_sources":{"client_name":"email","pickup_address":"email","delivery_address":"email","pickup_date":"email","delivery_date":"email","time_window_start":"email","time_window_end":"email","reference_number":"email","contact_name":"email","quantity":"email","unit":"email","weight_kg":"email","dimensions":"email"}}
+
+VOORBEELD 2:
+Input: "Hallo, wij moeten 5 vaten chemisch afval (ADR klasse 3, totaal 1200kg) laten ophalen bij ons depot in Roosendaal. Afleveradres is ergens in de buurt van Antwerpen, exacte adres volgt nog. Moet gekoeld blijven onder 8 graden. Liefst donderdag tussen 8 en 10 uur 's ochtends. Geen laadperron aanwezig."
+Output: {"client_name":"","transport_type":"direct","pickup_address":"Roosendaal","delivery_address":"Antwerpen (exact adres volgt)","pickup_date":"2026-04-03","delivery_date":"2026-04-03","time_window_start":"08:00","time_window_end":"10:00","reference_number":"","contact_name":"","quantity":5,"unit":"Colli","weight_kg":1200,"is_weight_per_unit":false,"dimensions":"","requirements":["Koeling","ADR","Laadklep"],"confidence_score":62,"field_sources":{"client_name":"email","pickup_address":"email","delivery_address":"email","pickup_date":"email","delivery_date":"email","time_window_start":"email","time_window_end":"email","reference_number":"email","contact_name":"email","quantity":"email","unit":"email","weight_kg":"email","dimensions":"email"}}
+
 Antwoord als JSON met deze velden:
 {
   "client_name": "string",
   "transport_type": "direct|warehouse-air",
   "pickup_address": "string",
   "delivery_address": "string",
+  "pickup_date": "string (ISO 8601 datum, bijv. 2026-04-03)",
+  "delivery_date": "string (ISO 8601 datum, bijv. 2026-04-04)",
+  "time_window_start": "string (HH:mm formaat, bijv. 08:00)",
+  "time_window_end": "string (HH:mm formaat, bijv. 17:00)",
+  "reference_number": "string (klantreferentie indien vermeld)",
+  "contact_name": "string (contactpersoon bij ophaal/aflevering)",
   "quantity": number,
   "unit": "Pallets|Colli|Box",
   "weight_kg": number,
@@ -355,8 +381,33 @@ Antwoord als JSON met deze velden:
   "dimensions": "string (LxBxH in cm)",
   "requirements": ["Koeling"|"ADR"|"Laadklep"|"Douane"],
   "confidence_score": number (0-100),
-  "field_sources": { "client_name": "email|pdf|both", "transport_type": "email|pdf|both", ... }
+  "field_sources": { "client_name": "email|pdf|both", "pickup_address": "email|pdf|both", "delivery_address": "email|pdf|both", "pickup_date": "email|pdf|both", "delivery_date": "email|pdf|both", "time_window_start": "email|pdf|both", "time_window_end": "email|pdf|both", "reference_number": "email|pdf|both", "contact_name": "email|pdf|both", "quantity": "email|pdf|both", "unit": "email|pdf|both", "weight_kg": "email|pdf|both", "dimensions": "email|pdf|both" }
 }`;
+
+    const extractionSchema = {
+      type: "OBJECT",
+      properties: {
+        client_name: { type: "STRING" },
+        transport_type: { type: "STRING", enum: ["direct", "warehouse-air"] },
+        pickup_address: { type: "STRING" },
+        delivery_address: { type: "STRING" },
+        pickup_date: { type: "STRING" },
+        delivery_date: { type: "STRING" },
+        time_window_start: { type: "STRING" },
+        time_window_end: { type: "STRING" },
+        reference_number: { type: "STRING" },
+        contact_name: { type: "STRING" },
+        quantity: { type: "NUMBER" },
+        unit: { type: "STRING", enum: ["Pallets", "Colli", "Box"] },
+        weight_kg: { type: "NUMBER" },
+        is_weight_per_unit: { type: "BOOLEAN" },
+        dimensions: { type: "STRING" },
+        requirements: { type: "ARRAY", items: { type: "STRING", enum: ["Koeling", "ADR", "Laadklep", "Douane"] } },
+        confidence_score: { type: "NUMBER" },
+        field_sources: { type: "OBJECT", properties: {} },
+      },
+      required: ["client_name", "confidence_score"],
+    };
 
     // Build the user content as a single text string for Gemini
     const userTextParts: string[] = [];
@@ -368,7 +419,7 @@ Antwoord als JSON met deze velden:
     const response = await fetchWithRetry(geminiUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(buildGeminiBody(extractionSystemPrompt, userTextParts.join("\n\n"))),
+      body: JSON.stringify(buildGeminiBody(extractionSystemPrompt, userTextParts.join("\n\n"), extractionSchema)),
     });
 
     if (!response.ok) {
