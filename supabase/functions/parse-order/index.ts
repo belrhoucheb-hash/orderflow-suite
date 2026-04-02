@@ -351,16 +351,20 @@ Regels:
 - Contactpersoon: naam van contactpersoon bij ophaal of aflevering. Als niet gevonden, lege string.
 - Als een veld ECHT niet gevonden kan worden, geef een lege string of 0 terug
 - confidence_score: 0-100, hoe zeker je bent over de extractie
+- field_confidence: geef naast de totale confidence_score ook een "field_confidence" object mee met PER VELD een score 0-100 die aangeeft hoe zeker je bent over dat specifieke veld. Voorbeeld: "field_confidence": { "client_name": 95, "pickup_address": 80, "delivery_address": 45, "weight_kg": 90, "quantity": 70, "unit": 85, "pickup_date": 60, "delivery_date": 60 }
+  - Score 90-100: veld is duidelijk en expliciet vermeld
+  - Score 60-89: veld is afgeleid of enigszins onduidelijk
+  - Score 0-59: veld is een gok of grotendeels ontbrekend
 - BELANGRIJK: Extraheer ALLES wat je kunt vinden. Laat liever geen veld leeg als er informatie beschikbaar is.
 ${aiContextBlock}
 
 VOORBEELD 1:
 Input: "Beste, graag 2 pallets (totaal 800kg, 120x80x150cm) ophalen bij Janssen BV, Industrieweg 5 Eindhoven en leveren bij AH DC, Transportweg 10 Zaandam. Graag morgen voor 14:00. Ref: PO-2024-445. Contactpersoon: Piet de Vries."
-Output: {"client_name":"Janssen BV","transport_type":"direct","pickup_address":"Industrieweg 5, Eindhoven","delivery_address":"Transportweg 10, Zaandam","pickup_date":"2026-04-03","delivery_date":"2026-04-03","time_window_start":"","time_window_end":"14:00","reference_number":"PO-2024-445","contact_name":"Piet de Vries","quantity":2,"unit":"Pallets","weight_kg":800,"is_weight_per_unit":false,"dimensions":"120x80x150","requirements":[],"confidence_score":95,"field_sources":{"client_name":"email","pickup_address":"email","delivery_address":"email","pickup_date":"email","delivery_date":"email","time_window_start":"email","time_window_end":"email","reference_number":"email","contact_name":"email","quantity":"email","unit":"email","weight_kg":"email","dimensions":"email"}}
+Output: {"client_name":"Janssen BV","transport_type":"direct","pickup_address":"Industrieweg 5, Eindhoven","delivery_address":"Transportweg 10, Zaandam","pickup_date":"2026-04-03","delivery_date":"2026-04-03","time_window_start":"","time_window_end":"14:00","reference_number":"PO-2024-445","contact_name":"Piet de Vries","quantity":2,"unit":"Pallets","weight_kg":800,"is_weight_per_unit":false,"dimensions":"120x80x150","requirements":[],"confidence_score":95,"field_confidence":{"client_name":98,"pickup_address":95,"delivery_address":95,"quantity":99,"weight_kg":99,"unit":95,"pickup_date":85,"delivery_date":85},"field_sources":{"client_name":"email","pickup_address":"email","delivery_address":"email","pickup_date":"email","delivery_date":"email","time_window_start":"email","time_window_end":"email","reference_number":"email","contact_name":"email","quantity":"email","unit":"email","weight_kg":"email","dimensions":"email"}}
 
 VOORBEELD 2:
 Input: "Hallo, wij moeten 5 vaten chemisch afval (ADR klasse 3, totaal 1200kg) laten ophalen bij ons depot in Roosendaal. Afleveradres is ergens in de buurt van Antwerpen, exacte adres volgt nog. Moet gekoeld blijven onder 8 graden. Liefst donderdag tussen 8 en 10 uur 's ochtends. Geen laadperron aanwezig."
-Output: {"client_name":"","transport_type":"direct","pickup_address":"Roosendaal","delivery_address":"Antwerpen (exact adres volgt)","pickup_date":"2026-04-03","delivery_date":"2026-04-03","time_window_start":"08:00","time_window_end":"10:00","reference_number":"","contact_name":"","quantity":5,"unit":"Colli","weight_kg":1200,"is_weight_per_unit":false,"dimensions":"","requirements":["Koeling","ADR","Laadklep"],"confidence_score":62,"field_sources":{"client_name":"email","pickup_address":"email","delivery_address":"email","pickup_date":"email","delivery_date":"email","time_window_start":"email","time_window_end":"email","reference_number":"email","contact_name":"email","quantity":"email","unit":"email","weight_kg":"email","dimensions":"email"}}
+Output: {"client_name":"","transport_type":"direct","pickup_address":"Roosendaal","delivery_address":"Antwerpen (exact adres volgt)","pickup_date":"2026-04-03","delivery_date":"2026-04-03","time_window_start":"08:00","time_window_end":"10:00","reference_number":"","contact_name":"","quantity":5,"unit":"Colli","weight_kg":1200,"is_weight_per_unit":false,"dimensions":"","requirements":["Koeling","ADR","Laadklep"],"confidence_score":62,"field_confidence":{"client_name":0,"pickup_address":55,"delivery_address":30,"quantity":95,"weight_kg":90,"unit":70,"pickup_date":75,"delivery_date":75},"field_sources":{"client_name":"email","pickup_address":"email","delivery_address":"email","pickup_date":"email","delivery_date":"email","time_window_start":"email","time_window_end":"email","reference_number":"email","contact_name":"email","quantity":"email","unit":"email","weight_kg":"email","dimensions":"email"}}
 
 Antwoord als JSON met deze velden:
 {
@@ -381,6 +385,7 @@ Antwoord als JSON met deze velden:
   "dimensions": "string (LxBxH in cm)",
   "requirements": ["Koeling"|"ADR"|"Laadklep"|"Douane"],
   "confidence_score": number (0-100),
+  "field_confidence": { "client_name": number, "pickup_address": number, "delivery_address": number, "quantity": number, "weight_kg": number, "unit": number, "pickup_date": number, "delivery_date": number },
   "field_sources": { "client_name": "email|pdf|both", "pickup_address": "email|pdf|both", "delivery_address": "email|pdf|both", "pickup_date": "email|pdf|both", "delivery_date": "email|pdf|both", "time_window_start": "email|pdf|both", "time_window_end": "email|pdf|both", "reference_number": "email|pdf|both", "contact_name": "email|pdf|both", "quantity": "email|pdf|both", "unit": "email|pdf|both", "weight_kg": "email|pdf|both", "dimensions": "email|pdf|both" }
 }`;
 
@@ -404,6 +409,19 @@ Antwoord als JSON met deze velden:
         dimensions: { type: "STRING" },
         requirements: { type: "ARRAY", items: { type: "STRING", enum: ["Koeling", "ADR", "Laadklep", "Douane"] } },
         confidence_score: { type: "NUMBER" },
+        field_confidence: {
+          type: "OBJECT",
+          properties: {
+            client_name: { type: "NUMBER" },
+            pickup_address: { type: "NUMBER" },
+            delivery_address: { type: "NUMBER" },
+            quantity: { type: "NUMBER" },
+            weight_kg: { type: "NUMBER" },
+            unit: { type: "NUMBER" },
+            pickup_date: { type: "NUMBER" },
+            delivery_date: { type: "NUMBER" },
+          },
+        },
         field_sources: { type: "OBJECT", properties: {} },
       },
       required: ["client_name", "confidence_score"],

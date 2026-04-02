@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { ClientRate } from "@/hooks/useClients";
 
 // ─── Interfaces ─────────────────────────────────────────────────────
@@ -454,4 +456,244 @@ export function useCalculateOrderCost(orderId: string | null, clientId: string |
       return { lines, subtotal, btw, total };
     },
   });
+}
+
+// ─── Auto concept-invoice generation ──────────────────────────────
+/**
+ * Polls for orders with billing_status = 'GEREED' and invoice_id IS NULL,
+ * then automatically creates a concept invoice for each.
+ *
+ * This is HITL-conform: only concept invoices are created, never sent automatically.
+ * Mount this once at the app/layout level (e.g., in a billing dashboard page).
+ */
+export function useAutoInvoiceGeneration(enabled = true) {
+  const queryClient = useQueryClient();
+  const processingRef = useRef(false);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const processReadyOrders = async () => {
+      // Prevent concurrent runs
+      if (processingRef.current) return;
+      processingRef.current = true;
+
+      try {
+        // Find orders ready for invoicing that have no invoice yet
+        const { data: orders, error: fetchErr } = await supabase
+          .from("orders")
+          .select("id, client_id, client_name, order_number, tenant_id, quantity")
+          .eq("billing_status", "GEREED")
+          .is("invoice_id", null)
+          .limit(20);
+
+        if (fetchErr || !orders || orders.length === 0) {
+          processingRef.current = false;
+          return;
+        }
+
+        // Group orders by client_id so we create one invoice per client
+        const byClient = new Map<string, typeof orders>();
+        for (const order of orders) {
+          if (!order.client_id) continue;
+          const existing = byClient.get(order.client_id) || [];
+          existing.push(order);
+          byClient.set(order.client_id, existing);
+        }
+
+        for (const [clientId, clientOrders] of byClient) {
+          try {
+            // Calculate cost for each order and collect lines
+            const allLines: Omit<InvoiceLine, "id" | "invoice_id" | "created_at">[] = [];
+            let sortOrder = 0;
+
+            for (const order of clientOrders) {
+              // Fetch client rates
+              const { data: rates } = await supabase
+                .from("client_rates")
+                .select("*")
+                .eq("client_id", clientId)
+                .eq("is_active", true)
+                .order("rate_type");
+
+              const clientRates = (rates ?? []) as ClientRate[];
+
+              if (clientRates.length === 0) {
+                // No rates configured — add a placeholder line
+                allLines.push({
+                  order_id: order.id,
+                  description: `Order #${order.order_number} — tarief niet geconfigureerd`,
+                  quantity: 1,
+                  unit: "rit",
+                  unit_price: 0,
+                  total: 0,
+                  sort_order: sortOrder++,
+                });
+                continue;
+              }
+
+              for (const rate of clientRates) {
+                let qty = 1;
+                let unitLabel = "stuk";
+                let include = false;
+
+                switch (rate.rate_type) {
+                  case "per_km": {
+                    // Use 150km Dutch average fallback (no geocode data in order list query)
+                    qty = 150;
+                    unitLabel = "km";
+                    include = true;
+                    break;
+                  }
+                  case "per_pallet": {
+                    const pallets = order.quantity ?? 0;
+                    if (pallets > 0) {
+                      qty = pallets;
+                      unitLabel = "pallet";
+                      include = true;
+                    }
+                    break;
+                  }
+                  case "per_rit": {
+                    qty = 1;
+                    unitLabel = "rit";
+                    include = true;
+                    break;
+                  }
+                  case "toeslag":
+                  case "surcharge": {
+                    qty = 1;
+                    unitLabel = "stuk";
+                    include = true;
+                    break;
+                  }
+                  default: {
+                    qty = 1;
+                    unitLabel = "stuk";
+                    include = true;
+                    break;
+                  }
+                }
+
+                if (include) {
+                  const lineTotal = Math.round(qty * rate.amount * 100) / 100;
+                  allLines.push({
+                    order_id: order.id,
+                    description: `Order #${order.order_number}: ${rate.description || rate.rate_type}`,
+                    quantity: qty,
+                    unit: unitLabel,
+                    unit_price: rate.amount,
+                    total: lineTotal,
+                    sort_order: sortOrder++,
+                  });
+                }
+              }
+            }
+
+            // Get tenant info
+            const tenantId = clientOrders[0].tenant_id;
+            if (!tenantId) continue;
+
+            // Look up client details
+            const { data: client } = await supabase
+              .from("clients")
+              .select("name, address, btw_number, kvk_number, payment_terms")
+              .eq("id", clientId)
+              .single();
+
+            if (!client) continue;
+
+            // Generate invoice number
+            const { data: invoiceNumber } = await supabase
+              .rpc("generate_invoice_number", { p_tenant_id: tenantId });
+
+            if (!invoiceNumber) continue;
+
+            // Calculate totals
+            const subtotal = allLines.reduce((sum, l) => sum + l.total, 0);
+            const btwPercentage = 21;
+            const btwAmount = Math.round(subtotal * (btwPercentage / 100) * 100) / 100;
+            const total = Math.round((subtotal + btwAmount) * 100) / 100;
+
+            // Calculate due_date
+            let dueDate: string | null = null;
+            if (client.payment_terms) {
+              const due = new Date();
+              due.setDate(due.getDate() + client.payment_terms);
+              dueDate = due.toISOString().split("T")[0];
+            }
+
+            // Insert concept invoice
+            const { data: invoice, error: insertErr } = await supabase
+              .from("invoices")
+              .insert({
+                tenant_id: tenantId,
+                invoice_number: invoiceNumber,
+                client_id: clientId,
+                client_name: client.name,
+                client_address: client.address ?? null,
+                client_btw_number: client.btw_number ?? null,
+                client_kvk_number: client.kvk_number ?? null,
+                status: "concept",
+                invoice_date: new Date().toISOString().split("T")[0],
+                due_date: dueDate,
+                subtotal,
+                btw_percentage: btwPercentage,
+                btw_amount: btwAmount,
+                total,
+                notes: `Automatisch concept — ${clientOrders.length} order(s)`,
+              })
+              .select()
+              .single();
+
+            if (insertErr || !invoice) continue;
+
+            // Insert invoice lines
+            const lineInserts = allLines.map((line, idx) => ({
+              invoice_id: invoice.id,
+              order_id: line.order_id ?? null,
+              description: line.description,
+              quantity: line.quantity,
+              unit: line.unit,
+              unit_price: line.unit_price,
+              total: line.total,
+              sort_order: line.sort_order ?? idx,
+            }));
+
+            if (lineInserts.length > 0) {
+              await supabase.from("invoice_lines").insert(lineInserts);
+            }
+
+            // Link orders to the invoice
+            for (const order of clientOrders) {
+              await supabase
+                .from("orders")
+                .update({ invoice_id: invoice.id, billing_status: "GEFACTUREERD" })
+                .eq("id", order.id);
+            }
+
+            toast.success(
+              `Concept-factuur ${invoiceNumber} aangemaakt voor ${client.name} (${clientOrders.length} order${clientOrders.length > 1 ? "s" : ""})`,
+            );
+          } catch (clientErr) {
+            console.error(`Auto invoice generation failed for client ${clientId}:`, clientErr);
+          }
+        }
+
+        // Refresh queries
+        queryClient.invalidateQueries({ queryKey: ["invoices"] });
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+      } catch (err) {
+        console.error("Auto invoice generation error:", err);
+      } finally {
+        processingRef.current = false;
+      }
+    };
+
+    // Run immediately, then every 60 seconds
+    processReadyOrders();
+    const interval = setInterval(processReadyOrders, 60_000);
+
+    return () => clearInterval(interval);
+  }, [enabled, queryClient]);
 }

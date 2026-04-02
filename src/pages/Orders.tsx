@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from "react";
-import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Loader2, HelpCircle, Printer } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Package, Search, Plus, Circle, TrendingUp, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { statusLabels } from "@/data/mockData";
@@ -40,9 +40,32 @@ const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DEL
 const Orders = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
-  const { data: orders = [], isLoading, isError, refetch } = useOrders();
+  const [page, setPage] = useState(0);
+  const [pageSize] = useState(25);
   const [printOrder, setPrintOrder] = useState<any>(null);
   const [printLoading, setPrintLoading] = useState<string | null>(null);
+
+  // Reset page when filters change
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(0);
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+    setPage(0);
+  };
+
+  const { data, isLoading, isError, refetch } = useOrders({
+    page,
+    pageSize,
+    statusFilter: statusFilter !== "alle" ? statusFilter : undefined,
+    search: search || undefined,
+  });
+
+  const orders = data?.orders ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const handleQuickPrint = async (orderId: string) => {
     setPrintLoading(orderId);
@@ -54,7 +77,6 @@ const Orders = () => {
         .single();
       if (error) throw error;
       setPrintOrder(data);
-      // Wait for React to render the SmartLabel, then print
       setTimeout(() => {
         window.print();
         setPrintOrder(null);
@@ -64,14 +86,6 @@ const Orders = () => {
       setPrintLoading(null);
     }
   };
-
-  const filtered = orders.filter((o) => {
-    const matchesSearch =
-      o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-      o.customer.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "alle" || o.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
 
   const stats = useMemo(() => {
     const byStatus = orders.reduce((acc, o) => {
@@ -107,7 +121,7 @@ const Orders = () => {
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">Orderlijst</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{orders.length} transportopdrachten in totaal</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{totalCount} transportopdrachten in totaal</p>
         </div>
         <Link to="/orders/nieuw">
           <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
@@ -149,7 +163,7 @@ const Orders = () => {
           <input
             placeholder="Zoek op ordernummer of klant..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full h-10 pl-10 pr-4 rounded-xl border border-border/50 bg-card text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/40 transition-all"
           />
         </div>
@@ -157,7 +171,7 @@ const Orders = () => {
           {filterOptions.map((s) => (
             <button
               key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => handleStatusFilterChange(s)}
               className={cn(
                 "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
                 statusFilter === s
@@ -194,7 +208,7 @@ const Orders = () => {
             </thead>
             <tbody className="divide-y divide-border/20">
               <AnimatePresence mode="popLayout">
-                {filtered.map((order, idx) => (
+                {orders.map((order, idx) => (
                   <motion.tr
                     key={order.id}
                     layout
@@ -260,7 +274,7 @@ const Orders = () => {
                   </motion.tr>
                 ))}
               </AnimatePresence>
-              {filtered.length === 0 && (
+              {orders.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-5 py-16 text-center">
                     <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
@@ -272,13 +286,46 @@ const Orders = () => {
           </table>
         </div>
 
-        {/* Footer */}
+        {/* Footer with Pagination */}
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
           <p className="text-xs text-muted-foreground">
-            {filtered.length} van {orders.length} transportopdrachten
+            {orders.length > 0
+              ? `${page * pageSize + 1}-${Math.min((page + 1) * pageSize, totalCount)} van ${totalCount} transportopdrachten`
+              : `0 transportopdrachten`}
           </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
+                page === 0
+                  ? "text-muted-foreground/40 cursor-not-allowed"
+                  : "text-foreground hover:bg-muted/50",
+              )}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Vorige
+            </button>
+            <span className="text-xs text-muted-foreground tabular-nums px-2">
+              Pagina {page + 1} van {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
+                page >= totalPages - 1
+                  ? "text-muted-foreground/40 cursor-not-allowed"
+                  : "text-foreground hover:bg-muted/50",
+              )}
+            >
+              Volgende
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
           <p className="text-xs text-muted-foreground tabular-nums">
-            Totaal: {filtered.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
+            Totaal: {orders.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
           </p>
         </div>
       </motion.div>
@@ -290,4 +337,3 @@ const Orders = () => {
 };
 
 export default Orders;
-

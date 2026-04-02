@@ -31,10 +31,13 @@ export interface OrderDraft {
   parent_order_id: string | null;
   changes_detected: { field: string; old_value: string; new_value: string }[] | null;
   anomalies: { field: string; value: number; avg_value: number; message: string }[] | null;
+  field_confidence: Record<string, number> | null;
 }
 
 export type FieldSource = "email" | "pdf" | "both";
 export type FieldSources = Record<string, FieldSource>;
+
+export type FieldConfidence = Record<string, number>;
 
 export interface FormState {
   transportType: string;
@@ -48,6 +51,7 @@ export interface FormState {
   perUnit: boolean;
   internalNote: string;
   fieldSources: FieldSources;
+  fieldConfidence: FieldConfidence;
 }
 
 export interface ClientRecord {

@@ -21,7 +21,8 @@ const overdueImpacts: Record<string, { label: string; color: string }> = {};
 
 const Dashboard = () => {
   const today = new Date();
-  const { data: orders = [], isLoading: ordersLoading } = useOrders();
+  const { data: ordersData, isLoading: ordersLoading } = useOrders();
+  const orders = ordersData?.orders ?? [];
   const { data: vehicles = [], isLoading: vehiclesLoading } = useVehicles();
   const { toast } = useToast();
 

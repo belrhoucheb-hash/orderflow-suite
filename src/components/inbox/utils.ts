@@ -13,6 +13,7 @@ export function orderToForm(order: OrderDraft): FormState {
     perUnit: order.is_weight_per_unit,
     internalNote: order.internal_note || "",
     fieldSources: {},
+    fieldConfidence: order.field_confidence || {},
   };
 }
 
