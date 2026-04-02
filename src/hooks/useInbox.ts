@@ -337,8 +337,7 @@ export function useInbox() {
     },
     onError: (error: any) => {
       console.error("Create order error:", error);
-      toast.success("Order aanmaken mislukt", { description: error.message || "Controleer de gegevens en probeer opnieuw",
-        variant: "destructive", });
+      toast.error("Order aanmaken mislukt", { description: error.message || "Controleer de gegevens en probeer opnieuw" });
     },
   });
 
