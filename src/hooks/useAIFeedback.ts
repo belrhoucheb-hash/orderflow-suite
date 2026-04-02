@@ -2,15 +2,27 @@ import { supabase } from "@/integrations/supabase/client";
 import type { FormState } from "@/components/inbox/types";
 
 // Store a correction when the dispatcher edits an AI-extracted field
-export async function saveCorrection(orderId: string, clientName: string, field: string, aiValue: string, correctedValue: string) {
+export async function saveCorrection(orderId: string, clientName: string, field: string, aiValue: string, correctedValue: string, tenantId?: string) {
   if (!correctedValue || aiValue === correctedValue) return;
   try {
+    // Resolve tenant_id: use provided value, or look up from the order
+    let resolvedTenantId = tenantId;
+    if (!resolvedTenantId) {
+      const { data: order } = await supabase
+        .from("orders")
+        .select("tenant_id")
+        .eq("id", orderId)
+        .single();
+      resolvedTenantId = order?.tenant_id ?? undefined;
+    }
+
     await supabase.from("ai_corrections").insert({
       order_id: orderId,
       client_name: clientName,
       field_name: field,
       ai_value: aiValue,
       corrected_value: correctedValue,
+      ...(resolvedTenantId ? { tenant_id: resolvedTenantId } : {}),
     });
   } catch (e) {
     console.error("Failed to save AI correction:", e);

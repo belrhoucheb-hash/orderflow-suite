@@ -54,6 +54,7 @@ export interface VehicleAvailability {
 export function useFleetVehicles() {
   return useQuery({
     queryKey: ["fleet-vehicles"],
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
@@ -87,6 +88,7 @@ export function useVehicleById(id: string | undefined) {
   return useQuery({
     queryKey: ["fleet-vehicle", id],
     enabled: !!id,
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
@@ -122,6 +124,7 @@ export function useVehicleDocuments(vehicleId: string | undefined) {
   return useQuery({
     queryKey: ["vehicle-documents", vehicleId],
     enabled: !!vehicleId,
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicle_documents")
@@ -138,6 +141,7 @@ export function useVehicleMaintenance(vehicleId: string | undefined) {
   return useQuery({
     queryKey: ["vehicle-maintenance", vehicleId],
     enabled: !!vehicleId,
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicle_maintenance")
@@ -154,6 +158,7 @@ export function useVehicleAvailability(vehicleId: string | undefined, startDate?
   return useQuery({
     queryKey: ["vehicle-availability", vehicleId, startDate, endDate],
     enabled: !!vehicleId,
+    staleTime: 60_000,
     queryFn: async () => {
       let query = supabase
         .from("vehicle_availability")

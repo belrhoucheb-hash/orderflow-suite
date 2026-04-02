@@ -10,6 +10,7 @@ export function useLoadSettings<T = Record<string, unknown>>(category: SettingsC
   return useQuery({
     queryKey: ["tenant_settings", tenant?.id, category],
     enabled: !!tenant?.id,
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_settings" as any)

@@ -541,7 +541,7 @@ export function useInbox() {
       const oldValue = String((form as any)[field] || "");
       const newValue = String(value || "");
       if (oldValue && newValue && oldValue !== newValue) {
-        saveCorrection(selected.id, selected.client_name || "", field, oldValue, newValue);
+        saveCorrection(selected.id, selected.client_name || "", field, oldValue, newValue, tenant?.id);
       }
     }
     setFormData((prev) => ({ ...prev, [selected.id]: { ...prev[selected.id], [field]: value } }));

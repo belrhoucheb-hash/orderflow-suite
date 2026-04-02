@@ -64,11 +64,13 @@ export interface OrderCostResult {
 export function useInvoices() {
   return useQuery({
     queryKey: ["invoices"],
+    staleTime: 15_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices")
         .select("*")
-        .order("invoice_date", { ascending: false });
+        .order("invoice_date", { ascending: false })
+        .limit(100);
 
       if (error) throw error;
       return (data ?? []) as Invoice[];
@@ -83,6 +85,7 @@ export function useInvoiceById(id: string | null) {
   return useQuery({
     queryKey: ["invoices", id],
     enabled: !!id,
+    staleTime: 15_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices")
