@@ -230,6 +230,15 @@ const Facturatie = () => {
         client_id: selectedClientId,
         lines,
       });
+
+      // Link the selected orders to the newly created invoice
+      for (const orderId of selectedOrderIds) {
+        await supabase
+          .from("orders")
+          .update({ invoice_id: invoice.id, billing_status: "GEFACTUREERD" })
+          .eq("id", orderId);
+      }
+
       toast.success(`Factuur ${invoice.invoice_number} aangemaakt`, {
         description: `${selectedOrderIds.size} order(s) gekoppeld`,
       });
@@ -237,6 +246,7 @@ const Facturatie = () => {
       setSelectedClientId("");
       setSelectedOrderIds(new Set());
       queryClient.invalidateQueries({ queryKey: ["uninvoiced-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["client-uninvoiced-orders", selectedClientId] });
     } catch (e: any) {
       toast.error("Factuur aanmaken mislukt", { description: e.message });
     }
@@ -553,7 +563,7 @@ const Facturatie = () => {
                   return (
                     <tr
                       key={invoice.id}
-                      onClick={() => { console.log("Navigating to", `/facturatie/${invoice.id}`); navigate(`/facturatie/${invoice.id}`); }}
+                      onClick={() => navigate(`/facturatie/${invoice.id}`)}
                       className="hover:bg-muted/20 transition-colors duration-100 group cursor-pointer"
                     >
                       <td className="px-4 py-2">

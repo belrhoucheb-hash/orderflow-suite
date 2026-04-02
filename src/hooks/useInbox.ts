@@ -605,9 +605,9 @@ export function useInbox() {
   useEffect(() => {
     if (!selected) return;
     if (selected.status !== "DRAFT") return;
-    // Already extracted — has confidence or form data
-    if (selected.confidence_score && selected.confidence_score > 0) return;
-    if (formData[selected.id]?.pickupAddress || formData[selected.id]?.deliveryAddress) return;
+    // Already extracted — check DB fields (not formData which persists across selections)
+    if (selected.confidence_score != null && selected.confidence_score > 0) return;
+    if (selected.pickup_address || selected.delivery_address) return;
     // No email body to parse
     if (!selected.source_email_body) return;
     // Prevent re-trigger
