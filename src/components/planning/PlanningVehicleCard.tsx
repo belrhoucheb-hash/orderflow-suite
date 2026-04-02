@@ -230,6 +230,7 @@ export function PlanningVehicleCard({
                   vehicleColor={color}
                   eta={etas[idx]?.eta}
                   isLate={etas[idx]?.lateMinutes > 0}
+                  waitMinutes={etas[idx]?.waitMinutes}
                 />
               ))}
             </div>
@@ -269,6 +270,17 @@ export function PlanningVehicleCard({
                       <Package className="h-3 w-3" />
                       {o.quantity ?? 0} stuks
                     </span>
+                    {(o.time_window_start || o.time_window_end) && (
+                      <span className={cn(
+                        "flex items-center gap-0.5 text-[10px] font-medium rounded px-1 py-0.5",
+                        etas[idx]?.lateMinutes > 0
+                          ? "bg-destructive/10 text-destructive border border-destructive/20"
+                          : "bg-blue-500/10 text-blue-700 border border-blue-200/60",
+                      )}>
+                        <Clock className="h-2.5 w-2.5" />
+                        {o.time_window_start || "..."}-{o.time_window_end || "..."}
+                      </span>
+                    )}
                     {o.requirements && o.requirements.length > 0 && (
                       <span className="text-amber-600 font-medium">{o.requirements.join(", ")}</span>
                     )}
