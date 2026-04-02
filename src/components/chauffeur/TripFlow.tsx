@@ -202,18 +202,23 @@ export function TripFlow({ driverId, onStartPOD }: Props) {
               {stop.contact_name && <p className="text-xs text-gray-500">{stop.contact_name} {stop.contact_phone && `· ${stop.contact_phone}`}</p>}
               {stop.instructions && <p className="text-xs text-amber-600 mt-1">📋 {stop.instructions}</p>}
 
+              {/* Navigate button — always visible for non-completed stops */}
+              {!isDone && stop.planned_address && (
+                <Button
+                  className="w-full mt-2 h-11 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl shadow-sm"
+                  onClick={() => handleNavigate(stop.planned_address || "")}
+                >
+                  <Navigation className="h-4 w-4 mr-2" /> Navigeer naar adres
+                </Button>
+              )}
+
               {/* Actions — only for current stop */}
               {isCurrentStop && (
                 <div className="mt-3 space-y-2">
                   {stop.stop_status === "ONDERWEG" && (
-                    <div className="flex gap-2">
-                      <Button size="sm" className="flex-1 h-10 bg-blue-600 hover:bg-blue-700" onClick={() => handleNavigate(stop.planned_address || "")}>
-                        <Navigation className="h-4 w-4 mr-1" /> Navigeer
-                      </Button>
-                      <Button size="sm" className="flex-1 h-10" onClick={() => handleArrived(stop.id)}>
-                        <MapPin className="h-4 w-4 mr-1" /> Ik ben er
-                      </Button>
-                    </div>
+                    <Button size="sm" className="w-full h-10" onClick={() => handleArrived(stop.id)}>
+                      <MapPin className="h-4 w-4 mr-1" /> Ik ben er
+                    </Button>
                   )}
                   {stop.stop_status === "AANGEKOMEN" && (
                     <Button className="w-full h-10" onClick={() => handleStartUnload(stop.id)}>

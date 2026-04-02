@@ -17,6 +17,8 @@ const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
   order_cancelled: { icon: X, color: "text-destructive", bg: "bg-destructive/10" },
   planning_conflict: { icon: CalendarClock, color: "text-violet-600", bg: "bg-violet-500/10" },
   driver_update: { icon: Truck, color: "text-primary", bg: "bg-primary/10" },
+  DISPATCH: { icon: Truck, color: "text-green-600", bg: "bg-green-500/10" },
+  trip_dispatched: { icon: Truck, color: "text-green-600", bg: "bg-green-500/10" },
   info: { icon: Bell, color: "text-muted-foreground", bg: "bg-muted" },
 };
 

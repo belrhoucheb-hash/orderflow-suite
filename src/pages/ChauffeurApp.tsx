@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Truck, MapPin, Package, CheckCircle2, Navigation, LogOut, Check, Phone, Fingerprint, Camera, X, User, MessageSquare, Image, Clock, Coffee, Play, Square, WifiOff, RefreshCw } from "lucide-react";
+import { Truck, MapPin, Package, CheckCircle2, Navigation, LogOut, Check, Phone, Fingerprint, Camera, X, User, MessageSquare, Image, Clock, Coffee, Play, Square, WifiOff, RefreshCw, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -196,6 +196,85 @@ export default function ChauffeurApp() {
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
   }, [refreshPendingCount, handleSyncPending]);
+
+  // -- Chauffeur Notifications --
+  const [driverNotifications, setDriverNotifications] = useState<any[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+
+  // Fetch driver's user_id and subscribe to notifications
+  useEffect(() => {
+    if (!activeDriverId) return;
+
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const setupNotifications = async () => {
+      // Look up user_id for this driver
+      const { data: driverRow } = await supabase
+        .from("drivers" as any)
+        .select("user_id")
+        .eq("id", activeDriverId)
+        .single();
+
+      const driverUserId = (driverRow as any)?.user_id;
+      if (!driverUserId) return;
+
+      // Fetch existing unread notifications
+      const { data: existing } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", driverUserId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (existing) {
+        setDriverNotifications(existing);
+        setUnreadNotifCount(existing.filter((n: any) => !n.is_read).length);
+      }
+
+      // Subscribe to new notifications
+      channel = supabase
+        .channel("chauffeur-notifications")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${driverUserId}`,
+          },
+          (payload) => {
+            const newNotif = payload.new as any;
+            setDriverNotifications(prev => [newNotif, ...prev]);
+            setUnreadNotifCount(prev => prev + 1);
+            toast.info(newNotif.title, { description: newNotif.message });
+          }
+        )
+        .subscribe();
+    };
+
+    setupNotifications();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [activeDriverId]);
+
+  const markDriverNotifRead = async (notifId: string) => {
+    await supabase.from("notifications").update({ is_read: true }).eq("id", notifId);
+    setDriverNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n));
+    setUnreadNotifCount(prev => Math.max(0, prev - 1));
+  };
+
+  const markAllDriverNotifsRead = async () => {
+    const unreadIds = driverNotifications.filter(n => !n.is_read).map(n => n.id);
+    if (unreadIds.length === 0) return;
+    for (const id of unreadIds) {
+      await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    }
+    setDriverNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setUnreadNotifCount(0);
+  };
 
   // -- GPS & Time Tracking --
   const { isTracking, currentPosition, startTracking, stopTracking, error: gpsError } = useGPSTracking(activeDriverId);
@@ -749,11 +828,76 @@ export default function ChauffeurApp() {
           >
             <MapPin className={`h-5 w-5 ${isTracking ? "animate-pulse" : ""}`} />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowNotifPanel(!showNotifPanel)}
+            className="relative rounded-full h-10 w-10 text-white hover:bg-white/20"
+            title="Notificaties"
+          >
+            <Bell className="h-5 w-5" />
+            {unreadNotifCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 h-5 min-w-[20px] px-1 rounded-full bg-red-500 text-xs text-white flex items-center justify-center font-bold shadow-sm">
+                {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+              </span>
+            )}
+          </Button>
           <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white hover:bg-white/20 rounded-full h-10 w-10">
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
       </header>
+
+      {/* Notification Panel */}
+      {showNotifPanel && (
+        <div className="absolute top-[72px] right-2 left-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 max-h-[60vh] overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h3 className="text-sm font-bold text-slate-900">Notificaties</h3>
+            <div className="flex items-center gap-2">
+              {unreadNotifCount > 0 && (
+                <button onClick={markAllDriverNotifsRead} className="text-xs text-primary font-semibold">
+                  Alles gelezen
+                </button>
+              )}
+              <button onClick={() => setShowNotifPanel(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {driverNotifications.length === 0 ? (
+              <div className="py-10 text-center text-slate-400">
+                <Bell className="h-8 w-8 mx-auto mb-2 text-slate-200" />
+                <p className="text-sm font-medium">Geen notificaties</p>
+              </div>
+            ) : (
+              driverNotifications.map((n: any) => (
+                <button
+                  key={n.id}
+                  onClick={() => { if (!n.is_read) markDriverNotifRead(n.id); }}
+                  className={`w-full text-left px-4 py-3 border-b border-slate-50 transition-colors ${!n.is_read ? "bg-primary/5" : ""}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${!n.is_read ? "bg-green-100" : "bg-slate-100"}`}>
+                      <Truck className={`h-4 w-4 ${!n.is_read ? "text-green-600" : "text-slate-400"}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{n.title}</p>
+                        {!n.is_read && <span className="h-2 w-2 rounded-full bg-primary shrink-0" />}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-xs text-slate-300 mt-1">
+                        {new Date(n.created_at).toLocaleString("nl-NL", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Offline POD Banner */}
       {pendingPODCount > 0 && (
@@ -1020,7 +1164,13 @@ export default function ChauffeurApp() {
                 </p>
                 <p className="text-slate-900 font-medium text-lg leading-snug mt-2">{selectedOrder.delivery_address}</p>
                 <div className="flex gap-3 mt-5">
-                   <Button className="flex-1 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm h-12">
+                   <Button
+                     className="flex-1 rounded-2xl bg-green-600 hover:bg-green-700 text-white shadow-sm h-12"
+                     onClick={() => {
+                       const encoded = encodeURIComponent(selectedOrder.delivery_address || "");
+                       window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, "_blank");
+                     }}
+                   >
                      <Navigation className="h-4 w-4 mr-2" /> Start Navigatie
                    </Button>
                    <Button variant="secondary" size="icon" className="h-12 w-12 rounded-2xl flex-shrink-0 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100">
