@@ -268,7 +268,7 @@ const Planning = () => {
       // Fetch orders for selected date: either matching delivery_date or PENDING without date
       const { data, error } = await supabase
         .from("orders")
-        .select("id, order_number, client_name, pickup_address, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng, delivery_date, pickup_date")
+        .select("id, order_number, client_name, pickup_address, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit, time_window_start, time_window_end, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng, delivery_date, pickup_date")
         .eq("status", "PENDING")
         .is("vehicle_id", null)
         .order("order_number", { ascending: true });

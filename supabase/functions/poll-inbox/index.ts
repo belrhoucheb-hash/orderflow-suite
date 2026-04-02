@@ -160,7 +160,8 @@ type EmailClassification = "cancellation" | "confirmation" | "order" | null;
 async function ruleBasedClassify(
   subject: string,
   fromAddr: string,
-  supabase: any
+  supabase: any,
+  tenantId: string
 ): Promise<EmailClassification> {
   const subjectLower = subject.toLowerCase();
 
@@ -176,12 +177,13 @@ async function ruleBasedClassify(
     return "confirmation";
   }
 
-  // Check if sender is a known client
+  // Check if sender is a known client (tenant-scoped)
   if (fromAddr) {
     const { data: knownClient } = await supabase
       .from("clients")
       .select("id")
       .eq("email", fromAddr)
+      .eq("tenant_id", tenantId)
       .limit(1);
     if (knownClient && knownClient.length > 0) {
       console.log(`Rule-based: classified as order (known client: ${fromAddr})`);
@@ -303,7 +305,7 @@ async function pollInbox(): Promise<Response> {
           // Quick classification: rule-based first, then AI for ambiguous emails
           const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
-          const ruleResult = await ruleBasedClassify(subject, fromAddr, supabase);
+          const ruleResult = await ruleBasedClassify(subject, fromAddr, supabase, tenantId);
 
           if (ruleResult) {
             // Rule-based classification succeeded — skip AI call, email is transport-related
