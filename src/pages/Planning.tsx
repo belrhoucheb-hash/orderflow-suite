@@ -179,8 +179,8 @@ const Planning = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, order_number, client_name, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit")
-        .in("status", ["DRAFT", "PENDING"])
+        .select("id, order_number, client_name, pickup_address, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng")
+        .eq("status", "PENDING")
         .is("vehicle_id", null)
         .order("order_number", { ascending: true });
       if (error) throw error;
@@ -542,16 +542,49 @@ const Planning = () => {
           .single();
         if (tripErr) throw tripErr;
 
-        // 3. Create trip_stops for each order in this vehicle
-        const stopInserts = vOrders
-          .map((order, idx) => ({
+        // 3. Create trip_stops: PICKUP stops first, then DELIVERY stops
+        const stopInserts: Record<string, any>[] = [];
+        let seq = 0;
+
+        // Group orders by unique pickup address to create one PICKUP stop per location
+        const pickupGroups = new Map<string, PlanOrder[]>();
+        for (const order of vOrders) {
+          const addr = order.pickup_address?.trim() || "";
+          if (!addr) continue;
+          if (!pickupGroups.has(addr)) pickupGroups.set(addr, []);
+          pickupGroups.get(addr)!.push(order);
+        }
+
+        // Create PICKUP stops (one per unique pickup address)
+        for (const [pickupAddr, groupOrders] of pickupGroups) {
+          const firstOrder = groupOrders[0];
+          stopInserts.push({
+            trip_id: trip.id,
+            order_id: groupOrders.length === 1 ? firstOrder.id : firstOrder.id,
+            stop_type: "PICKUP" as const,
+            stop_sequence: seq,
+            planned_address: pickupAddr,
+            stop_status: "GEPLAND" as const,
+            planned_latitude: firstOrder.geocoded_pickup_lat ?? null,
+            planned_longitude: firstOrder.geocoded_pickup_lng ?? null,
+          });
+          seq++;
+        }
+
+        // Create DELIVERY stops (one per order)
+        for (const order of vOrders) {
+          stopInserts.push({
             trip_id: trip.id,
             order_id: order.id,
             stop_type: "DELIVERY" as const,
-            stop_sequence: idx + 1,
+            stop_sequence: seq,
             planned_address: order.delivery_address ?? "",
             stop_status: "GEPLAND" as const,
-          }));
+            planned_latitude: order.geocoded_delivery_lat ?? null,
+            planned_longitude: order.geocoded_delivery_lng ?? null,
+          });
+          seq++;
+        }
 
         if (stopInserts.length > 0) {
           const { error: stopsErr } = await supabase
