@@ -194,7 +194,7 @@ export default function Mail() {
           ))}
         </nav>
         <div className="p-4 border-t border-border/30">
-          <p className="text-xs text-muted-foreground/50 text-center">E-mail management</p>
+          <p className="text-xs text-muted-foreground/50 text-center">Communicatie met klanten en partners</p>
         </div>
       </div>
 
@@ -207,7 +207,10 @@ export default function Mail() {
         {/* Toolbar */}
         <div className="p-4 border-b border-border/30 space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground">{folders.find(f => f.key === folder)?.label}</h2>
+            <div>
+              <h2 className="text-sm font-bold text-foreground">E-mail</h2>
+              <p className="text-[10px] text-muted-foreground">Communicatie met klanten en partners</p>
+            </div>
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => refetch()}>
                 <RefreshCw className="h-3.5 w-3.5" />
