@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { getStatusColor } from "@/lib/statusColors";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { OrderDraft, FormState } from "./types";
@@ -101,7 +102,6 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
   const [isSending, setIsSending] = useState(false);
   const replyRef = useRef<HTMLTextAreaElement>(null);
   const [isParsing, setIsParsing] = useState(false);
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const attachments = (selected.attachments || []) as { name: string; url: string; type: string }[];
   const hasAttachments = attachments.length > 0;
@@ -158,9 +158,15 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
         fieldConfidence: ext.field_confidence || {},
       });
 
+      // Normalise confidence: AI may return 0-1 float instead of 0-100
+      const normalizedConfidence =
+        typeof ext.confidence_score === "number" && ext.confidence_score > 0 && ext.confidence_score <= 1
+          ? Math.round(ext.confidence_score * 100)
+          : ext.confidence_score;
+
       // Save extracted data to DB
       await supabase.from("orders").update({
-        confidence_score: ext.confidence_score,
+        confidence_score: normalizedConfidence,
         client_name: ext.client_name || selected.client_name,
         transport_type: ext.transport_type,
         pickup_address: ext.pickup_address,
@@ -179,10 +185,10 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
       }).eq("id", selected.id);
 
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
-      toast({ title: "AI Extractie voltooid", description: `Confidence: ${ext.confidence_score}%` });
+      toast.success("AI Extractie voltooid", { description: `Confidence: ${ext.confidence_score}%` });
     } catch (e: any) {
       console.error("Parse error:", e);
-      toast({ title: "Fout bij AI extractie", description: e.message || "Probeer het opnieuw", variant: "destructive" });
+      toast.error("Fout bij AI extractie", { description: e.message || "Probeer het opnieuw" });
     } finally {
       setIsParsing(false);
     }
@@ -226,18 +232,18 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
           body: { orderId: selected.id, toEmail, subject, body: replyText },
         });
         if (error) throw error;
-        toast({ title: replyMode === "forward" ? "Doorgestuurd" : "Antwoord verzonden" });
+        toast.success(replyMode === "forward" ? "Doorgestuurd" : "Antwoord verzonden");
       } catch {
         const encodedSubject = encodeURIComponent(subject);
         const encodedBody = encodeURIComponent(replyText);
         window.open(`mailto:${toEmail}?subject=${encodedSubject}&body=${encodedBody}`);
-        toast({ title: "E-mail client geopend", description: "Bericht klaar om te versturen" });
+        toast.success("E-mail client geopend", { description: "Bericht klaar om te versturen" });
       }
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
       setReplyMode("none");
       setReplyText("");
     } catch (e: any) {
-      toast({ title: "Verzenden mislukt", description: e.message, variant: "destructive" });
+      toast.error("Verzenden mislukt", { description: e.message });
     } finally {
       setIsSending(false);
     }
@@ -373,20 +379,13 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
                 </p>
                 <div className="space-y-2">
                   {clientData.previousOrders.map((order: any) => {
-                    const statusColors: Record<string, string> = {
-                      DRAFT: "bg-gray-100 text-gray-600",
-                      PENDING: "bg-blue-100 text-blue-700",
-                      PLANNED: "bg-violet-100 text-violet-700",
-                      IN_TRANSIT: "bg-amber-100 text-amber-700",
-                      DELIVERED: "bg-green-100 text-green-700",
-                      CANCELLED: "bg-red-100 text-red-700",
-                    };
+                    const sc = getStatusColor(order.status);
                     return (
                       <a key={order.id} href={`/orders/${order.id}`} className="block rounded-lg border border-gray-100 bg-white p-3 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs font-mono font-bold text-gray-900">#{order.order_number}</span>
-                          <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded", statusColors[order.status] || "bg-gray-100 text-gray-600")}>
-                            {order.status}
+                          <span className={cn("text-xs font-medium px-1.5 py-0.5 rounded", sc.bg, sc.text)}>
+                            {sc.label}
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 truncate">

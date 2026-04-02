@@ -31,11 +31,10 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export function MasterDataSection() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // --- Queries ---
@@ -83,10 +82,10 @@ export function MasterDataSection() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [`settings-${variables.table.replace('_', '-')}`] });
-      toast({ title: "Verwijderd", description: "Gegeven succesvol verwijderd." });
+      toast.success("Verwijderd", { description: "Gegeven succesvol verwijderd." });
     },
     onError: () => {
-      toast({ title: "Fout", description: "Kon gegeven niet verwijderen.", variant: "destructive" });
+      toast.error("Fout", { description: "Kon gegeven niet verwijderen." });
     }
   });
 
@@ -108,11 +107,11 @@ export function MasterDataSection() {
       queryClient.invalidateQueries({ queryKey: [`settings-${variables.table.replace('_', '-')}`] });
       setIsAdding(null);
       setNewData({});
-      toast({ title: "Bijgevoegd", description: "Nieuw gegeven succesvol toegevoegd." });
+      toast.success("Bijgevoegd", { description: "Nieuw gegeven succesvol toegevoegd." });
     },
     onError: (err) => {
       console.error(err);
-      toast({ title: "Fout", description: "Kon gegeven niet toevoegen.", variant: "destructive" });
+      toast.error("Fout", { description: "Kon gegeven niet toevoegen." });
     }
   });
 

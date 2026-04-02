@@ -2,6 +2,8 @@ import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, 
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import defaultLogo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,6 +42,39 @@ const adminItems = [
   { title: "Instellingen", url: "/settings", icon: Settings },
 ];
 
+function useExceptionCount() {
+  return useQuery({
+    queryKey: ["exception-count"],
+    queryFn: async () => {
+      // Count DRAFT orders with missing fields
+      const { count: missingCount } = await supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "DRAFT")
+        .not("missing_fields", "eq", "{}");
+
+      // Count DRAFT orders older than 3 hours (SLA risk)
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      const { count: slaCount } = await supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "DRAFT")
+        .lt("created_at", threeHoursAgo);
+
+      // Count IN_TRANSIT orders older than 24h (delays)
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count: delayCount } = await supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "IN_TRANSIT")
+        .lt("created_at", oneDayAgo);
+
+      return (missingCount || 0) + (slaCount || 0) + (delayCount || 0);
+    },
+    refetchInterval: 60_000,
+  });
+}
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -47,6 +82,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { profile, user, signOut, isAdmin } = useAuth();
   const { tenant } = useTenant();
+  const { data: exceptionCount = 0 } = useExceptionCount();
 
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const toggleTheme = () => {
@@ -112,6 +148,11 @@ export function AppSidebar() {
                       >
                         <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
                         <span>{item.title}</span>
+                        {item.title === "Uitzonderingen" && exceptionCount > 0 && !collapsed && (
+                          <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none font-medium">
+                            {exceptionCount}
+                          </span>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

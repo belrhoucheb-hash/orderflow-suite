@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { useClients, type Client } from "@/hooks/useClients";
 import { ClientDetailPanel } from "@/components/clients/ClientDetailPanel";
 import { NewClientDialog } from "@/components/clients/NewClientDialog";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { QueryError } from "@/components/QueryError";
 
 export default function Clients() {
   const [search, setSearch] = useState("");
@@ -72,14 +74,10 @@ export default function Clients() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Laden...</td></tr>
+                  <tr><td colSpan={6}><LoadingState message="Klanten laden..." /></td></tr>
                 ) : isError ? (
                   <tr><td colSpan={6}>
-                    <div className="flex flex-col items-center justify-center h-64 text-center">
-                      <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
-                      <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
-                      <button onClick={() => refetch()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
-                    </div>
+                    <QueryError message="Kan klantgegevens niet laden." onRetry={() => refetch()} />
                   </td></tr>
                 ) : clients?.length === 0 ? (
                   <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Geen klanten gevonden</td></tr>

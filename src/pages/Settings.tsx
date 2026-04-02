@@ -28,14 +28,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { MasterDataSection } from "@/components/settings/MasterDataSection";
 import { useTenant } from "@/contexts/TenantContext";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
 
 const Settings = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { tenant } = useTenant();
-  const { toast } = useToast();
 
   // Branding state
   const [companyName, setCompanyName] = useState("");
@@ -139,18 +138,18 @@ const Settings = () => {
   const handleSaveIntegrations = async () => {
     try {
       await saveIntegrations.mutateAsync(integrations as any);
-      toast({ title: "Integratie-instellingen opgeslagen" });
+      toast.success("Integratie-instellingen opgeslagen");
     } catch {
-      toast({ title: "Fout bij opslaan", description: "Probeer het opnieuw.", variant: "destructive" });
+      toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
     }
   };
 
   const handleSaveNotifications = async () => {
     try {
       await saveNotifications.mutateAsync(notifications as any);
-      toast({ title: "Notificatie-instellingen opgeslagen" });
+      toast.success("Notificatie-instellingen opgeslagen");
     } catch {
-      toast({ title: "Fout bij opslaan", description: "Probeer het opnieuw.", variant: "destructive" });
+      toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
     }
   };
 
@@ -160,9 +159,9 @@ const Settings = () => {
         smsProvider, twilioAccountSid, twilioAuthToken, twilioFromNumber,
         messageBirdApiKey, messageBirdOriginator, smsEvents, smsTemplate,
       });
-      toast({ title: "SMS instellingen opgeslagen" });
+      toast.success("SMS instellingen opgeslagen");
     } catch {
-      toast({ title: "Fout bij opslaan", description: "Probeer het opnieuw.", variant: "destructive" });
+      toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
     }
   };
 
@@ -394,7 +393,7 @@ const Settings = () => {
                    <Tooltip>
                      <TooltipTrigger asChild>
                        <span className="inline-block">
-                         <Button onClick={() => toast({ title: "Branding opgeslagen", description: "Wijzigingen worden doorgevoerd." })}>Opslaan</Button>
+                         <Button onClick={() => toast.success("Branding opgeslagen", { description: "Wijzigingen worden doorgevoerd." })}>Opslaan</Button>
                        </span>
                      </TooltipTrigger>
                      <TooltipContent>
@@ -608,10 +607,7 @@ const Settings = () => {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    toast({
-                      title: "Test SMS verstuurd",
-                      description: "Een test SMS is verstuurd naar het geconfigureerde nummer.",
-                    });
+                    toast.success("Test SMS verstuurd", { description: "Een test SMS is verstuurd naar het geconfigureerde nummer.", });
                   }}
                 >
                   <Smartphone className="h-4 w-4 mr-2" strokeWidth={1.5} />
@@ -880,7 +876,7 @@ const Settings = () => {
                 <Label className="text-sm font-semibold">Webhook URL</Label>
                 <div className="flex gap-2">
                   <Input placeholder="https://jouw-systeem.nl/webhook" className="flex-1" />
-                  <Button onClick={() => toast({ title: "Webhook URL opgeslagen" })}>Opslaan</Button>
+                  <Button onClick={() => toast.success("Webhook URL opgeslagen")}>Opslaan</Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Alle geselecteerde events worden als POST request naar deze URL gestuurd met een JSON payload.</p>
               </div>
@@ -889,7 +885,7 @@ const Settings = () => {
                 <Label className="text-sm font-semibold">Webhook Secret</Label>
                 <div className="flex gap-2">
                   <Input type="password" placeholder="whsec_..." className="flex-1 font-mono" />
-                  <Button variant="outline" onClick={() => toast({ title: "Webhook secret gegenereerd", description: "whsec_" + Math.random().toString(36).slice(2, 18) })}>Genereer</Button>
+                  <Button variant="outline" onClick={() => toast.success("Webhook secret gegenereerd", { description: "whsec_" + Math.random().toString(36).slice(2, 18) })}>Genereer</Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Optioneel. Wordt meegestuurd als X-Webhook-Secret header voor verificatie.</p>
               </div>
@@ -909,8 +905,8 @@ const Settings = () => {
                 <Label className="text-sm font-semibold">API Key</Label>
                 <div className="flex gap-2">
                   <Input type="password" value="sk_live_••••••••••••••••••••••" readOnly className="flex-1 font-mono text-sm" />
-                  <Button variant="outline" onClick={() => { navigator.clipboard.writeText("sk_live_demo_key_placeholder"); toast({ title: "API key gekopieerd" }); }}>Kopieer</Button>
-                  <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => toast({ title: "API key hernieuwd", description: "De oude key is ongeldig gemaakt." })}>Hernieuw</Button>
+                  <Button variant="outline" onClick={() => { navigator.clipboard.writeText("sk_live_demo_key_placeholder"); toast.success("API key gekopieerd"); }}>Kopieer</Button>
+                  <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => toast.success("API key hernieuwd", { description: "De oude key is ongeldig gemaakt." })}>Hernieuw</Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Gebruik deze key in de Authorization header: <code className="bg-muted px-1 rounded">Bearer sk_live_...</code></p>
               </div>
