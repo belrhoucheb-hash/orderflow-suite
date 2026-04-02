@@ -76,7 +76,7 @@ export default function Inbox() {
       {/* Left Sidebar */}
       <div className="w-56 bg-white border-r border-gray-200 flex flex-col p-4 gap-2 shrink-0 hidden lg:flex">
         <div className="mb-4 px-2">
-          <p className="text-primary font-black tracking-tighter text-sm uppercase">Dispatch Hub</p>
+          <p className="text-primary font-black tracking-tighter text-sm uppercase">AI Inbox</p>
           <p className="text-[11px] text-gray-400">{tenant?.name || "Royalty Cargo"}</p>
         </div>
         <nav className="flex flex-col gap-0.5 flex-1">
@@ -153,9 +153,9 @@ export default function Inbox() {
                   className="text-lg font-bold tracking-tight"
                   style={{ fontFamily: "'Space Grotesk', sans-serif" }}
                 >
-                  Inbox
+                  AI Inbox
                 </h3>
-                <p className="text-[10px] text-gray-400">Laatst gesynchroniseerd: 2 min geleden</p>
+                <p className="text-[10px] text-gray-400">Automatische orderverwerking uit e-mails</p>
               </div>
             </div>
             <div className="p-3 space-y-2">

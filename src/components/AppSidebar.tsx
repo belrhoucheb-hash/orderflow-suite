@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Shield, Send } from "lucide-react";
+import { LayoutDashboard, Inbox, Mail, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Shield, Send } from "lucide-react";
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -24,7 +24,8 @@ import {
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Inbox", url: "/inbox", icon: Inbox },
+  { title: "AI Inbox", url: "/inbox", icon: Inbox },
+  { title: "E-mail", url: "/mail", icon: Mail },
   { title: "Orders", url: "/orders", icon: Package },
   { title: "Klanten", url: "/klanten", icon: Building2 },
   { title: "Planbord", url: "/planning", icon: Truck },
