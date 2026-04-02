@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
+// TODO: replace with tenant_settings lookup when multi-tenant is wired up
+const COMPANY_NAME = "Royalty Cargo";
+const COMPANY_PLANNING_EMAIL = "planning@royaltycargo.nl";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -129,8 +133,8 @@ serve(async (req) => {
     lines.push(``);
     lines.push(`Heeft u vragen of wijzigingen? Reageer dan op deze e-mail met vermelding van ordernummer #${orderNum}.`);
     lines.push(``);
-    const tenantName = order.tenants?.name || "Royalty Cargo";
-    const tenantEmail = order.tenants?.email || "planning@royaltycargo.nl";
+    const tenantName = order.tenants?.name || COMPANY_NAME;
+    const tenantEmail = order.tenants?.email || COMPANY_PLANNING_EMAIL;
 
     lines.push(`Met vriendelijke groet,`);
     lines.push(`${tenantName} Planning`);
@@ -210,7 +214,7 @@ serve(async (req) => {
       }
 
       const emailContent = [
-        `From: Royalty Cargo Planning <${smtpUser}>`,
+        `From: ${tenantName} Planning <${smtpUser}>`,
         `To: ${toEmail}`,
         `Subject: ${subject}`,
         `Content-Type: text/plain; charset=UTF-8`,

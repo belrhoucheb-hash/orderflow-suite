@@ -4,6 +4,7 @@
 
 import jsPDF from "jspdf";
 import type { Invoice, InvoiceLine } from "@/hooks/useInvoices";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 // ─── PDF Generation ─────────────────────────────────────────────────
 
@@ -35,12 +36,12 @@ export function generateInvoicePDF(invoice: InvoiceWithLines): Blob {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
-  doc.text("Royalty Cargo", marginLeft, y + 8);
+  doc.text(DEFAULT_COMPANY.name, marginLeft, y + 8);
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.text("Transport & Logistiek", marginLeft, y + 14);
-  doc.text("Industrieweg 42, 3044 AT Rotterdam", marginLeft, y + 19);
+  doc.text(DEFAULT_COMPANY.address, marginLeft, y + 19);
 
   // Invoice label on the right
   doc.setFontSize(28);
@@ -238,9 +239,9 @@ export function generateInvoicePDF(invoice: InvoiceWithLines): Blob {
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...primaryColor);
-  doc.text("IBAN: NL00 INGB 0000 0000 00", marginLeft + 5, y);
+  doc.text(`IBAN: ${DEFAULT_COMPANY.iban}`, marginLeft + 5, y);
   y += 4.5;
-  doc.text("T.n.v. Royalty Cargo B.V.", marginLeft + 5, y);
+  doc.text(`T.n.v. ${DEFAULT_COMPANY.legalName}`, marginLeft + 5, y);
   y += 4.5;
   doc.text(`Referentie: ${invoice.invoice_number}`, marginLeft + 5, y);
 
@@ -254,7 +255,7 @@ export function generateInvoicePDF(invoice: InvoiceWithLines): Blob {
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...mutedColor);
   doc.text(
-    "Royalty Cargo B.V. | KVK 12345678 | BTW NL001234567B01 | info@royaltycargo.nl",
+    `${DEFAULT_COMPANY.legalName} | KVK ${DEFAULT_COMPANY.kvk} | BTW ${DEFAULT_COMPANY.btw} | ${DEFAULT_COMPANY.email}`,
     pageWidth / 2,
     footerY,
     { align: "center" }
@@ -523,25 +524,25 @@ export function generateUBL(invoice: Invoice & { invoice_lines?: InvoiceLine[] }
   <cac:AccountingSupplierParty>
     <cac:Party>
       <cac:PartyName>
-        <cbc:Name>Royalty Cargo B.V.</cbc:Name>
+        <cbc:Name>${escapeXml(DEFAULT_COMPANY.legalName)}</cbc:Name>
       </cac:PartyName>
       <cac:PostalAddress>
-        <cbc:StreetName>Industrieweg 42</cbc:StreetName>
-        <cbc:CityName>Rotterdam</cbc:CityName>
-        <cbc:PostalZone>3044 AT</cbc:PostalZone>
+        <cbc:StreetName>${escapeXml(DEFAULT_COMPANY.streetName)}</cbc:StreetName>
+        <cbc:CityName>${escapeXml(DEFAULT_COMPANY.city)}</cbc:CityName>
+        <cbc:PostalZone>${escapeXml(DEFAULT_COMPANY.postalZone)}</cbc:PostalZone>
         <cac:Country>
           <cbc:IdentificationCode>NL</cbc:IdentificationCode>
         </cac:Country>
       </cac:PostalAddress>
       <cac:PartyTaxScheme>
-        <cbc:CompanyID>NL001234567B01</cbc:CompanyID>
+        <cbc:CompanyID>${escapeXml(DEFAULT_COMPANY.btw)}</cbc:CompanyID>
         <cac:TaxScheme>
           <cbc:ID>VAT</cbc:ID>
         </cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
-        <cbc:RegistrationName>Royalty Cargo B.V.</cbc:RegistrationName>
-        <cbc:CompanyID>12345678</cbc:CompanyID>
+        <cbc:RegistrationName>${escapeXml(DEFAULT_COMPANY.legalName)}</cbc:RegistrationName>
+        <cbc:CompanyID>${escapeXml(DEFAULT_COMPANY.kvk)}</cbc:CompanyID>
       </cac:PartyLegalEntity>
     </cac:Party>
   </cac:AccountingSupplierParty>

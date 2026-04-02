@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 export interface Tenant {
   id: string;
@@ -121,7 +122,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
              console.error("CRITICAL: No tenants exist in the database! Overriding with hardcoded Development tenant.");
              tenantData = {
                id: "00000000-0000-0000-0000-000000000001",
-               name: "Dev Mode Royalty Cargo",
+               name: `Dev Mode ${DEFAULT_COMPANY.name}`,
                slug: "localhost-dev",
                logoUrl: null,
                primaryColor: "#dc2626"

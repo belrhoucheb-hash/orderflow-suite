@@ -8,6 +8,7 @@ import defaultLogo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 import {
   Sidebar,
@@ -122,7 +123,7 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="flex flex-col min-w-0 pr-2">
             <span className="text-sm font-semibold text-white tracking-tight leading-tight truncate">
-              {tenant?.name || "Royalty Cargo"}
+              {tenant?.name || DEFAULT_COMPANY.name}
             </span>
             <span className="text-xs text-white/50 font-light uppercase tracking-wider">
               TMS Platform

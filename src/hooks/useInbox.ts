@@ -17,6 +17,7 @@ import {
 } from "@/components/inbox/utils";
 import { saveCorrection } from "@/hooks/useAIFeedback";
 import { useTenant } from "@/contexts/TenantContext";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 export function useInbox() {
   const queryClient = useQueryClient();
@@ -140,7 +141,7 @@ export function useInbox() {
       try {
         const scenario = TEST_SCENARIOS[scenarioIndex];
         const subjectLine = scenario.subject || `Test: ${scenario.label}`;
-        const fromEmail = scenario.from || "test@royaltycargo.nl";
+        const fromEmail = scenario.from || `test@${DEFAULT_COMPANY.email.split("@")[1]}`;
         const clientName = scenario.client || "Test Scenario";
 
         const { data: existing } = await supabase
