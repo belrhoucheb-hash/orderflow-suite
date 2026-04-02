@@ -154,6 +154,80 @@ export function useVehicleMaintenance(vehicleId: string | undefined) {
   });
 }
 
+export function useCreateMaintenance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      vehicle_id: string;
+      maintenance_type: string;
+      scheduled_date: string;
+      cost?: number;
+      description?: string;
+    }) => {
+      const { error } = await supabase.from("vehicle_maintenance").insert(data);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["vehicle-maintenance", vars.vehicle_id] });
+      qc.invalidateQueries({ queryKey: ["overdue-maintenance"] });
+    },
+  });
+}
+
+export function useCompleteMaintenance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, vehicleId }: { id: string; vehicleId: string }) => {
+      const { error } = await supabase
+        .from("vehicle_maintenance")
+        .update({ completed_date: new Date().toISOString().split("T")[0] })
+        .eq("id", id);
+      if (error) throw error;
+      return vehicleId;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["vehicle-maintenance", vars.vehicleId] });
+      qc.invalidateQueries({ queryKey: ["overdue-maintenance"] });
+    },
+  });
+}
+
+export function useUpcomingMaintenance() {
+  return useQuery({
+    queryKey: ["overdue-maintenance"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+      const { data, error } = await supabase
+        .from("vehicle_maintenance")
+        .select("*, vehicles(name, plate)")
+        .is("completed_date", null)
+        .lte("scheduled_date", today)
+        .order("scheduled_date", { ascending: true });
+      if (error) throw error;
+      return data as (VehicleMaintenance & { vehicles: { name: string; plate: string } | null })[];
+    },
+  });
+}
+
+export function useCreateDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      vehicle_id: string;
+      doc_type: string;
+      expiry_date?: string;
+      notes?: string;
+    }) => {
+      const { error } = await supabase.from("vehicle_documents").insert(data);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["vehicle-documents", vars.vehicle_id] });
+    },
+  });
+}
+
 export function useVehicleAvailability(vehicleId: string | undefined, startDate?: string, endDate?: string) {
   return useQuery({
     queryKey: ["vehicle-availability", vehicleId, startDate, endDate],

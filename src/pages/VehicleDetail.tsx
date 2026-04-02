@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTriangle, Plus, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -8,10 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useVehicleById, useVehicleDocuments, useVehicleMaintenance, useVehicleAvailability } from "@/hooks/useFleet";
+import { useVehicleById, useVehicleDocuments, useVehicleMaintenance, useVehicleAvailability, useCompleteMaintenance } from "@/hooks/useFleet";
+import { MaintenanceDialog } from "@/components/fleet/MaintenanceDialog";
+import { DocumentDialog } from "@/components/fleet/DocumentDialog";
 import { format, differenceInDays, startOfWeek, addDays } from "date-fns";
 import { nl } from "date-fns/locale";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   beschikbaar: { label: "Beschikbaar", className: "bg-emerald-500/10 text-emerald-700 border-emerald-200" },
@@ -25,6 +28,15 @@ const DOC_LABELS: Record<string, string> = {
   verzekering: "Verzekeringsbewijs",
   adr: "ADR-keuring",
   tachograaf: "Tachograaf IJking",
+};
+
+const MAINTENANCE_LABELS: Record<string, string> = {
+  apk: "APK",
+  grote_beurt: "Grote beurt",
+  kleine_beurt: "Kleine beurt",
+  bandenwissel: "Bandenwissel",
+  regulier: "Regulier onderhoud",
+  overig: "Overig",
 };
 
 export default function VehicleDetail() {
@@ -43,6 +55,9 @@ export default function VehicleDetail() {
     format(weekStart, "yyyy-MM-dd"),
     format(addDays(weekStart, 27), "yyyy-MM-dd")
   );
+  const completeMaintenance = useCompleteMaintenance();
+  const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
+  const [showDocumentDialog, setShowDocumentDialog] = useState(false);
 
   const availMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -119,8 +134,11 @@ export default function VehicleDetail() {
           {/* Documenten */}
           <TabsContent value="docs">
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Documenten & Keuringen</CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setShowDocumentDialog(true)}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />Document Toevoegen
+                </Button>
               </CardHeader>
               <CardContent>
                 {!documents || documents.length === 0 ? (
@@ -169,32 +187,82 @@ export default function VehicleDetail() {
           {/* Onderhoud */}
           <TabsContent value="maintenance">
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Onderhoudslogboek</CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setShowMaintenanceDialog(true)}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />Onderhoud Plannen
+                </Button>
               </CardHeader>
               <CardContent>
                 {!maintenance || maintenance.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4">Geen onderhoud geregistreerd</p>
                 ) : (
                   <div className="space-y-3">
-                    {maintenance.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{m.description || m.maintenance_type}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {m.completed_date
-                              ? `Uitgevoerd ${format(new Date(m.completed_date), "d MMM yyyy", { locale: nl })}`
-                              : m.scheduled_date
-                              ? `Gepland ${format(new Date(m.scheduled_date), "d MMM yyyy", { locale: nl })}`
-                              : "Geen datum"}
-                            {m.mileage_km && ` · ${m.mileage_km.toLocaleString()} km`}
-                          </p>
+                    {maintenance.map((m) => {
+                      const isCompleted = !!m.completed_date;
+                      const isOverdue = !isCompleted && m.scheduled_date && new Date(m.scheduled_date) < today;
+                      const isScheduled = !isCompleted && !isOverdue;
+                      return (
+                        <div key={m.id} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-foreground">
+                                  {MAINTENANCE_LABELS[m.maintenance_type] || m.description || m.maintenance_type}
+                                </p>
+                                {isCompleted && (
+                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-200 text-xs">
+                                    Uitgevoerd
+                                  </Badge>
+                                )}
+                                {isScheduled && (
+                                  <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-200 text-xs">
+                                    Gepland
+                                  </Badge>
+                                )}
+                                {isOverdue && (
+                                  <Badge variant="destructive" className="text-xs gap-1">
+                                    <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />VERLOPEN
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {m.completed_date
+                                  ? `Uitgevoerd ${format(new Date(m.completed_date), "d MMM yyyy", { locale: nl })}`
+                                  : m.scheduled_date
+                                  ? `Gepland ${format(new Date(m.scheduled_date), "d MMM yyyy", { locale: nl })}`
+                                  : "Geen datum"}
+                                {m.mileage_km && ` \u00B7 ${m.mileage_km.toLocaleString()} km`}
+                              </p>
+                              {m.description && m.description !== m.maintenance_type && (
+                                <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {m.cost !== null && m.cost !== undefined && (
+                              <span className="text-sm font-medium text-foreground">{"\u20AC"}{m.cost.toLocaleString()}</span>
+                            )}
+                            {!isCompleted && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                disabled={completeMaintenance.isPending}
+                                onClick={() => {
+                                  completeMaintenance.mutate(
+                                    { id: m.id, vehicleId: m.vehicle_id },
+                                    { onSuccess: () => toast.success("Onderhoud afgerond") }
+                                  );
+                                }}
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-1" />Afronden
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        {m.cost !== null && m.cost !== undefined && (
-                          <span className="text-sm font-medium text-foreground">€{m.cost.toLocaleString()}</span>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -258,6 +326,9 @@ export default function VehicleDetail() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {id && <MaintenanceDialog vehicleId={id} open={showMaintenanceDialog} onOpenChange={setShowMaintenanceDialog} />}
+      {id && <DocumentDialog vehicleId={id} open={showDocumentDialog} onOpenChange={setShowDocumentDialog} />}
     </div>
   );
 }
