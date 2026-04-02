@@ -116,21 +116,48 @@ export async function createNotification(params: {
   icon?: string;
   order_id?: string;
   user_id?: string;
+  tenant_id?: string;
   metadata?: Record<string, any>;
 }) {
-  let targetUserId = params.user_id;
-  if (!targetUserId) {
-    const { data } = await supabase.auth.getUser();
-    targetUserId = data.user?.id;
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
+
+    let targetUserId = params.user_id || user?.id;
+    let tenantId = params.tenant_id;
+
+    // Resolve tenant_id if not provided
+    if (!tenantId && user) {
+      tenantId = (user.app_metadata as any)?.tenant_id;
+      if (!tenantId) {
+        const { data: tm } = await supabase
+          .from("tenant_members")
+          .select("tenant_id")
+          .eq("user_id", user.id)
+          .limit(1)
+          .single();
+        tenantId = tm?.tenant_id;
+      }
+    }
+
+    if (!tenantId) {
+      console.warn("createNotification: no tenant_id available, skipping");
+      return;
+    }
+
+    const { error } = await supabase.from("notifications").insert({
+      type: params.type,
+      title: params.title,
+      message: params.message,
+      icon: params.icon || "bell",
+      order_id: params.order_id || null,
+      user_id: targetUserId,
+      tenant_id: tenantId,
+      metadata: params.metadata || {},
+    });
+    if (error) console.error("Failed to create notification:", error);
+  } catch (e) {
+    // Never crash the app because of a notification failure
+    console.error("createNotification error:", e);
   }
-  const { error } = await supabase.from("notifications").insert({
-    type: params.type,
-    title: params.title,
-    message: params.message,
-    icon: params.icon || "bell",
-    order_id: params.order_id || null,
-    user_id: targetUserId,
-    metadata: params.metadata || {},
-  });
-  if (error) console.error("Failed to create notification:", error);
 }
