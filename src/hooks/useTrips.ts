@@ -251,6 +251,9 @@ export function useDispatchTrip() {
 
       // Validate
       const errors: string[] = [];
+      if (!["CONCEPT", "VERZENDKLAAR"].includes(trip.dispatch_status)) {
+        errors.push(`Rit kan niet verzonden worden vanuit status "${trip.dispatch_status}"`);
+      }
       if (!trip.driver_id) errors.push("Geen chauffeur toegewezen");
       const stops = (trip as any).trip_stops || [];
       stops.forEach((s: any, i: number) => {

@@ -184,10 +184,9 @@ export function PlanningVehicleCard({
         {assigned.length > 0 && (
           <div className="inline-flex rounded-lg bg-muted/50 p-0.5 w-full">
             <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setActiveTab("route"); }}
+              onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setActiveTab("route"); }}
               className={cn(
-                "flex-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 relative z-10",
+                "flex-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 relative z-10 select-none",
                 activeTab === "route"
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -196,10 +195,9 @@ export function PlanningVehicleCard({
               ROUTE
             </button>
             <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setActiveTab("ingepland"); }}
+              onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setActiveTab("ingepland"); }}
               className={cn(
-                "flex-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 relative z-10",
+                "flex-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 relative z-10 select-none",
                 activeTab === "ingepland"
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
