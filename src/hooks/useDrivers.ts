@@ -21,6 +21,7 @@ export function useDrivers() {
 
   const query = useQuery({
     queryKey: ["drivers"],
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("drivers" as any)
@@ -86,6 +87,7 @@ export function useDrivers() {
 export function useAvailableDrivers(requiredCertifications: string[] = []) {
   return useQuery({
     queryKey: ["drivers", "available", requiredCertifications],
+    staleTime: 30_000,
     queryFn: async () => {
       let query = supabase
         .from("drivers" as any)

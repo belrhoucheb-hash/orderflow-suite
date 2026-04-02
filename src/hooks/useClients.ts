@@ -49,6 +49,7 @@ export interface ClientRate {
 export function useClients(search?: string) {
   return useQuery({
     queryKey: ["clients", search],
+    staleTime: 60_000,
     queryFn: async () => {
       // 8.10 – Single query: fetch clients and active order counts in parallel
       // instead of N+1 (one query per client). We fire both requests at once
@@ -56,7 +57,8 @@ export function useClients(search?: string) {
       let clientQuery = supabase
         .from("clients")
         .select("*")
-        .order("name");
+        .order("name")
+        .limit(200);
 
       if (search) {
         clientQuery = clientQuery.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
@@ -90,6 +92,7 @@ export function useClientLocations(clientId: string | null) {
   return useQuery({
     queryKey: ["client_locations", clientId],
     enabled: !!clientId,
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("client_locations")
@@ -106,6 +109,7 @@ export function useClientRates(clientId: string | null) {
   return useQuery({
     queryKey: ["client_rates", clientId],
     enabled: !!clientId,
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("client_rates")
@@ -122,6 +126,7 @@ export function useClientOrders(clientName: string | null) {
   return useQuery({
     queryKey: ["client_orders", clientName],
     enabled: !!clientName,
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
