@@ -3,6 +3,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Truck, AlertTriangle, Snowflake, ArrowUp, Package, Shield, Globe, Barcode } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { generateSscc18 } from "@/utils/ssccUtils";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 interface SmartLabelProps {
   order: any;
@@ -34,7 +35,7 @@ const SmartLabel: React.FC<SmartLabelProps> = ({ order, pieceNumber = 1, totalPi
               <Truck className="h-4 w-4" strokeWidth={2.5} />
             </div>
             <div>
-              <p className="text-xs font-bold leading-none tracking-tight">Royalty Cargo</p>
+              <p className="text-xs font-bold leading-none tracking-tight">{DEFAULT_COMPANY.name}</p>
               <p className="text-xs font-bold text-[#dc2626] tracking-[0.1em] uppercase">TMS Platform</p>
             </div>
           </div>

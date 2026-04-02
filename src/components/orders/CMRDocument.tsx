@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Truck, AlertTriangle, Snowflake } from "lucide-react";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 interface CMRDocumentProps {
   order: any;
@@ -15,8 +16,8 @@ interface CMRDocumentProps {
  */
 const CMRDocument: React.FC<CMRDocumentProps> = ({
   order,
-  tenantName = "Royalty Cargo",
-  tenantAddress = "Transportweg 1, 3045 AB Rotterdam, NL",
+  tenantName = DEFAULT_COMPANY.name,
+  tenantAddress = `${DEFAULT_COMPANY.address}, ${DEFAULT_COMPANY.country}`,
 }) => {
   const requirements = (order.requirements || []) as string[];
   const isADR = requirements.some(r => r.toUpperCase().includes("ADR"));

@@ -3,11 +3,12 @@ import { Truck, Building2, Users, Package, CheckCircle2, ArrowRight, X, Sparkles
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 const steps = [
   {
     icon: Sparkles,
-    title: "Welkom bij Royalty Cargo TMS",
+    title: `Welkom bij ${DEFAULT_COMPANY.name} TMS`,
     description: "Uw transport management platform is klaar voor gebruik. Laten we uw account instellen.",
     action: null,
   },

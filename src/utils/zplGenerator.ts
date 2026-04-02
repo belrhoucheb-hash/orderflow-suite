@@ -2,6 +2,7 @@
  * Zebra Programming Language (ZPL) Generator Utility
  * Generates ZPL strings for a 10x15cm (4x6 inch) thermal label.
  */
+import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 interface ZplLabelParams {
   orderNumber: string;
@@ -43,7 +44,7 @@ export function generateZplLabel(params: ZplLabelParams): string {
   return `^XA
 ^FX Header
 ^CF0,60
-^FO50,50^FDRoyalty Cargo^FS
+^FO50,50^FD${DEFAULT_COMPANY.name}^FS
 ^CF0,30
 ^FO600,50^FDPiece ${pieceNumber}/${totalPieces}^FS
 ^FO50,120^GB700,2,2^FS
