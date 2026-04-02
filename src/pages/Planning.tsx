@@ -53,7 +53,7 @@ import { PlanningDateNav, toDateString, type ViewMode } from "@/components/plann
 import { PlanningWeekView } from "@/components/planning/PlanningWeekView";
 import { useTenant } from "@/contexts/TenantContext";
 import { solveVRP } from "@/lib/vrpSolver";
-import { useLoadPlanningDraft, useSavePlanningDraft, useDeletePlanningDraft, collectWeekDrafts } from "@/hooks/usePlanningDrafts";
+import { useLoadPlanningDraft, useSavePlanningDraft, useDeletePlanningDraft, collectWeekDrafts, usePlanningDraftsRealtime } from "@/hooks/usePlanningDrafts";
 
 const Planning = () => {
   const { data: fleetVehicles = [] } = useVehicles();
@@ -74,6 +74,7 @@ const Planning = () => {
   // ── Database draft hooks ──
   const saveDraftMutation = useSavePlanningDraft();
   const deleteDraftMutation = useDeletePlanningDraft();
+  usePlanningDraftsRealtime();
   const dbSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Multi-day planning state ──
