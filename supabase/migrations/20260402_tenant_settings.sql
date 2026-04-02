@@ -11,4 +11,9 @@ CREATE TABLE IF NOT EXISTS public.tenant_settings (
 ALTER TABLE tenant_settings ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "tenant_isolation" ON tenant_settings
-  FOR ALL USING (tenant_id = current_setting('app.current_tenant_id')::uuid);
+  FOR ALL USING (
+    tenant_id = COALESCE(
+      (auth.jwt()->'app_metadata'->>'tenant_id')::uuid,
+      (SELECT tenant_id FROM public.tenant_members WHERE user_id = auth.uid() LIMIT 1)
+    )
+  );

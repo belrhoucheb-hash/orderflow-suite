@@ -12,4 +12,10 @@ ALTER TABLE public.ai_corrections ENABLE ROW LEVEL SECURITY;
 -- Tenant isolation policy
 CREATE POLICY "tenant_isolation" ON public.ai_corrections
   FOR ALL
-  USING (tenant_id = current_setting('app.current_tenant_id')::uuid);
+  USING (
+    tenant_id IS NULL OR
+    tenant_id = COALESCE(
+      (auth.jwt()->'app_metadata'->>'tenant_id')::uuid,
+      (SELECT tenant_id FROM public.tenant_members WHERE user_id = auth.uid() LIMIT 1)
+    )
+  );
