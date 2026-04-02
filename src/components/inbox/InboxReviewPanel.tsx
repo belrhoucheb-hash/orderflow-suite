@@ -21,7 +21,7 @@ function FieldConfidenceIndicator({ score }: { score: number | undefined }) {
   }
   return <span title={`AI confidence: ${score}%`} className="inline-flex items-center cursor-help"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>;
 }
-import { getFilledCount, getTotalFields, getRequiredFilledCount, getFormErrors, formatDate } from "./utils";
+import { getFilledCount, getTotalFields, getRequiredFilledCount, getFormErrors, formatDate, isAddressIncomplete } from "./utils";
 
 interface Props {
   selected: OrderDraft;
@@ -36,12 +36,11 @@ interface Props {
 }
 
 export function InboxReviewPanel({ selected, form, isCreatePending, addressSuggestions, onUpdateField, onToggleRequirement, onAutoSave, onCreateOrder, onDelete }: Props) {
-  // Normalise confidence: AI may return 0-1 float instead of 0-100 integer
-  const rawConf = selected.confidence_score || 0;
-  const conf = rawConf > 0 && rawConf <= 1 ? Math.round(rawConf * 100) : Math.round(rawConf);
   const formErrors = getFormErrors(form);
   const filledCount = getFilledCount(form);
   const totalFields = getTotalFields();
+  // Confidence badge = actual filled fields percentage (not AI confidence_score)
+  const conf = Math.round((filledCount / totalFields) * 100);
   const requiredFilled = getRequiredFilledCount(form);
   const totalRequired = 4;
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -190,6 +189,11 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                   </div>
                   <AddressAutocomplete value={form.pickupAddress} onChange={(v) => { onUpdateField("pickupAddress", v); onAutoSave(); }}
                     placeholder="Ophaaladres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-0", !form.pickupAddress && "text-red-400 italic font-normal")} />
+                  {form.pickupAddress && isAddressIncomplete(form.pickupAddress) && (
+                    <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-bold">
+                      <AlertTriangle className="h-3 w-3 shrink-0" /> Onvolledig adres — straat + huisnummer nodig
+                    </div>
+                  )}
                   {selected.pickup_time_from && selected.pickup_time_to && (
                     <p className="text-xs text-gray-400 mt-1">{selected.pickup_time_from} - {selected.pickup_time_to}</p>
                   )}
@@ -205,6 +209,11 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                   </div>
                   <AddressAutocomplete value={form.deliveryAddress} onChange={(v) => { onUpdateField("deliveryAddress", v); onAutoSave(); }}
                     placeholder="Afleveradres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-0", !form.deliveryAddress && "text-red-400 italic font-normal")} />
+                  {form.deliveryAddress && isAddressIncomplete(form.deliveryAddress) && (
+                    <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-bold">
+                      <AlertTriangle className="h-3 w-3 shrink-0" /> Onvolledig adres — straat + huisnummer nodig
+                    </div>
+                  )}
                   {selected.delivery_time_from && selected.delivery_time_to && (
                     <p className="text-xs text-gray-400 mt-1">{selected.delivery_time_from} - {selected.delivery_time_to}</p>
                   )}
