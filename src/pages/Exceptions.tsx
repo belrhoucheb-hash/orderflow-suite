@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFleetVehicles } from "@/hooks/useFleet";
 import { Link } from "react-router-dom";
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { toast } from "sonner";
 
 // ── Types ────────────────────────────────────────────────────────────
 type ExceptionType = "Vertraging" | "Data mist" | "Capaciteit" | "SLA";
@@ -35,6 +36,8 @@ interface ExceptionItem {
   detectedAt: Date;
   actionLabel: string;
   actionTo: string;
+  /** "db" = from delivery_exceptions table, "adhoc" = computed from order data */
+  source: "db" | "adhoc";
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -60,6 +63,43 @@ const typeBadgeColor: Record<ExceptionType, string> = {
   Capaciteit: "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800",
   SLA: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800",
 };
+
+// ── Delivery exceptions from DB ─────────────────────────────────────
+function useDeliveryExceptions() {
+  return useQuery({
+    queryKey: ["delivery-exceptions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("delivery_exceptions")
+        .select("id, exception_type, severity, description, order_id, created_at, status")
+        .in("status", ["OPEN", "IN_PROGRESS"]);
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 60_000,
+  });
+}
+
+function useResolveException() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (exceptionId: string) => {
+      const { error } = await supabase
+        .from("delivery_exceptions")
+        .update({ status: "RESOLVED", resolved_at: new Date().toISOString() })
+        .eq("id", exceptionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["delivery-exceptions"] });
+      queryClient.invalidateQueries({ queryKey: ["exception-count"] });
+      toast.success("Exception opgelost");
+    },
+    onError: () => {
+      toast.error("Kon exception niet oplossen");
+    },
+  });
+}
 
 // ── Data fetching ────────────────────────────────────────────────────
 function useExceptionOrders() {
@@ -90,18 +130,48 @@ function useExceptionOrders() {
 const Exceptions = () => {
   const { data: orderData, isLoading: ordersLoading } = useExceptionOrders();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useFleetVehicles();
+  const { data: deliveryExceptions = [], isLoading: dexLoading } = useDeliveryExceptions();
+  const resolveException = useResolveException();
 
-  const isLoading = ordersLoading || vehiclesLoading;
+  const isLoading = ordersLoading || vehiclesLoading || dexLoading;
 
   const { exceptions, counts } = useMemo(() => {
-    if (!orderData) return { exceptions: [] as ExceptionItem[], counts: { delays: 0, missingData: 0, capacity: 0, sla: 0 } };
+    if (!orderData) return { exceptions: [] as ExceptionItem[], counts: { delays: 0, missingData: 0, capacity: 0, sla: 0, delivery: 0 } };
 
     const items: ExceptionItem[] = [];
     const now = Date.now();
     const threeHoursMs = 3 * 60 * 60 * 1000;
     const twentyFourHoursMs = 24 * 60 * 60 * 1000;
 
-    // Missing data: DRAFT orders with missing_fields
+    // ── Delivery exceptions from DB ──────────────────────────────
+    const severityToUrgency: Record<string, Urgency> = {
+      CRITICAL: "critical",
+      HIGH: "critical",
+      MEDIUM: "warning",
+      LOW: "info",
+    };
+    const dexTypeMap: Record<string, ExceptionType> = {
+      DELAY: "Vertraging",
+      MISSING_DATA: "Data mist",
+      CAPACITY: "Capaciteit",
+      SLA_BREACH: "SLA",
+    };
+    for (const dex of deliveryExceptions) {
+      items.push({
+        id: dex.id,
+        type: dexTypeMap[dex.exception_type] || "Vertraging",
+        urgency: severityToUrgency[dex.severity] || "warning",
+        orderNumber: dex.order_id ? `Order` : "—",
+        clientName: "",
+        description: dex.description,
+        detectedAt: new Date(dex.created_at),
+        actionLabel: dex.order_id ? "Bekijk order" : "Details",
+        actionTo: dex.order_id ? `/orders/${dex.order_id}` : "/exceptions",
+        source: "db",
+      });
+    }
+
+    // ── Ad-hoc: Missing data ─────────────────────────────────────
     const missingDataOrders = orderData.drafts.filter(
       (o: any) => o.missing_fields && Array.isArray(o.missing_fields) && o.missing_fields.length > 0
     );
@@ -116,19 +186,16 @@ const Exceptions = () => {
         detectedAt: new Date(o.received_at || o.created_at),
         actionLabel: "Ga naar inbox",
         actionTo: "/inbox",
+        source: "adhoc",
       });
     }
 
-    // SLA risk: DRAFT orders received > 3 hours ago
+    // ── Ad-hoc: SLA risk ─────────────────────────────────────────
     const slaOrders = orderData.drafts.filter((o: any) => {
       const receivedAt = o.received_at || o.created_at;
       return receivedAt && now - new Date(receivedAt).getTime() > threeHoursMs;
     });
     for (const o of slaOrders) {
-      // Avoid duplicate if already in missing data
-      if (items.find((i) => i.id === `missing-${o.id}`)) {
-        // Still count it but create a separate exception entry
-      }
       items.push({
         id: `sla-${o.id}`,
         type: "SLA",
@@ -139,10 +206,11 @@ const Exceptions = () => {
         detectedAt: new Date(o.received_at || o.created_at),
         actionLabel: "Ga naar inbox",
         actionTo: "/inbox",
+        source: "adhoc",
       });
     }
 
-    // Delays: IN_TRANSIT orders created > 24h ago
+    // ── Ad-hoc: Delays ───────────────────────────────────────────
     const delayOrders = orderData.inTransit.filter(
       (o: any) => now - new Date(o.created_at).getTime() > twentyFourHoursMs
     );
@@ -157,10 +225,11 @@ const Exceptions = () => {
         detectedAt: new Date(o.created_at),
         actionLabel: "Bekijk order",
         actionTo: `/orders/${o.id}`,
+        source: "adhoc",
       });
     }
 
-    // Capacity: vehicles at 100% (status "niet_beschikbaar" or capacity logic)
+    // ── Ad-hoc: Capacity ─────────────────────────────────────────
     const fullVehicles = vehicles.filter((v) => v.status === "niet_beschikbaar" || v.status === "in_gebruik");
     for (const v of fullVehicles) {
       items.push({
@@ -171,8 +240,9 @@ const Exceptions = () => {
         clientName: v.name,
         description: `Voertuig ${v.plate} op volle capaciteit`,
         detectedAt: new Date(),
-        actionLabel: "Bekijk order",
+        actionLabel: "Bekijk voertuig",
         actionTo: `/vloot/${v.id}`,
+        source: "adhoc",
       });
     }
 
@@ -191,17 +261,19 @@ const Exceptions = () => {
         missingData: missingDataOrders.length,
         capacity: fullVehicles.length,
         sla: slaOrders.length,
+        delivery: deliveryExceptions.length,
       },
     };
-  }, [orderData, vehicles]);
+  }, [orderData, vehicles, deliveryExceptions]);
 
-  const totalCount = counts.delays + counts.missingData + counts.capacity + counts.sla;
+  const totalCount = counts.delays + counts.missingData + counts.capacity + counts.sla + counts.delivery;
 
   if (isLoading) {
     return <LoadingState message="Uitzonderingen laden..." />;
   }
 
   const kpis = [
+    { label: "Delivery", value: counts.delivery, icon: AlertTriangle, color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/40" },
     { label: "Vertragingen", value: counts.delays, icon: Clock, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/40" },
     { label: "Ontbrekende data", value: counts.missingData, icon: Package, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/40" },
     { label: "Capaciteit", value: counts.capacity, icon: Truck, color: "text-violet-600", bg: "bg-violet-50 dark:bg-violet-950/40" },
@@ -217,7 +289,7 @@ const Exceptions = () => {
       />
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {kpis.map((kpi, i) => (
           <motion.div
             key={kpi.label}
@@ -294,18 +366,32 @@ const Exceptions = () => {
                     {timeAgo(exc.detectedAt)}
                   </span>
 
-                  {/* Action button */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    asChild
-                    className="shrink-0 text-xs gap-1.5"
-                  >
-                    <Link to={exc.actionTo}>
-                      {exc.actionLabel}
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {exc.source === "db" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                        disabled={resolveException.isPending}
+                        onClick={() => resolveException.mutate(exc.id)}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Opgelost
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      className="text-xs gap-1.5"
+                    >
+                      <Link to={exc.actionTo}>
+                        {exc.actionLabel}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  </div>
                 </motion.div>
               );
             })}

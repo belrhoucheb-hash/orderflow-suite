@@ -3,14 +3,32 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Loader2 } from "lucide-react";
+import { Navigate } from "react-router-dom";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
+
+/**
+ * Route guard based on effective role.
+ * - admin: all routes
+ * - planner: everything except admin-only (/settings, /users)
+ * - chauffeur: only /chauffeur
+ */
+function RoleGuard({ allow, children }: { allow: Array<"admin" | "planner" | "chauffeur">; children: React.ReactNode }) {
+  const { effectiveRole, loading } = useAuth();
+  if (loading) return null;
+  if (!allow.includes(effectiveRole)) {
+    // Redirect to role-appropriate default page
+    const defaultPaths: Record<string, string> = { admin: "/", planner: "/", chauffeur: "/chauffeur" };
+    return <Navigate to={defaultPaths[effectiveRole] || "/"} replace />;
+  }
+  return <>{children}</>;
+}
 
 // Lazy load heavy pages
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
@@ -56,7 +74,9 @@ const App = () => (
             <Route
               element={
                 <ProtectedRoute>
-                  <AppLayout />
+                  <RoleGuard allow={["admin", "planner"]}>
+                    <AppLayout />
+                  </RoleGuard>
                 </ProtectedRoute>
               }
             >
@@ -72,14 +92,14 @@ const App = () => (
               <Route path="/chauffeurs" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Chauffeurs /></Suspense></ErrorBoundary>} />
               <Route path="/vloot" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Fleet /></Suspense></ErrorBoundary>} />
               <Route path="/vloot/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><VehicleDetail /></Suspense></ErrorBoundary>} />
-              <Route path="/users" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><UsersPage /></Suspense></ErrorBoundary>} />
+              <Route path="/users" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><UsersPage /></Suspense></ErrorBoundary></RoleGuard>} />
               <Route path="/rapportage" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Rapportage /></Suspense></ErrorBoundary>} />
               <Route path="/facturatie" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Facturatie /></Suspense></ErrorBoundary>} />
               <Route path="/facturatie/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Facturatie /></Suspense></ErrorBoundary>} />
               <Route path="/dispatch" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Dispatch /></Suspense></ErrorBoundary>} />
               <Route path="/exceptions" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Exceptions /></Suspense></ErrorBoundary>} />
-              <Route path="/settings" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary>} />
-              <Route path="/settings/stamgegevens" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary>} />
+              <Route path="/settings" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />
+              <Route path="/settings/stamgegevens" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />
             </Route>
 
             <Route path="/chauffeur" element={<ProtectedRoute><ErrorBoundary><Suspense fallback={<PageLoader />}><ChauffeurApp /></Suspense></ErrorBoundary></ProtectedRoute>} />
