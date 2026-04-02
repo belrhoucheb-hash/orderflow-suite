@@ -139,11 +139,23 @@ serve(async (req) => {
       }
 
       await tlsSend(`MAIL FROM:<${smtpUser}>`);
-      await tlsRead();
+      const mailFromResp = await tlsRead();
+      if (!mailFromResp.startsWith("2")) {
+        tlsConn.close();
+        throw new Error(`SMTP MAIL FROM afgewezen: ${mailFromResp.trim()}`);
+      }
       await tlsSend(`RCPT TO:<${toEmail}>`);
-      await tlsRead();
+      const rcptResp = await tlsRead();
+      if (!rcptResp.startsWith("2")) {
+        tlsConn.close();
+        throw new Error(`SMTP RCPT TO afgewezen: ${rcptResp.trim()}`);
+      }
       await tlsSend("DATA");
-      await tlsRead();
+      const dataResp = await tlsRead();
+      if (!dataResp.startsWith("3")) {
+        tlsConn.close();
+        throw new Error(`SMTP DATA afgewezen: ${dataResp.trim()}`);
+      }
 
       const emailContent = [
         `From: ${smtpUser}`,
@@ -156,7 +168,11 @@ serve(async (req) => {
       ].join("\r\n");
 
       await tlsSend(emailContent);
-      await tlsRead();
+      const sendResp = await tlsRead();
+      if (!sendResp.startsWith("2")) {
+        tlsConn.close();
+        throw new Error(`SMTP verzending mislukt: ${sendResp.trim()}`);
+      }
       await tlsSend("QUIT");
       tlsConn.close();
     } else {
@@ -177,11 +193,23 @@ serve(async (req) => {
       }
 
       await sendLine(`MAIL FROM:<${smtpUser}>`);
-      await readResponse();
+      const mailFromResp2 = await readResponse();
+      if (!mailFromResp2.startsWith("2")) {
+        conn.close();
+        throw new Error(`SMTP MAIL FROM afgewezen: ${mailFromResp2.trim()}`);
+      }
       await sendLine(`RCPT TO:<${toEmail}>`);
-      await readResponse();
+      const rcptResp2 = await readResponse();
+      if (!rcptResp2.startsWith("2")) {
+        conn.close();
+        throw new Error(`SMTP RCPT TO afgewezen: ${rcptResp2.trim()}`);
+      }
       await sendLine("DATA");
-      await readResponse();
+      const dataResp2 = await readResponse();
+      if (!dataResp2.startsWith("3")) {
+        conn.close();
+        throw new Error(`SMTP DATA afgewezen: ${dataResp2.trim()}`);
+      }
 
       const emailContent = [
         `From: ${smtpUser}`,
@@ -194,7 +222,11 @@ serve(async (req) => {
       ].join("\r\n");
 
       await sendLine(emailContent);
-      await readResponse();
+      const sendResp2 = await readResponse();
+      if (!sendResp2.startsWith("2")) {
+        conn.close();
+        throw new Error(`SMTP verzending mislukt: ${sendResp2.trim()}`);
+      }
       await sendLine("QUIT");
       conn.close();
     }

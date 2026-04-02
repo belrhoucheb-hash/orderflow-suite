@@ -12,6 +12,29 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
 
   try {
+    // Verify JWT authorization
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Authenticatie vereist" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Verify the user's JWT token
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authUser) {
+      return new Response(
+        JSON.stringify({ error: "Ongeldige of verlopen sessie" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { orderId } = await req.json();
 
     if (!orderId) {
@@ -20,10 +43,6 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch the order
     const { data: order, error: fetchError } = await supabase
@@ -36,6 +55,15 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Order niet gevonden" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify tenant isolation
+    const userTenantId = authUser.app_metadata?.tenant_id;
+    if (userTenantId && order.tenant_id && userTenantId !== order.tenant_id) {
+      return new Response(
+        JSON.stringify({ error: "Geen toegang tot deze order" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -163,11 +191,23 @@ serve(async (req) => {
       }
 
       await tlsSend(`MAIL FROM:<${smtpUser}>`);
-      await tlsRead();
+      const mailFromResp = await tlsRead();
+      if (!mailFromResp.startsWith("2")) {
+        tlsConn.close();
+        throw new Error(`SMTP MAIL FROM afgewezen: ${mailFromResp.trim()}`);
+      }
       await tlsSend(`RCPT TO:<${toEmail}>`);
-      await tlsRead();
+      const rcptResp = await tlsRead();
+      if (!rcptResp.startsWith("2")) {
+        tlsConn.close();
+        throw new Error(`SMTP RCPT TO afgewezen: ${rcptResp.trim()}`);
+      }
       await tlsSend("DATA");
-      await tlsRead();
+      const dataResp = await tlsRead();
+      if (!dataResp.startsWith("3")) {
+        tlsConn.close();
+        throw new Error(`SMTP DATA afgewezen: ${dataResp.trim()}`);
+      }
 
       const emailContent = [
         `From: Royalty Cargo Planning <${smtpUser}>`,
@@ -180,7 +220,11 @@ serve(async (req) => {
       ].join("\r\n");
 
       await tlsSend(emailContent);
-      await tlsRead();
+      const sendResp = await tlsRead();
+      if (!sendResp.startsWith("2")) {
+        tlsConn.close();
+        throw new Error(`SMTP verzending mislukt: ${sendResp.trim()}`);
+      }
       await tlsSend("QUIT");
       tlsConn.close();
     } else {
@@ -199,11 +243,23 @@ serve(async (req) => {
       }
 
       await sendLine(`MAIL FROM:<${smtpUser}>`);
-      await readResponse();
+      const mailFromResp = await readResponse();
+      if (!mailFromResp.startsWith("2")) {
+        conn.close();
+        throw new Error(`SMTP MAIL FROM afgewezen: ${mailFromResp.trim()}`);
+      }
       await sendLine(`RCPT TO:<${toEmail}>`);
-      await readResponse();
+      const rcptResp = await readResponse();
+      if (!rcptResp.startsWith("2")) {
+        conn.close();
+        throw new Error(`SMTP RCPT TO afgewezen: ${rcptResp.trim()}`);
+      }
       await sendLine("DATA");
-      await readResponse();
+      const dataResp = await readResponse();
+      if (!dataResp.startsWith("3")) {
+        conn.close();
+        throw new Error(`SMTP DATA afgewezen: ${dataResp.trim()}`);
+      }
 
       const emailContent = [
         `From: ${tenantName} Planning <${smtpUser}>`,
@@ -216,7 +272,11 @@ serve(async (req) => {
       ].join("\r\n");
 
       await sendLine(emailContent);
-      await readResponse();
+      const sendResp = await readResponse();
+      if (!sendResp.startsWith("2")) {
+        conn.close();
+        throw new Error(`SMTP verzending mislukt: ${sendResp.trim()}`);
+      }
       await sendLine("QUIT");
       conn.close();
     }
