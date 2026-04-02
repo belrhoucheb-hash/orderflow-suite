@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useTrips, useUpdateTripStatus, useDispatchTrip } from "@/hooks/useTrips";
+import { useTrips, useUpdateTripStatus, useDispatchTrip, useTripsRealtime } from "@/hooks/useTrips";
 import { useDrivers } from "@/hooks/useDrivers";
 import {
   TRIP_STATUS_LABELS, STOP_STATUS_LABELS,
@@ -76,6 +76,7 @@ const Dispatch = () => {
   const [confirmStatus, setConfirmStatus] = useState<{ tripId: string; tripNumber: number; newStatus: TripStatus } | null>(null);
 
   const { data: trips = [], isLoading, isError, refetch } = useTrips(selectedDate);
+  useTripsRealtime();
   const { data: drivers = [] } = useDrivers();
   const updateStatus = useUpdateTripStatus();
   const dispatchTrip = useDispatchTrip();
