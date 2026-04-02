@@ -221,21 +221,25 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
         // Resolve or create client
         let clientId = clientCache[clientName.toLowerCase()];
         if (!clientId) {
-          // Look up existing client
-          const { data: existingClient } = await supabase
+          // Look up existing client (scoped to tenant)
+          const lookupQuery = supabase
             .from("clients")
             .select("id")
-            .ilike("name", clientName)
+            .ilike("name", clientName);
+          if (tenant?.id) lookupQuery.eq("tenant_id", tenant.id);
+          const { data: existingClient } = await lookupQuery
             .limit(1)
             .maybeSingle();
 
           if (existingClient) {
             clientId = existingClient.id;
           } else {
-            // Create new client
+            // Create new client (with tenant_id)
+            const clientInsert: Record<string, unknown> = { name: clientName };
+            if (tenant?.id) clientInsert.tenant_id = tenant.id;
             const { data: newClient, error: clientErr } = await supabase
               .from("clients")
-              .insert({ name: clientName } as any)
+              .insert(clientInsert as any)
               .select("id")
               .single();
 

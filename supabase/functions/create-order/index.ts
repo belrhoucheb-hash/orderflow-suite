@@ -55,6 +55,7 @@ serve(async (req) => {
 
     // Build order object with allowed fields only
     const allowedFields = [
+      "tenant_id",
       "client_name", "pickup_address", "delivery_address", "transport_type",
       "weight_kg", "is_weight_per_unit", "quantity", "unit", "dimensions",
       "requirements", "internal_note", "source_email_from", "source_email_subject",
@@ -72,6 +73,14 @@ serve(async (req) => {
     // Default status
     if (!orderData.status) {
       orderData.status = "DRAFT";
+    }
+
+    // Require tenant_id — reject if missing
+    if (!orderData.tenant_id) {
+      return new Response(
+        JSON.stringify({ error: "tenant_id is verplicht" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const { data, error } = await supabase
