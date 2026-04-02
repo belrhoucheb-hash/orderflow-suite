@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { Mail, MailOpen, Paperclip, Loader2, Sparkles, FileText, Eye, Download, Image as ImageIcon, Send, Reply, Forward, Building2, Package, TrendingUp, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -194,28 +194,7 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
     }
   };
 
-  // ── Auto-extract: trigger AI extraction when a new email is selected ──
-  const autoExtractedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    // Only auto-extract if:
-    // 1. There is email content to parse
-    // 2. The order is still DRAFT status (not yet processed)
-    // 3. No extraction has been done yet (confidence_score is null/0)
-    // 4. We haven't already auto-extracted this specific order
-    // 5. Not currently parsing
-    const shouldAutoExtract =
-      selected.id &&
-      selected.source_email_body &&
-      selected.status === "DRAFT" &&
-      (!selected.confidence_score || selected.confidence_score === 0) &&
-      !autoExtractedRef.current.has(selected.id) &&
-      !isParsing;
-
-    if (shouldAutoExtract) {
-      autoExtractedRef.current.add(selected.id);
-      handleParseWithAI();
-    }
-  }, [selected.id]); // Only trigger on selection change
+  // Auto-extract is handled by useInbox hook — removed duplicate trigger here to prevent double AI calls
 
   const handleReply = () => {
     setReplyMode("reply");
