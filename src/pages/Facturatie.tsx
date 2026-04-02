@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check, FileDown, Send, CreditCard, AlertCircle } from "lucide-react";
+import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check, FileDown, Send, CreditCard, AlertCircle, ChevronDown, FileSpreadsheet, FileCode } from "lucide-react";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -14,7 +14,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
-import { downloadInvoicePDF } from "@/lib/invoiceUtils";
+import { downloadInvoicePDF, downloadInvoicesCSV, downloadUBL } from "@/lib/invoiceUtils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Invoice {
   id: string;
@@ -304,6 +310,41 @@ const Facturatie = () => {
     });
   }, [invoices, search, statusFilter, sortConfig]);
 
+  // ─── Export handlers ───
+  const handleExportCSV = useCallback(() => {
+    if (filtered.length === 0) {
+      toast.error("Geen facturen om te exporteren");
+      return;
+    }
+    downloadInvoicesCSV(filtered as any);
+    toast.success("CSV export gedownload", { description: `${filtered.length} facturen geexporteerd` });
+  }, [filtered]);
+
+  const handleExportUBL = useCallback(async () => {
+    if (filtered.length === 0) {
+      toast.error("Geen facturen om te exporteren");
+      return;
+    }
+    let exportCount = 0;
+    for (const inv of filtered) {
+      const { data: fullInvoice, error } = await supabase
+        .from("invoices")
+        .select("*, invoice_lines(*)")
+        .eq("id", inv.id)
+        .single();
+
+      if (error || !fullInvoice) continue;
+
+      if (fullInvoice.invoice_lines) {
+        fullInvoice.invoice_lines.sort((a: any, b: any) => a.sort_order - b.sort_order);
+      }
+
+      downloadUBL(fullInvoice as any);
+      exportCount++;
+    }
+    toast.success("UBL export gedownload", { description: `${exportCount} XML-bestanden geexporteerd` });
+  }, [filtered]);
+
   const stats = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -361,10 +402,31 @@ const Facturatie = () => {
         title="Facturatie"
         subtitle={`${invoices.length} facturen in totaal`}
         actions={
-          <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5"
-            onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }}>
-            <Plus className="h-4 w-4" /> Nieuwe factuur
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2 rounded-xl h-10 px-4">
+                  <FileDown className="h-4 w-4" />
+                  Exporteer
+                  <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={handleExportCSV} className="gap-2 cursor-pointer">
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                  Export CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportUBL} className="gap-2 cursor-pointer">
+                  <FileCode className="h-4 w-4 text-blue-600" />
+                  Export UBL (XML)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5"
+              onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }}>
+              <Plus className="h-4 w-4" /> Nieuwe factuur
+            </Button>
+          </div>
         }
       />
 

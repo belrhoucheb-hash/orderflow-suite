@@ -49,6 +49,7 @@ const Rapportage = lazy(() => import("@/pages/Rapportage"));
 const Facturatie = lazy(() => import("@/pages/Facturatie"));
 const ChauffeurApp = lazy(() => import("@/pages/ChauffeurApp"));
 const TrackTrace = lazy(() => import("@/pages/TrackTrace"));
+const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const Exceptions = lazy(() => import("@/pages/Exceptions"));
 const Dispatch = lazy(() => import("@/pages/Dispatch"));
 
@@ -104,6 +105,7 @@ const App = () => (
 
             <Route path="/chauffeur" element={<ProtectedRoute><ErrorBoundary><Suspense fallback={<PageLoader />}><ChauffeurApp /></Suspense></ErrorBoundary></ProtectedRoute>} />
             <Route path="/track" element={<Suspense fallback={<PageLoader />}><TrackTrace /></Suspense>} />
+            <Route path="/portal" element={<Suspense fallback={<PageLoader />}><ClientPortal /></Suspense>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
