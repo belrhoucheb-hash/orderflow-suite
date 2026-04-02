@@ -47,6 +47,7 @@ const VehicleDetail = lazy(() => import("@/pages/VehicleDetail"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Rapportage = lazy(() => import("@/pages/Rapportage"));
 const Facturatie = lazy(() => import("@/pages/Facturatie"));
+const FacturatieDetail = lazy(() => import("@/pages/FacturatieDetail"));
 const ChauffeurApp = lazy(() => import("@/pages/ChauffeurApp"));
 const TrackTrace = lazy(() => import("@/pages/TrackTrace"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
@@ -96,7 +97,7 @@ const App = () => (
               <Route path="/users" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><UsersPage /></Suspense></ErrorBoundary></RoleGuard>} />
               <Route path="/rapportage" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Rapportage /></Suspense></ErrorBoundary>} />
               <Route path="/facturatie" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Facturatie /></Suspense></ErrorBoundary>} />
-              <Route path="/facturatie/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Facturatie /></Suspense></ErrorBoundary>} />
+              <Route path="/facturatie/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><FacturatieDetail /></Suspense></ErrorBoundary>} />
               <Route path="/dispatch" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Dispatch /></Suspense></ErrorBoundary>} />
               <Route path="/exceptions" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Exceptions /></Suspense></ErrorBoundary>} />
               <Route path="/settings" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />

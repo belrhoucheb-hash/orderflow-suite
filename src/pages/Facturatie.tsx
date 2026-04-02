@@ -584,7 +584,7 @@ const Facturatie = () => {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: idx * 0.02 }}
-                      onClick={() => setSelectedInvoice(invoice)}
+                      onClick={() => navigate(`/facturatie/${invoice.id}`)}
                       className="hover:bg-muted/20 transition-colors duration-100 group cursor-pointer"
                     >
                       <td className="px-4 py-2">
@@ -636,7 +636,7 @@ const Facturatie = () => {
                       <td className="px-4 py-2 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedInvoice(invoice); }}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/facturatie/${invoice.id}`); }}
                             className="p-1.5 rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
                           >
                             <Eye className="h-3.5 w-3.5" />
