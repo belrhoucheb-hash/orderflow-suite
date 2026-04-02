@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Assignments } from "@/components/planning/types";
+import { toDateString } from "@/components/planning/PlanningDateNav";
 
 // ── Types ──
 
@@ -23,6 +25,60 @@ export interface DraftData {
   drivers: Record<string, string>;
 }
 
+// ── Private localStorage helpers (write-through cache for offline) ──
+
+function getDraftKey(dateStr: string) { return `planning-draft-${dateStr}`; }
+function getStartTimesKey(dateStr: string) { return `planning-draft-startTimes-${dateStr}`; }
+function getDriversKey(dateStr: string) { return `planning-draft-drivers-${dateStr}`; }
+
+function writeLocalCache(dateStr: string, assignments: Assignments, startTimes: Record<string, string>, drivers: Record<string, string>) {
+  try {
+    const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
+    if (hasOrders) {
+      localStorage.setItem(getDraftKey(dateStr), JSON.stringify(assignments));
+    } else {
+      localStorage.removeItem(getDraftKey(dateStr));
+    }
+    if (Object.keys(startTimes).length > 0) {
+      localStorage.setItem(getStartTimesKey(dateStr), JSON.stringify(startTimes));
+    } else {
+      localStorage.removeItem(getStartTimesKey(dateStr));
+    }
+    if (Object.keys(drivers).length > 0) {
+      localStorage.setItem(getDriversKey(dateStr), JSON.stringify(drivers));
+    } else {
+      localStorage.removeItem(getDriversKey(dateStr));
+    }
+  } catch {
+    // localStorage may be full or unavailable — ignore
+  }
+}
+
+function readLocalCache(dateStr: string): DraftData | null {
+  try {
+    const saved = localStorage.getItem(getDraftKey(dateStr));
+    if (!saved) return null;
+    const assignments = JSON.parse(saved) as Assignments;
+    const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
+    if (!hasOrders) return null;
+    const startTimes = JSON.parse(localStorage.getItem(getStartTimesKey(dateStr)) || "{}");
+    const drivers = JSON.parse(localStorage.getItem(getDriversKey(dateStr)) || "{}");
+    return { assignments, startTimes, drivers };
+  } catch {
+    return null;
+  }
+}
+
+function clearLocalCache(dateStr: string) {
+  try {
+    localStorage.removeItem(getDraftKey(dateStr));
+    localStorage.removeItem(getStartTimesKey(dateStr));
+    localStorage.removeItem(getDriversKey(dateStr));
+  } catch {
+    // ignore
+  }
+}
+
 // ── Load planning drafts for a date ──
 
 export function useLoadPlanningDraft(date: string, tenantId: string | undefined) {
@@ -30,43 +86,53 @@ export function useLoadPlanningDraft(date: string, tenantId: string | undefined)
     queryKey: ["planning-drafts", date, tenantId],
     enabled: !!tenantId && !!date,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("planning_drafts")
-        .select("*")
-        .eq("tenant_id", tenantId!)
-        .eq("planned_date", date);
+      try {
+        const { data, error } = await supabase
+          .from("planning_drafts")
+          .select("*")
+          .eq("tenant_id", tenantId!)
+          .eq("planned_date", date);
 
-      if (error) throw error;
-      if (!data || data.length === 0) return null;
+        if (error) throw error;
 
-      const rows = data as unknown as PlanningDraftRow[];
-
-      // We only have order_ids (UUIDs) in the DB, not full PlanOrder objects.
-      // The caller must resolve these against the orders list.
-      // We return a partial Assignments with just { vehicleId: orderIdStrings[] }
-      // and a special __orderIds flag so the caller knows to hydrate.
-      const assignments: Record<string, string[]> = {};
-      const startTimes: Record<string, string> = {};
-      const drivers: Record<string, string> = {};
-
-      for (const row of rows) {
-        if (row.order_ids.length > 0) {
-          assignments[row.vehicle_id] = row.order_ids;
+        if (!data || data.length === 0) {
+          // DB has no draft — check localStorage as fallback (e.g. saved while offline)
+          return readLocalCache(date);
         }
-        if (row.start_time) {
-          startTimes[row.vehicle_id] = row.start_time;
+
+        const rows = data as unknown as PlanningDraftRow[];
+
+        const assignments: Record<string, string[]> = {};
+        const startTimes: Record<string, string> = {};
+        const drivers: Record<string, string> = {};
+
+        for (const row of rows) {
+          if (row.order_ids.length > 0) {
+            assignments[row.vehicle_id] = row.order_ids;
+          }
+          if (row.start_time) {
+            startTimes[row.vehicle_id] = row.start_time;
+          }
+          if (row.driver_id) {
+            drivers[row.vehicle_id] = row.driver_id;
+          }
         }
-        if (row.driver_id) {
-          drivers[row.vehicle_id] = row.driver_id;
-        }
+
+        const draft: DraftData = {
+          assignments: assignments as unknown as Assignments,
+          startTimes,
+          drivers,
+        };
+
+        // Write-through: keep localStorage in sync for offline access
+        writeLocalCache(date, draft.assignments, draft.startTimes, draft.drivers);
+
+        return draft;
+      } catch (err) {
+        // Supabase unreachable — fall back to localStorage
+        console.warn("Failed to load draft from Supabase, falling back to localStorage:", err);
+        return readLocalCache(date);
       }
-
-      // Return assignments as any — caller will hydrate order IDs into PlanOrder objects
-      return {
-        assignments: assignments as unknown as Assignments,
-        startTimes,
-        drivers,
-      };
     },
     staleTime: 30_000,
   });
@@ -88,6 +154,9 @@ export function useSavePlanningDraft() {
 
   return useMutation({
     mutationFn: async ({ tenantId, date, assignments, startTimes, drivers }: SaveDraftParams) => {
+      // Write-through: always save to localStorage immediately (offline resilience)
+      writeLocalCache(date, assignments, startTimes, drivers);
+
       // Build upsert rows for every vehicle that has orders
       const rows: Array<{
         tenant_id: string;
@@ -140,6 +209,10 @@ export function useSavePlanningDraft() {
         queryKey: ["planning-drafts", variables.date, variables.tenantId],
       });
     },
+    onError: (_err, variables) => {
+      // Supabase failed but localStorage was already written — data is safe offline
+      console.warn("Failed to save draft to Supabase (localStorage cache still valid):", _err);
+    },
   });
 }
 
@@ -155,6 +228,9 @@ export function useDeletePlanningDraft() {
 
   return useMutation({
     mutationFn: async ({ tenantId, date }: DeleteDraftParams) => {
+      // Clear localStorage cache
+      clearLocalCache(date);
+
       const { error } = await supabase
         .from("planning_drafts")
         .delete()
@@ -168,5 +244,57 @@ export function useDeletePlanningDraft() {
         queryKey: ["planning-drafts", variables.date, variables.tenantId],
       });
     },
+    onError: (_err, variables) => {
+      // localStorage was already cleared; Supabase delete failed — log but don't block
+      console.warn("Failed to delete draft from Supabase:", _err);
+    },
   });
+}
+
+// ── Collect week drafts from localStorage cache (for week overview) ──
+
+export function collectWeekDrafts(weekStart: string): Record<string, Assignments> {
+  const monday = new Date(weekStart + "T00:00:00");
+  const day = monday.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  monday.setDate(monday.getDate() + diff);
+
+  const result: Record<string, Assignments> = {};
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const ds = toDateString(d);
+    const draft = readLocalCache(ds);
+    if (draft) result[ds] = draft.assignments;
+  }
+  return result;
+}
+
+// ─── Realtime ───────────────────────────────────────────────
+/**
+ * Subscribe to all changes on the `planning_drafts` table and
+ * invalidate React Query caches so planners see each other's
+ * changes in near-real-time.
+ *
+ * Mount once at the planning page level.
+ */
+export function usePlanningDraftsRealtime() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("planning-drafts-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "planning_drafts" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["planning-drafts"] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 }

@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
-import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check, FileDown, Send, CreditCard, AlertCircle, ChevronDown, FileSpreadsheet, FileCode } from "lucide-react";
+import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check, FileDown, Send, CreditCard, AlertCircle, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode } from "lucide-react";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { QueryError } from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useInvoices, useInvoiceById, useCreateInvoice, useUpdateInvoiceStatus, type InvoiceLine } from "@/hooks/useInvoices";
+import { useInvoices, useInvoiceById, useCreateInvoice, useUpdateInvoiceStatus, type InvoiceLine, type Invoice } from "@/hooks/useInvoices";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
@@ -14,30 +15,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
-import { downloadInvoicePDF, downloadInvoicesCSV, downloadUBL } from "@/lib/invoiceUtils";
+import { downloadInvoicePDF, downloadInvoicesCSV, downloadUBL, buildInvoiceLines } from "@/lib/invoiceUtils";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-interface Invoice {
-  id: string;
-  invoice_number: string;
-  client_id: string;
-  client_name: string;
-  status: string;
-  invoice_date: string;
-  due_date: string | null;
-  subtotal: number;
-  btw_percentage: number;
-  btw_amount: number;
-  total: number;
-  notes: string | null;
-  pdf_url: string | null;
-  created_at: string;
-}
 
 const statusStyles: Record<string, string> = {
   concept: "bg-muted text-muted-foreground border-border",
@@ -86,7 +70,17 @@ const Facturatie = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
-  const { data: invoices = [], isLoading, isError, refetch } = useInvoices();
+  const [page, setPage] = useState(0);
+  const [pageSize] = useState(25);
+  const { data, isLoading, isError, refetch } = useInvoices({
+    page,
+    pageSize,
+    statusFilter: statusFilter !== "alle" ? statusFilter : undefined,
+    search: search || undefined,
+  });
+  const invoices = data?.invoices ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
@@ -137,12 +131,14 @@ const Facturatie = () => {
       // Look up the client name from the selected client ID
       const client = clients.find((c) => c.id === selectedClientId);
       if (!client) return [];
+      // Prefer client_id match; fall back to client_name ilike for orders
+      // that haven't been backfilled yet (see 20260402_backfill_client_id.sql)
       const { data, error } = await supabase
         .from("orders")
-        .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, status")
+        .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, status, distance_km")
         .eq("status", "DELIVERED")
         .is("invoice_id", null)
-        .ilike("client_name", `%${client.name}%`)
+        .or(`client_id.eq.${selectedClientId},client_name.ilike.%${client.name}%`)
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return data || [];
@@ -201,7 +197,7 @@ const Facturatie = () => {
           let include = false;
 
           switch (rate.rate_type) {
-            case "per_km": { qty = 150; unitLabel = "km"; include = true; break; }
+            case "per_km": { qty = order.distance_km ?? 0; unitLabel = "km"; include = true; break; }
             case "per_pallet": {
               const pallets = order.quantity ?? 0;
               if (pallets > 0) { qty = pallets; unitLabel = "pallet"; include = true; }
@@ -272,25 +268,10 @@ const Facturatie = () => {
   });
 
   const filtered = useMemo(() => {
-    const result = (invoices as Invoice[]).filter((inv) => {
-      const matchesSearch =
-        inv.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
-        inv.client_name.toLowerCase().includes(search.toLowerCase());
-
-      let effectiveStatus = inv.status;
-      if (isOverdue(inv.due_date, inv.status)) {
-        effectiveStatus = "vervallen";
-      }
-
-      const matchesStatus =
-        statusFilter === "alle" || effectiveStatus === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-
-    if (!sortConfig) return result;
+    if (!sortConfig) return invoices;
 
     const { field, direction } = sortConfig;
-    return [...result].sort((a, b) => {
+    return [...invoices].sort((a, b) => {
       let aVal: string | number = "";
       let bVal: string | number = "";
       switch (field) {
@@ -308,7 +289,7 @@ const Facturatie = () => {
       if (aVal > bVal) return direction === "asc" ? 1 : -1;
       return 0;
     });
-  }, [invoices, search, statusFilter, sortConfig]);
+  }, [invoices, sortConfig]);
 
   // ─── Export handlers ───
   const handleExportCSV = useCallback(() => {
@@ -355,7 +336,7 @@ const Facturatie = () => {
     let betaaldDezeMaand = 0;
     let vervallenCount = 0;
 
-    (invoices as Invoice[]).forEach((inv) => {
+    invoices.forEach((inv) => {
       const invDate = new Date(inv.invoice_date);
       const isThisMonth =
         invDate.getMonth() === currentMonth &&
@@ -386,13 +367,7 @@ const Facturatie = () => {
   }
 
   if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
-        <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
-        <button onClick={() => refetch()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
-      </div>
-    );
+    return <QueryError message="Kan facturen niet laden. Probeer het opnieuw." onRetry={() => refetch()} />;
   }
 
   return (
@@ -400,7 +375,7 @@ const Facturatie = () => {
       {/* Header */}
       <PageHeader
         title="Facturatie"
-        subtitle={`${invoices.length} facturen in totaal`}
+        subtitle={`${totalCount} facturen in totaal`}
         actions={
           <div className="flex items-center gap-2">
             <DropdownMenu>
@@ -514,7 +489,7 @@ const Facturatie = () => {
           <input
             placeholder="Zoek op factuurnummer of klant..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             className="w-full h-10 pl-10 pr-4 rounded-xl border border-border/50 bg-card text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/40 transition-all"
           />
         </div>
@@ -522,7 +497,7 @@ const Facturatie = () => {
           {filterOptions.map((s) => (
             <button
               key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => { setStatusFilter(s); setPage(0); }}
               className={cn(
                 "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
                 statusFilter === s
@@ -665,11 +640,44 @@ const Facturatie = () => {
           </table>
         </div>
 
-        {/* Footer */}
+        {/* Footer with Pagination */}
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
           <p className="text-xs text-muted-foreground">
-            {filtered.length} van {invoices.length} facturen
+            {filtered.length > 0
+              ? `${page * pageSize + 1}-${Math.min((page + 1) * pageSize, totalCount)} van ${totalCount} facturen`
+              : `0 facturen`}
           </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
+                page === 0
+                  ? "text-muted-foreground/40 cursor-not-allowed"
+                  : "text-foreground hover:bg-muted/50",
+              )}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Vorige
+            </button>
+            <span className="text-xs text-muted-foreground tabular-nums px-2">
+              Pagina {page + 1} van {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
+                page >= totalPages - 1
+                  ? "text-muted-foreground/40 cursor-not-allowed"
+                  : "text-foreground hover:bg-muted/50",
+              )}
+            >
+              Volgende
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
           <p className="text-xs text-muted-foreground tabular-nums">
             Totaal: {formatCurrency(filtered.reduce((s, inv) => s + inv.total, 0))}
           </p>

@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useMemo, useState } from "react";
-import { ArrowLeft, FileDown, Send, CheckCircle, AlertTriangle, Receipt, Loader2 } from "lucide-react";
+import { useMemo, useState, useCallback } from "react";
+import { ArrowLeft, FileDown, Send, CheckCircle, AlertTriangle, Receipt, Loader2, Plus, Trash2, Save, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useInvoiceById, useUpdateInvoiceStatus } from "@/hooks/useInvoices";
+import { useInvoiceById, useUpdateInvoiceStatus, useUpdateInvoiceLines, type InvoiceLine } from "@/hooks/useInvoices";
 import { downloadInvoicePDF } from "@/lib/invoiceUtils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -35,12 +36,31 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// Editable line type for local state (may have temporary IDs for new lines)
+interface EditableLine {
+  id: string;
+  invoice_id: string;
+  order_id: string | null;
+  description: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total: number;
+  sort_order: number;
+}
+
 export default function FacturatieDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: invoice, isLoading, isError } = useInvoiceById(id ?? null);
   const updateStatus = useUpdateInvoiceStatus();
+  const updateLines = useUpdateInvoiceLines();
   const [confirmAction, setConfirmAction] = useState<{ status: string; label: string } | null>(null);
+
+  // Editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableLines, setEditableLines] = useState<EditableLine[]>([]);
+  const [editingCellId, setEditingCellId] = useState<string | null>(null);
 
   const isOverdue = useMemo(() => {
     if (!invoice?.due_date || invoice.status !== "verzonden") return false;
@@ -49,6 +69,103 @@ export default function FacturatieDetail() {
 
   const effectiveStatus = isOverdue ? "vervallen" : (invoice?.status ?? "concept");
   const style = statusStyles[effectiveStatus] || statusStyles.concept;
+  const isConcept = invoice?.status === "concept";
+
+  // Calculate totals from editable lines
+  const editTotals = useMemo(() => {
+    if (!isEditing || !invoice) return null;
+    const subtotal = editableLines.reduce((sum, l) => sum + l.total, 0);
+    const btwAmount = Math.round(subtotal * (invoice.btw_percentage / 100) * 100) / 100;
+    const total = Math.round((subtotal + btwAmount) * 100) / 100;
+    return { subtotal, btwAmount, total };
+  }, [editableLines, isEditing, invoice]);
+
+  const startEditing = useCallback(() => {
+    if (!invoice) return;
+    const lines = (invoice.invoice_lines ?? []).map((l: any) => ({
+      id: l.id,
+      invoice_id: l.invoice_id,
+      order_id: l.order_id,
+      description: l.description,
+      quantity: l.quantity,
+      unit: l.unit,
+      unit_price: l.unit_price,
+      total: l.total,
+      sort_order: l.sort_order,
+    }));
+    setEditableLines(lines);
+    setIsEditing(true);
+    setEditingCellId(null);
+  }, [invoice]);
+
+  const cancelEditing = useCallback(() => {
+    setIsEditing(false);
+    setEditableLines([]);
+    setEditingCellId(null);
+  }, []);
+
+  const updateLine = useCallback((lineId: string, field: keyof EditableLine, value: string | number) => {
+    setEditableLines((prev) =>
+      prev.map((line) => {
+        if (line.id !== lineId) return line;
+        const updated = { ...line, [field]: value };
+        // Recalculate line total when quantity or unit_price changes
+        if (field === "quantity" || field === "unit_price") {
+          updated.total = Math.round(updated.quantity * updated.unit_price * 100) / 100;
+        }
+        return updated;
+      })
+    );
+  }, []);
+
+  const addNewLine = useCallback(() => {
+    if (!invoice) return;
+    const newLine: EditableLine = {
+      id: `new-${Date.now()}`,
+      invoice_id: invoice.id,
+      order_id: null,
+      description: "",
+      quantity: 1,
+      unit: "stuk",
+      unit_price: 0,
+      total: 0,
+      sort_order: editableLines.length,
+    };
+    setEditableLines((prev) => [...prev, newLine]);
+    // Auto-focus the new line description
+    setEditingCellId(`${newLine.id}-description`);
+  }, [invoice, editableLines.length]);
+
+  const deleteLine = useCallback((lineId: string) => {
+    setEditableLines((prev) => prev.filter((l) => l.id !== lineId));
+  }, []);
+
+  const saveChanges = useCallback(async () => {
+    if (!invoice) return;
+    try {
+      await updateLines.mutateAsync({
+        invoiceId: invoice.id,
+        lines: editableLines.map((l) => ({
+          id: l.id,
+          invoice_id: l.invoice_id,
+          order_id: l.order_id,
+          description: l.description,
+          quantity: l.quantity,
+          unit: l.unit,
+          unit_price: l.unit_price,
+          total: l.total,
+          sort_order: l.sort_order,
+        })),
+        btw_percentage: invoice.btw_percentage,
+      });
+      toast.success("Factuurregels opgeslagen");
+      setIsEditing(false);
+      setEditableLines([]);
+      setEditingCellId(null);
+    } catch (e: any) {
+      toast.error("Opslaan mislukt", { description: e.message });
+    }
+  }, [invoice, editableLines, updateLines]);
 
   const handleStatusChange = async (newStatus: string) => {
     if (!invoice) return;
@@ -94,6 +211,10 @@ export default function FacturatieDetail() {
   }
 
   const lines = invoice.invoice_lines ?? [];
+  const displayLines = isEditing ? editableLines : lines;
+  const displaySubtotal = isEditing ? (editTotals?.subtotal ?? 0) : invoice.subtotal;
+  const displayBtwAmount = isEditing ? (editTotals?.btwAmount ?? 0) : invoice.btw_amount;
+  const displayTotal = isEditing ? (editTotals?.total ?? 0) : invoice.total;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -176,36 +297,167 @@ export default function FacturatieDetail() {
 
       {/* Factuurregels */}
       <div className="bg-card rounded-xl border border-border/40 overflow-hidden">
-        <div className="px-5 py-3 border-b border-border/30">
+        <div className="px-5 py-3 border-b border-border/30 flex items-center justify-between">
           <h3 className="text-sm font-semibold">Factuurregels</h3>
+          {isConcept && !isEditing && (
+            <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5">
+              <Pencil className="h-3.5 w-3.5" /> Bewerken
+            </Button>
+          )}
+          {isEditing && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={addNewLine} className="gap-1.5">
+                <Plus className="h-3.5 w-3.5" /> Regel toevoegen
+              </Button>
+              <Button variant="outline" size="sm" onClick={cancelEditing}>
+                Annuleren
+              </Button>
+              <Button
+                size="sm"
+                onClick={saveChanges}
+                disabled={updateLines.isPending}
+                className="gap-1.5 bg-primary hover:bg-primary/90"
+              >
+                {updateLines.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Opslaan
+              </Button>
+            </div>
+          )}
         </div>
         <table className="w-full">
           <thead>
             <tr className="border-b border-border/30 bg-muted/30">
               <th className="px-5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Omschrijving</th>
-              <th className="px-5 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Aantal</th>
-              <th className="px-5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Eenheid</th>
-              <th className="px-5 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Prijs</th>
-              <th className="px-5 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Totaal</th>
+              <th className="px-5 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground w-24">Aantal</th>
+              <th className="px-5 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground w-24">Eenheid</th>
+              <th className="px-5 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground w-28">Prijs</th>
+              <th className="px-5 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground w-28">Totaal</th>
+              {isEditing && (
+                <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground w-12"></th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-border/20">
-            {lines.length === 0 ? (
+            {displayLines.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-5 py-8 text-center text-sm text-muted-foreground">
-                  Geen factuurregels
+                <td colSpan={isEditing ? 6 : 5} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                  {isEditing ? "Nog geen regels. Klik op \"Regel toevoegen\" om te beginnen." : "Geen factuurregels"}
                 </td>
               </tr>
             ) : (
-              lines.map((line: any, idx: number) => (
-                <tr key={line.id || idx} className="hover:bg-muted/10">
-                  <td className="px-5 py-2.5 text-sm">{line.description}</td>
-                  <td className="px-5 py-2.5 text-sm text-right tabular-nums">{line.quantity}</td>
-                  <td className="px-5 py-2.5 text-sm text-muted-foreground">{line.unit}</td>
-                  <td className="px-5 py-2.5 text-sm text-right tabular-nums">{formatCurrency(line.unit_price)}</td>
-                  <td className="px-5 py-2.5 text-sm text-right tabular-nums font-medium">{formatCurrency(line.total)}</td>
-                </tr>
-              ))
+              displayLines.map((line: any, idx: number) => {
+                if (isEditing) {
+                  return (
+                    <tr key={line.id || idx} className="hover:bg-muted/10">
+                      <td className="px-5 py-1.5">
+                        {editingCellId === `${line.id}-description` ? (
+                          <Input
+                            autoFocus
+                            value={line.description}
+                            onChange={(e) => updateLine(line.id, "description", e.target.value)}
+                            onBlur={() => setEditingCellId(null)}
+                            onKeyDown={(e) => e.key === "Enter" && setEditingCellId(null)}
+                            className="h-8 text-sm"
+                          />
+                        ) : (
+                          <button
+                            className="w-full text-left text-sm py-1 px-2 -mx-2 rounded hover:bg-muted/40 transition-colors min-h-[32px] truncate"
+                            onClick={() => setEditingCellId(`${line.id}-description`)}
+                          >
+                            {line.description || <span className="text-muted-foreground/40 italic">Klik om in te vullen...</span>}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-5 py-1.5">
+                        {editingCellId === `${line.id}-quantity` ? (
+                          <Input
+                            autoFocus
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={line.quantity}
+                            onChange={(e) => updateLine(line.id, "quantity", parseFloat(e.target.value) || 0)}
+                            onBlur={() => setEditingCellId(null)}
+                            onKeyDown={(e) => e.key === "Enter" && setEditingCellId(null)}
+                            className="h-8 text-sm text-right tabular-nums"
+                          />
+                        ) : (
+                          <button
+                            className="w-full text-right text-sm py-1 px-2 -mx-2 rounded hover:bg-muted/40 transition-colors tabular-nums"
+                            onClick={() => setEditingCellId(`${line.id}-quantity`)}
+                          >
+                            {line.quantity}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-5 py-1.5">
+                        {editingCellId === `${line.id}-unit` ? (
+                          <Input
+                            autoFocus
+                            value={line.unit}
+                            onChange={(e) => updateLine(line.id, "unit", e.target.value)}
+                            onBlur={() => setEditingCellId(null)}
+                            onKeyDown={(e) => e.key === "Enter" && setEditingCellId(null)}
+                            className="h-8 text-sm"
+                          />
+                        ) : (
+                          <button
+                            className="w-full text-left text-sm py-1 px-2 -mx-2 rounded hover:bg-muted/40 transition-colors text-muted-foreground"
+                            onClick={() => setEditingCellId(`${line.id}-unit`)}
+                          >
+                            {line.unit}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-5 py-1.5">
+                        {editingCellId === `${line.id}-unit_price` ? (
+                          <Input
+                            autoFocus
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={line.unit_price}
+                            onChange={(e) => updateLine(line.id, "unit_price", parseFloat(e.target.value) || 0)}
+                            onBlur={() => setEditingCellId(null)}
+                            onKeyDown={(e) => e.key === "Enter" && setEditingCellId(null)}
+                            className="h-8 text-sm text-right tabular-nums"
+                          />
+                        ) : (
+                          <button
+                            className="w-full text-right text-sm py-1 px-2 -mx-2 rounded hover:bg-muted/40 transition-colors tabular-nums"
+                            onClick={() => setEditingCellId(`${line.id}-unit_price`)}
+                          >
+                            {formatCurrency(line.unit_price)}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-5 py-2.5 text-sm text-right tabular-nums font-medium">
+                        {formatCurrency(line.total)}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <button
+                          onClick={() => deleteLine(line.id)}
+                          className="p-1 rounded-md text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Regel verwijderen"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }
+
+                // Read-only row
+                return (
+                  <tr key={line.id || idx} className="hover:bg-muted/10">
+                    <td className="px-5 py-2.5 text-sm">{line.description}</td>
+                    <td className="px-5 py-2.5 text-sm text-right tabular-nums">{line.quantity}</td>
+                    <td className="px-5 py-2.5 text-sm text-muted-foreground">{line.unit}</td>
+                    <td className="px-5 py-2.5 text-sm text-right tabular-nums">{formatCurrency(line.unit_price)}</td>
+                    <td className="px-5 py-2.5 text-sm text-right tabular-nums font-medium">{formatCurrency(line.total)}</td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -215,15 +467,15 @@ export default function FacturatieDetail() {
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center justify-between w-48 text-sm">
               <span className="text-muted-foreground">Subtotaal</span>
-              <span className="tabular-nums">{formatCurrency(invoice.subtotal)}</span>
+              <span className="tabular-nums">{formatCurrency(displaySubtotal)}</span>
             </div>
             <div className="flex items-center justify-between w-48 text-sm">
               <span className="text-muted-foreground">BTW ({invoice.btw_percentage}%)</span>
-              <span className="tabular-nums">{formatCurrency(invoice.btw_amount)}</span>
+              <span className="tabular-nums">{formatCurrency(displayBtwAmount)}</span>
             </div>
             <div className="flex items-center justify-between w-48 text-base font-semibold pt-1 border-t border-border/30 mt-1">
               <span>Totaal</span>
-              <span className="tabular-nums">{formatCurrency(invoice.total)}</span>
+              <span className="tabular-nums">{formatCurrency(displayTotal)}</span>
             </div>
           </div>
         </div>

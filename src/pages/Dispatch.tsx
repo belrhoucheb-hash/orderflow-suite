@@ -9,8 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { QueryError } from "@/components/QueryError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
+} from "@/components/ui/dialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
@@ -67,7 +71,11 @@ const Dispatch = () => {
   const [search, setSearch] = useState("");
   const [expandedTrip, setExpandedTrip] = useState<string | null>(null);
 
-  const { data: trips = [], isLoading } = useTrips(selectedDate);
+  // Confirmation dialog state
+  const [confirmDispatch, setConfirmDispatch] = useState<{ tripId: string; tripNumber: number } | null>(null);
+  const [confirmStatus, setConfirmStatus] = useState<{ tripId: string; tripNumber: number; newStatus: TripStatus } | null>(null);
+
+  const { data: trips = [], isLoading, isError, refetch } = useTrips(selectedDate);
   const { data: drivers = [] } = useDrivers();
   const updateStatus = useUpdateTripStatus();
   const dispatchTrip = useDispatchTrip();
@@ -108,27 +116,45 @@ const Dispatch = () => {
     aborted: trips.filter(t => t.dispatch_status === "AFGEBROKEN" || t.dispatch_status === "GEWEIGERD").length,
   }), [trips]);
 
-  // Actions
-  const handleStatusChange = async (tripId: string, newStatus: TripStatus) => {
+  // Actions — go through confirmation dialogs
+  const handleStatusChange = (tripId: string, tripNumber: number, newStatus: TripStatus) => {
+    setConfirmStatus({ tripId, tripNumber, newStatus });
+  };
+
+  const confirmStatusChange = async () => {
+    if (!confirmStatus) return;
     try {
-      await updateStatus.mutateAsync({ tripId, status: newStatus });
-      toast.success(`Status bijgewerkt — Rit is nu ${TRIP_STATUS_LABELS[newStatus].label}`);
+      await updateStatus.mutateAsync({ tripId: confirmStatus.tripId, status: confirmStatus.newStatus });
+      toast.success(`Status bijgewerkt — Rit is nu ${TRIP_STATUS_LABELS[confirmStatus.newStatus].label}`);
     } catch (e: any) {
       toast.error(e.message || "Fout bij status wijziging");
+    } finally {
+      setConfirmStatus(null);
     }
   };
 
-  const handleDispatch = async (tripId: string) => {
+  const handleDispatch = (tripId: string, tripNumber: number) => {
+    setConfirmDispatch({ tripId, tripNumber });
+  };
+
+  const confirmDispatchAction = async () => {
+    if (!confirmDispatch) return;
     try {
-      await dispatchTrip.mutateAsync(tripId);
+      await dispatchTrip.mutateAsync(confirmDispatch.tripId);
       toast.success("Rit verzonden — De chauffeur ontvangt een notificatie");
     } catch (e: any) {
       toast.error(e.message || "Kan niet verzenden");
+    } finally {
+      setConfirmDispatch(null);
     }
   };
 
   if (isLoading) {
     return <LoadingState message="Ritten laden..." />;
+  }
+
+  if (isError) {
+    return <QueryError message="Kan ritten niet laden. Probeer het opnieuw." onRetry={() => refetch()} />;
   }
 
   return (
@@ -299,7 +325,7 @@ const Dispatch = () => {
                           <Button
                             size="sm"
                             className="gap-1.5 h-8"
-                            onClick={() => handleDispatch(trip.id)}
+                            onClick={() => handleDispatch(trip.id, trip.trip_number)}
                             disabled={dispatchTrip.isPending}
                           >
                             {dispatchTrip.isPending ? (
@@ -314,7 +340,7 @@ const Dispatch = () => {
                           <Button
                             size="sm"
                             className="gap-1.5 h-8"
-                            onClick={() => handleDispatch(trip.id)}
+                            onClick={() => handleDispatch(trip.id, trip.trip_number)}
                             disabled={dispatchTrip.isPending}
                           >
                             <Send className="h-3.5 w-3.5" />
@@ -333,7 +359,7 @@ const Dispatch = () => {
                               {nextStatuses.map((ns) => (
                                 <DropdownMenuItem
                                   key={ns}
-                                  onClick={() => handleStatusChange(trip.id, ns)}
+                                  onClick={() => handleStatusChange(trip.id, trip.trip_number, ns)}
                                 >
                                   {TRIP_STATUS_LABELS[ns].label}
                                 </DropdownMenuItem>
@@ -433,6 +459,51 @@ const Dispatch = () => {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Dispatch confirmation dialog */}
+      <Dialog open={!!confirmDispatch} onOpenChange={(open) => !open && setConfirmDispatch(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rit dispatchen</DialogTitle>
+            <DialogDescription>
+              Weet je zeker dat je Rit #{confirmDispatch?.tripNumber} wilt verzenden naar de chauffeur?
+              De chauffeur ontvangt hiervan een notificatie.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDispatch(null)}>Annuleren</Button>
+            <Button onClick={confirmDispatchAction} disabled={dispatchTrip.isPending}>
+              {dispatchTrip.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : (
+                <Send className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Verzenden
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Status change confirmation dialog */}
+      <Dialog open={!!confirmStatus} onOpenChange={(open) => !open && setConfirmStatus(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Status wijzigen</DialogTitle>
+            <DialogDescription>
+              Weet je zeker dat je de status van Rit #{confirmStatus?.tripNumber} wilt wijzigen
+              naar "{confirmStatus ? TRIP_STATUS_LABELS[confirmStatus.newStatus].label : ""}"?
+              Deze actie kan niet ongedaan worden gemaakt.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmStatus(null)}>Annuleren</Button>
+            <Button onClick={confirmStatusChange} disabled={updateStatus.isPending}>
+              {updateStatus.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+              Bevestigen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
