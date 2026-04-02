@@ -1,3 +1,10 @@
+// ─── Unified Order Status System ────────────────────────────
+// Single source of truth: DB statuses as used in Supabase.
+// UI labels are mapped via statusLabels below.
+// ─────────────────────────────────────────────────────────────
+
+export type OrderStatus = "DRAFT" | "PENDING" | "PLANNED" | "IN_TRANSIT" | "DELIVERED" | "CANCELLED";
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -6,7 +13,7 @@ export interface Order {
   phone: string;
   pickupAddress: string;
   deliveryAddress: string;
-  status: "nieuw" | "in_behandeling" | "onderweg" | "afgeleverd" | "geannuleerd" | "wacht_op_antwoord";
+  status: OrderStatus;
   priority: "laag" | "normaal" | "hoog" | "spoed";
   items: { name: string; quantity: number; weight: number }[];
   totalWeight: number;
@@ -30,13 +37,13 @@ export interface Vehicle {
 
 // Removed mockOrders and mockVehicles — App now fetches real data from Supabase
 
-export const statusColors: Record<Order["status"], string> = {
-  nieuw: "bg-blue-500/10 text-blue-700 border-blue-200",
-  in_behandeling: "bg-amber-500/10 text-amber-700 border-amber-200",
-  onderweg: "bg-primary/10 text-primary border-primary/20",
-  afgeleverd: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
-  geannuleerd: "bg-muted text-muted-foreground border-border",
-  wacht_op_antwoord: "bg-violet-500/10 text-violet-700 border-violet-200",
+export const statusColors: Record<OrderStatus, string> = {
+  DRAFT: "bg-blue-500/10 text-blue-700 border-blue-200",
+  PENDING: "bg-amber-500/10 text-amber-700 border-amber-200",
+  PLANNED: "bg-violet-500/10 text-violet-700 border-violet-200",
+  IN_TRANSIT: "bg-primary/10 text-primary border-primary/20",
+  DELIVERED: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
+  CANCELLED: "bg-muted text-muted-foreground border-border",
 };
 
 export const priorityColors: Record<Order["priority"], string> = {
@@ -46,13 +53,13 @@ export const priorityColors: Record<Order["priority"], string> = {
   spoed: "bg-primary/10 text-primary font-semibold",
 };
 
-export const statusLabels: Record<Order["status"], string> = {
-  nieuw: "Nieuw",
-  in_behandeling: "In behandeling",
-  onderweg: "Onderweg",
-  afgeleverd: "Afgeleverd",
-  geannuleerd: "Geannuleerd",
-  wacht_op_antwoord: "Wacht op antwoord",
+export const statusLabels: Record<OrderStatus, string> = {
+  DRAFT: "Nieuw",
+  PENDING: "In behandeling",
+  PLANNED: "Ingepland",
+  IN_TRANSIT: "Onderweg",
+  DELIVERED: "Afgeleverd",
+  CANCELLED: "Geannuleerd",
 };
 
 export const vehicleStatusColors: Record<Vehicle["status"], string> = {

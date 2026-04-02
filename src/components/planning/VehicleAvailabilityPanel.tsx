@@ -89,16 +89,16 @@ export function VehicleAvailabilityPanel() {
           </div>
           <span className="text-xs font-semibold text-foreground">Beschikbaarheid</span>
           <div className="flex items-center gap-1.5 ml-2">
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 border-emerald-200">
+            <Badge variant="outline" className="text-xs px-1.5 py-0 bg-emerald-500/10 text-emerald-700 border-emerald-200">
               {summary.free} vrij
             </Badge>
             {summary.busy > 0 && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-700 border-blue-200">
+              <Badge variant="outline" className="text-xs px-1.5 py-0 bg-blue-500/10 text-blue-700 border-blue-200">
                 {summary.busy} onderweg
               </Badge>
             )}
             {summary.blocked > 0 && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-destructive/10 text-destructive border-destructive/20">
+              <Badge variant="outline" className="text-xs px-1.5 py-0 bg-destructive/10 text-destructive border-destructive/20">
                 {summary.blocked} geblokkeerd
               </Badge>
             )}
@@ -110,7 +110,7 @@ export function VehicleAvailabilityPanel() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-[11px] gap-1.5 rounded-lg"
+                className="h-7 text-xs gap-1.5 rounded-lg"
                 onClick={(e) => e.stopPropagation()}
               >
                 <CalendarIcon className="h-3 w-3" />
@@ -143,7 +143,7 @@ export function VehicleAvailabilityPanel() {
                   key={offset}
                   variant={isActive ? "default" : "ghost"}
                   size="sm"
-                  className="h-6 text-[10px] px-2 rounded-md"
+                  className="h-6 text-xs px-2 rounded-md"
                   onClick={() => setDate(d)}
                 >
                   {label}
@@ -161,9 +161,9 @@ export function VehicleAvailabilityPanel() {
                 <Tooltip key={v.id}>
                   <TooltipTrigger asChild>
                     <div className={cn("rounded-lg px-2.5 py-1.5 border border-border/30 cursor-default", cfg.bg)}>
-                      <p className={cn("text-[11px] font-semibold truncate", cfg.text)}>{v.name}</p>
-                      <p className="text-[9px] text-muted-foreground font-mono">{v.plate}</p>
-                      <p className={cn("text-[9px] font-medium mt-0.5", cfg.text)}>{cfg.label}</p>
+                      <p className={cn("text-xs font-semibold truncate", cfg.text)}>{v.name}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{v.plate}</p>
+                      <p className={cn("text-xs font-medium mt-0.5", cfg.text)}>{cfg.label}</p>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">

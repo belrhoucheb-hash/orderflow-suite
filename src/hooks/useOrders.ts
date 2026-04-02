@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Order } from "@/data/mockData";
+import type { Order, OrderStatus } from "@/data/mockData";
 
 // ─── 8.11 Order Status State Machine ─────────────────────────────────
 // Valid status transitions (matches the intended Supabase check constraint):
@@ -49,15 +49,15 @@ export function isValidStatusTransition(from: string, to: string): boolean {
   return allowed.includes(normTo);
 }
 
-// Map DB status to UI status
-const statusMap: Record<string, Order["status"]> = {
-  DRAFT: "nieuw",
-  WAITING: "wacht_op_antwoord",
-  OPEN: "in_behandeling",
-  PLANNED: "onderweg",
-  DELIVERED: "afgeleverd",
-  CANCELLED: "geannuleerd",
+// Map legacy DB statuses to the canonical status model
+const legacyStatusMap: Record<string, OrderStatus> = {
+  OPEN: "PENDING",
+  WAITING: "PENDING",
 };
+
+function normalizeStatus(dbStatus: string): OrderStatus {
+  return (legacyStatusMap[dbStatus] ?? dbStatus) as OrderStatus;
+}
 
 export function useOrders() {
   return useQuery({
@@ -78,7 +78,7 @@ export function useOrders() {
         phone: "",
         pickupAddress: o.pickup_address || "",
         deliveryAddress: o.delivery_address || "",
-        status: statusMap[o.status] || "nieuw",
+        status: normalizeStatus(o.status),
         priority: "normaal",
         items: [],
         totalWeight: o.weight_kg ?? 0,
@@ -133,7 +133,7 @@ export function useOrder(id: string) {
         phone: "",
         pickupAddress: data.pickup_address || "",
         deliveryAddress: data.delivery_address || "",
-        status: statusMap[data.status] || "nieuw",
+        status: normalizeStatus(data.status),
         priority: "normaal" as const,
         items: [],
         totalWeight: data.weight_kg ?? 0,

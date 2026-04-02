@@ -32,13 +32,13 @@ export function ConfidenceRing({ score }: { score: number }) {
             strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
             className="transition-all duration-700 ease-out" />
         </svg>
-        <span className={cn("absolute inset-0 flex items-center justify-center text-[13px] font-bold tabular-nums", colorClass)}>
+        <span className={cn("absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums", colorClass)}>
           {score}
         </span>
       </div>
       <div>
-        <p className="text-[11px] font-semibold text-foreground leading-tight">AI Score</p>
-        <p className={cn("text-[10px] font-medium", colorClass)}>
+        <p className="text-xs font-semibold text-foreground leading-tight">AI Score</p>
+        <p className={cn("text-xs font-medium", colorClass)}>
           {isHigh ? "Hoge zekerheid" : isMedium ? "Controleer velden" : "Handmatig invoeren"}
         </p>
       </div>
@@ -55,7 +55,7 @@ export function FieldConfidence({ level }: { level: "high" | "medium" | "low" | 
   };
   const c = config[level];
   return (
-    <span className={cn("inline-flex items-center gap-1 text-[9px] font-medium", c.textColor)}>
+    <span className={cn("inline-flex items-center gap-1 text-xs font-medium", c.textColor)}>
       <span className={cn("h-1 w-3 rounded-full", c.color)} />
       {c.label}
     </span>

@@ -140,6 +140,22 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Decode JWT from Auth Header
+    let tenantIdStr = "00000000-0000-0000-0000-000000000001"; // Fallback to demo
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        try {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.app_metadata?.tenant_id) {
+            tenantIdStr = payload.app_metadata.tenant_id;
+          }
+        } catch(e) {}
+      }
+    }
+
     // Upload attachments to storage
     const uploadedAttachments: { name: string; url: string; type: string }[] = [];
     const timestamp = Date.now();

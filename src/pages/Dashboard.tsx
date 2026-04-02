@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   Package, Truck, MapPin, CheckCircle2, AlertTriangle, Clock,
   TrendingUp, ArrowRight, Gauge, CalendarClock, Phone, Mail, Loader2,
+  BarChart3, CircleDot, Navigation, Timer,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { statusLabels, statusColors, priorityColors } from "@/data/mockData";
@@ -14,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { FinancialKPIWidget } from "@/components/dashboard/FinancialKPIWidget";
 import { OperationalForecastWidget } from "@/components/dashboard/OperationalForecastWidget";
+import { useToast } from "@/hooks/use-toast";
 
 const overdueImpacts: Record<string, { label: string; color: string }> = {};
 
@@ -21,6 +23,7 @@ const Dashboard = () => {
   const today = new Date();
   const { data: orders = [], isLoading: ordersLoading } = useOrders();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useVehicles();
+  const { toast } = useToast();
 
   const isLoading = ordersLoading || vehiclesLoading;
 
@@ -30,11 +33,11 @@ const Dashboard = () => {
       return acc;
     }, {} as Record<string, number>);
     const spoedOrders = orders.filter((o) => o.priority === "spoed" || o.priority === "hoog");
-    const onderwegOrders = orders.filter((o) => o.status === "onderweg");
+    const onderwegOrders = orders.filter((o) => o.status === "IN_TRANSIT");
     const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
 
     const overdueOrders = orders.filter((o) => {
-      if (o.status === "afgeleverd" || o.status === "geannuleerd") return false;
+      if (o.status === "DELIVERED" || o.status === "CANCELLED") return false;
       return o.estimatedDelivery && new Date(o.estimatedDelivery) < today;
     });
 
@@ -80,12 +83,12 @@ const Dashboard = () => {
       {/* KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: "Totaal orders", value: orders.length, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
-          { label: "Voertuigen", value: vehicles.length, icon: Truck, color: "text-primary", bg: "bg-primary/8" },
-          { label: "Nieuw", value: stats.byStatus["nieuw"] || 0, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
-          { label: "Onderweg", value: stats.byStatus["onderweg"] || 0, icon: MapPin, color: "text-primary", bg: "bg-primary/8" },
-          { label: "Afgeleverd", value: stats.byStatus["afgeleverd"] || 0, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-500/8" },
-          { label: "Achterstallig", value: stats.overdueOrders.length, icon: Clock, color: stats.overdueOrders.length > 0 ? "text-destructive" : "text-muted-foreground", bg: stats.overdueOrders.length > 0 ? "bg-destructive/8" : "bg-muted" },
+          { label: "Totaal orders", value: orders.length, icon: BarChart3, color: "text-blue-600", bg: "bg-blue-500/10" },
+          { label: "Voertuigen", value: vehicles.length, icon: Truck, color: "text-violet-600", bg: "bg-violet-500/10" },
+          { label: "Nieuw", value: (stats.byStatus["DRAFT"] || 0) + (stats.byStatus["PENDING"] || 0), icon: CircleDot, color: "text-sky-600", bg: "bg-sky-500/10" },
+          { label: "Onderweg", value: stats.byStatus["IN_TRANSIT"] || 0, icon: Navigation, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-500/10" },
+          { label: "Achterstallig", value: stats.overdueOrders.length, icon: Timer, color: stats.overdueOrders.length > 0 ? "text-destructive" : "text-muted-foreground", bg: stats.overdueOrders.length > 0 ? "bg-destructive/10" : "bg-muted" },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}
@@ -99,7 +102,7 @@ const Dashboard = () => {
             </div>
             <div className="min-w-0">
               <p className="text-lg font-semibold font-display tabular-nums leading-tight">{stat.value}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{stat.label}</p>
+              <p className="text-xs text-muted-foreground truncate">{stat.label}</p>
             </div>
           </motion.div>
         ))}
@@ -125,7 +128,7 @@ const Dashboard = () => {
               <CalendarClock className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold font-display">Recente orders</h2>
             </div>
-            <Link to="/orders" className="text-[11px] text-primary hover:underline flex items-center gap-1">
+            <Link to="/orders" className="text-xs text-primary hover:underline flex items-center gap-1">
               Bekijk alles <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
@@ -133,33 +136,33 @@ const Dashboard = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border/30 bg-muted/20">
-                  <th className="px-4 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Order</th>
-                  <th className="px-4 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Klant</th>
-                  <th className="px-4 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden md:table-cell">Bezorging</th>
-                  <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 hidden sm:table-cell">Gewicht</th>
-                  <th className="px-4 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Status</th>
+                  <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Order</th>
+                  <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Klant</th>
+                  <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">Bezorging</th>
+                  <th className="px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden sm:table-cell">Gewicht</th>
+                  <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
                 {recentOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-muted/20 transition-colors duration-100">
                     <td className="px-4 py-2">
-                      <Link to={`/orders/${order.id}`} className="font-mono text-[13px] font-medium text-foreground hover:text-primary transition-colors">
+                      <Link to={`/orders/${order.id}`} className="font-mono text-sm font-medium text-foreground hover:text-primary transition-colors">
                         {order.orderNumber}
                       </Link>
                     </td>
-                    <td className="px-4 py-2 text-[13px] text-foreground/80">{order.customer}</td>
-                    <td className="px-4 py-2 text-[13px] text-muted-foreground hidden md:table-cell">
+                    <td className="px-4 py-2 text-sm text-foreground/80">{order.customer}</td>
+                    <td className="px-4 py-2 text-sm text-muted-foreground hidden md:table-cell">
                       <span className="flex items-center gap-1 truncate max-w-[180px]">
                         <MapPin className="h-3 w-3 shrink-0" />
                         {order.deliveryAddress}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-[13px] text-foreground/80 text-right tabular-nums font-medium hidden sm:table-cell">
+                    <td className="px-4 py-2 text-sm text-foreground/80 text-right tabular-nums font-medium hidden sm:table-cell">
                       {order.totalWeight.toLocaleString()} kg
                     </td>
                     <td className="px-4 py-2">
-                      <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5", statusColors[order.status])}>
+                      <Badge variant="outline" className={cn("text-xs px-2 py-0.5", statusColors[order.status])}>
                         {statusLabels[order.status]}
                       </Badge>
                     </td>
@@ -193,19 +196,19 @@ const Dashboard = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-muted/30 p-3 text-center">
                 <p className="text-lg font-bold font-display tabular-nums">{orders.length}</p>
-                <p className="text-[10px] text-muted-foreground">Totaal orders</p>
+                <p className="text-xs text-muted-foreground">Totaal orders</p>
               </div>
               <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="text-lg font-bold font-display tabular-nums">{stats.byStatus["afgeleverd"] || 0}</p>
-                <p className="text-[10px] text-muted-foreground">Afgeleverd</p>
+                <p className="text-lg font-bold font-display tabular-nums">{stats.byStatus["DELIVERED"] || 0}</p>
+                <p className="text-xs text-muted-foreground">Afgeleverd</p>
               </div>
               <div className="rounded-lg bg-muted/30 p-3 text-center">
                 <p className="text-lg font-bold font-display tabular-nums">{stats.totalWeight.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground">Totaal kg</p>
+                <p className="text-xs text-muted-foreground">Totaal kg</p>
               </div>
               <div className="rounded-lg bg-muted/30 p-3 text-center">
                 <p className="text-lg font-bold font-display tabular-nums">{vehicles.length}</p>
-                <p className="text-[10px] text-muted-foreground">Voertuigen</p>
+                <p className="text-xs text-muted-foreground">Voertuigen</p>
               </div>
             </div>
           </motion.div>
@@ -229,22 +232,44 @@ const Dashboard = () => {
                       <button className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-destructive/5 border border-destructive/10 hover:bg-destructive/10 transition-colors text-left group">
                         <Clock className="h-3.5 w-3.5 text-destructive shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[12px] font-medium text-foreground truncate">{order.orderNumber}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{order.customer}</p>
+                          <p className="text-sm font-medium text-foreground truncate">{order.orderNumber}</p>
+                          <p className="text-xs text-muted-foreground truncate">{order.customer}</p>
                         </div>
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-56 p-3" side="left" align="start">
-                      <p className="text-[12px] font-semibold font-display mb-2">Quick Actions</p>
+                      <p className="text-sm font-semibold font-display mb-2">Quick Actions</p>
                       <div className="space-y-1.5">
-                        <Button variant="outline" size="sm" className="w-full justify-start gap-2 h-8 text-[12px]">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2 h-8 text-sm"
+                          onClick={() => {
+                            if (order.phone) {
+                              window.open(`tel:${order.phone}`, "_self");
+                            } else {
+                              toast({ title: "Geen telefoonnummer beschikbaar", variant: "destructive" });
+                            }
+                          }}
+                        >
                           <Phone className="h-3 w-3" /> Bel Chauffeur
                         </Button>
-                        <Button variant="outline" size="sm" className="w-full justify-start gap-2 h-8 text-[12px]">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start gap-2 h-8 text-sm"
+                          onClick={() => {
+                            if (order.email) {
+                              window.open(`mailto:${order.email}`, "_self");
+                            } else {
+                              toast({ title: "Geen e-mailadres beschikbaar", variant: "destructive" });
+                            }
+                          }}
+                        >
                           <Mail className="h-3 w-3" /> Mail Klant
                         </Button>
                         <Link to={`/orders/${order.id}`}>
-                          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 h-8 text-[12px] text-primary">
+                          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 h-8 text-sm text-primary">
                             <ArrowRight className="h-3 w-3" /> Bekijk order
                           </Button>
                         </Link>
@@ -255,7 +280,7 @@ const Dashboard = () => {
               ) : (
                 <div className="text-center py-4">
                   <CheckCircle2 className="h-6 w-6 mx-auto mb-1.5 text-emerald-500/50" />
-                  <p className="text-[12px] text-muted-foreground">Geen achterstallige orders</p>
+                  <p className="text-sm text-muted-foreground">Geen achterstallige orders</p>
                 </div>
               )}
             </div>

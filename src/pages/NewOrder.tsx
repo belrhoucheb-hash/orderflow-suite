@@ -23,6 +23,19 @@ interface FreightLine {
   opmerkingen: string;
 }
 
+interface FreightSummaryItem {
+  id: string;
+  aankomstdatum: string;
+  aantal: string;
+  bestemming: string;
+  gewicht: string;
+  laadreferentie: string;
+  losreferentie: string;
+  tijdslot: string;
+  eenheid: string;
+  afmetingen: string;
+}
+
 const today = new Date().toISOString().split("T")[0];
 const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
@@ -50,6 +63,20 @@ const NewOrder = () => {
   const [totaleDuur, setTotaleDuur] = useState("");
   const [afmetingen, setAfmetingen] = useState("");
 
+  // Time windows
+  const [pickupTimeFrom, setPickupTimeFrom] = useState("");
+  const [pickupTimeTo, setPickupTimeTo] = useState("");
+  const [deliveryTimeFrom, setDeliveryTimeFrom] = useState("");
+  const [deliveryTimeTo, setDeliveryTimeTo] = useState("");
+
+  // Freight summary (items added via "Toevoegen aan Vrachtlijst")
+  const [freightSummary, setFreightSummary] = useState<FreightSummaryItem[]>([]);
+
+  // Financieel state
+  const [tariefType, setTariefType] = useState("");
+  const [bedrag, setBedrag] = useState("");
+  const [toeslag, setToeslag] = useState("");
+
   // Freight lines
   const [freightLines, setFreightLines] = useState<FreightLine[]>([
     { id: "1", activiteit: "Laden", locatie: "", datum: "25 Maart 08:30", tijd: "", referentie: "", opmerkingen: "" },
@@ -69,6 +96,39 @@ const NewOrder = () => {
 
   const updateFreightLine = (id: string, field: keyof FreightLine, value: string) => {
     setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+  };
+
+  const addToFreightSummary = () => {
+    const ladenLine = freightLines.find(f => f.activiteit === "Laden");
+    const lossenLine = freightLines.find(f => f.activiteit === "Lossen");
+    if (!quantity && !lossenLine?.locatie && !weightKg) {
+      toast.error("Vul minimaal aantal, bestemming of gewicht in");
+      return;
+    }
+    const item: FreightSummaryItem = {
+      id: crypto.randomUUID(),
+      aankomstdatum: lossenLine?.datum || ladenLine?.datum || "",
+      aantal: quantity ? `${quantity} ${transportEenheid || "stuks"}` : "",
+      bestemming: lossenLine?.locatie || "",
+      gewicht: weightKg ? `${weightKg} kg` : "",
+      laadreferentie: ladenLine?.referentie || "",
+      losreferentie: lossenLine?.referentie || "",
+      tijdslot: [pickupTimeFrom, pickupTimeTo].filter(Boolean).join(" - ") || "",
+      eenheid: transportEenheid || "",
+      afmetingen: afmetingen || "",
+    };
+    setFreightSummary(prev => [...prev, item]);
+    // Reset detail fields
+    setQuantity("");
+    setWeightKg("");
+    setAfstand("");
+    setTotaleDuur("");
+    setAfmetingen("");
+    toast.success("Item toegevoegd aan vrachtlijst");
+  };
+
+  const removeFromFreightSummary = (id: string) => {
+    setFreightSummary(prev => prev.filter(item => item.id !== id));
   };
 
   // 8.12 – Save ALL form fields to the database, not just a subset.
@@ -107,6 +167,10 @@ const NewOrder = () => {
         unit: transportEenheid || null,
         pickup_address: pickupLine?.locatie || null,
         delivery_address: deliveryLine?.locatie || null,
+        pickup_time_from: pickupTimeFrom || null,
+        pickup_time_to: pickupTimeTo || null,
+        delivery_time_from: deliveryTimeFrom || null,
+        delivery_time_to: deliveryTimeTo || null,
         dimensions: afmetingen || null,
         internal_note: referentie || null,
         invoice_ref: pickupLine?.referentie || deliveryLine?.referentie || null,
@@ -146,7 +210,7 @@ const NewOrder = () => {
             size="sm"
             onClick={() => handleSave(true)}
             disabled={saving}
-            className="h-7 px-3 text-[11px] gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+            className="h-7 px-3 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
           >
             <Save className="h-3 w-3" /> Opslaan & Sluiten
           </Button>
@@ -155,7 +219,7 @@ const NewOrder = () => {
             variant="outline"
             onClick={() => handleSave(false)}
             disabled={saving}
-            className="h-7 px-3 text-[11px] gap-1.5 font-medium border-sidebar-border text-sidebar-foreground bg-sidebar-accent hover:bg-sidebar-accent/80"
+            className="h-7 px-3 text-xs gap-1.5 font-medium border-sidebar-border text-sidebar-foreground bg-sidebar-accent hover:bg-sidebar-accent/80"
           >
             <Save className="h-3 w-3" /> Opslaan
           </Button>
@@ -163,7 +227,7 @@ const NewOrder = () => {
             size="sm"
             variant="outline"
             onClick={() => navigate("/orders")}
-            className="h-7 px-3 text-[11px] gap-1.5 font-medium border-sidebar-border text-sidebar-foreground bg-sidebar-accent hover:bg-sidebar-accent/80"
+            className="h-7 px-3 text-xs gap-1.5 font-medium border-sidebar-border text-sidebar-foreground bg-sidebar-accent hover:bg-sidebar-accent/80"
           >
             <X className="h-3 w-3" /> Annuleren
           </Button>
@@ -172,18 +236,18 @@ const NewOrder = () => {
 
       {/* ── Secondary toolbar ── */}
       <div className="bg-card border-b border-border px-4 py-1.5 flex items-center justify-between shrink-0">
-        <span className="text-[11px] text-muted-foreground">{todayFormatted}</span>
+        <span className="text-xs text-muted-foreground">{todayFormatted}</span>
         <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="outline" className="h-7 px-2.5 text-[11px] gap-1 font-medium">
+          <Button size="sm" variant="outline" onClick={() => handleSave(true)} className="h-7 px-2.5 text-xs gap-1 font-medium">
             <Check className="h-3 w-3" /> Goedkeuren
           </Button>
-          <Button size="sm" variant="outline" className="h-7 px-2.5 text-[11px] gap-1 font-medium">
+          <Button size="sm" variant="outline" onClick={() => window.print()} className="h-7 px-2.5 text-xs gap-1 font-medium">
             <Printer className="h-3 w-3" /> Afdrukken
           </Button>
-          <Button size="sm" variant="outline" className="h-7 px-2.5 text-[11px] gap-1 font-medium">
+          <Button size="sm" variant="outline" onClick={() => toast("PDF download wordt voorbereid...")} className="h-7 px-2.5 text-xs gap-1 font-medium">
             <Download className="h-3 w-3" /> Downloaden
           </Button>
-          <Button size="sm" variant="outline" className="h-7 px-2.5 text-[11px] gap-1 font-medium">
+          <Button size="sm" variant="outline" onClick={() => toast("E-mail functie wordt voorbereid...")} className="h-7 px-2.5 text-xs gap-1 font-medium">
             <Mail className="h-3 w-3" /> E-mail
           </Button>
         </div>
@@ -196,7 +260,7 @@ const NewOrder = () => {
             key={tab.key}
             onClick={() => setMainTab(tab.key)}
             className={cn(
-              "px-4 py-2 text-[11px] font-bold tracking-wider transition-colors border-b-2 -mb-px",
+              "px-4 py-2 text-xs font-bold tracking-wider transition-colors border-b-2 -mb-px",
               mainTab === tab.key
                 ? "text-foreground border-primary"
                 : "text-muted-foreground border-transparent hover:text-foreground"
@@ -218,7 +282,7 @@ const NewOrder = () => {
                 <h3 className="text-xs font-bold text-foreground">Algemene Ordergegevens</h3>
                 <div className="space-y-2">
                   <div>
-                    <span className="text-[10px] text-muted-foreground font-medium">Klantgegevens</span>
+                    <span className="text-xs text-muted-foreground font-medium">Klantgegevens</span>
                     <Input
                       value={clientName}
                       onChange={e => setClientName(e.target.value)}
@@ -227,7 +291,7 @@ const NewOrder = () => {
                     />
                   </div>
                   <div>
-                    <span className="text-[10px] text-muted-foreground font-medium">Contactpersoon</span>
+                    <span className="text-xs text-muted-foreground font-medium">Contactpersoon</span>
                     <Select value={contactpersoon} onValueChange={setContactpersoon}>
                       <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent><SelectItem value="-">—</SelectItem></SelectContent>
@@ -241,18 +305,18 @@ const NewOrder = () => {
                 <h3 className="text-xs font-bold text-foreground">Orderdetails</h3>
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
-                    <span className="text-[10px] text-muted-foreground font-medium w-20 shrink-0">Ordernummer:</span>
+                    <span className="text-xs text-muted-foreground font-medium w-20 shrink-0">Ordernummer:</span>
                     <span className="text-xs text-muted-foreground">[Auto-gen]</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-[10px] text-muted-foreground font-medium w-20 shrink-0">Orderdatum:</span>
+                    <span className="text-xs text-muted-foreground font-medium w-20 shrink-0">Orderdatum:</span>
                     <Input type="date" defaultValue={today} className="h-8 text-xs flex-1" />
                   </div>
-                  <div className="text-[10px] text-muted-foreground ml-[calc(5rem+0.75rem)]">
+                  <div className="text-xs text-muted-foreground ml-[calc(5rem+0.75rem)]">
                     {todayFormatted}
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-[10px] text-muted-foreground font-medium w-20 shrink-0">Soort order:</span>
+                    <span className="text-xs text-muted-foreground font-medium w-20 shrink-0">Soort order:</span>
                     <Select>
                       <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent>
@@ -279,18 +343,20 @@ const NewOrder = () => {
             {/* ── Transport row ── */}
             <div className="bg-card border border-border rounded-lg p-3 flex items-end gap-3">
               <div className="space-y-0.5">
-                <span className="text-[10px] text-muted-foreground font-medium">Transport type:</span>
+                <span className="text-xs text-muted-foreground font-medium">Transport type:</span>
                 <Select value={transportType} onValueChange={setTransportType}>
                   <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="Selecter..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="FTL">FTL</SelectItem>
                     <SelectItem value="LTL">LTL</SelectItem>
                     <SelectItem value="koel">Koel</SelectItem>
+                    <SelectItem value="retour">Retour</SelectItem>
+                    <SelectItem value="express">Express</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-0.5">
-                <span className="text-[10px] text-muted-foreground font-medium">Voertuigtype:</span>
+                <span className="text-xs text-muted-foreground font-medium">Voertuigtype:</span>
                 <Select value={voertuigtype} onValueChange={setVoertuigtype}>
                   <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="—" /></SelectTrigger>
                   <SelectContent>
@@ -300,11 +366,11 @@ const NewOrder = () => {
                 </Select>
               </div>
               <div className="space-y-0.5">
-                <span className="text-[10px] text-muted-foreground font-medium">Chauffeur:</span>
+                <span className="text-xs text-muted-foreground font-medium">Chauffeur:</span>
                 <Input value={chauffeur} onChange={e => setChauffeur(e.target.value)} className="h-8 text-xs w-36" />
               </div>
               <div className="space-y-0.5">
-                <span className="text-[10px] text-muted-foreground font-medium">MRN doc:</span>
+                <span className="text-xs text-muted-foreground font-medium">MRN doc:</span>
                 <Input value={mrnDoc} onChange={e => setMrnDoc(e.target.value)} className="h-8 text-xs w-36" />
               </div>
             </div>
@@ -315,11 +381,11 @@ const NewOrder = () => {
               <div className="bg-card border border-border rounded-lg overflow-hidden">
                 {/* Table header */}
                 <div className="grid grid-cols-[140px_1fr_180px_140px_140px_40px] gap-px bg-muted/60 px-3 py-2 border-b border-border">
-                  <span className="text-[10px] font-bold text-foreground">Type Activiteit</span>
-                  <span className="text-[10px] font-bold text-foreground">Locatie/Adres</span>
-                  <span className="text-[10px] font-bold text-foreground">Datum & Tijd</span>
-                  <span className="text-[10px] font-bold text-foreground">Referentie</span>
-                  <span className="text-[10px] font-bold text-foreground">Opmerkingen</span>
+                  <span className="text-xs font-bold text-foreground">Type Activiteit</span>
+                  <span className="text-xs font-bold text-foreground">Locatie/Adres</span>
+                  <span className="text-xs font-bold text-foreground">Datum & Tijd</span>
+                  <span className="text-xs font-bold text-foreground">Referentie</span>
+                  <span className="text-xs font-bold text-foreground">Opmerkingen</span>
                   <span />
                 </div>
                 {/* Rows */}
@@ -370,10 +436,54 @@ const NewOrder = () => {
                 <div className="px-3 py-2">
                   <button
                     onClick={addFreightLine}
-                    className="text-[11px] text-muted-foreground hover:text-foreground font-medium flex items-center gap-1 transition-colors"
+                    className="text-xs text-muted-foreground hover:text-foreground font-medium flex items-center gap-1 transition-colors"
                   >
                     <Plus className="h-3 w-3" /> Nieuwe Vrachtregel
                   </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Tijdvensters ── */}
+            <div className="bg-card border border-border rounded-lg p-3 flex items-end gap-6 flex-wrap">
+              <div className="space-y-0.5">
+                <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> Ophaalvenster
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="time"
+                    value={pickupTimeFrom}
+                    onChange={e => setPickupTimeFrom(e.target.value)}
+                    className="h-8 text-xs rounded-md border border-input bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                  />
+                  <span className="text-xs text-muted-foreground">tot</span>
+                  <input
+                    type="time"
+                    value={pickupTimeTo}
+                    onChange={e => setPickupTimeTo(e.target.value)}
+                    className="h-8 text-xs rounded-md border border-input bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> Levervenster
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="time"
+                    value={deliveryTimeFrom}
+                    onChange={e => setDeliveryTimeFrom(e.target.value)}
+                    className="h-8 text-xs rounded-md border border-input bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                  />
+                  <span className="text-xs text-muted-foreground">tot</span>
+                  <input
+                    type="time"
+                    value={deliveryTimeTo}
+                    onChange={e => setDeliveryTimeTo(e.target.value)}
+                    className="h-8 text-xs rounded-md border border-input bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                  />
                 </div>
               </div>
             </div>
@@ -383,11 +493,11 @@ const NewOrder = () => {
               <h3 className="text-sm font-bold text-foreground">Gedetailleerde Vrachtinvoer</h3>
               <div className="bg-card border border-border rounded-lg p-3 flex items-end gap-3 flex-wrap">
                 <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-medium">Aantal eenheden</span>
+                  <span className="text-xs text-muted-foreground font-medium">Aantal eenheden</span>
                   <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="" className="h-8 text-xs w-24" />
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-medium">Transporteenheid type</span>
+                  <span className="text-xs text-muted-foreground font-medium">Transporteenheid type</span>
                   <Select value={transportEenheid} onValueChange={setTransportEenheid}>
                     <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
@@ -399,7 +509,7 @@ const NewOrder = () => {
                   </Select>
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-medium">Voertuigtype</span>
+                  <span className="text-xs text-muted-foreground font-medium">Voertuigtype</span>
                   <Select>
                     <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
@@ -409,25 +519,25 @@ const NewOrder = () => {
                   </Select>
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-medium">Gewicht (kg)</span>
+                  <span className="text-xs text-muted-foreground font-medium">Gewicht (kg)</span>
                   <Input type="number" value={weightKg} onChange={e => setWeightKg(e.target.value)} className="h-8 text-xs w-24" />
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-medium">Afstand (km)</span>
+                  <span className="text-xs text-muted-foreground font-medium">Afstand (km)</span>
                   <Input value={afstand} onChange={e => setAfstand(e.target.value)} className="h-8 text-xs w-24" />
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-medium">Totale duur</span>
+                  <span className="text-xs text-muted-foreground font-medium">Totale duur</span>
                   <Input value={totaleDuur} onChange={e => setTotaleDuur(e.target.value)} className="h-8 text-xs w-28" />
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] text-muted-foreground font-medium">Afmetingen (LxBxH)</span>
+                  <span className="text-xs text-muted-foreground font-medium">Afmetingen (LxBxH)</span>
                   <Input value={afmetingen} onChange={e => setAfmetingen(e.target.value)} placeholder="LxBxH" className="h-8 text-xs w-28" />
                 </div>
                 <Button
                   size="sm"
-                  onClick={addFreightLine}
-                  className="h-8 px-3 text-[11px] gap-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shrink-0"
+                  onClick={addToFreightSummary}
+                  className="h-8 px-3 text-xs gap-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shrink-0"
                 >
                   <Plus className="h-3 w-3" /> Toevoegen aan Vrachtlijst
                 </Button>
@@ -438,7 +548,7 @@ const NewOrder = () => {
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-foreground">Overzicht Vrachtlijst</h3>
               <div className="bg-card border border-border rounded-lg overflow-hidden">
-                <table className="w-full text-[11px]">
+                <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-muted/50 border-b border-border">
                       {["Aankomstdatum", "Aantal", "Bestemming", "Gewicht", "Laadreferentie", "Losreferentie", "Tijdslot"].map(h => (
@@ -447,11 +557,33 @@ const NewOrder = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground text-xs">
-                        Geen vrachtitems toegevoegd. Gebruik de bovenstaande velden om een item toe te voegen.
-                      </td>
-                    </tr>
+                    {freightSummary.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground text-xs">
+                          Geen vrachtitems toegevoegd. Gebruik de bovenstaande velden om een item toe te voegen.
+                        </td>
+                      </tr>
+                    ) : (
+                      freightSummary.map((item) => (
+                        <tr key={item.id} className="border-b border-border/50 hover:bg-muted/30">
+                          <td className="px-3 py-2 text-xs">{item.aankomstdatum}</td>
+                          <td className="px-3 py-2 text-xs">{item.aantal}</td>
+                          <td className="px-3 py-2 text-xs">{item.bestemming}</td>
+                          <td className="px-3 py-2 text-xs">{item.gewicht}</td>
+                          <td className="px-3 py-2 text-xs">{item.laadreferentie}</td>
+                          <td className="px-3 py-2 text-xs">{item.losreferentie}</td>
+                          <td className="px-3 py-2 text-xs flex items-center gap-1">
+                            {item.tijdslot}
+                            <button
+                              onClick={() => removeFromFreightSummary(item.id)}
+                              className="ml-auto text-muted-foreground hover:text-destructive transition-colors p-0.5"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -464,7 +596,7 @@ const NewOrder = () => {
                   key={tab.key}
                   onClick={() => setBottomTab(tab.key)}
                   className={cn(
-                    "px-4 py-1.5 text-[10px] font-bold tracking-wider transition-colors",
+                    "px-4 py-1.5 text-xs font-bold tracking-wider transition-colors",
                     bottomTab === tab.key
                       ? "text-foreground border-b-2 border-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -484,13 +616,145 @@ const NewOrder = () => {
           </div>
         )}
 
-        {mainTab !== "algemeen" && (
+        {mainTab === "financieel" && (
+          <div className="p-4 space-y-4 max-w-xl">
+            <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+              <h3 className="text-xs font-bold text-foreground">Tariefgegevens</h3>
+              <div className="space-y-2">
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Tarief type</span>
+                  <Select value={tariefType} onValueChange={setTariefType}>
+                    <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue placeholder="Selecteer tarief type..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="per_rit">Per rit</SelectItem>
+                      <SelectItem value="per_pallet">Per pallet</SelectItem>
+                      <SelectItem value="per_km">Per km</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Bedrag</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={bedrag}
+                    onChange={e => setBedrag(e.target.value)}
+                    placeholder="0.00"
+                    className="h-8 text-xs mt-0.5"
+                  />
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium">Toeslag</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={toeslag}
+                    onChange={e => setToeslag(e.target.value)}
+                    placeholder="0.00"
+                    className="h-8 text-xs mt-0.5"
+                  />
+                </div>
+                <div className="pt-2 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">Totaal</span>
+                    <span className="text-sm font-bold text-foreground">
+                      {((parseFloat(bedrag) || 0) + (parseFloat(toeslag) || 0)).toFixed(2)} EUR
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {mainTab === "facturen" && (
           <p className="py-16 text-center text-xs text-muted-foreground">
-            {mainTab === "financieel" && "Financiële gegevens worden beschikbaar na opslaan"}
-            {mainTab === "facturen" && "Geen facturen beschikbaar"}
-            {mainTab === "callbacks" && "Geen callbacks geconfigureerd"}
-            {mainTab === "vrachtdossier" && "Vrachtdossier wordt aangemaakt na opslaan"}
+            Facturen worden beschikbaar nadat de order is opgeslagen en goedgekeurd.
           </p>
+        )}
+
+        {mainTab === "callbacks" && (
+          <p className="py-16 text-center text-xs text-muted-foreground">
+            Callbacks kunnen worden ingesteld nadat de order is opgeslagen.
+          </p>
+        )}
+
+        {mainTab === "vrachtdossier" && (
+          <div className="p-4 space-y-4">
+            <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+              <h3 className="text-xs font-bold text-foreground">Vrachtoverzicht</h3>
+              {freightLines.filter(l => l.locatie).length === 0 && freightSummary.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">
+                  Geen vrachtgegevens ingevoerd. Ga naar het tabblad Algemeen om vrachtregels toe te voegen.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {/* Freight planning lines */}
+                  {freightLines.filter(l => l.locatie).length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground">Vrachtplanning</span>
+                      <div className="mt-1 border border-border rounded overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-muted/50 border-b border-border">
+                              <th className="px-3 py-1.5 text-left font-bold">Activiteit</th>
+                              <th className="px-3 py-1.5 text-left font-bold">Locatie</th>
+                              <th className="px-3 py-1.5 text-left font-bold">Datum</th>
+                              <th className="px-3 py-1.5 text-left font-bold">Referentie</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {freightLines.filter(l => l.locatie).map(line => (
+                              <tr key={line.id} className="border-b border-border/50">
+                                <td className="px-3 py-1.5">{line.activiteit}</td>
+                                <td className="px-3 py-1.5">{line.locatie}</td>
+                                <td className="px-3 py-1.5">{line.datum}</td>
+                                <td className="px-3 py-1.5">{line.referentie}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {/* Summary items */}
+                  {freightSummary.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground">Vrachtlijst items</span>
+                      <div className="mt-1 border border-border rounded overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-muted/50 border-b border-border">
+                              <th className="px-3 py-1.5 text-left font-bold">Aantal</th>
+                              <th className="px-3 py-1.5 text-left font-bold">Bestemming</th>
+                              <th className="px-3 py-1.5 text-left font-bold">Gewicht</th>
+                              <th className="px-3 py-1.5 text-left font-bold">Datum</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {freightSummary.map(item => (
+                              <tr key={item.id} className="border-b border-border/50">
+                                <td className="px-3 py-1.5">{item.aantal}</td>
+                                <td className="px-3 py-1.5">{item.bestemming}</td>
+                                <td className="px-3 py-1.5">{item.gewicht}</td>
+                                <td className="px-3 py-1.5">{item.aankomstdatum}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+              <h3 className="text-xs font-bold text-foreground">Bijlagen</h3>
+              <p className="text-xs text-muted-foreground">
+                Bijlagen kunnen worden toegevoegd nadat de order is opgeslagen.
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>

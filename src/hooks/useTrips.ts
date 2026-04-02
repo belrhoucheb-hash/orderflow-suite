@@ -1,0 +1,276 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { Trip, TripStop, TripStatus, StopStatus, canTransitionTrip, canTransitionStop } from "@/types/dispatch";
+
+// ─── Fetch trips for a date ─────────────────────────────────
+export function useTrips(date?: string) {
+  return useQuery({
+    queryKey: ["trips", date],
+    queryFn: async () => {
+      let query = supabase
+        .from("trips")
+        .select("*, trip_stops(*, proof_of_delivery(*))")
+        .order("planned_start_time", { ascending: true });
+
+      if (date) {
+        query = query.eq("planned_date", date);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as Trip[];
+    },
+  });
+}
+
+// ─── Fetch single trip with stops ───────────────────────────
+export function useTripById(tripId: string | null) {
+  return useQuery({
+    queryKey: ["trip", tripId],
+    queryFn: async () => {
+      if (!tripId) return null;
+      const { data, error } = await supabase
+        .from("trips")
+        .select("*, trip_stops(*, proof_of_delivery(*))")
+        .eq("id", tripId)
+        .single();
+      if (error) throw error;
+      return data as Trip;
+    },
+    enabled: !!tripId,
+  });
+}
+
+// ─── Fetch trips for a driver ───────────────────────────────
+export function useDriverTrips(driverId: string | null) {
+  return useQuery({
+    queryKey: ["driver-trips", driverId],
+    queryFn: async () => {
+      if (!driverId) return [];
+      const { data, error } = await supabase
+        .from("trips")
+        .select("*, trip_stops(*, proof_of_delivery(*))")
+        .eq("driver_id", driverId)
+        .in("dispatch_status", ["VERZONDEN", "ONTVANGEN", "GEACCEPTEERD", "ACTIEF"])
+        .order("planned_date", { ascending: true });
+      if (error) throw error;
+      return (data || []) as Trip[];
+    },
+    enabled: !!driverId,
+  });
+}
+
+// ─── Create trip from planning ──────────────────────────────
+export function useCreateTrip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      tenant_id: string;
+      vehicle_id: string;
+      driver_id: string | null;
+      planned_date: string;
+      planned_start_time?: string;
+      stops: { order_id: string; stop_type: "PICKUP" | "DELIVERY"; planned_address: string; stop_sequence: number }[];
+    }) => {
+      // Create trip
+      const { data: trip, error: tripErr } = await supabase
+        .from("trips")
+        .insert({
+          tenant_id: input.tenant_id,
+          vehicle_id: input.vehicle_id,
+          driver_id: input.driver_id,
+          planned_date: input.planned_date,
+          planned_start_time: input.planned_start_time || null,
+          dispatch_status: "CONCEPT",
+        })
+        .select()
+        .single();
+      if (tripErr) throw tripErr;
+
+      // Create stops
+      const stopInserts = input.stops.map(s => ({
+        trip_id: trip.id,
+        order_id: s.order_id,
+        stop_type: s.stop_type,
+        stop_sequence: s.stop_sequence,
+        planned_address: s.planned_address,
+        stop_status: "GEPLAND" as const,
+      }));
+
+      const { error: stopsErr } = await supabase.from("trip_stops").insert(stopInserts);
+      if (stopsErr) throw stopsErr;
+
+      return trip as Trip;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+    },
+  });
+}
+
+// ─── Update trip status ─────────────────────────────────────
+export function useUpdateTripStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tripId, status, extra }: { tripId: string; status: TripStatus; extra?: Record<string, any> }) => {
+      const updates: Record<string, any> = { dispatch_status: status, updated_at: new Date().toISOString() };
+
+      // Set timestamps based on status
+      if (status === "VERZONDEN") updates.dispatched_at = new Date().toISOString();
+      if (status === "ONTVANGEN") updates.received_at = new Date().toISOString();
+      if (status === "GEACCEPTEERD") updates.accepted_at = new Date().toISOString();
+      if (status === "ACTIEF") { updates.started_at = new Date().toISOString(); updates.actual_start_time = new Date().toISOString(); }
+      if (status === "VOLTOOID") { updates.completed_at = new Date().toISOString(); updates.actual_end_time = new Date().toISOString(); }
+
+      if (extra) Object.assign(updates, extra);
+
+      const { error } = await supabase.from("trips").update(updates).eq("id", tripId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: ["trip"] });
+      queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
+    },
+  });
+}
+
+// ─── Update stop status ─────────────────────────────────────
+export function useUpdateStopStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ stopId, status, extra }: { stopId: string; status: StopStatus; extra?: Record<string, any> }) => {
+      const updates: Record<string, any> = { stop_status: status, updated_at: new Date().toISOString() };
+
+      if (status === "AANGEKOMEN") updates.actual_arrival_time = new Date().toISOString();
+      if (status === "AFGELEVERD" || status === "MISLUKT") updates.actual_departure_time = new Date().toISOString();
+
+      if (extra) Object.assign(updates, extra);
+
+      const { error } = await supabase.from("trip_stops").update(updates).eq("id", stopId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: ["trip"] });
+      queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
+    },
+  });
+}
+
+// ─── Dispatch trip (validate + send) ────────────────────────
+export function useDispatchTrip() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (tripId: string) => {
+      // Fetch trip + stops for validation
+      const { data: trip, error: fetchErr } = await supabase
+        .from("trips")
+        .select("*, trip_stops(*)")
+        .eq("id", tripId)
+        .single();
+      if (fetchErr) throw fetchErr;
+
+      // Validate
+      const errors: string[] = [];
+      if (!trip.driver_id) errors.push("Geen chauffeur toegewezen");
+      const stops = (trip as any).trip_stops || [];
+      stops.forEach((s: any, i: number) => {
+        if (!s.planned_address) errors.push(`Stop ${i + 1}: adres ontbreekt`);
+      });
+      if (stops.length === 0) errors.push("Geen stops in deze rit");
+
+      if (errors.length > 0) {
+        throw new Error(errors.join(". "));
+      }
+
+      // Update to VERZONDEN
+      const { error: updateErr } = await supabase.from("trips").update({
+        dispatch_status: "VERZONDEN",
+        dispatched_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", tripId);
+      if (updateErr) throw updateErr;
+
+      // Create notification for driver
+      await supabase.from("notifications").insert({
+        type: "trip_dispatched",
+        title: "Nieuwe rit ontvangen",
+        message: `Rit met ${stops.length} stops is naar je verstuurd`,
+        metadata: { trip_id: tripId },
+        is_read: false,
+      }).then(() => {});
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
+    },
+  });
+}
+
+// ─── Save POD ───────────────────────────────────────────────
+export function useSavePOD() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      trip_stop_id: string;
+      order_id?: string;
+      signature_url: string;
+      photos?: { url: string; type: string }[];
+      recipient_name: string;
+      notes?: string;
+    }) => {
+      const { error } = await supabase.from("proof_of_delivery").insert({
+        trip_stop_id: input.trip_stop_id,
+        order_id: input.order_id || null,
+        pod_status: "ONTVANGEN",
+        signature_url: input.signature_url,
+        photos: input.photos || [],
+        recipient_name: input.recipient_name,
+        received_at: new Date().toISOString(),
+        notes: input.notes || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: ["trip"] });
+      queryClient.invalidateQueries({ queryKey: ["driver-trips"] });
+    },
+  });
+}
+
+// ─── Create delivery exception ──────────────────────────────
+export function useCreateDeliveryException() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      tenant_id: string;
+      trip_id?: string;
+      trip_stop_id?: string;
+      order_id?: string;
+      exception_type: string;
+      severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+      description: string;
+      blocks_billing?: boolean;
+    }) => {
+      const { error } = await supabase.from("delivery_exceptions").insert({
+        tenant_id: input.tenant_id,
+        trip_id: input.trip_id || null,
+        trip_stop_id: input.trip_stop_id || null,
+        order_id: input.order_id || null,
+        exception_type: input.exception_type,
+        severity: input.severity,
+        description: input.description,
+        blocks_billing: input.blocks_billing || false,
+        status: "OPEN",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["delivery-exceptions"] });
+    },
+  });
+}
