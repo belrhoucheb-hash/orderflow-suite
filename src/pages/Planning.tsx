@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -36,11 +36,11 @@ import { motion } from "framer-motion";
 
 // Local planning components
 import { type PlanOrder, type Assignments, DISTANCE_WARN_KM } from "@/components/planning/types";
-import { 
-  getTotalWeight, 
-  hasTag, 
-  optimizeRoute, 
-  getEmptyReason, 
+import {
+  getTotalWeight,
+  hasTag,
+  optimizeRoute,
+  getEmptyReason,
   computeRouteStats,
   getCity
 } from "@/components/planning/planningUtils";
@@ -49,8 +49,69 @@ import { PlanningOrderCard } from "@/components/planning/PlanningOrderCard";
 import { PlanningVehicleCard } from "@/components/planning/PlanningVehicleCard";
 import { PlanningUnassignedSidebar } from "@/components/planning/PlanningUnassignedSidebar";
 import { PlanningMap } from "@/components/planning/PlanningMap";
+import { PlanningDateNav, toDateString, type ViewMode } from "@/components/planning/PlanningDateNav";
+import { PlanningWeekView } from "@/components/planning/PlanningWeekView";
 import { useTenant } from "@/contexts/TenantContext";
 import { solveVRP } from "@/lib/vrpSolver";
+
+// ── Per-day localStorage helpers ──
+function getDraftKey(dateStr: string) { return `planning-draft-${dateStr}`; }
+function getStartTimesKey(dateStr: string) { return `planning-draft-startTimes-${dateStr}`; }
+function getDriversKey(dateStr: string) { return `planning-draft-drivers-${dateStr}`; }
+
+function loadDraft(dateStr: string): { assignments: Assignments; startTimes: Record<string, string>; drivers: Record<string, string> } | null {
+  try {
+    const saved = localStorage.getItem(getDraftKey(dateStr));
+    if (!saved) return null;
+    const assignments = JSON.parse(saved) as Assignments;
+    const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
+    if (!hasOrders) return null;
+    const startTimes = JSON.parse(localStorage.getItem(getStartTimesKey(dateStr)) || "{}");
+    const drivers = JSON.parse(localStorage.getItem(getDriversKey(dateStr)) || "{}");
+    return { assignments, startTimes, drivers };
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(dateStr: string, assignments: Assignments, startTimes: Record<string, string>, drivers: Record<string, string>) {
+  const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
+  if (hasOrders) {
+    localStorage.setItem(getDraftKey(dateStr), JSON.stringify(assignments));
+  } else {
+    localStorage.removeItem(getDraftKey(dateStr));
+  }
+  if (Object.keys(startTimes).length > 0) {
+    localStorage.setItem(getStartTimesKey(dateStr), JSON.stringify(startTimes));
+  }
+  if (Object.keys(drivers).length > 0) {
+    localStorage.setItem(getDriversKey(dateStr), JSON.stringify(drivers));
+  }
+}
+
+function clearDraft(dateStr: string) {
+  localStorage.removeItem(getDraftKey(dateStr));
+  localStorage.removeItem(getStartTimesKey(dateStr));
+  localStorage.removeItem(getDriversKey(dateStr));
+}
+
+/** Collect all draft assignments from localStorage for the week view */
+function collectWeekDrafts(weekStart: string): Record<string, Assignments> {
+  const monday = new Date(weekStart + "T00:00:00");
+  const day = monday.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  monday.setDate(monday.getDate() + diff);
+
+  const result: Record<string, Assignments> = {};
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const ds = toDateString(d);
+    const draft = loadDraft(ds);
+    if (draft) result[ds] = draft.assignments;
+  }
+  return result;
+}
 
 const Planning = () => {
   const { data: fleetVehicles = [] } = useVehicles();
@@ -68,66 +129,86 @@ const Planning = () => {
   const [vehicleDrivers, setVehicleDrivers] = useState<Record<string, string>>({});
   const { tenant } = useTenant();
 
-  // ── Auto-restore planning draft from localStorage on mount ──
+  // ── Multi-day planning state ──
+  const [selectedDate, setSelectedDate] = useState<string>(toDateString(new Date()));
+  const [viewMode, setViewMode] = useState<ViewMode>("day");
+  const prevDateRef = useRef<string>(selectedDate);
+
+  // ── Auto-restore planning draft from localStorage for current date ──
   const [draftRestored, setDraftRestored] = useState(false);
   useEffect(() => {
+    const draft = loadDraft(selectedDate);
+    if (draft) {
+      setAssignments(draft.assignments);
+      setVehicleStartTimes(prev => ({ ...prev, ...draft.startTimes }));
+      setVehicleDrivers(prev => ({ ...prev, ...draft.drivers }));
+      setDraftRestored(true);
+      toast.success("Planning hersteld", { description: `Conceptplanning voor ${selectedDate} hersteld.` });
+    }
+    // Also migrate old format drafts (without date) on first load
     try {
-      const savedAssignments = localStorage.getItem("planning-draft");
-      const savedStartTimes = localStorage.getItem("planning-draft-startTimes");
-      const savedDrivers = localStorage.getItem("planning-draft-drivers");
-      let restored = false;
-      if (savedAssignments) {
-        const parsed = JSON.parse(savedAssignments) as Assignments;
+      const oldDraft = localStorage.getItem("planning-draft");
+      if (oldDraft && !loadDraft(toDateString(new Date()))) {
+        const parsed = JSON.parse(oldDraft) as Assignments;
         const hasOrders = Object.values(parsed).some(arr => arr.length > 0);
         if (hasOrders) {
-          setAssignments(parsed);
-          restored = true;
+          const todayStr = toDateString(new Date());
+          localStorage.setItem(getDraftKey(todayStr), oldDraft);
+          const oldStartTimes = localStorage.getItem("planning-draft-startTimes");
+          const oldDrivers = localStorage.getItem("planning-draft-drivers");
+          if (oldStartTimes) localStorage.setItem(getStartTimesKey(todayStr), oldStartTimes);
+          if (oldDrivers) localStorage.setItem(getDriversKey(todayStr), oldDrivers);
+          // Clean up old keys
+          localStorage.removeItem("planning-draft");
+          localStorage.removeItem("planning-draft-startTimes");
+          localStorage.removeItem("planning-draft-drivers");
+          if (selectedDate === todayStr) {
+            setAssignments(parsed);
+            setDraftRestored(true);
+          }
         }
       }
-      if (savedStartTimes) {
-        setVehicleStartTimes(JSON.parse(savedStartTimes));
-      }
-      if (savedDrivers) {
-        setVehicleDrivers(JSON.parse(savedDrivers));
-      }
-      if (restored) {
-        setDraftRestored(true);
-        toast.success("Vorige planning hersteld", { description: "Je conceptplanning is hersteld vanuit lokale opslag." });
-      }
-    } catch {
-      // Ignore corrupt localStorage data
-    }
+    } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Auto-save assignments, vehicleStartTimes, vehicleDrivers to localStorage ──
-  useEffect(() => {
-    // Don't save empty state during initial mount before restore
-    const hasOrders = Object.values(assignments).some(arr => arr.length > 0);
-    if (hasOrders) {
-      localStorage.setItem("planning-draft", JSON.stringify(assignments));
+  // ── Save current draft and load new when date changes ──
+  const handleDateChange = useCallback((newDate: string) => {
+    // Save current day's draft
+    saveDraft(prevDateRef.current, assignments, vehicleStartTimes, vehicleDrivers);
+    // Load new day's draft
+    const draft = loadDraft(newDate);
+    if (draft) {
+      setAssignments(draft.assignments);
+      setVehicleStartTimes(prev => {
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(draft.startTimes)) next[k] = v;
+        return next;
+      });
+      setVehicleDrivers(prev => {
+        const next = { ...prev };
+        for (const [k, v] of Object.entries(draft.drivers)) next[k] = v;
+        return next;
+      });
+      setDraftRestored(true);
+    } else {
+      setAssignments({});
+      setDraftRestored(false);
     }
-  }, [assignments]);
+    prevDateRef.current = newDate;
+    setSelectedDate(newDate);
+  }, [assignments, vehicleStartTimes, vehicleDrivers]);
 
+  // ── Auto-save assignments to per-day localStorage ──
   useEffect(() => {
-    if (Object.keys(vehicleStartTimes).length > 0) {
-      localStorage.setItem("planning-draft-startTimes", JSON.stringify(vehicleStartTimes));
-    }
-  }, [vehicleStartTimes]);
-
-  useEffect(() => {
-    if (Object.keys(vehicleDrivers).length > 0) {
-      localStorage.setItem("planning-draft-drivers", JSON.stringify(vehicleDrivers));
-    }
-  }, [vehicleDrivers]);
+    saveDraft(selectedDate, assignments, vehicleStartTimes, vehicleDrivers);
+  }, [assignments, vehicleStartTimes, vehicleDrivers, selectedDate]);
 
   const handleClearDraft = useCallback(() => {
-    localStorage.removeItem("planning-draft");
-    localStorage.removeItem("planning-draft-startTimes");
-    localStorage.removeItem("planning-draft-drivers");
+    clearDraft(selectedDate);
     setAssignments({});
-    toast.success("Concept gewist", { description: "Lokale planninggegevens zijn verwijderd." });
-  }, []);
+    toast.success("Concept gewist", { description: `Planninggegevens voor ${selectedDate} verwijderd.` });
+  }, [selectedDate]);
 
   // Initialize vehicle start times and drivers
   useEffect(() => {
@@ -174,21 +255,35 @@ const Planning = () => {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+  // Compute next day for date range queries
+  const nextDay = useMemo(() => {
+    const d = new Date(selectedDate + "T00:00:00");
+    d.setDate(d.getDate() + 1);
+    return toDateString(d);
+  }, [selectedDate]);
+
   const { data: dbOrders = [], refetch } = useQuery({
-    queryKey: ["planning-orders"],
+    queryKey: ["planning-orders", selectedDate],
     queryFn: async () => {
+      // Fetch orders for selected date: either matching delivery_date or PENDING without date
       const { data, error } = await supabase
         .from("orders")
-        .select("id, order_number, client_name, pickup_address, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng")
+        .select("id, order_number, client_name, pickup_address, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng, delivery_date, pickup_date")
         .eq("status", "PENDING")
         .is("vehicle_id", null)
         .order("order_number", { ascending: true });
       if (error) throw error;
-      return ((data ?? []) as unknown as PlanOrder[]).map(o => ({
-        ...o,
-        time_window_start: (o as any).time_window_start ?? null,
-        time_window_end: (o as any).time_window_end ?? null,
-      }));
+      // Client-side filter: orders matching this date OR orders without delivery_date
+      return ((data ?? []) as unknown as PlanOrder[])
+        .filter(o => {
+          if (!o.delivery_date) return true; // PENDING without date → always show
+          return o.delivery_date >= selectedDate && o.delivery_date < nextDay;
+        })
+        .map(o => ({
+          ...o,
+          time_window_start: (o as any).time_window_start ?? null,
+          time_window_end: (o as any).time_window_end ?? null,
+        }));
     },
   });
 
@@ -503,7 +598,7 @@ const Planning = () => {
     setIsConfirming(true);
     try {
       const totalAssigned = Object.values(assignments).reduce((s, a) => s + a.length, 0);
-      const plannedDate = new Date().toISOString().split("T")[0];
+      const plannedDate = selectedDate;
       let tripsCreated = 0;
 
       for (const [vId, vOrders] of Object.entries(assignments)) {
@@ -596,11 +691,9 @@ const Planning = () => {
         tripsCreated++;
       }
 
-      toast.success("Planning bevestigd", { description: `${totalAssigned} orders ingepland in ${tripsCreated} ${tripsCreated === 1 ? "rit" : "ritten"}.` });
-      // Clear localStorage draft after successful confirm
-      localStorage.removeItem("planning-draft");
-      localStorage.removeItem("planning-draft-startTimes");
-      localStorage.removeItem("planning-draft-drivers");
+      toast.success("Planning bevestigd", { description: `${totalAssigned} orders ingepland in ${tripsCreated} ${tripsCreated === 1 ? "rit" : "ritten"} voor ${selectedDate}.` });
+      // Clear per-day localStorage draft after successful confirm
+      clearDraft(selectedDate);
       setAssignments({});
       refetch();
     } catch (err: any) {
@@ -612,6 +705,9 @@ const Planning = () => {
   };
 
   const totalAssigned = Object.values(assignments).reduce((s, a) => s + a.length, 0);
+
+  // Collect all week drafts for the week view
+  const weekDrafts = useMemo(() => collectWeekDrafts(selectedDate), [selectedDate, assignments]);
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -658,65 +754,90 @@ const Planning = () => {
           </div>
         </div>
 
-        <VehicleAvailabilityPanel />
+        {/* Date navigation */}
+        <PlanningDateNav
+          selectedDate={selectedDate}
+          onDateChange={handleDateChange}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
 
-        <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
-          <PlanningUnassignedSidebar 
-            orders={orders}
-            assignedIds={assignedIds}
-            groupedUnassigned={groupedUnassigned}
-            search={search}
-            onSearchChange={setSearch}
-            filterTag={filterTag}
-            onFilterTagChange={setFilterTag}
-            onCombineTrips={handleCombineTrips}
-            onAutoPlan={handleAutoPlan}
-            onClearPlanning={handleClearPlanning}
-            onHoverOrder={setHoveredOrderId}
-            fleetVehicles={fleetVehicles}
-            assignments={assignments}
-            totalUnassigned={totalUnassigned}
-            totalAssigned={totalAssigned}
-          />
-
-          <div className={cn("flex-1 overflow-y-auto", showMap && "lg:w-1/2")}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {fleetVehicles.map((vehicle) => (
-                <PlanningVehicleCard
-                  key={vehicle.id}
-                  vehicle={vehicle}
-                  assigned={assignments[vehicle.id] ?? []}
-                  onRemove={handleRemove}
-                  onReorder={handleReorder}
-                  onOptimize={handleOptimize}
-                  rejected={rejectedVehicle === vehicle.id}
-                  onHoverVehicle={setHoveredVehicle}
-                  onHoverOrder={setHoveredOrderId}
-                  startTime={vehicleStartTimes[vehicle.id] ?? "07:00"}
-                  onStartTimeChange={(vId, t) => setVehicleStartTimes((p) => ({ ...p, [vId]: t }))}
-                  driverId={vehicleDrivers[vehicle.id] ?? ""}
-                  onDriverChange={(vId, d) => setVehicleDrivers((p) => ({ ...p, [vId]: d }))}
-                  orderCoords={orderCoords}
-                  emptyReason={getEmptyReason(vehicle, orders, assignedIds)}
-                  drivers={drivers}
-                />
-              ))}
-            </div>
+        {viewMode === "week" ? (
+          /* ── Week overview ── */
+          <div className="flex-1 overflow-y-auto">
+            <PlanningWeekView
+              weekStart={selectedDate}
+              onDayClick={(date) => {
+                handleDateChange(date);
+                setViewMode("day");
+              }}
+              draftAssignments={weekDrafts}
+            />
           </div>
+        ) : (
+          /* ── Day view (existing planning UI) ── */
+          <>
+            <VehicleAvailabilityPanel />
 
-          {showMap && (
-            <div className="hidden lg:block lg:w-1/4 min-w-[300px] bg-card rounded-xl border border-border/40 overflow-hidden shadow-sm relative z-0">
-              <PlanningMap 
+            <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+              <PlanningUnassignedSidebar
                 orders={orders}
-                orderCoords={orderCoords}
-                orderToVehicle={orderToVehicle}
-                highlightedIds={highlightedIds}
-                assignments={assignments}
+                assignedIds={assignedIds}
+                groupedUnassigned={groupedUnassigned}
+                search={search}
+                onSearchChange={setSearch}
+                filterTag={filterTag}
+                onFilterTagChange={setFilterTag}
+                onCombineTrips={handleCombineTrips}
+                onAutoPlan={handleAutoPlan}
+                onClearPlanning={handleClearPlanning}
+                onHoverOrder={setHoveredOrderId}
                 fleetVehicles={fleetVehicles}
+                assignments={assignments}
+                totalUnassigned={totalUnassigned}
+                totalAssigned={totalAssigned}
               />
+
+              <div className={cn("flex-1 overflow-y-auto", showMap && "lg:w-1/2")}>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {fleetVehicles.map((vehicle) => (
+                    <PlanningVehicleCard
+                      key={vehicle.id}
+                      vehicle={vehicle}
+                      assigned={assignments[vehicle.id] ?? []}
+                      onRemove={handleRemove}
+                      onReorder={handleReorder}
+                      onOptimize={handleOptimize}
+                      rejected={rejectedVehicle === vehicle.id}
+                      onHoverVehicle={setHoveredVehicle}
+                      onHoverOrder={setHoveredOrderId}
+                      startTime={vehicleStartTimes[vehicle.id] ?? "07:00"}
+                      onStartTimeChange={(vId, t) => setVehicleStartTimes((p) => ({ ...p, [vId]: t }))}
+                      driverId={vehicleDrivers[vehicle.id] ?? ""}
+                      onDriverChange={(vId, d) => setVehicleDrivers((p) => ({ ...p, [vId]: d }))}
+                      orderCoords={orderCoords}
+                      emptyReason={getEmptyReason(vehicle, orders, assignedIds)}
+                      drivers={drivers}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {showMap && (
+                <div className="hidden lg:block lg:w-1/4 min-w-[300px] bg-card rounded-xl border border-border/40 overflow-hidden shadow-sm relative z-0">
+                  <PlanningMap
+                    orders={orders}
+                    orderCoords={orderCoords}
+                    orderToVehicle={orderToVehicle}
+                    highlightedIds={highlightedIds}
+                    assignments={assignments}
+                    fleetVehicles={fleetVehicles}
+                  />
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
 
         <DragOverlay>
           {activeOrder && (
