@@ -2,6 +2,9 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
 import { NotificationCenter } from "@/components/NotificationCenter";
+import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcuts";
+import { MobileNav } from "@/components/MobileNav";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useSLAMonitor } from "@/hooks/useSLAMonitor";
 import { useOrdersSubscription } from "@/hooks/useOrders";
 
@@ -24,11 +27,14 @@ export function AppLayout() {
               <NotificationCenter />
             </div>
           </header>
-          <main className="flex-1 overflow-auto p-4 md:p-6">
+          <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">
             <Outlet />
           </main>
+          <MobileNav />
         </div>
       </div>
+      <KeyboardShortcutsDialog />
+      <OnboardingWizard />
     </SidebarProvider>
   );
 }

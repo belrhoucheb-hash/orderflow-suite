@@ -31,10 +31,10 @@ export function ClientDetailPanel({ client }: Props) {
       {/* Overzicht */}
       <TabsContent value="overzicht" className="p-6 space-y-6 mt-0">
         <Section title="Bedrijfsgegevens">
-          <Field icon={<Building2 className="h-4 w-4" />} label="Bedrijfsnaam" value={client.name} />
-          <Field icon={<Hash className="h-4 w-4" />} label="KvK-nummer" value={client.kvk_number} />
-          <Field icon={<Hash className="h-4 w-4" />} label="BTW-nummer" value={client.btw_number} />
-          <Field icon={<Euro className="h-4 w-4" />} label="Betalingstermijn" value={client.payment_terms ? `${client.payment_terms} dagen` : null} />
+          <Field icon={<Building2 className="h-4 w-4" strokeWidth={1.5} />} label="Bedrijfsnaam" value={client.name} />
+          <Field icon={<Hash className="h-4 w-4" strokeWidth={1.5} />} label="KvK-nummer" value={client.kvk_number} />
+          <Field icon={<Hash className="h-4 w-4" strokeWidth={1.5} />} label="BTW-nummer" value={client.btw_number} />
+          <Field icon={<Euro className="h-4 w-4" strokeWidth={1.5} />} label="Betalingstermijn" value={client.payment_terms ? `${client.payment_terms} dagen` : null} />
         </Section>
 
         <Section title="Contactgegevens">
@@ -59,23 +59,23 @@ export function ClientDetailPanel({ client }: Props) {
             <div key={loc.id} className="rounded-lg border border-border p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-primary" />
+                  <MapPin className="h-4 w-4 text-primary" strokeWidth={1.5} />
                   <span className="text-sm font-medium text-foreground">{loc.label}</span>
                 </div>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-xs">
                   {loc.location_type === "pickup" ? "Ophaal" : "Aflever"}
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">{loc.address}{loc.city ? `, ${loc.city}` : ""}</p>
               {(loc.time_window_start || loc.time_window_end) && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
+                  <Clock className="h-3 w-3" strokeWidth={1.5} />
                   <span>{loc.time_window_start || "?"} – {loc.time_window_end || "?"}</span>
                 </div>
               )}
               {loc.max_vehicle_length && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Truck className="h-3 w-3" />
+                  <Truck className="h-3 w-3" strokeWidth={1.5} />
                   <span>Max {loc.max_vehicle_length}</span>
                 </div>
               )}
@@ -94,16 +94,16 @@ export function ClientDetailPanel({ client }: Props) {
             <table className="w-full">
               <thead>
                 <tr className="bg-muted/30 border-b border-border">
-                  <th className="text-left text-[11px] font-medium text-muted-foreground uppercase px-4 py-2.5">Type</th>
-                  <th className="text-left text-[11px] font-medium text-muted-foreground uppercase px-4 py-2.5">Omschrijving</th>
-                  <th className="text-right text-[11px] font-medium text-muted-foreground uppercase px-4 py-2.5">Bedrag</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase px-4 py-2.5">Type</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground uppercase px-4 py-2.5">Omschrijving</th>
+                  <th className="text-right text-xs font-medium text-muted-foreground uppercase px-4 py-2.5">Bedrag</th>
                 </tr>
               </thead>
               <tbody>
                 {rates.map((rate) => (
                   <tr key={rate.id} className="border-b border-border/50">
                     <td className="px-4 py-2.5">
-                      <Badge variant="outline" className="text-[10px] font-normal">
+                      <Badge variant="outline" className="text-xs font-normal">
                         {rateTypeLabel(rate.rate_type)}
                       </Badge>
                     </td>
@@ -129,14 +129,14 @@ export function ClientDetailPanel({ client }: Props) {
               <div key={order.id} onClick={() => navigate(`/orders/${order.id}`)} className="flex items-center justify-between rounded-lg border border-border p-3 cursor-pointer hover:bg-muted/20 transition-colors">
                 <div>
                   <div className="flex items-center gap-2">
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
                     <span className="text-sm font-medium text-foreground">#{order.order_number}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {order.pickup_address || "—"} → {order.delivery_address || "—"}
                   </p>
                 </div>
-                <Badge variant="outline" className="text-[10px]">{order.status}</Badge>
+                <Badge variant="outline" className="text-xs">{order.status}</Badge>
               </div>
             ))}
           </div>
@@ -149,7 +149,7 @@ export function ClientDetailPanel({ client }: Props) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-3">{title}</h3>
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{title}</h3>
       <div className="space-y-2">{children}</div>
     </div>
   );

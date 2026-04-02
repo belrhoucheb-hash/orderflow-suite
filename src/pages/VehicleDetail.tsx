@@ -55,7 +55,7 @@ export default function VehicleDetail() {
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-auto">
       {/* Header */}
-      <div className="flex items-center gap-4 px-8 py-6 border-b border-border">
+      <div className="flex items-center gap-4 px-4 md:px-6 py-6 border-b border-border">
         <Button variant="ghost" size="icon" onClick={() => navigate("/vloot")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -68,14 +68,14 @@ export default function VehicleDetail() {
         </div>
       </div>
 
-      <div className="px-8 py-6 flex-1">
+      <div className="px-4 md:px-6 py-6 flex-1">
         <Tabs defaultValue="specs" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="specs" className="gap-1.5"><Truck className="h-3.5 w-3.5" />Specificaties</TabsTrigger>
-            <TabsTrigger value="docs" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Documenten</TabsTrigger>
-            <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Onderhoud</TabsTrigger>
-            <TabsTrigger value="availability" className="gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Beschikbaarheid</TabsTrigger>
-            <TabsTrigger value="performance" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" />Prestaties</TabsTrigger>
+            <TabsTrigger value="specs" className="gap-1.5"><Truck className="h-3.5 w-3.5" strokeWidth={1.5} />Specificaties</TabsTrigger>
+            <TabsTrigger value="docs" className="gap-1.5"><FileText className="h-3.5 w-3.5" strokeWidth={1.5} />Documenten</TabsTrigger>
+            <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" strokeWidth={1.5} />Onderhoud</TabsTrigger>
+            <TabsTrigger value="availability" className="gap-1.5"><CalendarDays className="h-3.5 w-3.5" strokeWidth={1.5} />Beschikbaarheid</TabsTrigger>
+            <TabsTrigger value="performance" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" strokeWidth={1.5} />Prestaties</TabsTrigger>
           </TabsList>
 
           {/* Specificaties */}
@@ -105,7 +105,7 @@ export default function VehicleDetail() {
                     <span className="text-sm text-muted-foreground">Uitrusting</span>
                     <div className="flex gap-1.5">
                       {vehicle.features.length > 0 ? vehicle.features.map((f) => (
-                        <Badge key={f} variant="secondary" className="text-[11px]">{f}</Badge>
+                        <Badge key={f} variant="secondary" className="text-xs">{f}</Badge>
                       )) : <span className="text-sm text-muted-foreground">—</span>}
                     </div>
                   </div>
@@ -132,7 +132,7 @@ export default function VehicleDetail() {
                       return (
                         <div key={doc.id} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
                           <div className="flex items-center gap-3">
-                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <FileText className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
                             <div>
                               <p className="text-sm font-medium text-foreground">{DOC_LABELS[doc.doc_type] || doc.doc_type}</p>
                               {doc.notes && <p className="text-xs text-muted-foreground">{doc.notes}</p>}
@@ -145,13 +145,13 @@ export default function VehicleDetail() {
                               </span>
                             )}
                             {isExpired && (
-                              <Badge variant="destructive" className="text-[10px] gap-1">
-                                <AlertTriangle className="h-3 w-3" />Verlopen
+                              <Badge variant="destructive" className="text-xs gap-1">
+                                <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />Verlopen
                               </Badge>
                             )}
                             {isWarning && (
-                              <Badge className="bg-amber-500/10 text-amber-700 border-amber-200 text-[10px] gap-1">
-                                <AlertTriangle className="h-3 w-3" />{daysLeft}d
+                              <Badge className="bg-amber-500/10 text-amber-700 border-amber-200 text-xs gap-1">
+                                <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />{daysLeft}d
                               </Badge>
                             )}
                           </div>
@@ -226,7 +226,7 @@ export default function VehicleDetail() {
                               : "bg-muted border-border";
                             return (
                               <div key={dayIdx} className={`rounded-lg border p-2 text-center ${color}`}>
-                                <p className="text-[10px] text-muted-foreground">{format(d, "EEE", { locale: nl })}</p>
+                                <p className="text-xs text-muted-foreground">{format(d, "EEE", { locale: nl })}</p>
                                 <p className="text-sm font-medium text-foreground">{format(d, "d")}</p>
                               </div>
                             );

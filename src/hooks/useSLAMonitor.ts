@@ -16,7 +16,7 @@ export function useSLAMonitor() {
         const { data: orders, error } = await supabase
           .from("orders")
           .select("id, order_number, client_name, received_at, status")
-          .in("status", ["DRAFT", "OPEN"])
+          .in("status", ["DRAFT", "PENDING"])
           .not("received_at", "is", null)
           .order("received_at", { ascending: true });
 
@@ -92,7 +92,7 @@ export function useSLAMonitor() {
           }
 
           // Reply merged (thread_type changed to update on an existing order)
-          if (newRecord.thread_type === "update" && oldStatus === "DRAFT" && newRecord.status === "OPEN") {
+          if (newRecord.thread_type === "update" && oldStatus === "DRAFT" && newRecord.status === "PENDING") {
             await createNotification({
               type: "client_reply",
               title: `Reply verwerkt: Order #${newRecord.order_number}`,
@@ -103,7 +103,7 @@ export function useSLAMonitor() {
           }
 
           // Order approved
-          if (oldStatus === "DRAFT" && newRecord.status === "OPEN" && newRecord.thread_type !== "update") {
+          if (oldStatus === "DRAFT" && newRecord.status === "PENDING" && newRecord.thread_type !== "update") {
             await createNotification({
               type: "order_approved",
               title: `Order #${newRecord.order_number} goedgekeurd`,

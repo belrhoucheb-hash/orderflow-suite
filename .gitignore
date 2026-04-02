@@ -29,3 +29,10 @@ gcp-service-account.json
 .env.local
 .env.production
 .env.*.local
+.vercel
+
+# Drawbridge
+.moat/
+
+# Claude Code configuration
+.claude/

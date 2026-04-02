@@ -44,7 +44,7 @@ export function PlanningOrderRow({
           <GripVertical className="h-3 w-3 text-muted-foreground" />
         </button>
         <span
-          className="flex items-center justify-center h-4 w-4 rounded-full text-[10px] font-bold text-white shrink-0"
+          className="flex items-center justify-center h-4 w-4 rounded-full text-xs font-bold text-white shrink-0"
           style={{ background: vehicleColor }}
         >
           {index + 1}
@@ -55,7 +55,7 @@ export function PlanningOrderRow({
       </div>
       <div className="flex items-center gap-1.5">
         {eta && (
-          <span className={cn("text-[10px] font-mono flex items-center gap-0.5", isLate ? "text-destructive font-bold" : "text-muted-foreground")}>
+          <span className={cn("text-xs font-mono flex items-center gap-0.5", isLate ? "text-destructive font-bold" : "text-muted-foreground")}>
             {isLate && <AlertTriangle className="h-3 w-3" />}
             ETA: {eta}
           </span>

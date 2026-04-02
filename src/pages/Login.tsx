@@ -3,31 +3,34 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import defaultLogo from "@/assets/logo.png";
+import { Truck, Eye, EyeOff, AlertCircle, CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { tenant } = useTenant();
+  const [tab, setTab] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorText, setErrorText] = useState("");
+  const [successText, setSuccessText] = useState("");
 
-  // Login state
+  // Login fields
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
 
-  // Register state
+  // Register fields
+  const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
-  const [regName, setRegName] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorText("");
+
     const { error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: loginPassword,
@@ -35,7 +38,7 @@ const Login = () => {
     setLoading(false);
 
     if (error) {
-      toast({ title: "Inloggen mislukt", description: error.message, variant: "destructive" });
+      setErrorText("Ongeldig e-mailadres of wachtwoord");
     } else {
       navigate("/");
     }
@@ -44,88 +47,238 @@ const Login = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorText("");
+    setSuccessText("");
+
+    if (regPassword.length < 6) {
+      setErrorText("Wachtwoord moet minimaal 6 tekens zijn");
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signUp({
       email: regEmail,
       password: regPassword,
       options: {
-        emailRedirectTo: window.location.origin,
-        data: { display_name: regName },
+        data: {
+          display_name: regName,
+        },
       },
     });
     setLoading(false);
 
     if (error) {
-      toast({ title: "Registratie mislukt", description: error.message, variant: "destructive" });
+      setErrorText(error.message === "User already registered"
+        ? "Dit e-mailadres is al geregistreerd"
+        : error.message);
     } else {
-      toast({
-        title: "Verificatie verstuurd",
-        description: "Controleer je inbox voor een bevestigingslink.",
-      });
+      setSuccessText("Account aangemaakt! Controleer je e-mail om je account te bevestigen, of log direct in.");
+      setTab("login");
+      setLoginEmail(regEmail);
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-foreground via-foreground/95 to-foreground/90 px-4">
-      <Card className="w-full max-w-md border-border/20 shadow-2xl bg-card">
-        <CardHeader className="text-center pb-2 pt-8">
-          <img 
-            src={tenant?.logoUrl || defaultLogo} 
-            alt={tenant?.name || "Royalty Cargo Solutions"} 
-            className="h-20 mx-auto mb-4 object-contain" 
-          />
-          <h1 className="font-display text-xl font-bold text-foreground">
-            {tenant?.name || "Royalty Cargo Solutions"}
-          </h1>
-          <p className="text-sm text-muted-foreground">Transportmanagementsysteem</p>
-        </CardHeader>
-        <CardContent className="pt-4 pb-8">
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="login">Inloggen</TabsTrigger>
-              <TabsTrigger value="register">Registreren</TabsTrigger>
-            </TabsList>
+  const handleGoogleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+  };
 
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">E-mailadres</Label>
-                  <Input id="login-email" type="email" placeholder="naam@royaltycargo.nl" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required />
+  // Demo login removed for security — use a real test account instead
+
+  return (
+    <div className="min-h-screen flex text-slate-900 font-sans">
+      {/* Left Split - Image */}
+      <div className="hidden lg:block lg:w-1/2 relative bg-slate-900">
+        <div className="absolute inset-0 bg-[#0f172a]/40 mix-blend-multiply z-10" />
+        <img
+          src="https://images.unsplash.com/photo-1586528116311-ad8ed7c83a7a?q=80&w=2670&auto=format&fit=crop"
+          alt="Cargo Containers"
+          className="w-full h-full object-cover filter grayscale opacity-90"
+        />
+      </div>
+
+      {/* Right Split - Form */}
+      <div className="w-full lg:w-1/2 bg-[#111827] relative flex items-center justify-center p-6 sm:p-12">
+
+        {/* Top left icon */}
+        <div className="absolute top-8 left-8">
+          <div className="bg-[#dc2626] p-2.5 rounded text-white shadow-sm">
+            <Truck className="h-5 w-5" strokeWidth={2.5} />
+          </div>
+        </div>
+
+        {/* Version */}
+        <div className="absolute bottom-8 right-8 text-slate-500/60 text-xs tracking-wider font-mono">
+          v2.4.0
+        </div>
+
+        {/* Card */}
+        <div className="bg-white w-full max-w-[420px] rounded shadow-2xl p-8 sm:p-10">
+
+          <div className="text-center space-y-1 mb-6">
+            <h1 className="text-2xl font-bold text-slate-900">{tenant?.name || "Royalty Cargo"}</h1>
+            <p className="text-xs font-bold text-[#dc2626] tracking-[0.2em] uppercase">
+              TMS Platform
+            </p>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-slate-200 mb-6">
+            <button
+              onClick={() => { setTab("login"); setErrorText(""); setSuccessText(""); }}
+              className={cn(
+                "flex-1 pb-3 text-sm font-semibold transition-colors border-b-2",
+                tab === "login" ? "text-slate-900 border-[#dc2626]" : "text-slate-400 border-transparent hover:text-slate-600"
+              )}
+            >
+              Inloggen
+            </button>
+            <button
+              onClick={() => { setTab("register"); setErrorText(""); setSuccessText(""); }}
+              className={cn(
+                "flex-1 pb-3 text-sm font-semibold transition-colors border-b-2",
+                tab === "register" ? "text-slate-900 border-[#dc2626]" : "text-slate-400 border-transparent hover:text-slate-600"
+              )}
+            >
+              Registreren
+            </button>
+          </div>
+
+          {/* Success message */}
+          {successText && (
+            <div className="flex items-start gap-2 text-emerald-700 text-sm font-medium mb-4 bg-emerald-50 border border-emerald-200 rounded p-3">
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{successText}</span>
+            </div>
+          )}
+
+          {/* ─── Login Form ─── */}
+          {tab === "login" && (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="login-email" className="text-sm font-semibold text-slate-900">E-mailadres</Label>
+                <Input
+                  id="login-email" type="email" placeholder="naam@bedrijf.nl"
+                  value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required
+                  className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="login-password" className="text-sm font-semibold text-slate-900">Wachtwoord</Label>
+                <div className="relative">
+                  <Input
+                    id="login-password" type={showPassword ? "text" : "password"} placeholder="••••••••"
+                    value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required
+                    className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300 pr-10"
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Wachtwoord</Label>
-                  <Input id="login-password" type="password" placeholder="••••••••" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
+              </div>
+
+              {errorText && (
+                <div className="flex items-center gap-2 text-[#dc2626] text-sm font-medium pt-1">
+                  <AlertCircle className="h-4 w-4 fill-[#dc2626] text-white" />
+                  <span>{errorText}</span>
                 </div>
-                <Button type="submit" className="w-full font-semibold" disabled={loading}>
+              )}
+
+              <div className="pt-2">
+                <Button type="submit" className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white rounded-sm h-11 text-sm font-semibold" disabled={loading}>
                   {loading ? "Bezig..." : "Inloggen"}
                 </Button>
-              </form>
-            </TabsContent>
+              </div>
 
-            <TabsContent value="register">
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reg-name">Naam</Label>
-                  <Input id="reg-name" type="text" placeholder="Jan Jansen" value={regName} onChange={(e) => setRegName(e.target.value)} required />
+              <div className="relative py-3">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100" /></div>
+                <div className="relative flex justify-center text-xs font-bold tracking-widest uppercase">
+                  <span className="bg-white px-3 text-slate-400">Of</span>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reg-email">E-mailadres</Label>
-                  <Input id="reg-email" type="email" placeholder="naam@royaltycargo.nl" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required />
+              </div>
+
+              <Button type="button" variant="outline" onClick={handleGoogleLogin}
+                className="w-full rounded-sm h-11 border-slate-200 text-slate-600 font-medium hover:bg-slate-50">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-4 w-4 mr-2" />
+                Inloggen met Google
+              </Button>
+
+              <div className="pt-2 text-center">
+                <a href="#" className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+                  Wachtwoord vergeten?
+                </a>
+              </div>
+            </form>
+          )}
+
+          {/* ─── Register Form ─── */}
+          {tab === "register" && (
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reg-name" className="text-sm font-semibold text-slate-900">Volledige naam</Label>
+                <Input
+                  id="reg-name" type="text" placeholder="Jan de Vries"
+                  value={regName} onChange={(e) => setRegName(e.target.value)} required
+                  className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="reg-email" className="text-sm font-semibold text-slate-900">E-mailadres</Label>
+                <Input
+                  id="reg-email" type="email" placeholder="naam@bedrijf.nl"
+                  value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required
+                  className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="reg-password" className="text-sm font-semibold text-slate-900">Wachtwoord</Label>
+                <div className="relative">
+                  <Input
+                    id="reg-password" type={showPassword ? "text" : "password"} placeholder="Minimaal 6 tekens"
+                    value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required
+                    className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300 pr-10"
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reg-password">Wachtwoord</Label>
-                  <Input id="reg-password" type="password" placeholder="Min. 6 tekens" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required minLength={6} />
+              </div>
+
+              {errorText && (
+                <div className="flex items-center gap-2 text-[#dc2626] text-sm font-medium pt-1">
+                  <AlertCircle className="h-4 w-4 fill-[#dc2626] text-white" />
+                  <span>{errorText}</span>
                 </div>
-                <Button type="submit" className="w-full font-semibold" disabled={loading}>
+              )}
+
+              <div className="pt-2">
+                <Button type="submit" className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white rounded-sm h-11 text-sm font-semibold" disabled={loading}>
                   {loading ? "Bezig..." : "Account aanmaken"}
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">
-                  Na registratie ontvang je een verificatiemail.
-                </p>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+              </div>
+
+              <div className="relative py-3">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100" /></div>
+                <div className="relative flex justify-center text-xs font-bold tracking-widest uppercase">
+                  <span className="bg-white px-3 text-slate-400">Of</span>
+                </div>
+              </div>
+
+              <Button type="button" variant="outline" onClick={handleGoogleLogin}
+                className="w-full rounded-sm h-11 border-slate-200 text-slate-600 font-medium hover:bg-slate-50">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-4 w-4 mr-2" />
+                Registreren met Google
+              </Button>
+            </form>
+          )}
+
+        </div>
+      </div>
     </div>
   );
 };

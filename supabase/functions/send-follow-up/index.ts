@@ -12,12 +12,57 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
 
   try {
+    // Verify JWT authorization
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Authenticatie vereist" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const authClient = createClient(supabaseUrl, supabaseKey);
+
+    // Verify the user's JWT token
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user: authUser }, error: authError } = await authClient.auth.getUser(token);
+    if (authError || !authUser) {
+      return new Response(
+        JSON.stringify({ error: "Ongeldige of verlopen sessie" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { orderId, toEmail, subject, body } = await req.json();
 
     if (!orderId || !toEmail || !body) {
       return new Response(
         JSON.stringify({ error: "orderId, toEmail en body zijn verplicht" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify the user has access to this order (tenant isolation)
+    const { data: order, error: orderError } = await authClient
+      .from("orders")
+      .select("id, tenant_id")
+      .eq("id", orderId)
+      .single();
+
+    if (orderError || !order) {
+      return new Response(
+        JSON.stringify({ error: "Order niet gevonden" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userTenantId = authUser.app_metadata?.tenant_id;
+    if (userTenantId && order.tenant_id && userTenantId !== order.tenant_id) {
+      return new Response(
+        JSON.stringify({ error: "Geen toegang tot deze order" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -155,11 +200,7 @@ serve(async (req) => {
     }
 
     // Update order with sent timestamp
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    await supabase
+    await authClient
       .from("orders")
       .update({ follow_up_sent_at: new Date().toISOString() })
       .eq("id", orderId);

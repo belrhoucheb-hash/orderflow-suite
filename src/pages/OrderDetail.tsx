@@ -1,6 +1,10 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { ArrowLeft, MapPin, Package, Truck, User, Clock, FileText, MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2, Undo2, Send, Loader2 } from "lucide-react";
+import { 
+  ArrowLeft, MapPin, Package, Truck, User, Clock, FileText, 
+  MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2, 
+  Undo2, Send, Loader2, Printer, Warehouse, ScrollText, Image 
+} from "lucide-react";
 import { ClickableAddress } from "@/components/ClickableAddress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,11 +16,19 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import SmartLabel from "@/components/orders/SmartLabel";
+import PodViewer from "@/components/orders/PodViewer";
+import CMRDocument from "@/components/orders/CMRDocument";
+import LabelWorkshop from "@/components/orders/LabelWorkshop";
+import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
+import { Receipt } from "lucide-react";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "Nieuw", color: "bg-muted text-muted-foreground" },
-  OPEN: { label: "In behandeling", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  PENDING: { label: "In behandeling", color: "bg-amber-100 text-amber-700 border-amber-200" },
+  OPEN: { label: "In behandeling", color: "bg-amber-100 text-amber-700 border-amber-200" }, // legacy
   PLANNED: { label: "Ingepland", color: "bg-violet-100 text-violet-700 border-violet-200" },
+  IN_TRANSIT: { label: "Onderweg", color: "bg-primary/10 text-primary border-primary/20" },
   DELIVERED: { label: "Afgeleverd", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
   CANCELLED: { label: "Geannuleerd", color: "bg-destructive/10 text-destructive border-destructive/20" },
 };
@@ -30,17 +42,33 @@ const OrderDetail = () => {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [showModifyMode, setShowModifyMode] = useState(false);
+  const [showCmr, setShowCmr] = useState(false);
+  const [isGeneratingCmr, setIsGeneratingCmr] = useState(false);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const createInvoiceMutation = useCreateInvoice();
 
   const { data: order, isLoading } = useQuery({
     queryKey: ["order-detail", id],
     queryFn: async () => {
+      // Check local storage first for test orders
+      const local = localStorage.getItem('local_test_orders');
+      if (local) {
+        try {
+          const orders = JSON.parse(local);
+          const found = orders.find((o: any) => o.id === id);
+          if (found) return found;
+        } catch (e) {
+          console.error("Local order check failed", e);
+        }
+      }
+
       const { data, error } = await supabase
         .from("orders")
         .select("*")
         .eq("id", id!)
         .single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
     enabled: !!id,
   });
@@ -75,7 +103,7 @@ const OrderDetail = () => {
   const reopenMutation = useMutation({
     mutationFn: async (orderId: string) => {
       const { error } = await supabase.from("orders").update({
-        status: "OPEN",
+        status: "PENDING",
         internal_note: order?.internal_note?.replace("[GEANNULEERD]", "[HEROPEND]") || "[HEROPEND]",
       }).eq("id", orderId);
       if (error) throw error;
@@ -84,6 +112,36 @@ const OrderDetail = () => {
       toast({ title: "Order heropend", description: `Order #${order?.order_number} is terug in behandeling` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+
+  // Mark as received in warehouse mutation (for Exports)
+  const markAsReceivedMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      if (orderId.startsWith("local-")) {
+        // Update local storage
+        const local = localStorage.getItem('local_test_orders');
+        if (local) {
+          const orders = JSON.parse(local);
+          const updated = orders.map((o: any) => 
+            o.id === orderId ? { ...o, warehouse_received_at: new Date().toISOString() } : o
+          );
+          localStorage.setItem('local_test_orders', JSON.stringify(updated));
+        }
+        return;
+      }
+
+      const { error } = await (supabase.from("orders") as any).update({
+        warehouse_received_at: new Date().toISOString(),
+      }).eq("id", orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ 
+        title: "Export binnen gemeld", 
+        description: `Zending #${order?.order_number} is nu gemarkeerd als ontvangen in het warehouse.` 
+      });
+      queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
     },
   });
 
@@ -99,7 +157,7 @@ const OrderDetail = () => {
       if (error) throw error;
       if (data?.error && !data?.skipped) throw new Error(data.error);
       if (data?.success) {
-        toast({ title: "✉️ Bevestiging verzonden", description: data.message });
+        toast({ title: "Bevestiging verzonden", description: data.message });
       } else if (data?.skipped) {
         toast({ title: "Overgeslagen", description: "Geen geldig e-mailadres", variant: "destructive" });
       }
@@ -107,6 +165,134 @@ const OrderDetail = () => {
       toast({ title: "Verzenden mislukt", description: e.message, variant: "destructive" });
     } finally {
       setIsSendingConfirmation(false);
+    }
+  };
+
+  const handlePrintLabel = () => {
+    // If it's an Export order and not yet received, mark it as received automatically
+    const isExport = order?.transport_type?.toUpperCase().includes("AIR") || 
+                   order?.transport_type?.toLowerCase().includes("warehouse");
+    
+    if (isExport && !order.warehouse_received_at) {
+      markAsReceivedMutation.mutate(order.id);
+    }
+    
+    window.print();
+  };
+
+  // Generate CMR number and save
+  const handleGenerateCmr = async () => {
+    if (!order) return;
+    if (order.cmr_number) {
+      // Already generated, just show it
+      setShowCmr(true);
+      return;
+    }
+    
+    setIsGeneratingCmr(true);
+    try {
+      const year = new Date().getFullYear();
+      const cmrNumber = `RC-CMR-${year}-${String(order.order_number).padStart(4, "0")}`;
+      
+      const { error } = await (supabase
+        .from("orders") as any)
+        .update({
+          cmr_number: cmrNumber,
+          cmr_generated_at: new Date().toISOString(),
+        })
+        .eq("id", order.id);
+      
+      if (error) throw error;
+      
+      toast({ title: "CMR Vrachtbrief gegenereerd", description: `Nummer: ${cmrNumber}` });
+      queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
+      setShowCmr(true);
+    } catch (e: any) {
+      toast({ title: "Fout", description: e.message, variant: "destructive" });
+    } finally {
+      setIsGeneratingCmr(false);
+    }
+  };
+
+  const handlePrintCmr = () => {
+    setShowCmr(true);
+    setTimeout(() => window.print(), 300);
+  };
+
+  const handleCreateInvoice = async () => {
+    if (!order) return;
+    setIsCreatingInvoice(true);
+    try {
+      // Find or create client
+      let clientId: string;
+      const { data: existingClients } = await supabase.from("clients").select("id").ilike("name", `%${order.client_name || ""}%`).limit(1);
+
+      if (existingClients && existingClients.length > 0) {
+        clientId = existingClients[0].id;
+      } else {
+        // Auto-create client
+        const { data: newClient, error: clientErr } = await supabase.from("clients").insert({
+          name: order.client_name || "Onbekende klant",
+          email: order.source_email_from || null,
+          is_active: true,
+        }).select("id").single();
+        if (clientErr) throw new Error("Klant kon niet worden aangemaakt: " + clientErr.message);
+        clientId = newClient.id;
+        toast({ title: "Klant aangemaakt", description: order.client_name || "Onbekende klant" });
+      }
+
+      // Build invoice lines
+      const route = `${order.pickup_address?.split(",")[0] || "Ophaal"} → ${order.delivery_address?.split(",")[0] || "Lever"}`;
+      const lines: any[] = [];
+
+      // Check for client rates
+      const { data: rates } = await supabase.from("client_rates").select("*").eq("client_id", clientId).eq("is_active", true);
+
+      if (rates && rates.length > 0) {
+        rates.forEach((rate: any, i: number) => {
+          let qty = 1, unit = "stuk", desc = rate.description || rate.rate_type;
+          if (rate.rate_type === "per_pallet") { qty = order.quantity || 1; unit = "pallet"; desc = desc || "Palletvervoer"; }
+          else if (rate.rate_type === "per_km") { qty = order.weight_kg || 1; unit = "km"; desc = desc || "Kilometertarief"; }
+          else if (rate.rate_type === "per_rit") { qty = 1; unit = "rit"; desc = desc || "Rittarief"; }
+          else { desc = desc || "Toeslag"; }
+          lines.push({ order_id: order.id, description: `${desc} — ${route}`, quantity: qty, unit, unit_price: rate.amount, total: qty * rate.amount, sort_order: i });
+        });
+      } else {
+        // No rates — create a standard transport line
+        const estimatedPrice = Math.round((order.weight_kg || 100) * 0.15 + (order.quantity || 1) * 25);
+        lines.push({
+          order_id: order.id,
+          description: `Transport #${order.order_number} — ${route}`,
+          quantity: 1,
+          unit: "rit",
+          unit_price: estimatedPrice,
+          total: estimatedPrice,
+          sort_order: 0,
+        });
+        if (order.quantity && order.quantity > 1) {
+          lines.push({
+            order_id: order.id,
+            description: `Handling ${order.quantity} ${order.unit || "pallets"}`,
+            quantity: order.quantity,
+            unit: order.unit?.toLowerCase() || "pallet",
+            unit_price: 15,
+            total: order.quantity * 15,
+            sort_order: 1,
+          });
+        }
+      }
+
+      await createInvoiceMutation.mutateAsync({ client_id: clientId, lines });
+
+      // Link invoice to order
+      toast({ title: "Factuur aangemaakt", description: `Factuur voor order #${order.order_number} — ${lines.length} regel(s)` });
+      queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    } catch (e: any) {
+      console.error("Invoice creation error:", e);
+      toast({ title: "Factuur aanmaken mislukt", description: e.message || "Onbekende fout", variant: "destructive" });
+    } finally {
+      setIsCreatingInvoice(false);
     }
   };
 
@@ -129,7 +315,8 @@ const OrderDetail = () => {
 
   const statusInfo = STATUS_MAP[order.status] || STATUS_MAP.DRAFT;
   const isCancelled = order.status === "CANCELLED";
-  const isActive = order.status === "OPEN" || order.status === "PLANNED";
+  const isPrintable = order.status !== "CANCELLED"; // Printable for DRAFT, OPEN, PLANNED, DELIVERED
+  const isActive = order.status === "PENDING" || order.status === "OPEN" || order.status === "PLANNED";
   const requirements = (order.requirements || []) as string[];
 
   // Build audit trail from order timestamps
@@ -137,8 +324,11 @@ const OrderDetail = () => {
   if (order.received_at) auditTrail.push({ time: new Date(order.received_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "E-mail ontvangen", icon: FileText });
   if (order.created_at) auditTrail.push({ time: new Date(order.created_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: order.confidence_score ? `AI extractie (${order.confidence_score}% zekerheid)` : "Order aangemaakt", icon: Package });
   if (order.follow_up_sent_at) auditTrail.push({ time: new Date(order.follow_up_sent_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Follow-up verstuurd", icon: Send });
-  if (order.status === "OPEN") auditTrail.push({ time: new Date(order.updated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Goedgekeurd door planner", icon: CheckCircle2 });
+  if (order.status === "PENDING" || order.status === "OPEN") auditTrail.push({ time: new Date(order.updated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Goedgekeurd door planner", icon: CheckCircle2 });
+  if (order.warehouse_received_at) auditTrail.push({ time: new Date(order.warehouse_received_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Zending ontvangen (Magazijn)", icon: Warehouse, color: "text-emerald-600" });
+  if (order.cmr_generated_at) auditTrail.push({ time: new Date(order.cmr_generated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: `CMR vrachtbrief: ${order.cmr_number}`, icon: ScrollText, color: "text-blue-600" });
   if (order.vehicle_id) auditTrail.push({ time: new Date(order.updated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: `Voertuig toegewezen`, icon: Truck });
+  if (order.pod_signed_at) auditTrail.push({ time: new Date(order.pod_signed_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: `PoD ontvangen${order.pod_signed_by ? ` (${order.pod_signed_by})` : ""}`, icon: Image, color: "text-emerald-600" });
   if (isCancelled) auditTrail.push({ time: new Date(order.updated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Geannuleerd", icon: XCircle, color: "text-destructive" });
 
   return (
@@ -283,6 +473,11 @@ const OrderDetail = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Proof of Delivery */}
+          {order.status === "DELIVERED" && (order.pod_signature_url || order.pod_signed_by) && (
+            <PodViewer order={order} />
+          )}
         </div>
 
         {/* Right column */}
@@ -330,6 +525,26 @@ const OrderDetail = () => {
                 </Button>
               </>
             )}
+            {isPrintable && (
+              <LabelWorkshop order={order} />
+            )}
+            {isPrintable && (
+              <Button
+                variant="outline"
+                className="w-full gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors"
+                onClick={handleGenerateCmr}
+                disabled={isGeneratingCmr}
+              >
+                {isGeneratingCmr ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScrollText className="h-4 w-4" />}
+                {order.cmr_number ? `CMR ${order.cmr_number}` : "Genereer CMR Vrachtbrief"}
+              </Button>
+            )}
+            {order.cmr_number && (
+              <Button variant="outline" className="w-full gap-2" onClick={handlePrintCmr}>
+                <Printer className="h-4 w-4 text-blue-500" />
+                Print CMR
+              </Button>
+            )}
             {isCancelled && (
               <Button variant="outline" className="w-full gap-2"
                 onClick={() => reopenMutation.mutate(order.id)}
@@ -337,6 +552,21 @@ const OrderDetail = () => {
                 {reopenMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
                 Heropen Order
               </Button>
+            )}
+            {/* Invoice creation — show for delivered or active orders */}
+            {(order.status === "DELIVERED" || order.status === "PENDING" || order.status === "IN_TRANSIT") && !order.invoice_id && (
+              <Button variant="outline" className="w-full gap-2 border-green-200 text-green-700 hover:bg-green-50"
+                onClick={handleCreateInvoice} disabled={isCreatingInvoice}>
+                {isCreatingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
+                Factuur aanmaken
+              </Button>
+            )}
+            {order.invoice_id && (
+              <Link to={`/facturatie`}>
+                <Button variant="outline" className="w-full gap-2 border-green-200 text-green-700">
+                  <Receipt className="h-4 w-4" /> Factuur bekijken
+                </Button>
+              </Link>
             )}
           </div>
         </div>
@@ -394,6 +624,9 @@ const OrderDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden printable CMR document */}
+      {showCmr && <CMRDocument order={order} />}
     </div>
   );
 };

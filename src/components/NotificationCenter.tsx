@@ -66,20 +66,20 @@ function NotificationItem({
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={cn("text-[12px] font-semibold leading-snug text-foreground")}>
+          <p className={cn("text-sm font-semibold leading-snug text-foreground")}>
             {notification.title}
           </p>
           {!notification.is_read && (
             <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />
           )}
         </div>
-        <p className="text-[11px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">
+        <p className="text-xs text-muted-foreground leading-snug mt-0.5 line-clamp-2">
           {notification.message}
         </p>
         <div className="flex items-center gap-2 mt-1.5">
-          <span className="text-[10px] text-muted-foreground/70">{formatTimeAgo(notification.created_at)}</span>
+          <span className="text-xs text-muted-foreground/70">{formatTimeAgo(notification.created_at)}</span>
           {notification.order_id && (
-            <span className="text-[10px] text-primary font-medium">
+            <span className="text-xs text-primary font-medium">
               Bekijk order →
             </span>
           )}
@@ -151,7 +151,7 @@ export function NotificationCenter() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0 }}
-              className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 rounded-full bg-primary text-[10px] text-primary-foreground flex items-center justify-center font-semibold"
+              className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 rounded-full bg-primary text-xs text-primary-foreground flex items-center justify-center font-semibold"
             >
               {unreadCount > 99 ? "99+" : unreadCount}
             </motion.span>
@@ -173,14 +173,14 @@ export function NotificationCenter() {
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-bold text-foreground">Notificaties</h3>
                 {unreadCount > 0 && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-primary/10 text-primary border-primary/20">
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5 bg-primary/10 text-primary border-primary/20">
                     {unreadCount} nieuw
                   </Badge>
                 )}
               </div>
               <div className="flex items-center gap-1">
                 {unreadCount > 0 && (
-                  <Button variant="ghost" size="sm" className="h-7 text-[10px] gap-1 text-muted-foreground" onClick={markAllAsRead}>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={markAllAsRead}>
                     <CheckCheck className="h-3 w-3" />
                     Alles gelezen
                   </Button>
@@ -196,14 +196,14 @@ export function NotificationCenter() {
                     <Inbox className="h-5 w-5 text-muted-foreground/30" />
                   </div>
                   <p className="text-sm font-medium text-muted-foreground">Geen notificaties</p>
-                  <p className="text-[11px] text-muted-foreground/60 mt-1">Alles is up-to-date</p>
+                  <p className="text-xs text-muted-foreground/60 mt-1">Alles is up-to-date</p>
                 </div>
               ) : (
                 <>
                   {unread.length > 0 && (
                     <div>
                       <div className="px-4 pt-2 pb-1">
-                        <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-[0.12em]">Nieuw</span>
+                        <span className="text-xs font-bold text-muted-foreground/50 uppercase tracking-[0.12em]">Nieuw</span>
                       </div>
                       <AnimatePresence>
                         {unread.map((n) => (
@@ -222,9 +222,9 @@ export function NotificationCenter() {
                     <div>
                       {unread.length > 0 && <Separator className="bg-border/30" />}
                       <div className="px-4 pt-2 pb-1 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-[0.12em]">Eerder</span>
+                        <span className="text-xs font-bold text-muted-foreground/50 uppercase tracking-[0.12em]">Eerder</span>
                         {read.length > 0 && (
-                          <Button variant="ghost" size="sm" className="h-5 text-[9px] text-muted-foreground/40 px-1.5" onClick={clearAll}>
+                          <Button variant="ghost" size="sm" className="h-5 text-xs text-muted-foreground/40 px-1.5" onClick={clearAll}>
                             Wis gelezen
                           </Button>
                         )}

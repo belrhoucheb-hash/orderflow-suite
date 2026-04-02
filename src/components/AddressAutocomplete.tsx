@@ -128,7 +128,7 @@ export function AddressAutocomplete({ value, onChange, placeholder, className }:
               )}
               <span className="truncate">{s.address}</span>
               {s.source === "history" && (
-                <span className="ml-auto text-[9px] text-muted-foreground shrink-0">eerder gebruikt</span>
+                <span className="ml-auto text-xs text-muted-foreground shrink-0">eerder gebruikt</span>
               )}
             </button>
           ))}

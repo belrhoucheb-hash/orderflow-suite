@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 @layer base {
   :root {
@@ -103,6 +103,91 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Space Grotesk', sans-serif;
+  }
+
+  /* Keyboard focus indicators */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
+  }
+
+  [class*="focus-visible:ring"]:focus-visible {
+    outline: none;
+  }
+}
+
+/* ─── Design Tokens ─── */
+/* Typography: 6-point scale only. Delete all text-[Xpx] usage. */
+/* xs=12px, sm=14px, base=16px, lg=18px, xl=20px, 2xl=24px, 3xl=30px */
+/* Labels/badges: text-xs (12px) minimum — never smaller */
+/* Body: text-sm (14px) */
+/* Headings: text-lg → text-3xl */
+
+/* Spacing: 4-point scale */
+/* Padding: p-3 (12), p-4 (16), p-5 (20), p-6 (24) */
+/* Page padding: p-4 mobile, p-6 desktop (already in AppLayout) */
+/* Gaps: gap-2 (8), gap-3 (12), gap-4 (16), gap-6 (24) */
+/* Section spacing: space-y-6 between major sections */
+
+@layer utilities {
+  /* Page header pattern */
+  .page-header {
+    @apply text-2xl font-semibold tracking-tight text-foreground;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .page-subtitle {
+    @apply text-sm text-muted-foreground mt-1;
+  }
+
+  /* Section label pattern (ALL CAPS) */
+  .section-label {
+    @apply text-xs font-bold uppercase tracking-wider text-muted-foreground;
+  }
+
+  /* Stat/KPI card pattern */
+  .stat-card {
+    @apply bg-card rounded-xl border border-border/40 p-4 flex items-center gap-3;
+  }
+  .stat-value {
+    @apply text-xl font-semibold tabular-nums leading-tight;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .stat-label {
+    @apply text-xs text-muted-foreground;
+  }
+
+  /* Table header pattern */
+  .table-header {
+    @apply px-4 py-2.5 text-left font-semibold uppercase tracking-wide text-muted-foreground/60;
+    font-size: 11px;
+  }
+  .td-cell {
+    @apply px-4 py-2.5 text-sm;
+  }
+
+  /* Badge pattern */
+  .badge-sm {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print\:block, .print\:block * {
+    visibility: visible;
+  }
+  .print\:block {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  @page {
+    margin: 0;
+    size: auto;
   }
 }
 

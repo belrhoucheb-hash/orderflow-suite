@@ -1,174 +1,58 @@
-# OrderFlow Suite — Open Source TMS
+# OrderFlow Suite
 
-Multi-tenant Transport Management System built for logistics companies that need modern order management, intelligent planning, and full fleet oversight.
+OrderFlow Suite is een robuust, multi-tenant Transport Management Systeem (TMS) gebouwd voor logistieke planners. Het stroomlijnt de order-intake, ritplanning, en het beheer van chauffeurs en ritten. Ontworpen met een focus op snelheid, is OrderFlow Suite sterk afhankelijk van AI (via Google Gemini) om ongestructureerde e-mailaanvragen direct om te zetten in gestructureerde, planbare transportorders.
 
-## Features
+## Belangrijkste Functies
 
-- **AI-Powered Inbox** — Automatically parse incoming transport orders from email using Google Gemini AI
-- **Drag-and-Drop Planning** — Visual planning board to assign orders to drivers and vehicles
-- **Fleet Management** — Track vehicles, maintenance schedules, documents, and availability
-- **Driver Management** — Manage driver profiles, assignments, and ride history
-- **Client Management** — Client database with locations, rates, and extraction templates
-- **Reporting** — Dashboards and reports for operational insights
-- **Multi-Tenant** — Full tenant isolation with per-tenant data, members, and roles
-- **Configurable Branding** — Per-tenant branding and settings
+- **AI-gedreven Inbox:**
+  Automatiseert het extraheren van transportdetails uit inkomende e-mails (.eml). Ondersteunt zowel rule-based parsing als directe Google Gemini API calls (via Edge Functions) om orders voor te bereiden.
+- **Multi-Tenant Architectuur:**
+  Volledig gescheiden data en configuratie per huurder (tenant) met Row Level Security (RLS). Bijna elke tabel, inclusief chauffeurs en rapportages, respecteert strikt de actieve tenant context.
+- **Geavanceerde Ritplanning:**
+  Visuele en kaartgerichte planning. Gebruikt PDOK (voor Nederlandse adressen) en Nominatim voor internationale geocoding in combinatie met een nearest-neighbor algoritme voor routering en ETA-berekening.
+- **Chauffeurs- en Vlootbeheer:**
+  Uitgebreid beheer van een eigen vloot en externe charters, met functies voor de registratie van certificeringen (zoals ADR of Code 95 expiratie-datums), wekelijkse inspecties en actuele statusupdates.
+- **Financieel en KPI Dashboards:**
+  Ingebouwd overzicht van wekelijkse kosten, uurgemiddelden, brandstofverbruik en gegenereerde facturen gebaseerd op werkelijke ritten en wachttijden.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Build | [Vite](https://vitejs.dev/) |
-| UI | [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) |
-| Styling | [Tailwind CSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
-| Backend | [Supabase](https://supabase.com/) (Postgres, Auth, Edge Functions, RLS) |
-| AI | [Google Gemini AI](https://ai.google.dev/) |
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Shadcn UI
+- **State Management:** React Query, Zustand
+- **Backend/Database:** Supabase (PostgreSQL) inclusief pgvector
+- **Edge Functions:** Deno-gebaseerde functies voor AI-koppelingen (`parse-order`, `poll-inbox`, `send-confirmation`, etc.)
+- **Kaarten & Geocoding:** Leaflet, PDOK Locatieserver, Nominatim
 
-## Quick Start
+## Installatie & Setup
 
-### Prerequisites
+1. **Clone repository:**
+   ```bash
+   git clone <repository_url>
+   cd orderflow-suite
+   ```
 
-- Node.js 18+
-- npm or bun
-- A Supabase project
-- A Google Cloud account (for Gemini AI features)
+2. **Installeer dependencies:**
+   ```bash
+   npm install
+   ```
 
-### Installation
+3. **Supabase instellen:**
+   Koppel uw project aan uw eigen Supabase instantie. Zorg dat alle migraties/SQL in `supabase/migrations/` (incl. policies en RLS) succesvol uitgevoerd zijn.
+   Vergeet niet om omgevingsvariabelen in te stellen in uw `.env` (of Supabase dashboard):
+   - `GEMINI_API_KEY`: Voor de edge functions
+   - SMTP details (voor de email notificaties)
 
-```bash
-# Clone the repository
-git clone https://github.com/your-org/orderflow-suite.git
-cd orderflow-suite
+4. **Lokale ontwikkeling:**
+   ```bash
+   npm run dev
+   ```
 
-# Install dependencies
-npm install
+## Workflow & Edge Functions
+De AI workflows functioneren op de achtergrond.
+1. `import-email`: Frontend functie die EML bestanden uploadt en parsings start.
+2. `parse-order`: Analyseert ordertekst met Google Gemini The function returns gestructureerde JSON. Gebruik in Edge logs `ai_usage_log` om tokens en kosten bij te houden.
+3. `poll-inbox`: Kan gebruikt worden via cron-jobs om mailboxen automatisch leeg te trekken.
 
-# Copy the example environment file and fill in your values
-cp .env.example .env
+## Licentie
 
-# Start the development server
-npm run dev
-```
-
-The app will be available at `http://localhost:5173`.
-
-## Environment Variables
-
-Create a `.env` file in the project root based on `.env.example`:
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_SUPABASE_PROJECT_ID` | Your Supabase project ID |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
-| `VITE_SUPABASE_URL` | Full Supabase project URL (e.g. `https://<id>.supabase.co`) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to your GCP service account JSON file |
-| `GEMINI_API_KEY` | Google Gemini API key for AI features |
-
-## Project Structure
-
-```
-orderflow-suite/
-├── src/
-│   ├── pages/              # Top-level route pages
-│   │   ├── Dashboard.tsx
-│   │   ├── Inbox.tsx
-│   │   ├── Orders.tsx
-│   │   ├── Planning.tsx
-│   │   ├── Fleet.tsx
-│   │   ├── Clients.tsx
-│   │   ├── ChauffeursRit.tsx
-│   │   ├── Rapportage.tsx
-│   │   ├── Settings.tsx
-│   │   └── ...
-│   ├── components/         # Reusable UI components
-│   │   ├── ui/             # shadcn/ui primitives
-│   │   ├── inbox/          # AI inbox components
-│   │   ├── planning/       # Planning board components
-│   │   ├── fleet/          # Fleet management components
-│   │   ├── orders/         # Order components
-│   │   ├── clients/        # Client components
-│   │   ├── dashboard/      # Dashboard widgets
-│   │   ├── settings/       # Settings panels
-│   │   └── ...
-│   └── hooks/              # Custom React hooks
-│       ├── useOrders.ts
-│       ├── useDrivers.ts
-│       ├── useFleet.ts
-│       ├── useClients.ts
-│       ├── useNotifications.ts
-│       └── ...
-├── supabase/
-│   ├── migrations/         # Database migration SQL files
-│   └── functions/          # Supabase Edge Functions
-│       ├── create-order/
-│       ├── parse-order/
-│       ├── poll-inbox/
-│       ├── import-email/
-│       ├── send-confirmation/
-│       ├── send-follow-up/
-│       └── google-places/
-├── .env.example
-├── tailwind.config.ts
-├── vite.config.ts
-└── package.json
-```
-
-## Supabase Setup
-
-OrderFlow Suite uses Supabase as its backend. All database schema changes are tracked as migration files in `supabase/migrations/`.
-
-### Running Migrations
-
-```bash
-# Link your Supabase project
-npx supabase link --project-ref <your-project-id>
-
-# Apply all migrations
-npx supabase db push
-```
-
-### Database Tables
-
-The migrations create the following tables:
-
-| Table | Purpose |
-|-------|---------|
-| `tenants` | Tenant (organization) records for multi-tenancy |
-| `tenant_members` | Maps users to tenants with roles |
-| `profiles` | User profiles linked to Supabase Auth |
-| `user_roles` | Role assignments for access control |
-| `orders` | Transport orders with status tracking |
-| `clients` | Client companies |
-| `client_locations` | Pickup/delivery addresses per client |
-| `client_rates` | Pricing rates per client |
-| `client_extraction_templates` | AI extraction templates per client |
-| `drivers` | Driver profiles |
-| `vehicles` | Vehicle records |
-| `vehicle_types` | Vehicle type definitions |
-| `vehicle_availability` | Vehicle availability windows |
-| `vehicle_documents` | Vehicle documents (insurance, registration, etc.) |
-| `vehicle_maintenance` | Maintenance logs |
-| `loading_units` | Loading unit definitions |
-| `requirement_types` | Order requirement type definitions |
-| `notifications` | In-app notifications |
-| `activity_log` | Audit trail of actions |
-| `ai_usage_log` | Tracks AI feature usage |
-
-Row Level Security (RLS) policies are applied to all tables to enforce tenant isolation.
-
-### Edge Functions
-
-Supabase Edge Functions handle server-side logic:
-
-- **poll-inbox** — Polls email inboxes for new transport orders
-- **import-email** — Imports raw email content
-- **parse-order** — Uses Gemini AI to extract structured order data from emails
-- **create-order** — Creates orders in the database
-- **send-confirmation** — Sends order confirmation emails
-- **send-follow-up** — Sends follow-up communications
-- **google-places** — Proxies Google Places API for address autocomplete
-
-## License
-
-Copyright 2026 OrderFlow Suite Contributors
-
-Licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text.
+Dit project is gelicentieerd onder de **Apache 2.0 Licentie**. Zie het [LICENSE](LICENSE) bestand voor meer details.
