@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -126,38 +128,32 @@ const Dispatch = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadingState message="Ritten laden..." />;
   }
 
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight font-display">Dispatch</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Ritten beheren en dispatchen naar chauffeurs
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-card border border-border/50 rounded-xl px-3 h-10">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-sm font-medium border-none outline-none"
-            />
+      <PageHeader
+        title="Dispatch"
+        subtitle="Ritten beheren en dispatchen naar chauffeurs"
+        actions={
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-card border border-border/50 rounded-xl px-3 h-10">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent text-sm font-medium border-none outline-none"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setSelectedDate(getTodayISO())}>
+              Vandaag
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setSelectedDate(getTodayISO())}>
-            Vandaag
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

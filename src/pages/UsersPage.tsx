@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Users, Shield, ShieldCheck, Mail, Loader2, UserCog } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -98,22 +100,16 @@ const UsersPage = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadingState message="Gebruikers laden..." />;
   }
 
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">Gebruikers</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{users.length} gebruiker{users.length !== 1 ? "s" : ""} geregistreerd</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Gebruikers"
+        subtitle={`${users.length} gebruiker${users.length !== 1 ? "s" : ""} geregistreerd`}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

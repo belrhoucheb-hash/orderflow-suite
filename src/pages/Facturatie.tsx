@@ -1,9 +1,11 @@
 import { useState, useMemo, useCallback } from "react";
-import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check } from "lucide-react";
+import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check, FileDown } from "lucide-react";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useInvoices, useCreateInvoice, type InvoiceLine } from "@/hooks/useInvoices";
+import { useInvoices, useInvoiceById, useCreateInvoice, type InvoiceLine } from "@/hooks/useInvoices";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,6 +14,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
+import { downloadInvoicePDF } from "@/lib/invoiceUtils";
 
 interface Invoice {
   id: string;
@@ -80,6 +83,22 @@ const Facturatie = () => {
   const { data: invoices = [], isLoading, isError, refetch } = useInvoices();
   const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+
+  // Fetch full invoice with lines for the detail dialog / PDF generation
+  const { data: invoiceWithLines } = useInvoiceById(selectedInvoice?.id ?? null);
+
+  const handleDownloadPDF = useCallback(() => {
+    if (!invoiceWithLines) {
+      toast.error("Factuurgegevens nog niet geladen");
+      return;
+    }
+    try {
+      downloadInvoicePDF(invoiceWithLines);
+      toast.success("PDF wordt gedownload");
+    } catch (e: any) {
+      toast.error("PDF generatie mislukt", { description: e.message });
+    }
+  }, [invoiceWithLines]);
 
   // ─── New Invoice Dialog State ───
   const [showNewInvoice, setShowNewInvoice] = useState(false);
@@ -306,11 +325,7 @@ const Facturatie = () => {
   }, [invoices]);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadingState message="Facturen laden..." />;
   }
 
   if (isError) {
@@ -326,20 +341,16 @@ const Facturatie = () => {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">
-            Facturatie
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {invoices.length} facturen in totaal
-          </p>
-        </div>
-        <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5"
-          onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }}>
-          <Plus className="h-4 w-4" /> Nieuwe factuur
-        </Button>
-      </div>
+      <PageHeader
+        title="Facturatie"
+        subtitle={`${invoices.length} facturen in totaal`}
+        actions={
+          <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5"
+            onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }}>
+            <Plus className="h-4 w-4" /> Nieuwe factuur
+          </Button>
+        }
+      />
 
       {/* Auto invoice suggestions */}
       {uninvoicedOrders.length > 0 && (
@@ -644,6 +655,18 @@ const Facturatie = () => {
                   <p className="text-muted-foreground">{selectedInvoice.notes}</p>
                 </div>
               )}
+              {/* Download PDF button */}
+              <div className="pt-2 border-t border-border/30">
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={handleDownloadPDF}
+                  disabled={!invoiceWithLines}
+                >
+                  <FileDown className="h-4 w-4" />
+                  {invoiceWithLines ? "Download PDF" : "Laden..."}
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>

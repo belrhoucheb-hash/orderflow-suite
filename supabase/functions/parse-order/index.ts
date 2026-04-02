@@ -220,6 +220,96 @@ serve(async (req) => {
       } catch { return ""; }
     }
 
+    // ── Fetch client extraction template ──
+    async function fetchClientTemplate(clientEmail: string): Promise<string> {
+      if (!clientEmail) return "";
+      try {
+        let query = supabase
+          .from("client_extraction_templates")
+          .select("field_mappings, success_count")
+          .eq("client_email", clientEmail);
+        if (tenantIdStr) {
+          query = query.eq("tenant_id", tenantIdStr);
+        }
+        const { data } = await query.limit(1).single();
+        if (!data || !data.field_mappings) return "";
+        const fm = data.field_mappings as Record<string, any>;
+        const parts: string[] = [];
+        if (fm.unit) parts.push(fm.unit);
+        if (fm.pickup_address) parts.push(`van ${fm.pickup_address}`);
+        if (fm.delivery_address) parts.push(`naar ${fm.delivery_address}`);
+        if (fm.transport_type) parts.push(`type: ${fm.transport_type}`);
+        if (fm.requirements && fm.requirements.length > 0) parts.push(`met ${fm.requirements.join(", ")}`);
+        if (parts.length === 0) return "";
+        return `\nKLANT TEMPLATE (gebaseerd op ${data.success_count} eerdere extracties): Deze klant bestelt typisch ${parts.join(", ")}.`;
+      } catch {
+        return "";
+      }
+    }
+
+    // ── Upsert client extraction template after successful extraction ──
+    async function upsertClientTemplate(
+      clientEmail: string,
+      extracted: Record<string, any>,
+      confidenceScore: number,
+    ): Promise<void> {
+      if (!clientEmail || !tenantIdStr || confidenceScore < 90) return;
+      try {
+        // Check if template already exists
+        const { data: existing } = await supabase
+          .from("client_extraction_templates")
+          .select("id, success_count")
+          .eq("client_email", clientEmail)
+          .eq("tenant_id", tenantIdStr)
+          .limit(1)
+          .single();
+
+        if (existing) {
+          // Template exists — increment count; update mappings every 10th extraction
+          const newCount = (existing.success_count || 1) + 1;
+          const updatePayload: Record<string, any> = { success_count: newCount };
+          if (newCount % 10 === 0) {
+            updatePayload.field_mappings = buildFieldMappings(extracted);
+          }
+          await supabase
+            .from("client_extraction_templates")
+            .update(updatePayload)
+            .eq("id", existing.id);
+        } else {
+          // No template yet — check if client has 5+ successful extractions
+          const { count } = await supabase
+            .from("orders")
+            .select("id", { count: "exact", head: true })
+            .ilike("client_name", extracted.client_name || "")
+            .gte("confidence_score", 90)
+            .neq("status", "CANCELLED");
+
+          if ((count || 0) >= 5) {
+            await supabase
+              .from("client_extraction_templates")
+              .insert({
+                tenant_id: tenantIdStr,
+                client_email: clientEmail,
+                field_mappings: buildFieldMappings(extracted),
+                success_count: count || 5,
+              });
+          }
+        }
+      } catch (e) {
+        console.error("Template upsert error:", e);
+      }
+    }
+
+    function buildFieldMappings(extracted: Record<string, any>): Record<string, any> {
+      return {
+        pickup_address: extracted.pickup_address || null,
+        delivery_address: extracted.delivery_address || null,
+        unit: extracted.unit || null,
+        transport_type: extracted.transport_type || null,
+        requirements: extracted.requirements || [],
+      };
+    }
+
     // Pre-fetch patterns (corrections will be fetched after extraction if client unknown)
     const patternsPromise = fetchPatterns();
 
@@ -316,13 +406,18 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
       ? `Je hebt TWEE bronnen: een e-mail body EN een of meer PDF-bijlagen. Voor elk veld dat je extraheert, geef aan uit welke bron het komt: "email", "pdf", of "both".`
       : hasPdfs ? `Alle velden komen uit "pdf".` : `Alle velden komen uit "email".`;
 
-    // Fetch corrections if we know the client from thread context
+    // Fetch corrections and template if we know the client from thread context
     const knownClient = threadContext?.parentOrder?.client_name || senderHint || "";
-    const [correctionsBlock, patternsBlock] = await Promise.all([
+    // Extract email from sender hint or thread context for template lookup
+    const clientEmail = emailBody?.match(/(?:van|from|afzender)[:\s]*[^<]*<([^>]+)>/i)?.[1]?.trim()
+      || emailBody?.match(/(?:van|from|afzender)[:\s]*(\S+@\S+)/i)?.[1]?.trim()
+      || "";
+    const [correctionsBlock, patternsBlock, templateBlock] = await Promise.all([
       fetchCorrections(knownClient),
       patternsPromise,
+      fetchClientTemplate(clientEmail),
     ]);
-    aiContextBlock = correctionsBlock + patternsBlock;
+    aiContextBlock = correctionsBlock + patternsBlock + templateBlock;
 
     const extractionSystemPrompt = `Je bent een logistiek data-extractie assistent voor een Transport Management Systeem (TMS) in Nederland.
 Je analyseert e-mails en PDF-bijlagen en extraheert gestructureerde ordergegevens.
@@ -600,6 +695,13 @@ Antwoord als JSON met deze velden:
     if (nonCriticalMissing.length > 0) {
       const penalty = nonCriticalMissing.length * 5;
       extracted.confidence_score = Math.max(20, (extracted.confidence_score || 0) - penalty);
+    }
+
+    // ── Step 5: Upsert client extraction template (fire-and-forget) ──
+    if (clientEmail && extracted.confidence_score >= 90) {
+      upsertClientTemplate(clientEmail, extracted, extracted.confidence_score).catch(e =>
+        console.error("Template upsert background error:", e)
+      );
     }
 
     return new Response(JSON.stringify({

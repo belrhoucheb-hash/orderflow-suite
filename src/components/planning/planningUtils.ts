@@ -5,7 +5,7 @@ import {
 } from "./types";
 
 // Re-export route optimizer functions so existing imports keep working
-export { optimizeRoute, computeETAs, computeRouteStats } from "@/lib/routeOptimizer";
+export { optimizeRoute, computeETAs, computeRouteStats, twoOptImprove } from "@/lib/routeOptimizer";
 
 export function getTotalWeight(order: PlanOrder) {
   if (!order.weight_kg) return 0;

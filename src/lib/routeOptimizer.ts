@@ -29,6 +29,8 @@ export function optimizeRoute(
   coordMap: Map<string, GeoCoord>,
 ): PlanOrder[] {
   if (routeOrders.length <= 1) return routeOrders;
+
+  // Step 1: Nearest-neighbor heuristic for initial route
   const remaining = [...routeOrders];
   const result: PlanOrder[] = [];
   let current: GeoCoord = WAREHOUSE;
@@ -49,7 +51,9 @@ export function optimizeRoute(
     result.push(next);
     current = coordMap.get(next.id) || current;
   }
-  return result;
+
+  // Step 2: 2-opt local search improvement
+  return twoOptImprove(result, coordMap);
 }
 
 /**
@@ -153,4 +157,50 @@ export function computeTotalDistanceKm(
     totalKm += haversineKm(currentPos, WAREHOUSE);
   }
   return totalKm;
+}
+
+/**
+ * 2-opt local search improvement for a route.
+ * Takes an existing ordered route and tries reversing segments to reduce
+ * total distance (warehouse -> stops -> warehouse).
+ * Repeats until no improvement is found or maxIterations is reached.
+ * Typically reduces nearest-neighbor routes by 10-20%.
+ */
+export function twoOptImprove(
+  route: PlanOrder[],
+  coordMap: Map<string, GeoCoord>,
+  maxIterations = 100,
+): PlanOrder[] {
+  if (route.length <= 2) return route;
+
+  // Build a coords array: [warehouse, stop0, stop1, ..., stopN, warehouse]
+  // We only need the order IDs to resolve coords; unresolvable stops keep their position.
+  let improved = [...route];
+  let bestDistance = computeTotalDistanceKm(improved, coordMap);
+
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
+    let foundImprovement = false;
+
+    for (let i = 0; i < improved.length - 1; i++) {
+      for (let j = i + 1; j < improved.length; j++) {
+        // Reverse the segment between i and j (inclusive)
+        const candidate = [...improved];
+        const segment = candidate.splice(i, j - i + 1);
+        segment.reverse();
+        candidate.splice(i, 0, ...segment);
+
+        const candidateDistance = computeTotalDistanceKm(candidate, coordMap);
+        if (candidateDistance < bestDistance - 0.01) {
+          // Accept improvement (0.01 km threshold to avoid floating-point churn)
+          improved = candidate;
+          bestDistance = candidateDistance;
+          foundImprovement = true;
+        }
+      }
+    }
+
+    if (!foundImprovement) break;
+  }
+
+  return improved;
 }

@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { Mail as MailIcon, Send, FileEdit, Inbox, Search, Star, StarOff, Paperclip, Clock, ChevronLeft, Reply, Forward, Trash2, Archive, MoreHorizontal, RefreshCw, Plus, Filter, Bot, CheckCircle2 } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -449,11 +450,11 @@ export default function Mail() {
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <MailIcon className="h-12 w-12 text-muted-foreground/15 mx-auto mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">Selecteer een e-mail</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Kies een bericht uit de lijst om te lezen</p>
-            </div>
+            <EmptyState
+              icon={MailIcon}
+              title="Selecteer een e-mail"
+              description="Kies een bericht uit de lijst om te lezen"
+            />
           </div>
         )}
       </div>
