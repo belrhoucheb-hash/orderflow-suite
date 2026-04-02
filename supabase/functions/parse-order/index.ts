@@ -138,7 +138,22 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { emailBody, pdfUrls, threadContext } = await req.json();
+    const { emailBody, pdfUrls, threadContext, tenantId } = await req.json();
+
+    let tenantIdStr = tenantId;
+    if (!tenantIdStr) {
+      const authHeader = req.headers.get("Authorization");
+      if (authHeader) {
+        const token = authHeader.replace("Bearer ", "");
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          try {
+            const payload = JSON.parse(atob(parts[1]));
+            tenantIdStr = payload.app_metadata?.tenant_id;
+          } catch (e) {}
+        }
+      }
+    }
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
@@ -149,6 +164,58 @@ serve(async (req) => {
 
     const hasPdfs = pdfUrls && Array.isArray(pdfUrls) && pdfUrls.length > 0;
     const hasEmail = !!emailBody;
+
+    // ── Fetch AI corrections & patterns for known clients ──
+    let aiContextBlock = "";
+    const senderHint = emailBody?.match(/(?:van|from|afzender)[:\s]*([^\n<]+)/i)?.[1]?.trim() || "";
+
+    async function fetchCorrections(clientName: string): Promise<string> {
+      if (!clientName) return "";
+      try {
+        const { data } = await supabase
+          .from("ai_corrections")
+          .select("field_name, ai_value, corrected_value")
+          .ilike("client_name", `%${clientName}%`)
+          .order("created_at", { ascending: false })
+          .limit(15);
+        if (!data || data.length === 0) return "";
+        const lines = data.map(c =>
+          `- Veld "${c.field_name}": AI zei "${c.ai_value}" → dispatcher corrigeerde naar "${c.corrected_value}"`
+        );
+        return `\nHISTORISCHE CORRECTIES VOOR DEZE KLANT (pas deze toe!):\n${lines.join("\n")}`;
+      } catch { return ""; }
+    }
+
+    async function fetchPatterns(): Promise<string> {
+      try {
+        const { data } = await supabase
+          .from("orders")
+          .select("client_name, pickup_address, delivery_address")
+          .not("confidence_score", "is", null)
+          .gte("confidence_score", 80)
+          .neq("status", "CANCELLED")
+          .order("created_at", { ascending: false })
+          .limit(30);
+        if (!data || data.length < 3) return "";
+        const addressMap: Record<string, Set<string>> = {};
+        data.forEach(o => {
+          const name = o.client_name || "";
+          if (!addressMap[name]) addressMap[name] = new Set();
+          if (o.pickup_address) addressMap[name].add(`ophaal: ${o.pickup_address}`);
+          if (o.delivery_address) addressMap[name].add(`lever: ${o.delivery_address}`);
+        });
+        const patterns = Object.entries(addressMap)
+          .filter(([_, addrs]) => addrs.size >= 2)
+          .slice(0, 5)
+          .map(([name, addrs]) => `- ${name}: ${[...addrs].slice(0, 3).join(", ")}`)
+          .join("\n");
+        if (!patterns) return "";
+        return `\nBEKENDE KLANT-ADRESSEN (gebruik deze als de email vaag is):\n${patterns}`;
+      } catch { return ""; }
+    }
+
+    // Pre-fetch patterns (corrections will be fetched after extraction if client unknown)
+    const patternsPromise = fetchPatterns();
 
     // ── Step 1: Thread intent classification (if email body exists) ──
     let threadType = "new";
@@ -184,6 +251,24 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
 
         if (classifyResp.ok) {
           const classResult = await classifyResp.json();
+          
+          // Log AI Usage
+          const usage = classResult.usageMetadata;
+          if (usage && tenantId) {
+            const inputTokens = usage.promptTokenCount || 0;
+            const outputTokens = usage.candidatesTokenCount || 0;
+            const cost = (inputTokens / 1_000_000) * 0.075 + (outputTokens / 1_000_000) * 0.3;
+            // Best effort insert without awaiting to keep function fast
+            supabase.from("ai_usage_log").insert({
+              tenant_id: tenantId,
+              function_name: "parse-order-classify",
+              model: "gemini-2.5-flash",
+              input_tokens: inputTokens,
+              output_tokens: outputTokens,
+              cost_estimate: cost
+            }).then();
+          }
+
           const text = parseGeminiResponse(classResult);
           if (text) {
             const parsed = JSON.parse(text);
@@ -225,6 +310,14 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
       ? `Je hebt TWEE bronnen: een e-mail body EN een of meer PDF-bijlagen. Voor elk veld dat je extraheert, geef aan uit welke bron het komt: "email", "pdf", of "both".`
       : hasPdfs ? `Alle velden komen uit "pdf".` : `Alle velden komen uit "email".`;
 
+    // Fetch corrections if we know the client from thread context
+    const knownClient = threadContext?.parentOrder?.client_name || senderHint || "";
+    const [correctionsBlock, patternsBlock] = await Promise.all([
+      fetchCorrections(knownClient),
+      patternsPromise,
+    ]);
+    aiContextBlock = correctionsBlock + patternsBlock;
+
     const extractionSystemPrompt = `Je bent een logistiek data-extractie assistent voor een Transport Management Systeem (TMS) in Nederland.
 Je analyseert e-mails en PDF-bijlagen en extraheert gestructureerde ordergegevens.
 
@@ -232,14 +325,23 @@ ${sourceInstructions}
 
 Regels:
 - Gebruik altijd Nederlandse plaatsnamen waar mogelijk
-- Gewicht altijd in kg
+- Gewicht altijd in kg (als gewicht per stuk/pallet vermeld wordt, bereken het totaal OF zet is_weight_per_unit op true)
 - Afmetingen in cm formaat: LxBxH
 - Transport type: "direct" of "warehouse-air"
-- Unit: "Pallets", "Colli", of "Box"
+- Unit: map naar een van deze waarden:
+  - "Pallets" (ook: europallets, blokpallets, pallets, pallet, plt)
+  - "Colli" (ook: dozen, pakken, stuks, stuks, collo, kartons, kratten)
+  - "Box" (ook: container, rolcontainer, kist, bak)
+  BELANGRIJK: Kies ALTIJD de best passende unit. Laat dit NOOIT leeg.
 - Requirements: kies uit ["Koeling", "ADR", "Laadklep", "Douane"]
-- Als een veld niet gevonden kan worden, geef een lege string of 0 terug
+  - "Koeling" als er gekoeld/koel/temperatuur/graden wordt genoemd
+  - "ADR" als er gevaarlijke stoffen/chemisch/ADR wordt genoemd
+  - "Laadklep" als er laadklep/klep/heftruck nodig/geen dock wordt genoemd
+  - "Douane" als er douane/customs/invoer/uitvoer wordt genoemd
+- Als een veld ECHT niet gevonden kan worden, geef een lege string of 0 terug
 - confidence_score: 0-100, hoe zeker je bent over de extractie
-
+- BELANGRIJK: Extraheer ALLES wat je kunt vinden. Laat liever geen veld leeg als er informatie beschikbaar is.
+${aiContextBlock}
 Antwoord als JSON met deze velden:
 {
   "client_name": "string",
@@ -277,6 +379,23 @@ Antwoord als JSON met deze velden:
     }
 
     const result = await response.json();
+
+    // Log AI Usage
+    const usage = result.usageMetadata;
+    if (usage && tenantId) {
+      const inputTokens = usage.promptTokenCount || 0;
+      const outputTokens = usage.candidatesTokenCount || 0;
+      const cost = (inputTokens / 1_000_000) * 0.075 + (outputTokens / 1_000_000) * 0.3;
+      await supabase.from("ai_usage_log").insert({
+        tenant_id: tenantId,
+        function_name: "parse-order",
+        model: "gemini-2.5-flash",
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_estimate: cost
+      });
+    }
+
     const extractedText = parseGeminiResponse(result);
     if (!extractedText) {
       return new Response(JSON.stringify({ error: "Geen data geëxtraheerd" }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
