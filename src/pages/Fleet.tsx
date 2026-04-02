@@ -1,13 +1,13 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Truck, Filter, Search, Loader2 } from "lucide-react";
+import { Plus, Truck, Filter, Search, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useFleetVehicles, useVehicleUtilization, type Vehicle } from "@/hooks/useFleet";
+import { useFleetVehicles, useVehicleUtilization, useUpcomingMaintenance, type Vehicle } from "@/hooks/useFleet";
 import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -31,6 +31,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 export default function Fleet() {
   const { data: vehicles, isLoading, isError, refetch } = useFleetVehicles();
   const { data: utilization } = useVehicleUtilization();
+  const { data: overdueMaintenance } = useUpcomingMaintenance();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -86,6 +87,18 @@ export default function Fleet() {
           }
         />
       </div>
+
+      {/* Overdue maintenance warning */}
+      {overdueMaintenance && overdueMaintenance.length > 0 && (
+        <div className="px-4 md:px-6 pb-2">
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+            <p className="text-sm text-destructive font-medium">
+              {new Set(overdueMaintenance.map((m) => m.vehicle_id)).size} voertuig{new Set(overdueMaintenance.map((m) => m.vehicle_id)).size !== 1 ? "en" : ""} {new Set(overdueMaintenance.map((m) => m.vehicle_id)).size !== 1 ? "hebben" : "heeft"} verlopen onderhoud
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="px-4 md:px-6 pb-4 flex flex-wrap items-center gap-3">
