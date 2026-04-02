@@ -12,10 +12,11 @@ import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTrips, useUpdateTripStatus, useDispatchTrip } from "@/hooks/useTrips";
+import { useDrivers } from "@/hooks/useDrivers";
 import {
   TRIP_STATUS_LABELS, STOP_STATUS_LABELS,
   type Trip, type TripStop, type TripStatus,
@@ -59,15 +60,24 @@ const FILTER_TABS = [
 // ─── Component ──────────────────────────────────────────────
 
 const Dispatch = () => {
-  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState(getTodayISO());
   const [statusFilter, setStatusFilter] = useState<string>("alle");
   const [search, setSearch] = useState("");
   const [expandedTrip, setExpandedTrip] = useState<string | null>(null);
 
   const { data: trips = [], isLoading } = useTrips(selectedDate);
+  const { data: drivers = [] } = useDrivers();
   const updateStatus = useUpdateTripStatus();
   const dispatchTrip = useDispatchTrip();
+
+  // Build a lookup map for driver names
+  const driverMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of drivers) {
+      map.set(d.id, d.name);
+    }
+    return map;
+  }, [drivers]);
 
   // Filter & search
   const filtered = useMemo(() => {
@@ -100,18 +110,18 @@ const Dispatch = () => {
   const handleStatusChange = async (tripId: string, newStatus: TripStatus) => {
     try {
       await updateStatus.mutateAsync({ tripId, status: newStatus });
-      toast({ title: "Status bijgewerkt", description: `Rit is nu ${TRIP_STATUS_LABELS[newStatus].label}` });
+      toast.success(`Status bijgewerkt — Rit is nu ${TRIP_STATUS_LABELS[newStatus].label}`);
     } catch (e: any) {
-      toast({ title: "Fout", description: e.message, variant: "destructive" });
+      toast.error(e.message || "Fout bij status wijziging");
     }
   };
 
   const handleDispatch = async (tripId: string) => {
     try {
       await dispatchTrip.mutateAsync(tripId);
-      toast({ title: "Rit verzonden", description: "De chauffeur ontvangt een notificatie" });
+      toast.success("Rit verzonden — De chauffeur ontvangt een notificatie");
     } catch (e: any) {
-      toast({ title: "Kan niet verzenden", description: e.message, variant: "destructive" });
+      toast.error(e.message || "Kan niet verzenden");
     }
   };
 
@@ -257,9 +267,13 @@ const Dispatch = () => {
                       </div>
 
                       {/* Driver */}
-                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-[140px]">
-                        <User className="h-3.5 w-3.5" />
-                        <span>{trip.driver_id ? "Chauffeur toegewezen" : "Geen chauffeur"}</span>
+                      <div className="flex items-center gap-1.5 text-sm min-w-[140px]">
+                        <User className="h-3.5 w-3.5 text-muted-foreground" />
+                        {trip.driver_id ? (
+                          <span className="font-medium">{driverMap.get(trip.driver_id) || "Chauffeur toegewezen"}</span>
+                        ) : (
+                          <span className="text-muted-foreground/60 italic">Geen chauffeur</span>
+                        )}
                       </div>
 
                       {/* Stops progress */}

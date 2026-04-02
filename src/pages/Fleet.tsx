@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Truck, Filter, Search } from "lucide-react";
+import { Plus, Truck, Filter, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useFleetVehicles, useVehicleUtilization, type Vehicle } from "@/hooks/useFleet";
 import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 const TYPE_LABELS: Record<string, string> = {
   busje: "Busje",
@@ -72,17 +74,17 @@ export default function Fleet() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
-      <div className="flex items-center justify-between px-4 md:px-6 py-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Vloot</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {vehicles?.length ?? 0} voertuigen — {vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar
-          </p>
-        </div>
-        <Button onClick={() => setShowNewDialog(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
-          <Plus className="h-4 w-4" />
-          Voertuig Toevoegen
-        </Button>
+      <div className="px-4 md:px-6 py-6">
+        <PageHeader
+          title="Vloot"
+          subtitle={`${vehicles?.length ?? 0} voertuigen — ${vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar`}
+          actions={
+            <Button onClick={() => setShowNewDialog(true)} className="btn-primary">
+              <Plus className="h-4 w-4" />
+              Voertuig Toevoegen
+            </Button>
+          }
+        />
       </div>
 
       {/* Filters */}
@@ -122,19 +124,29 @@ export default function Fleet() {
       {/* Cards grouped by type */}
       <div className="px-4 md:px-6 flex-1 overflow-auto pb-8 space-y-8">
         {isLoading ? (
-          <p className="text-center py-12 text-muted-foreground text-sm">Laden...</p>
-        ) : isError ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
-            <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
-            <button onClick={() => refetch()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
+          <div className="loading-spinner">
+            <Loader2 className="loading-spinner__icon" />
           </div>
+        ) : isError ? (
+          <EmptyState
+            title="Kan voertuiggegevens niet laden"
+            description="Controleer je verbinding en probeer opnieuw."
+            action={
+              <button onClick={() => refetch()} className="text-xs text-primary hover:underline">
+                Opnieuw proberen
+              </button>
+            }
+          />
         ) : Object.keys(grouped).length === 0 ? (
-          <p className="text-center py-12 text-muted-foreground text-sm">Geen voertuigen gevonden</p>
+          <EmptyState
+            icon={Truck}
+            title="Geen voertuigen gevonden"
+            description="Pas je filters aan of voeg een nieuw voertuig toe."
+          />
         ) : (
           Object.entries(grouped).map(([type, items]) => (
             <div key={type}>
-              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+              <h2 className="section-label mb-3 flex items-center gap-2">
                 <Truck className="h-4 w-4" />
                 {TYPE_LABELS[type] || type} <span className="text-xs font-normal">({items.length})</span>
               </h2>

@@ -237,14 +237,14 @@ const NewOrder = () => {
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold tracking-wide">Transport order Nieuw</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             size="sm"
             onClick={() => handleSave(true)}
             disabled={saving}
             className="h-7 px-3 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
           >
-            <Save className="h-3 w-3" /> Opslaan & Sluiten
+            <Save className="h-3 w-3" /> <span className="hidden sm:inline">Opslaan &</span> Sluiten
           </Button>
           <Button
             size="sm"
@@ -267,9 +267,9 @@ const NewOrder = () => {
       </div>
 
       {/* ── Secondary toolbar ── */}
-      <div className="bg-card border-b border-border px-4 py-1.5 flex items-center justify-between shrink-0">
+      <div className="bg-card border-b border-border px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
         <span className="text-xs text-muted-foreground">{todayFormatted}</span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button size="sm" variant="outline" onClick={() => handleSave(true)} className="h-7 px-2.5 text-xs gap-1 font-medium">
             <Check className="h-3 w-3" /> Goedkeuren
           </Button>
@@ -286,13 +286,13 @@ const NewOrder = () => {
       </div>
 
       {/* ── Main tabs ── */}
-      <div className="bg-card border-b border-border px-4 flex shrink-0">
+      <div className="bg-card border-b border-border px-4 flex shrink-0 overflow-x-auto whitespace-nowrap">
         {mainTabs.map(tab => (
           <button
             key={tab.key}
             onClick={() => setMainTab(tab.key)}
             className={cn(
-              "px-4 py-2 text-xs font-bold tracking-wider transition-colors border-b-2 -mb-px",
+              "px-4 py-2 text-xs font-bold tracking-wider transition-colors border-b-2 -mb-px shrink-0",
               mainTab === tab.key
                 ? "text-foreground border-primary"
                 : "text-muted-foreground border-transparent hover:text-foreground"
@@ -308,7 +308,7 @@ const NewOrder = () => {
         {mainTab === "algemeen" && (
           <div className="p-4 space-y-4">
             {/* ── Top 3-column grid ── */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Column 1: Algemene Ordergegevens */}
               <div className="bg-card border border-border rounded-lg p-4 space-y-3">
                 <h3 className="text-xs font-bold text-foreground">Algemene Ordergegevens</h3>
@@ -374,7 +374,7 @@ const NewOrder = () => {
             </div>
 
             {/* ── Transport row ── */}
-            <div className="bg-card border border-border rounded-lg p-3 flex items-end gap-3">
+            <div className="bg-card border border-border rounded-lg p-3 flex items-end gap-3 flex-wrap">
               <div className="space-y-0.5">
                 <span className="text-xs text-muted-foreground font-medium">Transport type:</span>
                 <Select value={transportType} onValueChange={setTransportType}>
@@ -411,9 +411,9 @@ const NewOrder = () => {
             {/* ── Vrachtplanning ── */}
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-foreground">Vrachtplanning</h3>
-              <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <div className="bg-card border border-border rounded-lg overflow-x-auto">
                 {/* Table header */}
-                <div className="grid grid-cols-[140px_1fr_180px_140px_140px_40px] gap-px bg-muted/60 px-3 py-2 border-b border-border">
+                <div className="grid grid-cols-[140px_1fr_180px_140px_140px_40px] gap-px bg-muted/60 px-3 py-2 border-b border-border min-w-[780px]">
                   <span className="text-xs font-bold text-foreground">Type Activiteit</span>
                   <span className="text-xs font-bold text-foreground">Locatie/Adres</span>
                   <span className="text-xs font-bold text-foreground">Datum & Tijd</span>
@@ -423,7 +423,7 @@ const NewOrder = () => {
                 </div>
                 {/* Rows */}
                 {freightLines.map((line) => (
-                  <div key={line.id} className="grid grid-cols-[140px_1fr_180px_140px_140px_40px] gap-2 px-3 py-1.5 border-b border-border/50 items-center">
+                  <div key={line.id} className="grid grid-cols-[140px_1fr_180px_140px_140px_40px] gap-2 px-3 py-1.5 border-b border-border/50 items-center min-w-[780px]">
                     <Select value={line.activiteit} onValueChange={v => updateFreightLine(line.id, "activiteit", v)}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
@@ -591,8 +591,8 @@ const NewOrder = () => {
             {/* ── Overzicht Vrachtlijst ── */}
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-foreground">Overzicht Vrachtlijst</h3>
-              <div className="bg-card border border-border rounded-lg overflow-hidden">
-                <table className="w-full text-xs">
+              <div className="bg-card border border-border rounded-lg overflow-x-auto">
+                <table className="w-full text-xs min-w-[640px]">
                   <thead>
                     <tr className="bg-muted/50 border-b border-border">
                       {["Aankomstdatum", "Aantal", "Bestemming", "Gewicht", "Laadreferentie", "Losreferentie", "Tijdslot"].map(h => (
@@ -634,13 +634,13 @@ const NewOrder = () => {
             </div>
 
             {/* ── Bottom tabs ── */}
-            <div className="flex border-t border-border pt-2 mt-2">
+            <div className="flex border-t border-border pt-2 mt-2 overflow-x-auto whitespace-nowrap">
               {bottomTabs.map(tab => (
                 <button
                   key={tab.key}
                   onClick={() => setBottomTab(tab.key)}
                   className={cn(
-                    "px-4 py-1.5 text-xs font-bold tracking-wider transition-colors",
+                    "px-4 py-1.5 text-xs font-bold tracking-wider transition-colors shrink-0",
                     bottomTab === tab.key
                       ? "text-foreground border-b-2 border-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -737,8 +737,8 @@ const NewOrder = () => {
                   {freightLines.filter(l => l.locatie).length > 0 && (
                     <div>
                       <span className="text-xs font-medium text-muted-foreground">Vrachtplanning</span>
-                      <div className="mt-1 border border-border rounded overflow-hidden">
-                        <table className="w-full text-xs">
+                      <div className="mt-1 border border-border rounded overflow-x-auto">
+                        <table className="w-full text-xs min-w-[480px]">
                           <thead>
                             <tr className="bg-muted/50 border-b border-border">
                               <th className="px-3 py-1.5 text-left font-bold">Activiteit</th>
@@ -765,8 +765,8 @@ const NewOrder = () => {
                   {freightSummary.length > 0 && (
                     <div>
                       <span className="text-xs font-medium text-muted-foreground">Vrachtlijst items</span>
-                      <div className="mt-1 border border-border rounded overflow-hidden">
-                        <table className="w-full text-xs">
+                      <div className="mt-1 border border-border rounded overflow-x-auto">
+                        <table className="w-full text-xs min-w-[480px]">
                           <thead>
                             <tr className="bg-muted/50 border-b border-border">
                               <th className="px-3 py-1.5 text-left font-bold">Aantal</th>

@@ -472,6 +472,24 @@ Antwoord als JSON met deze velden:
 
     const extracted = JSON.parse(extractedText);
 
+    // ── Normalise confidence_score: AI may return 0-1 float instead of 0-100 ──
+    if (
+      typeof extracted.confidence_score === "number" &&
+      extracted.confidence_score > 0 &&
+      extracted.confidence_score <= 1
+    ) {
+      extracted.confidence_score = Math.round(extracted.confidence_score * 100);
+    }
+    // Also normalise field_confidence values
+    if (extracted.field_confidence && typeof extracted.field_confidence === "object") {
+      for (const key of Object.keys(extracted.field_confidence)) {
+        const val = extracted.field_confidence[key];
+        if (typeof val === "number" && val > 0 && val <= 1) {
+          extracted.field_confidence[key] = Math.round(val * 100);
+        }
+      }
+    }
+
     // ── Step 3: Anomaly detection against client history ──
     let anomalies: { field: string; value: number; avg_value: number; message: string }[] = [];
     const clientName = extracted.client_name;

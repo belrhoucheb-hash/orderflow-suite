@@ -37,13 +37,16 @@ export interface Vehicle {
 
 // Removed mockOrders and mockVehicles — App now fetches real data from Supabase
 
+// Status colors are now centralized in @/lib/statusColors.ts
+// This re-export is kept for backward compatibility
+import { getStatusStyle } from "@/lib/statusColors";
 export const statusColors: Record<OrderStatus, string> = {
-  DRAFT: "bg-blue-500/10 text-blue-700 border-blue-200",
-  PENDING: "bg-amber-500/10 text-amber-700 border-amber-200",
-  PLANNED: "bg-violet-500/10 text-violet-700 border-violet-200",
-  IN_TRANSIT: "bg-primary/10 text-primary border-primary/20",
-  DELIVERED: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
-  CANCELLED: "bg-muted text-muted-foreground border-border",
+  DRAFT: getStatusStyle("DRAFT"),
+  PENDING: getStatusStyle("PENDING"),
+  PLANNED: getStatusStyle("PLANNED"),
+  IN_TRANSIT: getStatusStyle("IN_TRANSIT"),
+  DELIVERED: getStatusStyle("DELIVERED"),
+  CANCELLED: getStatusStyle("CANCELLED"),
 };
 
 export const priorityColors: Record<Order["priority"], string> = {
@@ -53,13 +56,16 @@ export const priorityColors: Record<Order["priority"], string> = {
   spoed: "bg-primary/10 text-primary font-semibold",
 };
 
+// Status labels are now centralized in @/lib/statusColors.ts
+// This re-export is kept for backward compatibility
+import { STATUS_COLORS } from "@/lib/statusColors";
 export const statusLabels: Record<OrderStatus, string> = {
-  DRAFT: "Nieuw",
-  PENDING: "In behandeling",
-  PLANNED: "Ingepland",
-  IN_TRANSIT: "Onderweg",
-  DELIVERED: "Afgeleverd",
-  CANCELLED: "Geannuleerd",
+  DRAFT: STATUS_COLORS.DRAFT.label,
+  PENDING: STATUS_COLORS.PENDING.label,
+  PLANNED: STATUS_COLORS.PLANNED.label,
+  IN_TRANSIT: STATUS_COLORS.IN_TRANSIT.label,
+  DELIVERED: STATUS_COLORS.DELIVERED.label,
+  CANCELLED: STATUS_COLORS.CANCELLED.label,
 };
 
 export const vehicleStatusColors: Record<Vehicle["status"], string> = {
