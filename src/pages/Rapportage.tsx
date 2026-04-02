@@ -6,6 +6,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -425,11 +427,7 @@ const Rapportage = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadingState message="Rapportage laden..." />;
   }
 
   if (isError) {
@@ -446,14 +444,10 @@ const Rapportage = () => {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">
-            Rapportage
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Overzicht van prestaties, kosten en klantactiviteit
-          </p>
-        </div>
+        <PageHeader
+          title="Rapportage"
+          subtitle="Overzicht van prestaties, kosten en klantactiviteit"
+        />
 
         {/* Date range picker + Export */}
         <div className="flex flex-col items-end gap-2">

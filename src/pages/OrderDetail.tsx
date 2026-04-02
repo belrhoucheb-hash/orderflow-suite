@@ -8,6 +8,10 @@ import {
 import { ClickableAddress } from "@/components/ClickableAddress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusBadge, type OrderStatus } from "@/components/ui/StatusBadge";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -293,19 +297,17 @@ const OrderDetail = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadingState message="Order laden..." />;
   }
 
   if (!order) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-muted-foreground">Order niet gevonden</p>
-        <Link to="/orders"><Button variant="outline">Terug naar orders</Button></Link>
-      </div>
+      <EmptyState
+        icon={Package}
+        title="Order niet gevonden"
+        description="De gevraagde order bestaat niet of is verwijderd."
+        action={<Link to="/orders"><Button variant="outline">Terug naar orders</Button></Link>}
+      />
     );
   }
 
@@ -334,13 +336,14 @@ const OrderDetail = () => {
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <h1 className="font-display text-2xl font-bold">Order #{order.order_number}</h1>
-          <p className="text-sm text-muted-foreground">{order.client_name || "Onbekende klant"}</p>
-        </div>
-        <Badge variant="outline" className={cn("text-sm px-3 py-1", statusInfo.color)}>
-          {statusInfo.label}
-        </Badge>
+        <PageHeader
+          title={`Order #${order.order_number}`}
+          subtitle={order.client_name || "Onbekende klant"}
+          actions={
+            <StatusBadge status={order.status as OrderStatus} />
+          }
+          className="flex-1"
+        />
       </div>
 
       {/* Cancellation banner */}

@@ -17,6 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 // ── Types ────────────────────────────────────────────────────────────
 type ExceptionType = "Vertraging" | "Data mist" | "Capaciteit" | "SLA";
@@ -195,11 +198,7 @@ const Exceptions = () => {
   const totalCount = counts.delays + counts.missingData + counts.capacity + counts.sla;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <LoadingState message="Uitzonderingen laden..." />;
   }
 
   const kpis = [
@@ -212,14 +211,10 @@ const Exceptions = () => {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground font-display">
-          Uitzonderingen
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {totalCount} items vereisen aandacht
-        </p>
-      </div>
+      <PageHeader
+        title="Uitzonderingen"
+        subtitle={`${totalCount} items vereisen aandacht`}
+      />
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -249,11 +244,11 @@ const Exceptions = () => {
         </div>
 
         {exceptions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <CheckCircle2 className="h-10 w-10 mb-3 text-emerald-500" />
-            <p className="text-sm font-medium">Geen uitzonderingen</p>
-            <p className="text-xs mt-1">Alles loopt volgens planning</p>
-          </div>
+          <EmptyState
+            icon={CheckCircle2}
+            title="Geen uitzonderingen"
+            description="Alles loopt volgens planning"
+          />
         ) : (
           <div className="divide-y">
             {exceptions.map((exc, i) => {

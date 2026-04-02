@@ -1,6 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -47,8 +50,8 @@ export default function VehicleDetail() {
     return m;
   }, [availability]);
 
-  if (isLoading) return <div className="flex-1 flex items-center justify-center text-muted-foreground">Laden...</div>;
-  if (!vehicle) return <div className="flex-1 flex items-center justify-center text-muted-foreground">Voertuig niet gevonden</div>;
+  if (isLoading) return <LoadingState message="Voertuig laden..." />;
+  if (!vehicle) return <EmptyState icon={Truck} title="Voertuig niet gevonden" description="Het gevraagde voertuig bestaat niet of is verwijderd." />;
 
   const statusCfg = STATUS_CONFIG[vehicle.status] || STATUS_CONFIG.beschikbaar;
 
@@ -59,13 +62,12 @@ export default function VehicleDetail() {
         <Button variant="ghost" size="icon" onClick={() => navigate("/vloot")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-foreground tracking-tight">{vehicle.name}</h1>
-            <Badge variant="outline" className={statusCfg.className}>{statusCfg.label}</Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-0.5 font-mono">{vehicle.plate} · {vehicle.code}</p>
-        </div>
+        <PageHeader
+          title={vehicle.name}
+          subtitle={`${vehicle.plate} \u00B7 ${vehicle.code}`}
+          actions={<Badge variant="outline" className={statusCfg.className}>{statusCfg.label}</Badge>}
+          className="flex-1"
+        />
       </div>
 
       <div className="px-4 md:px-6 py-6 flex-1">

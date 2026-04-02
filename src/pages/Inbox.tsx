@@ -1,5 +1,6 @@
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Search, Upload, FlaskConical, CheckCircle2, Loader2, Inbox as InboxIcon, CircleAlert, Send, FileEdit } from "lucide-react";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { SourcePanel } from "@/components/inbox/InboxSourcePanel";
@@ -56,14 +57,7 @@ export default function Inbox() {
   } = useInbox();
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-5rem)]">
-        <div className="text-center">
-          <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-3" />
-          <p className="text-xs text-muted-foreground">Inbox laden...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Inbox laden..." />;
   }
 
   return (
