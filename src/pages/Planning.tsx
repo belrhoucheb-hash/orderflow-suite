@@ -47,6 +47,8 @@ import { PlanningOrderCard } from "@/components/planning/PlanningOrderCard";
 import { PlanningVehicleCard } from "@/components/planning/PlanningVehicleCard";
 import { PlanningUnassignedSidebar } from "@/components/planning/PlanningUnassignedSidebar";
 import { PlanningMap } from "@/components/planning/PlanningMap";
+import { useTenant } from "@/contexts/TenantContext";
+import { solveVRP } from "@/lib/vrpSolver";
 
 const Planning = () => {
   const { toast } = useToast();
@@ -63,7 +65,7 @@ const Planning = () => {
   const [hoveredOrderId, setHoveredOrderId] = useState<string | null>(null);
   const [vehicleStartTimes, setVehicleStartTimes] = useState<Record<string, string>>({});
   const [vehicleDrivers, setVehicleDrivers] = useState<Record<string, string>>({});
-  const [testOrders, setTestOrders] = useState<PlanOrder[]>([]);
+  const { tenant } = useTenant();
 
   // Initialize vehicle start times and drivers
   useEffect(() => {
@@ -116,7 +118,7 @@ const Planning = () => {
       const { data, error } = await supabase
         .from("orders")
         .select("id, order_number, client_name, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit")
-        .in("status", ["DRAFT", "OPEN"])
+        .in("status", ["DRAFT", "PENDING"])
         .is("vehicle_id", null)
         .order("order_number", { ascending: true });
       if (error) throw error;
@@ -128,50 +130,8 @@ const Planning = () => {
     },
   });
 
-  const orders = useMemo(() => [...dbOrders, ...testOrders], [dbOrders, testOrders]);
+  const orders = dbOrders;
 
-  const handleInjectTestOrders = useCallback(() => {
-    const testData: PlanOrder[] = [
-      {
-        id: "test-bakwagen-vuller",
-        order_number: 9901,
-        client_name: "Bouwmarkt Gigant",
-        delivery_address: "Damrak 1, Amsterdam",
-        quantity: 4,
-        weight_kg: 3200,
-        requirements: [],
-        is_weight_per_unit: false,
-        time_window_start: null,
-        time_window_end: null,
-      },
-      {
-        id: "test-full-truck-load",
-        order_number: 9902,
-        client_name: "Staalhandel Rotterdam",
-        delivery_address: "Havenweg 50, Antwerpen, Belgie",
-        quantity: 22,
-        weight_kg: 18500,
-        requirements: [],
-        is_weight_per_unit: false,
-        time_window_start: null,
-        time_window_end: null,
-      },
-      {
-        id: "test-koel-combinatie",
-        order_number: 9903,
-        client_name: "Supermarkt DC Zwolle",
-        delivery_address: "Distributieweg 1, Zwolle",
-        quantity: 14,
-        weight_kg: 6000,
-        requirements: ["KOELING"],
-        is_weight_per_unit: false,
-        time_window_start: null,
-        time_window_end: null,
-      },
-    ];
-    setTestOrders(testData);
-    toast({ title: "🧪 3 testorders geladen", description: "Bakwagen Vuller · Full Truck Load · Koel-Combinatie" });
-  }, [toast]);
 
   const assignedIds = useMemo(() => {
     const ids = new Set<string>();
@@ -268,8 +228,8 @@ const Planning = () => {
         const dist = haversineKm(newCoord, exCoord);
         if (dist > DISTANCE_WARN_KM) {
           toast({
-            title: "⚠️ Grote afstand tussen stops!",
-            description: `${getCity(order.delivery_address)} ↔ ${getCity(ex.delivery_address)}: ${Math.round(dist)} km uit elkaar.`,
+            title: "Afstandswaarschuwing!",
+            description: `${getCity(order.delivery_address)} naar ${getCity(ex.delivery_address)}: ${Math.round(dist)} km uit elkaar.`,
           });
           return;
         }
@@ -358,7 +318,7 @@ const Planning = () => {
     });
 
     const fromLabel = activeVehicle ? fleetVehicles.find((v) => v.id === activeVehicle)?.name : "ongepland";
-    toast({ title: "Order verplaatst", description: `${order.client_name} → ${targetVehicle.name} (van ${fromLabel})` });
+    toast({ title: "Order verplaatst", description: `${order.client_name} naar ${targetVehicle.name} (van ${fromLabel})` });
   };
 
   const handleRemove = (orderId: string) => {
@@ -388,108 +348,36 @@ const Planning = () => {
   }, [orderCoords, toast]);
 
   const handleAutoPlan = useCallback(() => {
-    // Shared Auto-Plan logic... (Keeping it here for now as it relies on many states)
-    const unassigned = orders
-      .filter((o) => !assignedIds.has(o.id))
-      .map((o) => ({
-        order: o,
-        region: getPostcodeRegion(o.delivery_address),
-        windowEnd: (() => {
-          const windows = ["06:00 - 09:00", "08:00 - 12:00", "09:00 - 14:00", "12:00 - 17:00", "14:00 - 18:00", "16:00 - 20:00"];
-          const w = windows[o.order_number % windows.length].split(" - ")[1];
-          const [h, m] = w.split(":").map(Number);
-          return h * 60 + m;
-        })(),
-      }));
-    unassigned.sort((a, b) => a.region.localeCompare(b.region) || a.windowEnd - b.windowEnd);
-    const sortedOrders = unassigned.map((u) => u.order);
-
-    if (sortedOrders.length === 0) {
+    const unassigned = orders.filter((o) => !assignedIds.has(o.id));
+    
+    if (unassigned.length === 0) {
       toast({ title: "Geen orders", description: "Er zijn geen ongeplande orders om te verdelen." });
       return;
     }
 
-    const sortedVehicles = [...fleetVehicles].sort((a, b) => a.capacityKg - b.capacityKg);
-    const newAssignments: Assignments = { ...assignments };
-    const placed: Set<string> = new Set();
-    const vehicleWeight: Record<string, number> = {};
-    const vehiclePallets: Record<string, number> = {};
-    
-    for (const v of sortedVehicles) {
-      const existing = newAssignments[v.id] ?? [];
-      vehicleWeight[v.id] = existing.reduce((s, o) => s + getTotalWeight(o), 0);
-      vehiclePallets[v.id] = existing.reduce((s, o) => s + (o.quantity ?? 0), 0);
-    }
-
-    for (const vehicle of sortedVehicles) {
-      for (const order of sortedOrders) {
-        if (placed.has(order.id)) continue;
-        if (hasTag(order, "KOELING") && !vehicle.features.includes("KOELING")) continue;
-        if (hasTag(order, "ADR") && !vehicle.features.includes("ADR")) continue;
-        const orderWeight = getTotalWeight(order);
-        if (vehicleWeight[vehicle.id] + orderWeight > vehicle.capacityKg) continue;
-        const orderPallets = order.quantity ?? 0;
-        if (vehiclePallets[vehicle.id] + orderPallets > vehicle.capacityPallets) continue;
-
-        const existing = newAssignments[vehicle.id] ?? [];
-        if (existing.length > 0) {
-          const existingRegions = new Set(existing.map((o) => getPostcodeRegion(o.delivery_address)));
-          const orderRegion = getPostcodeRegion(order.delivery_address);
-          const regionNum = parseInt(orderRegion);
-          const isNearby = [...existingRegions].some((r) => {
-            const rNum = parseInt(r);
-            return isNaN(rNum) || isNaN(regionNum) || Math.abs(rNum - regionNum) <= 10;
-          });
-          const utilizationPct = (vehicleWeight[vehicle.id] / vehicle.capacityKg) * 100;
-          if (!isNearby && utilizationPct > 50) continue;
-        }
-
-        if (!newAssignments[vehicle.id]) newAssignments[vehicle.id] = [];
-        newAssignments[vehicle.id].push(order);
-        vehicleWeight[vehicle.id] += orderWeight;
-        vehiclePallets[vehicle.id] += orderPallets;
-        placed.add(order.id);
-      }
-    }
-
-    for (const vehicle of sortedVehicles) {
-      for (const order of sortedOrders) {
-        if (placed.has(order.id)) continue;
-        if (hasTag(order, "KOELING") && !vehicle.features.includes("KOELING")) continue;
-        if (hasTag(order, "ADR") && !vehicle.features.includes("ADR")) continue;
-        const orderWeight = getTotalWeight(order);
-        if (vehicleWeight[vehicle.id] + orderWeight > vehicle.capacityKg) continue;
-        const orderPallets = order.quantity ?? 0;
-        if (vehiclePallets[vehicle.id] + orderPallets > vehicle.capacityPallets) continue;
-
-        if (!newAssignments[vehicle.id]) newAssignments[vehicle.id] = [];
-        newAssignments[vehicle.id].push(order);
-        vehicleWeight[vehicle.id] += orderWeight;
-        vehiclePallets[vehicle.id] += orderPallets;
-        placed.add(order.id);
-      }
-    }
-
-    for (const vehicle of sortedVehicles) {
-      const list = newAssignments[vehicle.id];
-      if (list && list.length > 1) {
-        newAssignments[vehicle.id] = optimizeRoute(list, orderCoords);
-      }
-    }
-
+    const newAssignments = solveVRP(unassigned, fleetVehicles, orderCoords, assignments);
     setAssignments(newAssignments);
 
-    let totalKm = 0;
-    for (const v of sortedVehicles.filter(v => (newAssignments[v.id]?.length ?? 0) > 0)) {
-      const stats = computeRouteStats("07:00", newAssignments[v.id], orderCoords);
-      totalKm += stats.totalKm;
-    }
+    const placedCount = Object.values(newAssignments).reduce((s, a) => s + a.length, 0) - assignedIds.size;
     
-    toast({
-      title: `⚡ ${placed.size} orders → Route gepland · ${totalKm} km`,
-      description: placed.size < sortedOrders.length ? "Beperkte capaciteit — niet alle orders geplaatst." : "Alle orders succesvol verdeeld.",
-    });
+    if (placedCount > 0) {
+      toast({
+        title: `${placedCount} orders automatisch verdeeld`,
+        description: "Optimalisatie voltooid via slimme VRP solver.",
+      });
+    } else {
+      toast({
+        title: "Beperkte capaciteit",
+        description: "Geen van de resterende orders past op de beschikbare voertuigen.",
+        variant: "destructive"
+      });
+    }
   }, [orders, assignedIds, assignments, orderCoords, fleetVehicles, toast]);
+
+  const handleClearPlanning = useCallback(() => {
+    setAssignments({});
+    toast({ title: "Planning gewist", description: "Alle ritten zijn leeggemaakt." });
+  }, [toast]);
 
   const handleCombineTrips = useCallback(() => {
     const vehiclesWithOrders = fleetVehicles
@@ -553,7 +441,7 @@ const Planning = () => {
 
     if (combinedCount > 0) {
       setAssignments(newAssignments);
-      toast({ title: `🔗 ${combinedCount} ritten gecombineerd.` });
+      toast({ title: `${combinedCount} ritten gecombineerd` });
     } else {
       toast({ title: "Geen ritten gecombineerd", description: "Geen passende combinaties gevonden." });
     }
@@ -563,22 +451,79 @@ const Planning = () => {
     setIsConfirming(true);
     try {
       const totalAssigned = Object.values(assignments).reduce((s, a) => s + a.length, 0);
+      const plannedDate = new Date().toISOString().split("T")[0];
+      let tripsCreated = 0;
+
       for (const [vId, vOrders] of Object.entries(assignments)) {
         if (vOrders.length === 0) continue;
         const v = fleetVehicles.find(fv => fv.id === vId);
+        const driverId = vehicleDrivers[vId] || null;
+        const startTime = vehicleStartTimes[vId] || null;
+
+        // 1. Update orders: set status PLANNED + vehicle_id
         for (let i = 0; i < vOrders.length; i++) {
+          const order = vOrders[i];
           const { error } = await supabase
             .from("orders")
             .update({ vehicle_id: v?.id ?? vId, status: "PLANNED", stop_sequence: i + 1 } as any)
-            .eq("id", vOrders[i].id);
+            .eq("id", order.id);
           if (error) throw error;
         }
+
+        // 2. Create a trip for this vehicle
+
+        const tripInsert: Record<string, any> = {
+          vehicle_id: v?.id ?? vId,
+          driver_id: driverId,
+          planned_date: plannedDate,
+          planned_start_time: startTime ? `${startTime}:00` : null,
+          dispatch_status: "CONCEPT" as const,
+        };
+        if (tenant?.id) {
+          tripInsert.tenant_id = tenant.id;
+        }
+
+        const { data: trip, error: tripErr } = await supabase
+          .from("trips")
+          .insert(tripInsert)
+          .select("id")
+          .single();
+        if (tripErr) throw tripErr;
+
+        // 3. Create trip_stops for each order in this vehicle
+        const stopInserts = vOrders
+          .map((order, idx) => ({
+            trip_id: trip.id,
+            order_id: order.id,
+            stop_type: "DELIVERY" as const,
+            stop_sequence: idx + 1,
+            planned_address: order.delivery_address ?? "",
+            stop_status: "GEPLAND" as const,
+          }));
+
+        if (stopInserts.length > 0) {
+          const { error: stopsErr } = await supabase
+            .from("trip_stops")
+            .insert(stopInserts);
+          if (stopsErr) throw stopsErr;
+        }
+
+        tripsCreated++;
       }
-      toast({ title: "Planning bevestigd", description: `${totalAssigned} orders ingepland.` });
+
+      toast({
+        title: "Planning bevestigd",
+        description: `${totalAssigned} orders ingepland in ${tripsCreated} ${tripsCreated === 1 ? "rit" : "ritten"}.`,
+      });
       setAssignments({});
       refetch();
-    } catch {
-      toast({ title: "Fout", description: "Kon planning niet opslaan.", variant: "destructive" });
+    } catch (err: any) {
+      console.error("Planning confirm error:", err);
+      toast({
+        title: "Fout bij bevestigen",
+        description: err?.message || "Kon planning niet opslaan.",
+        variant: "destructive",
+      });
     } finally {
       setIsConfirming(false);
     }
@@ -636,15 +581,14 @@ const Planning = () => {
             onSearchChange={setSearch}
             filterTag={filterTag}
             onFilterTagChange={setFilterTag}
-            onInjectTest={handleInjectTestOrders}
             onCombineTrips={handleCombineTrips}
             onAutoPlan={handleAutoPlan}
+            onClearPlanning={handleClearPlanning}
             onHoverOrder={setHoveredOrderId}
             fleetVehicles={fleetVehicles}
             assignments={assignments}
             totalUnassigned={totalUnassigned}
             totalAssigned={totalAssigned}
-            testOrdersLoaded={testOrders.length > 0}
           />
 
           <div className={cn("flex-1 overflow-y-auto", showMap && "lg:w-1/2")}>
@@ -673,7 +617,7 @@ const Planning = () => {
           </div>
 
           {showMap && (
-            <div className="hidden lg:block lg:w-1/4 min-w-[300px] bg-card rounded-xl border border-border/40 overflow-hidden shadow-sm relative">
+            <div className="hidden lg:block lg:w-1/4 min-w-[300px] bg-card rounded-xl border border-border/40 overflow-hidden shadow-sm relative z-0">
               <PlanningMap 
                 orders={orders}
                 orderCoords={orderCoords}
