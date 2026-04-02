@@ -87,21 +87,32 @@ export function useInvoiceById(id: string | null) {
     enabled: !!id,
     staleTime: 15_000,
     queryFn: async () => {
+      // First try with invoice_lines join
       const { data, error } = await supabase
         .from("invoices")
         .select("*, invoice_lines(*)")
         .eq("id", id!)
         .single();
 
-      if (error) throw error;
-      if (!data) return null;
-
-      // Sort lines by sort_order
-      const invoice = data as Invoice;
-      if (invoice.invoice_lines) {
-        invoice.invoice_lines.sort((a, b) => a.sort_order - b.sort_order);
+      if (!error && data) {
+        const invoice = data as Invoice;
+        if (invoice.invoice_lines) {
+          invoice.invoice_lines.sort((a, b) => a.sort_order - b.sort_order);
+        }
+        return invoice;
       }
-      return invoice;
+
+      // Fallback: fetch invoice without lines (in case relation doesn't exist yet)
+      const { data: fallback, error: fallbackErr } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("id", id!)
+        .single();
+
+      if (fallbackErr) throw fallbackErr;
+      if (!fallback) return null;
+
+      return { ...fallback, invoice_lines: [] } as Invoice;
     },
   });
 }
