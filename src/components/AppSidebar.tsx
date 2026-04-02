@@ -75,14 +75,22 @@ function useExceptionCount() {
   });
 }
 
+// Chauffeur only sees the ChauffeurApp (separate route), so no main sidebar items
+// Planner sees all mainItems; Admin sees mainItems + adminItems
+const chauffeurItems = [
+  { title: "Mijn Ritten", url: "/chauffeur", icon: Route },
+];
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, user, signOut, isAdmin } = useAuth();
+  const { profile, user, signOut, isAdmin, effectiveRole } = useAuth();
   const { tenant } = useTenant();
   const { data: exceptionCount = 0 } = useExceptionCount();
+
+  const visibleMainItems = effectiveRole === "chauffeur" ? chauffeurItems : mainItems;
 
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const toggleTheme = () => {
@@ -129,7 +137,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
-              {mainItems.map((item) => {
+              {visibleMainItems.map((item) => {
                 const active = isActive(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
