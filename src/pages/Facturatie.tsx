@@ -1,21 +1,21 @@
 import { useState, useMemo, useCallback } from "react";
-import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check, FileDown, Send, CreditCard, AlertCircle, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode } from "lucide-react";
+import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check, FileDown, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode } from "lucide-react";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useInvoices, useInvoiceById, useCreateInvoice, useUpdateInvoiceStatus, type InvoiceLine, type Invoice } from "@/hooks/useInvoices";
+import { useInvoices, useCreateInvoice, type InvoiceLine, type Invoice } from "@/hooks/useInvoices";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { motion } from "framer-motion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
-import { downloadInvoicePDF, downloadInvoicesCSV, downloadUBL, buildInvoiceLines } from "@/lib/invoiceUtils";
+import { downloadInvoicesCSV, downloadUBL, buildInvoiceLines } from "@/lib/invoiceUtils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,39 +82,6 @@ const Facturatie = () => {
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const queryClient = useQueryClient();
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-
-  // Fetch full invoice with lines for the detail dialog / PDF generation
-  const { data: invoiceWithLines } = useInvoiceById(selectedInvoice?.id ?? null);
-
-  // ─── Invoice Status Flow ───
-  const updateInvoiceStatus = useUpdateInvoiceStatus();
-  const [showSendConfirm, setShowSendConfirm] = useState(false);
-
-  const handleStatusChange = useCallback(async (invoiceId: string, newStatus: string, invoiceNumber: string) => {
-    try {
-      await updateInvoiceStatus.mutateAsync({ id: invoiceId, status: newStatus as any });
-      const statusLabel = statusLabels[newStatus] || newStatus;
-      toast.success(`Factuur ${invoiceNumber} bijgewerkt`, { description: `Status: ${statusLabel}` });
-      // Update the selected invoice in local state so the dialog reflects the change
-      setSelectedInvoice((prev) => prev ? { ...prev, status: newStatus } : null);
-    } catch (e: any) {
-      toast.error("Status wijzigen mislukt", { description: e.message });
-    }
-  }, [updateInvoiceStatus]);
-
-  const handleDownloadPDF = useCallback(() => {
-    if (!invoiceWithLines) {
-      toast.error("Factuurgegevens nog niet geladen");
-      return;
-    }
-    try {
-      downloadInvoicePDF(invoiceWithLines);
-      toast.success("PDF wordt gedownload");
-    } catch (e: any) {
-      toast.error("PDF generatie mislukt", { description: e.message });
-    }
-  }, [invoiceWithLines]);
 
   // ─── New Invoice Dialog State ───
   const [showNewInvoice, setShowNewInvoice] = useState(false);
@@ -693,171 +660,6 @@ const Facturatie = () => {
           </p>
         </div>
       </motion.div>
-
-      {/* Invoice Detail Dialog */}
-      <Dialog open={!!selectedInvoice} onOpenChange={(open) => !open && setSelectedInvoice(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Factuur {selectedInvoice?.invoice_number}</DialogTitle>
-          </DialogHeader>
-          {selectedInvoice && (
-            <div className="space-y-4 mt-2">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">Klant</p>
-                  <p className="font-medium">{selectedInvoice.client_name}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Status</p>
-                  <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border", statusStyles[isOverdue(selectedInvoice.due_date, selectedInvoice.status) ? "vervallen" : selectedInvoice.status])}>
-                    {statusLabels[isOverdue(selectedInvoice.due_date, selectedInvoice.status) ? "vervallen" : selectedInvoice.status]}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Factuurdatum</p>
-                  <p>{formatDate(selectedInvoice.invoice_date)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Vervaldatum</p>
-                  <p className={isOverdue(selectedInvoice.due_date, selectedInvoice.status) ? "text-red-600 font-medium" : ""}>
-                    {selectedInvoice.due_date ? formatDate(selectedInvoice.due_date) : "—"}
-                  </p>
-                </div>
-              </div>
-              <div className="border-t border-border/30 pt-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotaal</span>
-                  <span>{formatCurrency(selectedInvoice.subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm mt-1">
-                  <span className="text-muted-foreground">BTW ({selectedInvoice.btw_percentage}%)</span>
-                  <span>{formatCurrency(selectedInvoice.btw_amount)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-semibold mt-2 pt-2 border-t border-border/30">
-                  <span>Totaal</span>
-                  <span>{formatCurrency(selectedInvoice.total)}</span>
-                </div>
-              </div>
-              {selectedInvoice.notes && (
-                <div className="text-sm">
-                  <p className="text-xs text-muted-foreground mb-1">Notities</p>
-                  <p className="text-muted-foreground">{selectedInvoice.notes}</p>
-                </div>
-              )}
-              {/* Download PDF button */}
-              <div className="pt-2 border-t border-border/30">
-                <Button
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={handleDownloadPDF}
-                  disabled={!invoiceWithLines}
-                >
-                  <FileDown className="h-4 w-4" />
-                  {invoiceWithLines ? "Download PDF" : "Laden..."}
-                </Button>
-              </div>
-
-              {/* Status action buttons */}
-              {(() => {
-                const effectiveStatus = isOverdue(selectedInvoice.due_date, selectedInvoice.status) ? "vervallen" : selectedInvoice.status;
-                return (
-                  <div className="pt-2 border-t border-border/30 space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Status wijzigen</p>
-
-                    {effectiveStatus === "concept" && (
-                      <Button
-                        className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-                        onClick={() => setShowSendConfirm(true)}
-                        disabled={updateInvoiceStatus.isPending}
-                      >
-                        {updateInvoiceStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                        Markeer als verzonden
-                      </Button>
-                    )}
-
-                    {effectiveStatus === "verzonden" && (
-                      <>
-                        <Button
-                          className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => handleStatusChange(selectedInvoice.id, "betaald", selectedInvoice.invoice_number)}
-                          disabled={updateInvoiceStatus.isPending}
-                        >
-                          {updateInvoiceStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                          Markeer als betaald
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="w-full gap-2 border-red-200 text-red-700 hover:bg-red-50"
-                          onClick={() => handleStatusChange(selectedInvoice.id, "vervallen", selectedInvoice.invoice_number)}
-                          disabled={updateInvoiceStatus.isPending}
-                        >
-                          {updateInvoiceStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}
-                          Markeer als vervallen
-                        </Button>
-                      </>
-                    )}
-
-                    {effectiveStatus === "vervallen" && (
-                      <Button
-                        className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                        onClick={() => handleStatusChange(selectedInvoice.id, "betaald", selectedInvoice.invoice_number)}
-                        disabled={updateInvoiceStatus.isPending}
-                      >
-                        {updateInvoiceStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                        Markeer als betaald
-                      </Button>
-                    )}
-
-                    {effectiveStatus === "betaald" && (
-                      <p className="text-xs text-emerald-600 text-center py-1">Betaald — geen verdere acties</p>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Send Confirmation Dialog */}
-      <Dialog open={showSendConfirm} onOpenChange={setShowSendConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Send className="h-5 w-5 text-blue-600" />
-              Factuur markeren als verzonden?
-            </DialogTitle>
-            <DialogDescription>
-              Door deze factuur als verzonden te markeren, geef je aan dat de factuur naar de klant is gestuurd. Dit kan niet ongedaan gemaakt worden.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedInvoice && (
-            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1">
-              <p><strong>Factuur:</strong> {selectedInvoice.invoice_number}</p>
-              <p><strong>Klant:</strong> {selectedInvoice.client_name}</p>
-              <p><strong>Bedrag:</strong> {formatCurrency(selectedInvoice.total)}</p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSendConfirm(false)}>
-              Annuleren
-            </Button>
-            <Button
-              className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => {
-                if (selectedInvoice) {
-                  handleStatusChange(selectedInvoice.id, "verzonden", selectedInvoice.invoice_number);
-                }
-                setShowSendConfirm(false);
-              }}
-              disabled={updateInvoiceStatus.isPending}
-            >
-              {updateInvoiceStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Bevestig verzenden
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* New Invoice Dialog */}
       <Dialog open={showNewInvoice} onOpenChange={setShowNewInvoice}>
