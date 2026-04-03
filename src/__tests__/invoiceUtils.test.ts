@@ -134,7 +134,7 @@ describe("generateInvoiceLines", () => {
 });
 
 describe("generateInvoicePDF", () => {
-  it("returns a Blob without crashing", () => {
+  it("returns a Blob without crashing", async () => {
     const invoice = {
       id: "test-id",
       tenant_id: "tenant-1",
@@ -169,12 +169,12 @@ describe("generateInvoicePDF", () => {
       ],
     };
 
-    const blob = generateInvoicePDF(invoice);
+    const blob = await generateInvoicePDF(invoice);
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.size).toBeGreaterThan(0);
   });
 
-  it("works with no invoice lines", () => {
+  it("works with no invoice lines", async () => {
     const invoice = {
       id: "test-id",
       tenant_id: "tenant-1",
@@ -198,7 +198,7 @@ describe("generateInvoicePDF", () => {
       invoice_lines: [],
     };
 
-    const blob = generateInvoicePDF(invoice);
+    const blob = await generateInvoicePDF(invoice);
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.size).toBeGreaterThan(0);
   });

@@ -23,6 +23,18 @@ import {
 } from "@/data/geoData";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { QueryError } from "@/components/QueryError";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
   Truck,
@@ -64,6 +76,8 @@ const Planning = () => {
   const [activeOrder, setActiveOrder] = useState<PlanOrder | null>(null);
   const [rejectedVehicle, setRejectedVehicle] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showClearDraftDialog, setShowClearDraftDialog] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [hoveredVehicle, setHoveredVehicle] = useState<string | null>(null);
   const [hoveredOrderId, setHoveredOrderId] = useState<string | null>(null);
@@ -86,6 +100,7 @@ const Planning = () => {
   const { data: dbDraft, isSuccess: dbDraftLoaded } = useLoadPlanningDraft(selectedDate, tenant?.id);
   const [draftRestored, setDraftRestored] = useState(false);
   const dbDraftAppliedRef = useRef<string | null>(null);
+  const pendingDraftOrderIdsRef = useRef<Record<string, string[]> | null>(null);
 
   // Apply draft when it arrives (Supabase with localStorage fallback handled by the hook)
   useEffect(() => {
@@ -99,7 +114,7 @@ const Planning = () => {
       setVehicleStartTimes(prev => ({ ...prev, ...dbDraft.startTimes }));
       setVehicleDrivers(prev => ({ ...prev, ...dbDraft.drivers }));
       // Store raw order IDs for hydration (assignments is Record<vehicleId, string[]> from DB)
-      (window as any).__pendingDraftOrderIds = dbDraft.assignments;
+      pendingDraftOrderIdsRef.current = dbDraft.assignments;
       setDraftRestored(true);
       toast.success("Planning hersteld", { description: `Conceptplanning voor ${selectedDate} hersteld.` });
     }
@@ -219,7 +234,7 @@ const Planning = () => {
     return toDateString(d);
   }, [selectedDate]);
 
-  const { data: dbOrders = [], refetch } = useQuery({
+  const { data: dbOrders = [], refetch, isLoading: ordersLoading, isError: ordersError } = useQuery({
     queryKey: ["planning-orders", selectedDate],
     queryFn: async () => {
       // Fetch orders for selected date: either matching delivery_date or PENDING without date
@@ -249,7 +264,7 @@ const Planning = () => {
   // ── Hydrate DB draft order IDs into full PlanOrder objects ──
   const dbHydratedRef = useRef(false);
   useEffect(() => {
-    const pending = (window as any).__pendingDraftOrderIds as Record<string, string[]> | undefined;
+    const pending = pendingDraftOrderIdsRef.current;
     if (!pending || orders.length === 0 || dbHydratedRef.current) return;
 
     const orderMap = new Map(orders.map(o => [o.id, o]));
@@ -269,7 +284,7 @@ const Planning = () => {
     if (hasAny) {
       setAssignments(hydrated);
     }
-    delete (window as any).__pendingDraftOrderIds;
+    pendingDraftOrderIdsRef.current = null;
     dbHydratedRef.current = true;
   }, [orders]);
 
@@ -718,7 +733,7 @@ const Planning = () => {
                 variant="outline"
                 size="sm"
                 className="gap-1.5 text-xs rounded-lg text-destructive border-destructive/30 hover:bg-destructive/10"
-                onClick={handleClearDraft}
+                onClick={() => setShowClearDraftDialog(true)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Wis concept
@@ -727,7 +742,7 @@ const Planning = () => {
             {totalAssigned > 0 && (
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
                 <Button
-                  onClick={handleConfirm}
+                  onClick={() => setShowConfirmDialog(true)}
                   disabled={isConfirming}
                   className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm"
                 >
@@ -763,6 +778,13 @@ const Planning = () => {
           /* ── Day view (existing planning UI) ── */
           <>
             <VehicleAvailabilityPanel />
+
+            {ordersLoading && (
+              <LoadingState message="Orders laden..." />
+            )}
+            {ordersError && !ordersLoading && (
+              <QueryError message="Kan orders niet laden. Probeer het opnieuw." onRetry={() => refetch()} />
+            )}
 
             <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
               <PlanningUnassignedSidebar
@@ -829,6 +851,73 @@ const Planning = () => {
             <PlanningOrderCard order={activeOrder} overlay />
           )}
         </DragOverlay>
+
+        {/* Confirmation dialog: Planning Bevestigen */}
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Planning bevestigen</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>
+                    {totalAssigned} orders in{" "}
+                    {Object.values(assignments).filter((a) => a.length > 0).length} ritten
+                    bevestigen voor {selectedDate}?
+                  </p>
+                  <ul className="text-sm space-y-1">
+                    {fleetVehicles
+                      .filter((v) => (assignments[v.id] ?? []).length > 0)
+                      .map((v) => (
+                        <li key={v.id} className="flex items-center gap-2">
+                          <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-medium">{v.name}</span>
+                          <span className="text-muted-foreground">
+                            — {assignments[v.id].length} order{assignments[v.id].length !== 1 ? "s" : ""}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuleren</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => {
+                  setShowConfirmDialog(false);
+                  handleConfirm();
+                }}
+              >
+                Bevestigen
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Confirmation dialog: Wis concept */}
+        <AlertDialog open={showClearDraftDialog} onOpenChange={setShowClearDraftDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Concept wissen</AlertDialogTitle>
+              <AlertDialogDescription>
+                Weet je zeker dat je de hele planning wilt wissen? Dit kan niet ongedaan worden.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuleren</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                onClick={() => {
+                  setShowClearDraftDialog(false);
+                  handleClearDraft();
+                }}
+              >
+                Wissen
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DndContext>
   );

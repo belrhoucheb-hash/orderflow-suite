@@ -2,7 +2,6 @@
  * Utility functions for invoice calculations and formatting.
  */
 
-import jsPDF from "jspdf";
 import type { Invoice, InvoiceLine } from "@/hooks/useInvoices";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
@@ -15,7 +14,8 @@ interface InvoiceWithLines extends Invoice {
 /**
  * Generate a professional PDF invoice and return it as a Blob.
  */
-export function generateInvoicePDF(invoice: InvoiceWithLines): Blob {
+export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blob> {
+  const { default: jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
   const marginLeft = 20;
@@ -267,8 +267,8 @@ export function generateInvoicePDF(invoice: InvoiceWithLines): Blob {
 /**
  * Generate and trigger a browser download for an invoice PDF.
  */
-export function downloadInvoicePDF(invoice: InvoiceWithLines): void {
-  const blob = generateInvoicePDF(invoice);
+export async function downloadInvoicePDF(invoice: InvoiceWithLines): Promise<void> {
+  const blob = await generateInvoicePDF(invoice);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
