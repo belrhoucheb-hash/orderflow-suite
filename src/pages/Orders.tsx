@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getStatusColor } from "@/lib/statusColors";
-import { useOrders, useOrdersSubscription } from "@/hooks/useOrders";
+import { useOrders } from "@/hooks/useOrders";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -61,8 +61,6 @@ const Orders = () => {
     statusFilter: statusFilter !== "alle" ? statusFilter : undefined,
     search: search || undefined,
   });
-  useOrdersSubscription();
-
   const rawOrders = data?.orders ?? [];
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));

@@ -95,7 +95,11 @@ export function PlanningUnassignedSidebar({
           Combineer
         </Button>
         <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={onClearPlanning} disabled={totalAssigned === 0}>
+          onClick={() => {
+            if (window.confirm("Hele planning wissen? Dit kan niet ongedaan worden.")) {
+              onClearPlanning();
+            }
+          }} disabled={totalAssigned === 0}>
           Wissen
         </Button>
       </div>

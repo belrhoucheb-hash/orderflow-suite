@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isValidStatusTransition } from "@/hooks/useOrders";
+import { isValidStatusTransition } from "@/lib/statusTransitions";
 
 describe("Order Status State Machine", () => {
   // ─── Valid forward transitions ─────────────────────────────────────
