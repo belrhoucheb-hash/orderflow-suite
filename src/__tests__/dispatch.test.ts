@@ -25,6 +25,7 @@ describe("Trip Status Transitions", () => {
       ["GEACCEPTEERD", "AFGEBROKEN"],
       ["ACTIEF", "VOLTOOID"],
       ["ACTIEF", "AFGEBROKEN"],
+      ["GEWEIGERD", "CONCEPT"],
     ];
 
     it.each(validCases)("%s -> %s is allowed", (from, to) => {
@@ -34,7 +35,7 @@ describe("Trip Status Transitions", () => {
 
   // ─── Terminal states ──────────────────────────────────────────────
   describe("terminal states cannot transition", () => {
-    const terminalStatuses: TripStatus[] = ["VOLTOOID", "AFGEBROKEN", "GEWEIGERD"];
+    const terminalStatuses: TripStatus[] = ["VOLTOOID", "AFGEBROKEN"];
     const allStatuses: TripStatus[] = [
       "CONCEPT", "VERZENDKLAAR", "VERZONDEN", "ONTVANGEN",
       "GEACCEPTEERD", "GEWEIGERD", "ACTIEF", "VOLTOOID", "AFGEBROKEN",

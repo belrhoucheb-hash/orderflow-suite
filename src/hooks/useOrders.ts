@@ -1,54 +1,17 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Order, OrderStatus } from "@/data/mockData";
+import type { Order } from "@/data/mockData";
 import { logAudit } from "@/lib/auditLog";
 
 // ─── 8.11 Order Status State Machine ─────────────────────────────────
-// Valid status transitions (matches the intended Supabase check constraint):
-//   DRAFT    → PENDING
-//   PENDING  → PLANNED
-//   PLANNED  → IN_TRANSIT
-//   IN_TRANSIT → DELIVERED
-//   Any      → CANCELLED
-//
-// The DB should enforce this via:
-//   ALTER TABLE orders ADD CONSTRAINT valid_status_transition CHECK (
-//     status IN ('DRAFT','PENDING','PLANNED','IN_TRANSIT','DELIVERED','CANCELLED')
-//   );
-// And a trigger or RLS policy for transition validation.
-// The frontend validates transitions below as a first line of defence.
+// Extracted to @/lib/statusTransitions as a pure function (no Supabase dep).
+// Re-exported here for backwards compatibility.
 // ──────────────────────────────────────────────────────────────────────
-
-export type OrderStatus = "DRAFT" | "PENDING" | "PLANNED" | "IN_TRANSIT" | "DELIVERED" | "CANCELLED";
-
-/** Map of each status to its allowed next statuses. */
-const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  DRAFT: ["PENDING", "CANCELLED"],
-  PENDING: ["PLANNED", "CANCELLED"],
-  PLANNED: ["IN_TRANSIT", "CANCELLED"],
-  IN_TRANSIT: ["DELIVERED", "CANCELLED"],
-  DELIVERED: [],    // terminal state
-  CANCELLED: [],    // terminal state
-};
-
-/**
- * Check whether a status transition is allowed.
- * Also accepts legacy statuses (OPEN, WAITING) and maps them to the new model.
- */
-export function isValidStatusTransition(from: string, to: string): boolean {
-  // Map legacy statuses used in existing data to the new state machine
-  const legacyMap: Record<string, OrderStatus> = {
-    OPEN: "PENDING",
-    WAITING: "PENDING",
-  };
-  const normFrom = (legacyMap[from] ?? from) as OrderStatus;
-  const normTo = (legacyMap[to] ?? to) as OrderStatus;
-
-  const allowed = VALID_TRANSITIONS[normFrom];
-  if (!allowed) return false; // unknown source status
-  return allowed.includes(normTo);
-}
+export { isValidStatusTransition, VALID_TRANSITIONS } from "@/lib/statusTransitions";
+export type { OrderStatus } from "@/lib/statusTransitions";
+import { VALID_TRANSITIONS } from "@/lib/statusTransitions";
+import type { OrderStatus } from "@/lib/statusTransitions";
 
 // Map legacy DB statuses to the canonical status model
 const legacyStatusMap: Record<string, OrderStatus> = {

@@ -178,10 +178,10 @@ export default function FacturatieDetail() {
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!invoice) return;
     try {
-      downloadInvoicePDF(invoice);
+      await downloadInvoicePDF(invoice);
       toast.success("PDF wordt gedownload");
     } catch (e: any) {
       toast.error("PDF generatie mislukt", { description: e.message });

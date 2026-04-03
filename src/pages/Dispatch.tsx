@@ -2,11 +2,12 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Truck, Send, Play, CheckCircle2, XCircle, Clock, MapPin,
-  Package, AlertTriangle, ChevronRight, Loader2, Search, Calendar,
+  Package, AlertTriangle, ChevronRight, ChevronLeft, Loader2, Search, Calendar,
   User, MoreHorizontal, Eye
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTrips, useUpdateTripStatus, useDispatchTrip, useTripsRealtime } from "@/hooks/useTrips";
 import { useDrivers } from "@/hooks/useDrivers";
+import { useVehicles } from "@/hooks/useVehicles";
 import {
   TRIP_STATUS_LABELS, STOP_STATUS_LABELS,
   type Trip, type TripStop, type TripStatus,
@@ -56,11 +58,12 @@ function getStopCounts(trip: Trip): { total: number; done: number; failed: numbe
 // ─── Status filter tabs ────────────────────────────────────
 
 const FILTER_TABS = [
-  { key: "alle", label: "Alle" },
-  { key: "CONCEPT", label: "Concept" },
-  { key: "VERZONDEN", label: "Verzonden" },
-  { key: "ACTIEF", label: "Actief" },
-  { key: "VOLTOOID", label: "Voltooid" },
+  { key: "alle", label: "Alle", statuses: [] as string[] },
+  { key: "concept", label: "Concept", statuses: ["CONCEPT", "VERZENDKLAAR"] },
+  { key: "verzonden", label: "Verzonden", statuses: ["VERZONDEN", "ONTVANGEN", "GEACCEPTEERD"] },
+  { key: "ACTIEF", label: "Actief", statuses: ["ACTIEF"] },
+  { key: "VOLTOOID", label: "Voltooid", statuses: ["VOLTOOID"] },
+  { key: "probleem", label: "Probleem", statuses: ["GEWEIGERD", "AFGEBROKEN"] },
 ] as const;
 
 // ─── Component ──────────────────────────────────────────────
@@ -71,6 +74,11 @@ const Dispatch = () => {
   const [search, setSearch] = useState("");
   const [expandedTrip, setExpandedTrip] = useState<string | null>(null);
 
+  // Bulk dispatch state
+  const [selectedTrips, setSelectedTrips] = useState<Set<string>>(new Set());
+  const [bulkDispatchOpen, setBulkDispatchOpen] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; errors: string[] } | null>(null);
+
   // Confirmation dialog state
   const [confirmDispatch, setConfirmDispatch] = useState<{ tripId: string; tripNumber: number } | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<{ tripId: string; tripNumber: number; newStatus: TripStatus } | null>(null);
@@ -78,8 +86,21 @@ const Dispatch = () => {
   const { data: trips = [], isLoading, isError, refetch } = useTrips(selectedDate);
   useTripsRealtime();
   const { data: drivers = [] } = useDrivers();
+  const { data: vehicles = [] } = useVehicles();
   const updateStatus = useUpdateTripStatus();
   const dispatchTrip = useDispatchTrip();
+
+  // Date navigation
+  const goToPrevDay = () => {
+    const d = new Date(selectedDate + "T00:00:00");
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(d.toISOString().split("T")[0]);
+  };
+  const goToNextDay = () => {
+    const d = new Date(selectedDate + "T00:00:00");
+    d.setDate(d.getDate() + 1);
+    setSelectedDate(d.toISOString().split("T")[0]);
+  };
 
   // Build a lookup map for driver names
   const driverMap = useMemo(() => {
@@ -90,10 +111,22 @@ const Dispatch = () => {
     return map;
   }, [drivers]);
 
+  // Build a lookup map for vehicle info by code
+  const vehicleMap = useMemo(() => {
+    const map = new Map<string, { name: string; plate: string }>();
+    for (const v of vehicles) {
+      map.set(v.code, { name: v.name, plate: v.plate });
+    }
+    return map;
+  }, [vehicles]);
+
   // Filter & search
+  const activeTab = FILTER_TABS.find((t) => t.key === statusFilter);
   const filtered = useMemo(() => {
     return trips.filter((t) => {
-      const matchesStatus = statusFilter === "alle" || t.dispatch_status === statusFilter;
+      const matchesStatus =
+        statusFilter === "alle" ||
+        (activeTab && activeTab.statuses.length > 0 && activeTab.statuses.includes(t.dispatch_status));
       if (!matchesStatus) return false;
       if (!search) return true;
       const s = search.toLowerCase();
@@ -106,7 +139,56 @@ const Dispatch = () => {
         )
       );
     });
-  }, [trips, statusFilter, search]);
+  }, [trips, statusFilter, activeTab, search]);
+
+  // Concept trips visible in current filtered list (for bulk select)
+  const conceptTripsInView = useMemo(
+    () => filtered.filter((t) => t.dispatch_status === "CONCEPT" || t.dispatch_status === "VERZENDKLAAR"),
+    [filtered],
+  );
+  const allConceptsSelected = conceptTripsInView.length > 0 && conceptTripsInView.every((t) => selectedTrips.has(t.id));
+
+  const toggleTripSelection = (tripId: string) => {
+    setSelectedTrips((prev) => {
+      const next = new Set(prev);
+      if (next.has(tripId)) next.delete(tripId);
+      else next.add(tripId);
+      return next;
+    });
+  };
+
+  const toggleAllConcepts = () => {
+    if (allConceptsSelected) {
+      setSelectedTrips(new Set());
+    } else {
+      setSelectedTrips(new Set(conceptTripsInView.map((t) => t.id)));
+    }
+  };
+
+  // Bulk dispatch action
+  const executeBulkDispatch = async () => {
+    const ids = Array.from(selectedTrips);
+    const total = ids.length;
+    setBulkProgress({ done: 0, total, errors: [] });
+    const errors: string[] = [];
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        await dispatchTrip.mutateAsync(ids[i]);
+      } catch (e: any) {
+        const trip = trips.find((t) => t.id === ids[i]);
+        errors.push(`Rit #${trip?.trip_number ?? "?"}: ${e.message || "Fout"}`);
+      }
+      setBulkProgress({ done: i + 1, total, errors: [...errors] });
+    }
+    if (errors.length === 0) {
+      toast.success(`${total} ritten verzonden`);
+    } else {
+      toast.warning(`${total - errors.length}/${total} ritten verzonden, ${errors.length} mislukt`);
+    }
+    setSelectedTrips(new Set());
+    setBulkDispatchOpen(false);
+    setBulkProgress(null);
+  };
 
   // Stats
   const stats = useMemo(() => ({
@@ -166,6 +248,9 @@ const Dispatch = () => {
         subtitle="Ritten beheren en dispatchen naar chauffeurs"
         actions={
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="icon" className="h-10 w-10" onClick={goToPrevDay}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
             <div className="flex items-center gap-2 bg-card border border-border/50 rounded-xl px-3 h-10">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <input
@@ -175,6 +260,9 @@ const Dispatch = () => {
                 className="bg-transparent text-sm font-medium border-none outline-none"
               />
             </div>
+            <Button variant="outline" size="icon" className="h-10 w-10" onClick={goToNextDay}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setSelectedDate(getTodayISO())}>
               Vandaag
             </Button>
@@ -183,13 +271,14 @@ const Dispatch = () => {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         {[
+          { label: "Totaal", value: trips.length, icon: Truck, color: "text-blue-600", bg: "bg-blue-500/8" },
           { label: "Concept", value: stats.concept, icon: Clock, color: "text-gray-600", bg: "bg-gray-500/8" },
           { label: "Verzonden", value: stats.dispatched, icon: Send, color: "text-amber-600", bg: "bg-amber-500/8" },
           { label: "Actief", value: stats.active, icon: Play, color: "text-green-600", bg: "bg-green-500/8" },
           { label: "Voltooid", value: stats.done, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-500/8" },
-          { label: "Problemen", value: stats.aborted, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-500/8" },
+          { label: "Probleem", value: stats.aborted, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-500/8" },
         ].map((stat) => (
           <motion.div
             key={stat.label}
@@ -237,6 +326,32 @@ const Dispatch = () => {
         </div>
       </div>
 
+      {/* Bulk select bar */}
+      {conceptTripsInView.length > 0 && (
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={allConceptsSelected}
+              onCheckedChange={toggleAllConcepts}
+              id="select-all-concepts"
+            />
+            <label htmlFor="select-all-concepts" className="text-sm font-medium cursor-pointer">
+              Selecteer alles ({conceptTripsInView.length})
+            </label>
+          </div>
+          {selectedTrips.size > 0 && (
+            <Button
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setBulkDispatchOpen(true)}
+            >
+              <Send className="h-3.5 w-3.5" />
+              Verzend geselecteerde ({selectedTrips.size})
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Trip list */}
       <div className="space-y-3">
         <AnimatePresence mode="popLayout">
@@ -250,9 +365,9 @@ const Dispatch = () => {
               <p className="text-sm font-medium text-muted-foreground">
                 Geen ritten voor {formatDate(selectedDate)}
               </p>
-              <p className="text-xs text-muted-foreground/60 mt-1">
+              <Link to="/planning" className="text-xs text-primary hover:underline mt-1">
                 Maak ritten aan via Planning
-              </p>
+              </Link>
             </motion.div>
           ) : (
             filtered.map((trip) => {
@@ -276,6 +391,16 @@ const Dispatch = () => {
                       className="flex items-center gap-4 px-5 py-3.5 cursor-pointer hover:bg-muted/30 transition-colors"
                       onClick={() => setExpandedTrip(isExpanded ? null : trip.id)}
                     >
+                      {/* Checkbox for concept trips */}
+                      {(trip.dispatch_status === "CONCEPT" || trip.dispatch_status === "VERZENDKLAAR") && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedTrips.has(trip.id)}
+                            onCheckedChange={() => toggleTripSelection(trip.id)}
+                          />
+                        </div>
+                      )}
+
                       {/* Trip number + status */}
                       <div className="flex items-center gap-3 min-w-[180px]">
                         <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -288,6 +413,15 @@ const Dispatch = () => {
                           </Badge>
                         </div>
                       </div>
+
+                      {/* Vehicle */}
+                      {trip.vehicle_id && vehicleMap.has(trip.vehicle_id) && (
+                        <div className="flex items-center gap-1.5 text-sm min-w-[140px] hidden lg:flex">
+                          <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-medium">{vehicleMap.get(trip.vehicle_id)!.name}</span>
+                          <span className="text-muted-foreground text-xs">({vehicleMap.get(trip.vehicle_id)!.plate})</span>
+                        </div>
+                      )}
 
                       {/* Driver */}
                       <div className="flex items-center gap-1.5 text-sm min-w-[140px]">
@@ -503,6 +637,44 @@ const Dispatch = () => {
               Bevestigen
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk dispatch confirmation dialog */}
+      <Dialog open={bulkDispatchOpen} onOpenChange={(open) => { if (!open && !bulkProgress) setBulkDispatchOpen(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ritten verzenden</DialogTitle>
+            <DialogDescription>
+              {bulkProgress ? (
+                <span className="flex flex-col gap-2">
+                  <span>Voortgang: {bulkProgress.done}/{bulkProgress.total} ritten verzonden</span>
+                  <span className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <span
+                      className="bg-primary h-2 block rounded-full transition-all"
+                      style={{ width: `${(bulkProgress.done / bulkProgress.total) * 100}%` }}
+                    />
+                  </span>
+                  {bulkProgress.errors.length > 0 && (
+                    <span className="text-red-600 text-xs">
+                      {bulkProgress.errors.map((err, i) => <span key={i} className="block">{err}</span>)}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                `${selectedTrips.size} ritten verzenden naar chauffeurs?`
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {!bulkProgress && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBulkDispatchOpen(false)}>Annuleren</Button>
+              <Button onClick={executeBulkDispatch}>
+                <Send className="h-3.5 w-3.5 mr-1.5" />
+                Verzenden
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </div>
