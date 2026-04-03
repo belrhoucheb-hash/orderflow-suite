@@ -18,6 +18,7 @@ export function logAudit(params: {
   old_data?: Record<string, unknown> | null;
   new_data?: Record<string, unknown> | null;
   changed_fields?: string[];
+  tenant_id?: string;
 }) {
   supabase
     .from("audit_log")
@@ -28,6 +29,7 @@ export function logAudit(params: {
       old_data: params.old_data ?? null,
       new_data: params.new_data ?? null,
       changed_fields: params.changed_fields ?? null,
+      tenant_id: params.tenant_id ?? null,
     })
     .then(({ error }) => {
       if (error) console.warn("Audit log failed:", error.message);
