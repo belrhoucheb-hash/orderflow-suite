@@ -22,6 +22,7 @@ export interface Order {
   createdAt: string;
   estimatedDelivery: string;
   notes: string;
+  orderType?: string;
 }
 
 export interface Vehicle {
