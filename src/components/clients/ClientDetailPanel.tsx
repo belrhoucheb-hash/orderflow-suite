@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { type Client, useClientLocations, useClientRates, useClientOrders } from "@/hooks/useClients";
 import { MapPin, Clock, Truck, Euro, FileText, Building2, Hash } from "lucide-react";
+import { ClientEmballageTab } from "./ClientEmballageTab";
 
 interface Props {
   client: Client;
@@ -17,7 +18,7 @@ export function ClientDetailPanel({ client }: Props) {
   return (
     <Tabs defaultValue="overzicht" className="w-full">
       <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent px-6 h-auto py-0">
-        {["Overzicht", "Locaties", "Tarieven", "Orders"].map((tab) => (
+        {["Overzicht", "Locaties", "Tarieven", "Orders", "Emballage"].map((tab) => (
           <TabsTrigger
             key={tab}
             value={tab.toLowerCase()}
@@ -141,6 +142,11 @@ export function ClientDetailPanel({ client }: Props) {
             ))}
           </div>
         )}
+      </TabsContent>
+
+      {/* Emballage */}
+      <TabsContent value="emballage" className="mt-0 p-0">
+        <ClientEmballageTab clientId={client.id} />
       </TabsContent>
     </Tabs>
   );
