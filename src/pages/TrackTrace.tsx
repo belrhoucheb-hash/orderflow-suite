@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,8 @@ interface TrackOrder {
   delivery_address: string | null;
   weight_kg: number | null;
   created_at: string;
+  eta: string | null;
+  recipient_name: string | null;
 }
 
 const TIMELINE_STEPS = [
@@ -52,14 +55,15 @@ const STATUS_BADGE_COLORS: Record<string, string> = {
 };
 
 export default function TrackTrace() {
+  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [order, setOrder] = useState<TrackOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSearch = async () => {
-    const trimmed = query.trim();
+  const handleSearchWithQuery = async (searchQuery: string) => {
+    const trimmed = searchQuery.trim();
     if (!trimmed) return;
 
     setLoading(true);
@@ -68,31 +72,33 @@ export default function TrackTrace() {
     setSearched(true);
 
     try {
-      // Try searching by order_number (numeric) or as a string match
       const numericQuery = parseInt(trimmed, 10);
       let data: TrackOrder | null = null;
 
       if (!isNaN(numericQuery)) {
         const { data: result, error: dbError } = await supabase
           .from("orders")
-          .select("order_number, client_name, status, pickup_address, delivery_address, weight_kg, created_at")
+          .select("order_number, client_name, status, pickup_address, delivery_address, weight_kg, created_at, time_window_end, recipient_name")
           .eq("order_number", numericQuery)
           .maybeSingle();
 
         if (dbError) throw dbError;
-        data = result;
+        if (result) {
+          data = { ...result, eta: (result as any).time_window_end ?? null };
+        }
       }
 
-      // If no numeric match, try text search on order_number as string
       if (!data) {
         const { data: results, error: dbError } = await supabase
           .from("orders")
-          .select("order_number, client_name, status, pickup_address, delivery_address, weight_kg, created_at")
+          .select("order_number, client_name, status, pickup_address, delivery_address, weight_kg, created_at, time_window_end, recipient_name")
           .eq("order_number", trimmed)
           .maybeSingle();
 
         if (dbError && dbError.code !== "PGRST116") throw dbError;
-        data = results;
+        if (results) {
+          data = { ...results, eta: (results as any).time_window_end ?? null };
+        }
       }
 
       setOrder(data);
@@ -102,6 +108,20 @@ export default function TrackTrace() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Auto-search from URL ?q= param on mount
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q) {
+      setQuery(q);
+      handleSearchWithQuery(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSearch = async () => {
+    await handleSearchWithQuery(query);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -286,6 +306,28 @@ export default function TrackTrace() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ETA section — shown for IN_TRANSIT orders */}
+          {order.status === "IN_TRANSIT" && (
+            <div className="border-t border-gray-100 pt-5 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+                  <Clock className="h-4 w-4 text-[#dc2626]" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Verwachte aankomst</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {order.eta
+                      ? new Date(order.eta).toLocaleString("nl-NL", {
+                          day: "2-digit", month: "2-digit", year: "numeric",
+                          hour: "2-digit", minute: "2-digit",
+                        })
+                      : "Wordt berekend..."}
+                  </p>
+                </div>
               </div>
             </div>
           )}
