@@ -788,6 +788,73 @@ export type Database = {
           },
         ]
       }
+      packaging_movements: {
+        Row: {
+          id: string
+          tenant_id: string
+          client_id: string
+          order_id: string | null
+          trip_stop_id: string | null
+          loading_unit_id: string
+          direction: string
+          quantity: number
+          recorded_by: string | null
+          recorded_at: string
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          client_id: string
+          order_id?: string | null
+          trip_stop_id?: string | null
+          loading_unit_id: string
+          direction: string
+          quantity: number
+          recorded_by?: string | null
+          recorded_at?: string
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          client_id?: string
+          order_id?: string | null
+          trip_stop_id?: string | null
+          loading_unit_id?: string
+          direction?: string
+          quantity?: number
+          recorded_by?: string | null
+          recorded_at?: string
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packaging_movements_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packaging_movements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packaging_movements_loading_unit_id_fkey"
+            columns: ["loading_unit_id"]
+            isOneToOne: false
+            referencedRelation: "loading_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -894,6 +961,8 @@ export type Database = {
           vehicle_id: string | null
           warehouse_received_at: string | null
           weight_kg: number | null
+          order_type: string
+          return_reason: string | null
         }
         Insert: {
           anomalies?: Json | null
@@ -950,6 +1019,8 @@ export type Database = {
           vehicle_id?: string | null
           warehouse_received_at?: string | null
           weight_kg?: number | null
+          order_type?: string
+          return_reason?: string | null
         }
         Update: {
           anomalies?: Json | null
@@ -1006,6 +1077,8 @@ export type Database = {
           vehicle_id?: string | null
           warehouse_received_at?: string | null
           weight_kg?: number | null
+          order_type?: string
+          return_reason?: string | null
         }
         Relationships: [
           {
@@ -1731,7 +1804,20 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      packaging_balances: {
+        Row: {
+          tenant_id: string
+          client_id: string
+          loading_unit_id: string
+          loading_unit_name: string
+          loading_unit_code: string
+          client_name: string
+          balance: number
+          total_movements: number
+          last_movement_at: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       current_tenant_id: {
