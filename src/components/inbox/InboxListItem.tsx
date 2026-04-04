@@ -2,6 +2,8 @@ import { Paperclip } from "lucide-react";
 import type { OrderDraft } from "./types";
 import { formatDate, getDeadlineInfo } from "./utils";
 import { cn } from "@/lib/utils";
+import { ORDER_SOURCE_LABELS, ORDER_SOURCE_COLORS } from "@/types/clientPortal";
+import type { OrderSource } from "@/types/clientPortal";
 
 interface Props {
   draft: OrderDraft;
@@ -68,6 +70,14 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
           <span className={cn("text-xs font-mono", isUrgent ? "text-primary font-bold" : "text-gray-500 font-medium")}>
             #{draft.order_number}
           </span>
+          {draft.source && draft.source !== "INTERN" && (
+            <span className={cn(
+              "text-[10px] px-1.5 py-0 border-0 rounded-full",
+              ORDER_SOURCE_COLORS[draft.source as OrderSource] ?? "bg-gray-100 text-gray-600"
+            )}>
+              {ORDER_SOURCE_LABELS[draft.source as OrderSource] ?? draft.source}
+            </span>
+          )}
           {attachmentCount > 0 && (
             <span className="flex items-center gap-0.5 text-[10px] text-gray-400 ml-auto">
               <Paperclip className="h-3 w-3" /> {attachmentCount}
