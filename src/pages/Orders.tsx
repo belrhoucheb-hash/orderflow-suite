@@ -28,10 +28,6 @@ const priorityDotColors: Record<string, string> = {
 
 const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED", "RETOUR"] as const;
 
-const ORDER_TYPE_LABELS: Record<string, { label: string; className: string }> = {
-  RETOUR: { label: "Retour", className: "bg-amber-100 text-amber-700 border-amber-200" },
-  EMBALLAGE_RUIL: { label: "Emb. Ruil", className: "bg-violet-100 text-violet-700 border-violet-200" },
-};
 
 const Orders = () => {
   const [search, setSearch] = useState("");
@@ -60,6 +56,11 @@ const Orders = () => {
 
   const handleStatusFilterChange = (value: string) => {
     setStatusFilter(value);
+    setPage(0);
+  };
+
+  const handleOrderTypeChange = (value: string) => {
+    setOrderTypeFilter(value);
     setPage(0);
   };
 
@@ -219,7 +220,7 @@ const Orders = () => {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {s === "alle" ? "Alle" : ORDER_TYPE_LABELS[s]?.label ?? getStatusColor(s).label}
+              {t === "alle" ? "Alle" : ORDER_TYPE_LABELS[t]?.label ?? t}
             </button>
           ))}
         </div>
@@ -297,7 +298,7 @@ const Orders = () => {
                         <StatusBadge status={order.status as OrderStatus} />
                         {order.orderType && order.orderType !== "ZENDING" && (
                           <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium border",
-                            ORDER_TYPE_LABELS[order.orderType]?.className ?? "bg-muted text-muted-foreground"
+                            ORDER_TYPE_LABELS[order.orderType as OrderType]?.color ?? "bg-muted text-muted-foreground"
                           )}>
                             {ORDER_TYPE_LABELS[order.orderType]?.label ?? order.orderType}
                           </span>
