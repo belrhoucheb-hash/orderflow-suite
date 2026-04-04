@@ -27,14 +27,15 @@ export interface UseOrdersOptions {
   page?: number;
   pageSize?: number;
   statusFilter?: string;
+  orderTypeFilter?: string;
   search?: string;
 }
 
 export function useOrders(options: UseOrdersOptions = {}) {
-  const { page = 0, pageSize = 25, statusFilter, search } = options;
+  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search } = options;
 
   return useQuery({
-    queryKey: ["orders", { page, pageSize, statusFilter, search }],
+    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search }],
     staleTime: 5_000,
     queryFn: async () => {
       let query = supabase
@@ -45,6 +46,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
       if (statusFilter && statusFilter !== "alle") {
         query = query.eq("status", statusFilter);
+      }
+
+      if (orderTypeFilter && orderTypeFilter !== "alle") {
+        query = query.eq("order_type", orderTypeFilter);
       }
 
       if (search) {
@@ -84,6 +89,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
           createdAt: o.created_at,
           estimatedDelivery,
           notes: o.internal_note || "",
+          orderType: o.order_type || "ZENDING",
         };
       });
 
