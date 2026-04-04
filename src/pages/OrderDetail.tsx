@@ -33,6 +33,7 @@ import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
 import { Receipt } from "lucide-react";
 import { ReturnOrderDialog } from "@/components/orders/ReturnOrderDialog";
+import { CreateReturnDialog } from "@/components/orders/CreateReturnDialog";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "Nieuw", color: "bg-muted text-muted-foreground" },

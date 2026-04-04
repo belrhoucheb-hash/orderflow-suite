@@ -108,8 +108,8 @@ describe("usePackagingMovements", () => {
       id: "m1", tenant_id: "t1", client_id: "c1", order_id: null, trip_stop_id: null,
       loading_unit_id: "lu1", direction: "UIT", quantity: 2, recorded_by: null,
       recorded_at: "2026-01-01T10:00:00Z", notes: null, created_at: "2026-01-01T10:00:00Z",
-      loading_units: { name: "Pallet", code: "PAL" },
-      clients: { name: "Klant A" },
+      loading_unit: { name: "Pallet", code: "PAL" },
+      client: { name: "Klant A" },
     }];
     const chain = makeChain({ data: rows, error: null });
     mockFrom.mockReturnValue(chain);

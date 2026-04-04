@@ -32,10 +32,12 @@ export function useLoadingUnits() {
 
 /* ── packaging_movements ────────────────────────────────────────── */
 
-export function usePackagingMovements(clientId?: string) {
+export function usePackagingMovements(options?: string | { clientId?: string }) {
+  // Accept either a plain string clientId or an options object
+  const clientId = typeof options === "string" ? options : options?.clientId;
   return useQuery<PackagingMovement[]>({
     queryKey: ["packaging_movements", clientId],
-    enabled: !!clientId,
+    enabled: clientId !== undefined ? !!clientId : true,
     staleTime: 10_000,
     queryFn: async () => {
       let q = fromTable("packaging_movements")
@@ -87,17 +89,31 @@ export function useCreatePackagingMovement() {
   });
 }
 
+export function useDeletePackagingMovement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await fromTable("packaging_movements")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["packaging_movements"] });
+      qc.invalidateQueries({ queryKey: ["packaging_movements_all"] });
+      qc.invalidateQueries({ queryKey: ["packaging_balances"] });
+    },
+  });
+}
+
 /* ── packaging_balances (VIEW) ──────────────────────────────────── */
 
 export function usePackagingBalances(clientId?: string) {
   return useQuery<PackagingBalance[]>({
     queryKey: ["packaging_balances", clientId],
-    enabled: !!clientId,
     staleTime: 10_000,
     queryFn: async () => {
-      let q = fromTable("packaging_balances").select(
-        "*, loading_unit:loading_units(id,name,code), client:clients(id,name)"
-      );
+      let q = fromTable("packaging_balances").select("*");
       if (clientId) q = q.eq("client_id", clientId);
       const { data, error } = await q;
       if (error) throw error;
@@ -111,18 +127,25 @@ export function useAllPackagingBalances() {
     queryKey: ["packaging_balances_all"],
     staleTime: 10_000,
     queryFn: async () => {
-      const { data, error } = await fromTable("packaging_balances").select(
-        "*, loading_unit:loading_units(id,name,code), client:clients(id,name)"
-      );
+      const { data, error } = await fromTable("packaging_balances").select("*");
       if (error) throw error;
       return (data ?? []) as PackagingBalance[];
     },
   });
 }
 
-/** Convenience: single client's total outstanding balance across all unit types */
+/** Per-client packaging balance query — returns raw React Query result */
 export function useClientPackagingBalance(clientId?: string) {
-  const { data: balances = [], isLoading, isError } = usePackagingBalances(clientId);
-  const total = balances.reduce((sum, b) => sum + (b.balance ?? 0), 0);
-  return { total, balances, isLoading, isError };
+  return useQuery<PackagingBalance[]>({
+    queryKey: ["packaging_balances", clientId],
+    enabled: !!clientId,
+    staleTime: 10_000,
+    queryFn: async () => {
+      const { data, error } = await fromTable("packaging_balances")
+        .select("*")
+        .eq("client_id", clientId!);
+      if (error) throw error;
+      return (data ?? []) as PackagingBalance[];
+    },
+  });
 }
