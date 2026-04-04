@@ -130,3 +130,14 @@ CREATE POLICY "surcharges_tenant_delete" ON public.surcharges
 CREATE POLICY "surcharges_service_role" ON public.surcharges
   FOR ALL TO service_role
   USING (true) WITH CHECK (true);
+
+-- ─── updated_at triggers ──────────────────────────────────────
+CREATE TRIGGER update_rate_cards_updated_at
+  BEFORE UPDATE ON public.rate_cards
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_surcharges_updated_at
+  BEFORE UPDATE ON public.surcharges
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { fromTable } from "@/lib/supabaseHelpers";
 import { toast } from "sonner";
 import type { VehicleFixedCost } from "@/types/costModels";
 
@@ -9,7 +9,7 @@ export function useVehicleFixedCosts(vehicleId: string | null) {
     enabled: !!vehicleId,
     staleTime: 15_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("vehicle_fixed_costs")
+      const { data, error } = await fromTable("vehicle_fixed_costs")
         .select("*, cost_types(*)")
         .eq("vehicle_id", vehicleId!)
         .order("valid_from", { ascending: false });
@@ -50,7 +50,7 @@ export function useCreateVehicleFixedCost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateVehicleFixedCostInput) => {
-      const { data, error } = await (supabase as any).from("vehicle_fixed_costs")
+      const { data, error } = await fromTable("vehicle_fixed_costs")
         .insert({
           tenant_id: input.tenant_id,
           vehicle_id: input.vehicle_id,
@@ -74,7 +74,7 @@ export function useUpdateVehicleFixedCost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, vehicleId, updates }: { id: string; vehicleId: string; updates: Partial<CreateVehicleFixedCostInput> }) => {
-      const { data, error } = await (supabase as any).from("vehicle_fixed_costs")
+      const { data, error } = await fromTable("vehicle_fixed_costs")
         .update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id).select().single();
       if (error) throw error;
       return data as VehicleFixedCost;
@@ -91,7 +91,7 @@ export function useDeleteVehicleFixedCost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, vehicleId }: { id: string; vehicleId: string }) => {
-      const { error } = await (supabase as any).from("vehicle_fixed_costs").delete().eq("id", id);
+      const { error } = await fromTable("vehicle_fixed_costs").delete().eq("id", id);
       if (error) throw error;
       return { id, vehicleId };
     },

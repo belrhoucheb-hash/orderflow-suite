@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,17 +6,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Fuel } from "lucide-react";
 
+// TODO: Persist to tenant settings table when available
+const STORAGE_KEY = "orderflow_diesel_price";
+
 export function FuelPriceSettings() {
   const [dieselPrice, setDieselPrice] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // On mount: read from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) setDieselPrice(saved);
+  }, []);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Persistence will be wired up when tenant settings infrastructure supports it.
-      // For now the value lives in local state and triggers a success toast.
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      toast.success("Dieselprijs opgeslagen", {
+      // On save: write to localStorage
+      localStorage.setItem(STORAGE_KEY, dieselPrice);
+      toast.success("Brandstofprijs opgeslagen", {
         description: `Huidige prijs: € ${parseFloat(dieselPrice || "0").toFixed(3)} / liter`,
       });
     } catch {

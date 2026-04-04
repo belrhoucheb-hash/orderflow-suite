@@ -208,7 +208,11 @@ export function CostTypeSettings() {
                     size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
                     disabled={deleteCostType.isPending}
-                    onClick={() => deleteCostType.mutate(ct.id)}
+                    onClick={() => {
+                      if (confirm("Weet u zeker dat u deze kostensoort wilt verwijderen?")) {
+                        deleteCostType.mutateAsync(ct.id);
+                      }
+                    }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
