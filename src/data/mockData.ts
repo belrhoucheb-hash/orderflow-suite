@@ -22,6 +22,9 @@ export interface Order {
   createdAt: string;
   estimatedDelivery: string;
   notes: string;
+  /** F5: order type — ZENDING (default) / RETOUR / EMBALLAGE_RUIL */
+  orderType?: string;
+  parentOrderId?: string | null;
 }
 
 export interface Vehicle {
