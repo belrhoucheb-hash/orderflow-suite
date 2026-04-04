@@ -13,9 +13,11 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KPIStrip, type KPIItem } from "@/components/ui/KPIStrip";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { OrderStatus } from "@/components/ui/StatusBadge";
 import { BulkImportDialog } from "@/components/orders/BulkImportDialog";
+import { ORDER_TYPE_LABELS, type OrderType } from "@/types/packaging";
 
 const priorityDotColors: Record<string, string> = {
   laag: "text-muted-foreground/40",
@@ -29,6 +31,7 @@ const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DEL
 const Orders = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
+  const [orderTypeFilter, setOrderTypeFilter] = useState<string>("alle");
   const [page, setPage] = useState(0);
   const [pageSize] = useState(25);
   const [printOrder, setPrintOrder] = useState<any>(null);
@@ -55,10 +58,16 @@ const Orders = () => {
     setPage(0);
   };
 
+  const handleOrderTypeChange = (value: string) => {
+    setOrderTypeFilter(value);
+    setPage(0);
+  };
+
   const { data, isLoading, isError, refetch } = useOrders({
     page,
     pageSize,
     statusFilter: statusFilter !== "alle" ? statusFilter : undefined,
+    orderTypeFilter: orderTypeFilter !== "alle" ? orderTypeFilter : undefined,
     search: search || undefined,
   });
   const rawOrders = data?.orders ?? [];
@@ -170,26 +179,45 @@ const Orders = () => {
       />
 
       {/* Search & Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <SearchInput
-          value={search}
-          onChange={handleSearchChange}
-          placeholder="Zoek op ordernummer of klant..."
-          className="flex-1 max-w-md"
-        />
-        <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 overflow-x-auto max-w-full">
-          {filterOptions.map((s) => (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <SearchInput
+            value={search}
+            onChange={handleSearchChange}
+            placeholder="Zoek op ordernummer of klant..."
+            className="flex-1 max-w-md"
+          />
+          <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 overflow-x-auto max-w-full">
+            {filterOptions.map((s) => (
+              <button
+                key={s}
+                onClick={() => handleStatusFilterChange(s)}
+                className={cn(
+                  "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
+                  statusFilter === s
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {s === "alle" ? "Alle" : getStatusColor(s).label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Order type filter pills */}
+        <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 w-fit">
+          {["alle", "ZENDING", "RETOUR", "EMBALLAGE_RUIL"].map((t) => (
             <button
-              key={s}
-              onClick={() => handleStatusFilterChange(s)}
+              key={t}
+              onClick={() => handleOrderTypeChange(t)}
               className={cn(
                 "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
-                statusFilter === s
+                orderTypeFilter === t
                   ? "bg-foreground text-background shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {s === "alle" ? "Alle" : getStatusColor(s).label}
+              {t === "alle" ? "Alle types" : ORDER_TYPE_LABELS[t as OrderType].label}
             </button>
           ))}
         </div>
@@ -244,6 +272,13 @@ const Orders = () => {
                       >
                         {order.orderNumber}
                       </Link>
+                      {order.orderType && order.orderType !== "ZENDING" && (
+                        <Badge className={cn("ml-2 text-[10px] px-1.5 py-0",
+                          ORDER_TYPE_LABELS[order.orderType as OrderType]?.color
+                        )}>
+                          {ORDER_TYPE_LABELS[order.orderType as OrderType]?.label}
+                        </Badge>
+                      )}
                     </td>
                     <td className="table-cell text-foreground/80">{order.customer}</td>
                     <td className="table-cell text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
