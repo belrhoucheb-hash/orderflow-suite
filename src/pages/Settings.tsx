@@ -30,6 +30,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { MasterDataSection } from "@/components/settings/MasterDataSection";
 import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
+import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
+import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
@@ -190,6 +192,7 @@ const Settings = () => {
     if (location.pathname.includes("/sms")) return "sms";
     if (location.pathname.includes("/integraties")) return "integraties";
     if (location.pathname.includes("/tarieven")) return "tarieven";
+    if (location.pathname.includes("/kosten")) return "kosten";
     return "algemeen";
   };
 
@@ -265,6 +268,12 @@ const Settings = () => {
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
               Tarieven
+            </TabsTrigger>
+            <TabsTrigger
+              value="kosten"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+            >
+              Kosten
             </TabsTrigger>
           </TabsList>
         </div>
@@ -959,6 +968,10 @@ const Settings = () => {
         <TabsContent value="tarieven" className="space-y-6 outline-none">
           <RateCardSettings />
           <SurchargeSettings />
+        </TabsContent>
+        <TabsContent value="kosten" className="space-y-6 outline-none">
+          <FuelPriceSettings />
+          <CostTypeSettings />
         </TabsContent>
       </Tabs>
     </div>
