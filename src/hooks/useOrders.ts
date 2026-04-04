@@ -38,7 +38,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
     queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search }],
     staleTime: 5_000,
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from("orders")
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false })
@@ -48,7 +48,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
         query = query.eq("status", statusFilter);
       }
 
-      if (orderTypeFilter && orderTypeFilter !== "alle") {
+      if (orderTypeFilter) {
         query = query.eq("order_type", orderTypeFilter);
       }
 
@@ -89,7 +89,8 @@ export function useOrders(options: UseOrdersOptions = {}) {
           createdAt: o.created_at,
           estimatedDelivery,
           notes: o.internal_note || "",
-          orderType: o.order_type || "ZENDING",
+          orderType: (o as any).order_type ?? "ZENDING",
+          parentOrderId: o.parent_order_id ?? null,
         };
       });
 
