@@ -39,22 +39,27 @@ function useProfitabilityData(groupBy: GroupBy) {
 
       if (invError) throw invError;
 
-      // Try fetching trip_costs
-      let tripCosts: { order_id: string; total_cost: number }[] = [];
+      // Try fetching trip_costs.
+      // trip_costs columns: id, tenant_id, trip_id, cost_type_id, amount, quantity, rate, source, notes, created_at
+      // Join trips to get vehicle_id for grouping by vehicle.
+      let totalTripCost = 0;
+      const costByVehicle = new Map<string, number>();
       try {
         const { data: costs, error: costError } = await supabase
           .from("trip_costs" as any)
-          .select("order_id, total_cost");
+          .select("amount, trips(vehicle_id)");
         if (!costError && costs) {
-          tripCosts = costs as { order_id: string; total_cost: number }[];
+          for (const c of costs as { amount: number; trips: { vehicle_id: string | null } | null }[]) {
+            const amt = c.amount ?? 0;
+            totalTripCost += amt;
+            const vehicleId = c.trips?.vehicle_id;
+            if (vehicleId) {
+              costByVehicle.set(vehicleId, (costByVehicle.get(vehicleId) ?? 0) + amt);
+            }
+          }
         }
       } catch {
         // table doesn't exist — proceed with zero costs
-      }
-
-      const costByOrder = new Map<string, number>();
-      for (const c of tripCosts) {
-        costByOrder.set(c.order_id, (costByOrder.get(c.order_id) ?? 0) + c.total_cost);
       }
 
       // Aggregate by groupBy key
@@ -81,7 +86,24 @@ function useProfitabilityData(groupBy: GroupBy) {
         }
         const b = buckets.get(key)!;
         b.revenue += inv.subtotal ?? inv.total ?? 0;
-        b.cost += costByOrder.get(inv.order_id ?? "") ?? 0;
+      }
+
+      // Apply trip costs: for vehicle grouping use per-vehicle sums;
+      // for client grouping distribute total trip cost proportionally to revenue.
+      if (groupBy === "vehicle") {
+        for (const [vehicleId, cost] of costByVehicle.entries()) {
+          if (buckets.has(vehicleId)) {
+            buckets.get(vehicleId)!.cost += cost;
+          }
+        }
+      } else {
+        // Distribute total trip costs proportionally across client revenue buckets
+        const totalRevenue = [...buckets.values()].reduce((s, b) => s + b.revenue, 0);
+        if (totalRevenue > 0 && totalTripCost > 0) {
+          for (const b of buckets.values()) {
+            b.cost += totalTripCost * (b.revenue / totalRevenue);
+          }
+        }
       }
 
       // Build rows, sorted by revenue desc
