@@ -30,6 +30,8 @@ import LabelWorkshop from "@/components/orders/LabelWorkshop";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
 import { Receipt } from "lucide-react";
+import { CreateReturnDialog } from "@/components/orders/CreateReturnDialog";
+import { ReturnOrdersList } from "@/components/orders/ReturnOrdersList";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "Nieuw", color: "bg-muted text-muted-foreground" },
@@ -692,6 +694,19 @@ const OrderDetail = () => {
                 Bewerken
               </Button>
             )}
+            {/* Retour aanmaken — only for ZENDING orders that are not cancelled */}
+            {order.status !== "CANCELLED" && order.order_type !== "RETOUR" && !isEditing && (
+              <div className="w-full">
+                <CreateReturnDialog
+                  parentOrderId={order.id}
+                  parentOrderNumber={`RCS-${new Date(order.created_at).getFullYear()}-${String(order.order_number).padStart(4, "0")}`}
+                  defaultQuantity={order.quantity}
+                  defaultWeightKg={order.weight_kg}
+                  pickupAddress={order.pickup_address}
+                  deliveryAddress={order.delivery_address}
+                />
+              </div>
+            )}
             {/* Save / Cancel buttons in edit mode */}
             {isEditing && (
               <>
@@ -764,6 +779,19 @@ const OrderDetail = () => {
           </div>
         </div>
       </div>
+
+      {/* Return orders section */}
+      {order.order_type === "ZENDING" && (
+        <ReturnOrdersList parentOrderId={order.id} />
+      )}
+      {order.order_type === "RETOUR" && order.parent_order_id && (
+        <p className="text-sm text-muted-foreground">
+          Retour van order{" "}
+          <Link to={`/orders/${order.parent_order_id}`} className="text-primary hover:underline">
+            origineel bekijken
+          </Link>
+        </p>
+      )}
 
       {/* Cancel Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
