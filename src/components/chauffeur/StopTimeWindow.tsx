@@ -3,17 +3,13 @@ import { Clock, AlertTriangle, CheckCircle2, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WindowStatus } from "@/types/timeWindows";
 import { WINDOW_STATUS_LABELS } from "@/types/timeWindows";
+import { parseMinutes } from "@/lib/timeUtils";
 
 interface Props {
   windowStart: string | null;
   windowEnd: string | null;
   windowStatus: WindowStatus;
   waitingTimeMin: number | null;
-}
-
-function parseMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
 }
 
 function nowMinutes(): number {

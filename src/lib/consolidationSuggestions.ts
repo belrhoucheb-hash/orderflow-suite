@@ -99,47 +99,58 @@ export function generateSuggestions(input: SuggestionInput): Suggestion[] {
       group.utilization_pct < LOW_UTILIZATION_THRESHOLD &&
       group.vehicle?.capacityKg != null
     ) {
-      // Compute centroid of existing order coords in the group
+      // Compute centroid from group order coordinates (from coordMap / geocoded fields on unassigned orders)
+      // ConsolidationOrder embeds a partial order without geocoded fields, so collect what we can.
       const groupCoords = orders
         .map((co) => {
-          // We don't have geocoded coords on ConsolidationOrder so use a rough placeholder
+          const o = co.order as (typeof co.order & { geocoded_delivery_lat?: number | null; geocoded_delivery_lng?: number | null }) | undefined;
+          if (o?.geocoded_delivery_lat != null && o?.geocoded_delivery_lng != null) {
+            return { lat: o.geocoded_delivery_lat, lng: o.geocoded_delivery_lng };
+          }
           return null;
         })
-        .filter(Boolean);
+        .filter((c): c is { lat: number; lng: number } => c !== null);
+
+      const hasCentroid = groupCoords.length > 0;
+      const centroid = hasCentroid
+        ? {
+            lat: groupCoords.reduce((sum, c) => sum + c.lat, 0) / groupCoords.length,
+            lng: groupCoords.reduce((sum, c) => sum + c.lng, 0) / groupCoords.length,
+          }
+        : null;
 
       for (const unassigned of unassignedOrders) {
-        if (
-          unassigned.geocoded_delivery_lat == null ||
-          unassigned.geocoded_delivery_lng == null
-        ) continue;
+        let distKm: number | null = null;
 
-        const unassignedCoord = {
-          lat: unassigned.geocoded_delivery_lat,
-          lng: unassigned.geocoded_delivery_lng,
-        };
+        // If group has coordinates, perform proximity check; otherwise skip it
+        if (centroid !== null) {
+          if (
+            unassigned.geocoded_delivery_lat == null ||
+            unassigned.geocoded_delivery_lng == null
+          ) continue;
 
-        // Check proximity against any order in the group that has coords
-        // Since ConsolidationOrder doesn't carry geocoded coords, we check weight fit
-        // and rely on haversineKm being called in the test with a mocked value.
-        // We use a sentinel coord for the group centroid (NL center as fallback).
-        const sentinelGroupCoord = { lat: 52.13, lng: 5.29 };
-        const distKm = haversineKm(sentinelGroupCoord, unassignedCoord);
+          distKm = haversineKm(centroid, {
+            lat: unassigned.geocoded_delivery_lat,
+            lng: unassigned.geocoded_delivery_lng,
+          });
 
-        if (distKm < NEARBY_KM_THRESHOLD) {
-          // Also check weight would still fit (rough check)
-          const currentWeight = group.total_weight_kg ?? 0;
-          const addedWeight = unassigned.is_weight_per_unit
-            ? unassigned.weight_kg * unassigned.quantity
-            : unassigned.weight_kg;
+          if (distKm >= NEARBY_KM_THRESHOLD) continue;
+        }
 
-          if (currentWeight + addedWeight <= group.vehicle.capacityKg) {
-            suggestions.push({
-              type: "PAST_IN_GROEP",
-              groupId: group.id,
-              orderId: unassigned.id,
-              message: `Order #${unassigned.order_number} (${unassigned.client_name}) ligt op ${distKm.toFixed(1)} km van groep "${group.name}" en past binnen de capaciteit. Overweeg toe te voegen.`,
-            });
-          }
+        // Check weight would still fit
+        const currentWeight = group.total_weight_kg ?? 0;
+        const addedWeight = unassigned.is_weight_per_unit
+          ? unassigned.weight_kg * unassigned.quantity
+          : unassigned.weight_kg;
+
+        if (currentWeight + addedWeight <= group.vehicle.capacityKg) {
+          const distLabel = distKm !== null ? ` op ${distKm.toFixed(1)} km van` : " nabij";
+          suggestions.push({
+            type: "PAST_IN_GROEP",
+            groupId: group.id,
+            orderId: unassigned.id,
+            message: `Order #${unassigned.order_number} (${unassigned.client_name}) ligt${distLabel} groep "${group.name}" en past binnen de capaciteit. Overweeg toe te voegen.`,
+          });
         }
       }
     }

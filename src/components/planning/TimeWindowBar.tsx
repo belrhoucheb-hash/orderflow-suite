@@ -1,10 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { WindowStatus } from "@/types/timeWindows";
-
-function parseMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
+import { parseMinutes } from "@/lib/timeUtils";
 
 function getStatus(windowStart: string | null, windowEnd: string | null, eta: string | null): WindowStatus {
   if (!windowStart || !windowEnd || !eta) return "ONBEKEND";
