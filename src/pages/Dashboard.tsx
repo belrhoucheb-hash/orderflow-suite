@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { FinancialKPIWidget } from "@/components/dashboard/FinancialKPIWidget";
 import { OperationalForecastWidget } from "@/components/dashboard/OperationalForecastWidget";
+import { MarginWidget } from "@/components/dashboard/MarginWidget";
 import { toast } from "sonner";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
@@ -99,6 +100,13 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <FinancialKPIWidget orders={orders} vehicles={vehicles} />
         <OperationalForecastWidget vehicles={vehicles} orders={orders} />
+      </div>
+
+      {/* Margin trend widget */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-1">
+          <MarginWidget />
+        </div>
       </div>
 
       {/* Two column layout */}
