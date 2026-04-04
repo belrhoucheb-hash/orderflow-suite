@@ -45,6 +45,9 @@ vi.mock("@/components/dashboard/OperationalForecastWidget", () => ({
 vi.mock("@/components/dashboard/MarginWidget", () => ({
   MarginWidget: () => <div data-testid="margin-widget">Margin Trend</div>,
 }));
+vi.mock("@/components/dashboard/EmballageWidget", () => ({
+  EmballageWidget: () => <div data-testid="emballage-widget">Emballage</div>,
+}));
 
 vi.mock("framer-motion", async () => ({
   motion: {
