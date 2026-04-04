@@ -62,7 +62,7 @@ export function useOnTimeReport(dateFrom: string | null, dateTo: string | null) 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("trip_stops")
-        .select("id, window_status, waiting_time_min, planned_window_start, planned_window_end, actual_arrival_time, trip:trips!inner(planned_date, tenant_id)")
+        .select("id, window_status, waiting_time_min, client_location_id, planned_window_start, planned_window_end, actual_arrival_time, trip:trips!inner(planned_date, tenant_id)")
         .gte("trip.planned_date", dateFrom!)
         .lte("trip.planned_date", dateTo!)
         .not("window_status", "eq", "ONBEKEND");

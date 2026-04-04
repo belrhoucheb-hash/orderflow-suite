@@ -1,7 +1,8 @@
 // src/hooks/useSlotBookings.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import type { SlotBooking, SlotAvailability, LocationTimeWindow } from "@/types/timeWindows";
+import { fromTable } from "@/lib/supabaseHelpers";
+import { parseMinutes, formatMinutes } from "@/lib/timeUtils";
 
 interface SlotBookingsFilter {
   locationId: string | null;
@@ -14,8 +15,7 @@ export function useSlotBookings(filter: SlotBookingsFilter) {
     enabled: !!filter.locationId && !!filter.date,
     staleTime: 30_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("slot_bookings")
+      const { data, error } = await fromTable("slot_bookings")
         .select("*")
         .eq("client_location_id", filter.locationId!)
         .eq("slot_date", filter.date!)
@@ -30,8 +30,7 @@ export function useCreateSlotBooking() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (booking: Omit<SlotBooking, "id" | "created_at" | "updated_at" | "order" | "location">) => {
-      const { data, error } = await (supabase as any)
-        .from("slot_bookings")
+      const { data, error } = await fromTable("slot_bookings")
         .insert(booking)
         .select()
         .single();
@@ -48,8 +47,7 @@ export function useCancelSlotBooking() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, locationId, date }: { id: string; locationId: string; date: string }) => {
-      const { data, error } = await (supabase as any)
-        .from("slot_bookings")
+      const { data, error } = await fromTable("slot_bookings")
         .update({ status: "GEANNULEERD" })
         .eq("id", id)
         .select()
@@ -72,16 +70,14 @@ export function computeSlotAvailability(
   existingBookings: SlotBooking[],
 ): SlotAvailability[] {
   const slots: SlotAvailability[] = [];
-  const [openH, openM] = timeWindow.open_time.split(":").map(Number);
-  const [closeH, closeM] = timeWindow.close_time.split(":").map(Number);
-  const openMinutes = openH * 60 + openM;
-  const closeMinutes = closeH * 60 + closeM;
+  const openMinutes = parseMinutes(timeWindow.open_time);
+  const closeMinutes = parseMinutes(timeWindow.close_time);
   const duration = timeWindow.slot_duration_min;
 
   for (let start = openMinutes; start + duration <= closeMinutes; start += duration) {
-    const startStr = `${String(Math.floor(start / 60)).padStart(2, "0")}:${String(start % 60).padStart(2, "0")}`;
+    const startStr = formatMinutes(start);
     const endMin = start + duration;
-    const endStr = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
+    const endStr = formatMinutes(endMin);
 
     const activeBookings = existingBookings.filter(
       (b) => b.status !== "GEANNULEERD" && b.status !== "VERLOPEN" && b.slot_start === startStr
