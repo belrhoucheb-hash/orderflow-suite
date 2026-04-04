@@ -4,7 +4,7 @@ import {
   ArrowLeft, MapPin, Package, Truck, User, Clock, FileText,
   MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2,
   Undo2, Send, Loader2, Printer, Warehouse, ScrollText, Image,
-  Save, X
+  Save, X, Bell
 } from "lucide-react";
 import { ClickableAddress } from "@/components/ClickableAddress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,8 @@ import SmartLabel from "@/components/orders/SmartLabel";
 import PodViewer from "@/components/orders/PodViewer";
 import CMRDocument from "@/components/orders/CMRDocument";
 import LabelWorkshop from "@/components/orders/LabelWorkshop";
+import { RecipientFields } from "@/components/orders/RecipientFields";
+import { NotificationLogPanel } from "@/components/orders/NotificationLogPanel";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
 import { Receipt } from "lucide-react";
@@ -646,6 +648,38 @@ const OrderDetail = () => {
             </Card>
           )}
 
+          {/* Recipient & Notifications */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-display flex items-center gap-2">
+                <Bell className="h-4 w-4 text-gray-400" />
+                Ontvanger &amp; Notificaties
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isEditing ? (
+                <RecipientFields
+                  recipientName={editForm.recipient_name ?? order.recipient_name ?? null}
+                  recipientEmail={editForm.recipient_email ?? order.recipient_email ?? null}
+                  recipientPhone={editForm.recipient_phone ?? order.recipient_phone ?? null}
+                  notificationPreferences={
+                    editForm.notification_preferences ?? order.notification_preferences ?? { email: true, sms: false }
+                  }
+                  onChange={updateEditField}
+                />
+              ) : (
+                <RecipientFields
+                  recipientName={order.recipient_name ?? null}
+                  recipientEmail={order.recipient_email ?? null}
+                  recipientPhone={order.recipient_phone ?? null}
+                  notificationPreferences={order.notification_preferences ?? { email: true, sms: false }}
+                  onChange={updateEditField}
+                  readOnly
+                />
+              )}
+            </CardContent>
+          </Card>
+
           {/* Proof of Delivery */}
           {order.status === "DELIVERED" && (order.pod_signature_url || order.pod_signed_by) && (
             <PodViewer order={order} />
@@ -679,6 +713,19 @@ const OrderDetail = () => {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Notification Log */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-display flex items-center gap-2">
+                <Bell className="h-4 w-4 text-gray-400" />
+                Notificatielogboek
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <NotificationLogPanel orderId={order.id} />
             </CardContent>
           </Card>
 
