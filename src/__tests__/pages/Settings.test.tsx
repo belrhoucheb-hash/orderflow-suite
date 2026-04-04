@@ -51,6 +51,20 @@ vi.mock("@/hooks/useCostTypes", () => ({
   useDeleteCostType: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 
+vi.mock("@/hooks/useNotificationTemplates", () => ({
+  useNotificationTemplates: () => ({ data: [], isLoading: false }),
+  useUpsertNotificationTemplate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useToggleNotificationTemplate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteNotificationTemplate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useNotificationTemplate: () => ({ data: null, isLoading: false }),
+}));
+
+vi.mock("@/lib/notificationRenderer", () => ({
+  renderTemplate: (template: string) => template,
+  extractVariables: () => [],
+  buildTrackUrl: () => "https://example.com/track",
+}));
+
 // Mock clipboard API and toast
 const mockClipboard = vi.fn().mockResolvedValue(undefined);
 Object.assign(navigator, { clipboard: { writeText: mockClipboard } });
@@ -90,9 +104,9 @@ describe("Settings", () => {
   it("switches to notifications tab (handleTabChange)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const notifTab = screen.queryByText(/Notificaties/i);
-    if (notifTab) {
-      await user.click(notifTab);
+    const notifTabs = screen.queryAllByText(/^Notificaties$/i);
+    if (notifTabs.length > 0) {
+      await user.click(notifTabs[0]);
       await waitFor(() => {
         expect(document.body.textContent).toBeTruthy();
       });
@@ -183,9 +197,9 @@ describe("Settings", () => {
   it("toggles notification switch (toggleNotification)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const notifTab = screen.queryByText(/Notificaties/i);
-    if (notifTab) {
-      await user.click(notifTab);
+    const notifTabs = screen.queryAllByText(/^Notificaties$/i);
+    if (notifTabs.length > 0) {
+      await user.click(notifTabs[0]);
       await waitFor(() => {
         const switches = document.querySelectorAll('[role="switch"]');
         expect(switches.length).toBeGreaterThan(0);
@@ -206,9 +220,9 @@ describe("Settings", () => {
   it("toggles all notification switches", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const notifTab = screen.queryByText(/Notificaties/i);
-    if (notifTab) {
-      await user.click(notifTab);
+    const notifTabs = screen.queryAllByText(/^Notificaties$/i);
+    if (notifTabs.length > 0) {
+      await user.click(notifTabs[0]);
       await waitFor(() => {
         const switches = document.querySelectorAll('[role="switch"]');
         expect(switches.length).toBeGreaterThanOrEqual(5);
@@ -225,9 +239,9 @@ describe("Settings", () => {
   it("saves notification settings (handleSaveNotifications)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const notifTab = screen.queryByText(/Notificaties/i);
-    if (notifTab) {
-      await user.click(notifTab);
+    const notifTabs = screen.queryAllByText(/^Notificaties$/i);
+    if (notifTabs.length > 0) {
+      await user.click(notifTabs[0]);
       const saveBtn = await screen.findByText(/Notificaties Opslaan/i);
       if (saveBtn) {
         await user.click(saveBtn);
@@ -244,9 +258,9 @@ describe("Settings", () => {
     mockSaveMutateAsync.mockRejectedValueOnce(new Error("fail"));
     const user = userEvent.setup();
     renderSettings();
-    const notifTab = screen.queryByText(/Notificaties/i);
-    if (notifTab) {
-      await user.click(notifTab);
+    const notifTabs = screen.queryAllByText(/^Notificaties$/i);
+    if (notifTabs.length > 0) {
+      await user.click(notifTabs[0]);
       const saveBtn = await screen.findByText(/Notificaties Opslaan/i);
       if (saveBtn) {
         await user.click(saveBtn);
