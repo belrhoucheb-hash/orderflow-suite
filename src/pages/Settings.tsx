@@ -32,6 +32,8 @@ import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
+import { NotificationTemplatesSection } from "@/components/settings/NotificationTemplatesSection";
+import { PortalModuleToggle } from "@/components/settings/PortalModuleToggle";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
@@ -193,6 +195,8 @@ const Settings = () => {
     if (location.pathname.includes("/integraties")) return "integraties";
     if (location.pathname.includes("/tarieven")) return "tarieven";
     if (location.pathname.includes("/kosten")) return "kosten";
+    if (location.pathname.includes("/klantnotificaties")) return "klantnotificaties";
+    if (location.pathname.includes("/portaal")) return "portaal";
     return "algemeen";
   };
 
@@ -274,6 +278,18 @@ const Settings = () => {
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
               Kosten
+            </TabsTrigger>
+            <TabsTrigger
+              value="klantnotificaties"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+            >
+              Klantnotificaties
+            </TabsTrigger>
+            <TabsTrigger
+              value="portaal"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+            >
+              Portaal
             </TabsTrigger>
           </TabsList>
         </div>
@@ -972,6 +988,12 @@ const Settings = () => {
         <TabsContent value="kosten" className="space-y-6 outline-none">
           <FuelPriceSettings />
           <CostTypeSettings />
+        </TabsContent>
+        <TabsContent value="klantnotificaties" className="space-y-6 outline-none">
+          <NotificationTemplatesSection />
+        </TabsContent>
+        <TabsContent value="portaal" className="space-y-6 outline-none">
+          <PortalModuleToggle />
         </TabsContent>
       </Tabs>
     </div>
