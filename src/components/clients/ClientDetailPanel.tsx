@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { type Client, useClientLocations, useClientRates, useClientOrders } from "@/hooks/useClients";
 import { MapPin, Clock, Truck, Euro, FileText, Building2, Hash } from "lucide-react";
+import { ClientPortalTab } from "./ClientPortalTab";
 
 interface Props {
   client: Client;
@@ -17,7 +18,7 @@ export function ClientDetailPanel({ client }: Props) {
   return (
     <Tabs defaultValue="overzicht" className="w-full">
       <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent px-6 h-auto py-0">
-        {["Overzicht", "Locaties", "Tarieven", "Orders"].map((tab) => (
+        {["Overzicht", "Locaties", "Tarieven", "Orders", "Portaal"].map((tab) => (
           <TabsTrigger
             key={tab}
             value={tab.toLowerCase()}
@@ -117,6 +118,11 @@ export function ClientDetailPanel({ client }: Props) {
             </table>
           </div>
         )}
+      </TabsContent>
+
+      {/* Portaal */}
+      <TabsContent value="portaal" className="p-6 mt-0">
+        <ClientPortalTab clientId={client.id} clientName={client.name} />
       </TabsContent>
 
       {/* Orders */}
