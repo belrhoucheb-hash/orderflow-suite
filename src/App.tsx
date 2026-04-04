@@ -52,6 +52,12 @@ const ChauffeurApp = lazy(() => import("@/pages/ChauffeurApp"));
 const TrackTrace = lazy(() => import("@/pages/TrackTrace"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const Exceptions = lazy(() => import("@/pages/Exceptions"));
+const PortalOrders = lazy(() => import("@/pages/portal/PortalOrders"));
+const PortalTracking = lazy(() => import("@/pages/portal/PortalTracking"));
+const PortalDocuments = lazy(() => import("@/pages/portal/PortalDocuments"));
+const PortalInvoicing = lazy(() => import("@/pages/portal/PortalInvoicing"));
+const PortalReporting = lazy(() => import("@/pages/portal/PortalReporting"));
+const PortalSettings = lazy(() => import("@/pages/portal/PortalSettings"));
 const Dispatch = lazy(() => import("@/pages/Dispatch"));
 
 const queryClient = new QueryClient();
@@ -106,7 +112,14 @@ const App = () => (
 
             <Route path="/chauffeur" element={<ProtectedRoute><ErrorBoundary><Suspense fallback={<PageLoader />}><ChauffeurApp /></Suspense></ErrorBoundary></ProtectedRoute>} />
             <Route path="/track" element={<Suspense fallback={<PageLoader />}><TrackTrace /></Suspense>} />
-            <Route path="/portal" element={<Suspense fallback={<PageLoader />}><ClientPortal /></Suspense>} />
+            <Route path="/portal" element={<Suspense fallback={<PageLoader />}><ClientPortal /></Suspense>}>
+              <Route index element={<Suspense fallback={<PageLoader />}><PortalOrders /></Suspense>} />
+              <Route path="tracking" element={<Suspense fallback={<PageLoader />}><PortalTracking /></Suspense>} />
+              <Route path="documenten" element={<Suspense fallback={<PageLoader />}><PortalDocuments /></Suspense>} />
+              <Route path="facturatie" element={<Suspense fallback={<PageLoader />}><PortalInvoicing /></Suspense>} />
+              <Route path="rapportage" element={<Suspense fallback={<PageLoader />}><PortalReporting /></Suspense>} />
+              <Route path="instellingen" element={<Suspense fallback={<PageLoader />}><PortalSettings /></Suspense>} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

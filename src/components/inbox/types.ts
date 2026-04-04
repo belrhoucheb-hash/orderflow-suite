@@ -2,6 +2,7 @@ export interface OrderDraft {
   id: string;
   order_number: number;
   status: string;
+  source: string | null;
   source_email_from: string | null;
   source_email_subject: string | null;
   source_email_body: string | null;
