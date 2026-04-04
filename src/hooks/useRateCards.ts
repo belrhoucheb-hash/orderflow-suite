@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { fromTable } from "@/lib/supabaseHelpers";
 import { toast } from "sonner";
 import type { RateCard, RateRule } from "@/types/rateModels";
 
@@ -14,7 +14,7 @@ export function useRateCards(options: UseRateCardsOptions = {}) {
     queryKey: ["rate_cards", { clientId, activeOnly }],
     staleTime: 15_000,
     queryFn: async () => {
-      let query = (supabase as any).from("rate_cards")
+      let query = fromTable("rate_cards")
         .select("*, rate_rules(*), clients(name)")
         .order("created_at", { ascending: false });
       if (activeOnly) query = query.eq("is_active", true);
@@ -38,7 +38,7 @@ export function useRateCardById(id: string | null) {
     enabled: !!id,
     staleTime: 15_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("rate_cards")
+      const { data, error } = await fromTable("rate_cards")
         .select("*, rate_rules(*), clients(name)").eq("id", id!).single();
       if (error) throw error;
       if (!data) return null;
@@ -56,7 +56,7 @@ export function useClientRateCard(clientId: string | null) {
     staleTime: 15_000,
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
-      const { data: clientCard } = await (supabase as any).from("rate_cards")
+      const { data: clientCard } = await fromTable("rate_cards")
         .select("*, rate_rules(*)").eq("client_id", clientId!).eq("is_active", true)
         .or(`valid_from.is.null,valid_from.lte.${today}`)
         .or(`valid_until.is.null,valid_until.gte.${today}`)
@@ -64,7 +64,7 @@ export function useClientRateCard(clientId: string | null) {
       if (clientCard) {
         return { ...clientCard, rate_rules: (clientCard.rate_rules ?? []).sort((a: RateRule, b: RateRule) => a.sort_order - b.sort_order) } as RateCard;
       }
-      const { data: defaultCard } = await (supabase as any).from("rate_cards")
+      const { data: defaultCard } = await fromTable("rate_cards")
         .select("*, rate_rules(*)").is("client_id", null).eq("is_active", true)
         .or(`valid_from.is.null,valid_from.lte.${today}`)
         .or(`valid_until.is.null,valid_until.gte.${today}`)
@@ -84,7 +84,7 @@ export function useCreateRateCard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateRateCardInput) => {
-      const { data, error } = await (supabase as any).from("rate_cards")
+      const { data, error } = await fromTable("rate_cards")
         .insert({ tenant_id: input.tenant_id, client_id: input.client_id ?? null, name: input.name,
           valid_from: input.valid_from ?? null, valid_until: input.valid_until ?? null,
           currency: input.currency ?? "EUR", is_active: true }).select().single();
@@ -100,7 +100,7 @@ export function useUpdateRateCard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<CreateRateCardInput> & { is_active?: boolean } }) => {
-      const { data, error } = await (supabase as any).from("rate_cards")
+      const { data, error } = await fromTable("rate_cards")
         .update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id).select().single();
       if (error) throw error;
       return data as RateCard;
@@ -114,7 +114,7 @@ export function useDeleteRateCard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("rate_cards").delete().eq("id", id);
+      const { error } = await fromTable("rate_cards").delete().eq("id", id);
       if (error) throw error; return true;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["rate_cards"] }); toast.success("Tariefkaart verwijderd"); },
@@ -126,15 +126,33 @@ export function useUpsertRateRules() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ rateCardId, rules }: { rateCardId: string; rules: Omit<RateRule, "id" | "created_at">[] }) => {
-      const { error: deleteErr } = await (supabase as any).from("rate_rules").delete().eq("rate_card_id", rateCardId);
+      // Fetch existing rules as backup before deleting
+      const { data: existingRules } = await fromTable("rate_rules")
+        .select("*")
+        .eq("rate_card_id", rateCardId);
+
+      // Delete existing rules
+      const { error: deleteErr } = await fromTable("rate_rules")
+        .delete()
+        .eq("rate_card_id", rateCardId);
       if (deleteErr) throw deleteErr;
+
+      // Insert new rules
       if (rules.length > 0) {
         const inserts = rules.map((rule, idx) => ({
           rate_card_id: rateCardId, rule_type: rule.rule_type, transport_type: rule.transport_type ?? null,
           amount: rule.amount, min_amount: rule.min_amount ?? null, conditions: rule.conditions ?? {}, sort_order: rule.sort_order ?? idx,
         }));
-        const { error: insertErr } = await (supabase as any).from("rate_rules").insert(inserts);
-        if (insertErr) throw insertErr;
+        const { error: insertErr } = await fromTable("rate_rules").insert(inserts);
+        if (insertErr) {
+          // Restore old rules on insert failure
+          if (existingRules && existingRules.length > 0) {
+            await fromTable("rate_rules").insert(
+              existingRules.map(({ id: _id, created_at: _created_at, ...rest }: { id: string; created_at: string; [key: string]: unknown }) => rest)
+            );
+          }
+          throw insertErr;
+        }
       }
       return true;
     },

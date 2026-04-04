@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { fromTable } from "@/lib/supabaseHelpers";
 import { toast } from "sonner";
 import type { TripCost, CostSource, CostCalculationInput } from "@/types/costModels";
 import { calculateTripCosts } from "@/lib/costEngine";
@@ -10,7 +10,7 @@ export function useTripCosts(tripId: string | null) {
     enabled: !!tripId,
     staleTime: 15_000,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("trip_costs")
+      const { data, error } = await fromTable("trip_costs")
         .select("*, cost_types(*)")
         .eq("trip_id", tripId!)
         .order("created_at", { ascending: true });
@@ -38,7 +38,7 @@ export function useCreateTripCost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateTripCostInput) => {
-      const { data, error } = await (supabase as any).from("trip_costs")
+      const { data, error } = await fromTable("trip_costs")
         .insert({
           tenant_id: input.tenant_id,
           trip_id: input.trip_id,
@@ -64,7 +64,7 @@ export function useDeleteTripCost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, tripId }: { id: string; tripId: string }) => {
-      const { error } = await (supabase as any).from("trip_costs").delete().eq("id", id);
+      const { error } = await fromTable("trip_costs").delete().eq("id", id);
       if (error) throw error;
       return { id, tripId };
     },
@@ -88,7 +88,7 @@ export function useAutoCalculateTripCosts() {
   return useMutation({
     mutationFn: async ({ tripId, tenantId, calcInput, costTypeMap }: AutoCalculateInput) => {
       // Delete existing AUTO costs for this trip
-      const { error: deleteError } = await (supabase as any).from("trip_costs")
+      const { error: deleteError } = await fromTable("trip_costs")
         .delete()
         .eq("trip_id", tripId)
         .eq("source", "AUTO");
@@ -116,7 +116,7 @@ export function useAutoCalculateTripCosts() {
         .filter(Boolean);
 
       if (inserts.length > 0) {
-        const { error: insertError } = await (supabase as any).from("trip_costs").insert(inserts);
+        const { error: insertError } = await fromTable("trip_costs").insert(inserts);
         if (insertError) throw insertError;
       }
 

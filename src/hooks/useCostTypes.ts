@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { fromTable } from "@/lib/supabaseHelpers";
 import { toast } from "sonner";
 import type { CostType } from "@/types/costModels";
 
@@ -13,7 +13,7 @@ export function useCostTypes(options: UseCostTypesOptions = {}) {
     queryKey: ["cost_types", { activeOnly }],
     staleTime: 15_000,
     queryFn: async () => {
-      let query = (supabase as any).from("cost_types")
+      let query = fromTable("cost_types")
         .select("*")
         .order("name", { ascending: true });
       if (activeOnly) query = query.eq("is_active", true);
@@ -37,7 +37,7 @@ export function useCreateCostType() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateCostTypeInput) => {
-      const { data, error } = await (supabase as any).from("cost_types")
+      const { data, error } = await fromTable("cost_types")
         .insert({
           tenant_id: input.tenant_id,
           name: input.name,
@@ -58,7 +58,7 @@ export function useUpdateCostType() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<CreateCostTypeInput> }) => {
-      const { data, error } = await (supabase as any).from("cost_types")
+      const { data, error } = await fromTable("cost_types")
         .update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id).select().single();
       if (error) throw error;
       return data as CostType;
@@ -72,7 +72,7 @@ export function useDeleteCostType() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("cost_types").delete().eq("id", id);
+      const { error } = await fromTable("cost_types").delete().eq("id", id);
       if (error) throw error;
       return true;
     },

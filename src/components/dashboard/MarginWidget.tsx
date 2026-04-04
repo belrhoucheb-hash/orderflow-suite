@@ -43,35 +43,35 @@ function useMarginData() {
 
       if (invError) throw invError;
 
-      // Try fetching trip_costs — table may not exist yet
-      let tripCosts: { order_id: string; total_cost: number }[] = [];
-      try {
-        const { data: costs, error: costError } = await supabase
-          .from("trip_costs" as any)
-          .select("order_id, total_cost")
-          .gte("created_at" as any, fourWeeksAgo.toISOString());
-        if (!costError && costs) {
-          tripCosts = costs as { order_id: string; total_cost: number }[];
-        }
-      } catch {
-        // table doesn't exist — proceed with zero costs
-      }
-
-      // Build cost lookup by order_id
-      const costByOrder = new Map<string, number>();
-      for (const c of tripCosts) {
-        costByOrder.set(c.order_id, (costByOrder.get(c.order_id) ?? 0) + c.total_cost);
-      }
-
-      // Build 4 weekly buckets (most recent 4 ISO weeks)
-      const buckets = new Map<number, { revenue: number; cost: number; weekNum: number }>();
-
+      // ISO week helper — defined first so it can be used below
       function getISOWeek(date: Date): number {
         const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
         d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
         const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
         return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
       }
+
+      // Try fetching trip_costs — table may not exist yet.
+      // trip_costs columns: id, tenant_id, trip_id, cost_type_id, amount, quantity, rate, source, notes, created_at
+      // trip_costs links to trips (not orders), so costs are bucketed by their own created_at week.
+      const costByWeek = new Map<number, number>();
+      try {
+        const { data: costs, error: costError } = await supabase
+          .from("trip_costs" as any)
+          .select("amount, created_at")
+          .gte("created_at" as any, fourWeeksAgo.toISOString());
+        if (!costError && costs) {
+          for (const c of costs as { amount: number; created_at: string }[]) {
+            const wk = getISOWeek(new Date(c.created_at));
+            costByWeek.set(wk, (costByWeek.get(wk) ?? 0) + (c.amount ?? 0));
+          }
+        }
+      } catch {
+        // table doesn't exist — proceed with zero costs
+      }
+
+      // Build 4 weekly buckets (most recent 4 ISO weeks)
+      const buckets = new Map<number, { revenue: number; cost: number; weekNum: number }>();
 
       // Seed the 4 buckets (current week and 3 prior)
       const today = new Date();
@@ -92,10 +92,13 @@ function useMarginData() {
         if (buckets.has(wk)) {
           const b = buckets.get(wk)!;
           b.revenue += inv.subtotal ?? inv.total ?? 0;
-          // Add associated trip cost if available
-          if (inv.order_id) {
-            b.cost += costByOrder.get(inv.order_id) ?? 0;
-          }
+        }
+      }
+
+      // Fill costs from trip_costs (bucketed by their own created_at week)
+      for (const [wk, cost] of costByWeek.entries()) {
+        if (buckets.has(wk)) {
+          buckets.get(wk)!.cost += cost;
         }
       }
 

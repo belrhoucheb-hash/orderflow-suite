@@ -22,20 +22,20 @@ ALTER TABLE public.cost_types ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Tenant isolation: cost_types SELECT" ON public.cost_types
   FOR SELECT TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: cost_types INSERT" ON public.cost_types
   FOR INSERT TO authenticated
-  WITH CHECK (tenant_id = (SELECT public.current_tenant_id()));
+  WITH CHECK (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: cost_types UPDATE" ON public.cost_types
   FOR UPDATE TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()))
-  WITH CHECK (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id())
+  WITH CHECK (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: cost_types DELETE" ON public.cost_types
   FOR DELETE TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Service role: cost_types" ON public.cost_types
   FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -67,20 +67,20 @@ ALTER TABLE public.trip_costs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Tenant isolation: trip_costs SELECT" ON public.trip_costs
   FOR SELECT TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: trip_costs INSERT" ON public.trip_costs
   FOR INSERT TO authenticated
-  WITH CHECK (tenant_id = (SELECT public.current_tenant_id()));
+  WITH CHECK (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: trip_costs UPDATE" ON public.trip_costs
   FOR UPDATE TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()))
-  WITH CHECK (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id())
+  WITH CHECK (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: trip_costs DELETE" ON public.trip_costs
   FOR DELETE TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Service role: trip_costs" ON public.trip_costs
   FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -106,20 +106,20 @@ ALTER TABLE public.vehicle_fixed_costs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Tenant isolation: vehicle_fixed_costs SELECT" ON public.vehicle_fixed_costs
   FOR SELECT TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: vehicle_fixed_costs INSERT" ON public.vehicle_fixed_costs
   FOR INSERT TO authenticated
-  WITH CHECK (tenant_id = (SELECT public.current_tenant_id()));
+  WITH CHECK (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: vehicle_fixed_costs UPDATE" ON public.vehicle_fixed_costs
   FOR UPDATE TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()))
-  WITH CHECK (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id())
+  WITH CHECK (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Tenant isolation: vehicle_fixed_costs DELETE" ON public.vehicle_fixed_costs
   FOR DELETE TO authenticated
-  USING (tenant_id = (SELECT public.current_tenant_id()));
+  USING (tenant_id = public.get_user_tenant_id());
 
 CREATE POLICY "Service role: vehicle_fixed_costs" ON public.vehicle_fixed_costs
   FOR ALL TO service_role USING (true) WITH CHECK (true);
