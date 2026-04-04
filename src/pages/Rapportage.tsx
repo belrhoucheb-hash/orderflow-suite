@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3, Clock, Truck, Brain, Users, Loader2, Package, Download,
 } from "lucide-react";
+import { ProfitabilityReport } from "@/components/rapportage/ProfitabilityReport";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -790,6 +791,15 @@ const Rapportage = () => {
             )}
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Profitability report */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+      >
+        <ProfitabilityReport />
       </motion.div>
     </div>
   );
