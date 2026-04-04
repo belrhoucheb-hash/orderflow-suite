@@ -30,6 +30,7 @@ import LabelWorkshop from "@/components/orders/LabelWorkshop";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
 import { Receipt } from "lucide-react";
+import { ReturnOrderDialog } from "@/components/orders/ReturnOrderDialog";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "Nieuw", color: "bg-muted text-muted-foreground" },
@@ -48,6 +49,7 @@ const OrderDetail = () => {
 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [showModifyMode, setShowModifyMode] = useState(false);
   const [showCmr, setShowCmr] = useState(false);
   const [isGeneratingCmr, setIsGeneratingCmr] = useState(false);
@@ -761,6 +763,17 @@ const OrderDetail = () => {
                 </Button>
               </Link>
             )}
+            {/* Retour aanmaken — only for non-retour, non-cancelled orders */}
+            {!isCancelled && (order as any).order_type !== "RETOUR" && (
+              <Button
+                variant="outline"
+                className="w-full gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
+                onClick={() => setShowReturnDialog(true)}
+              >
+                <Undo2 className="h-4 w-4" />
+                Retour aanmaken
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -844,6 +857,25 @@ const OrderDetail = () => {
 
       {/* Hidden printable CMR document */}
       {showCmr && <CMRDocument order={order} />}
+
+      {/* Retour order dialog */}
+      {showReturnDialog && (
+        <ReturnOrderDialog
+          open={showReturnDialog}
+          onOpenChange={setShowReturnDialog}
+          parentOrder={{
+            id: order.id,
+            order_number: order.order_number,
+            client_name: order.client_name,
+            tenant_id: order.tenant_id,
+            pickup_address: order.pickup_address,
+            delivery_address: order.delivery_address,
+            weight_kg: order.weight_kg,
+            quantity: order.quantity,
+            unit: order.unit,
+          }}
+        />
+      )}
     </div>
   );
 };
