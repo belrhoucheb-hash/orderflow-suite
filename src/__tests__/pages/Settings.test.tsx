@@ -19,6 +19,38 @@ vi.mock("@/components/settings/MasterDataSection", () => ({
   MasterDataSection: () => <div data-testid="master-data">Master Data</div>,
 }));
 
+// Mock supabase helpers and hooks that depend on DB tables not in the generated types
+vi.mock("@/lib/supabaseHelpers", () => ({
+  fromTable: () => ({
+    select: () => ({ order: () => ({ eq: () => ({ data: [], error: null }) }), data: [], error: null }),
+    insert: () => ({ select: () => ({ single: () => ({ data: null, error: null }) }) }),
+    update: () => ({ eq: () => ({ select: () => ({ single: () => ({ data: null, error: null }) }) }) }),
+    delete: () => ({ eq: () => ({ data: null, error: null }) }),
+  }),
+}));
+
+vi.mock("@/hooks/useRateCards", () => ({
+  useRateCards: () => ({ data: [], isLoading: false, error: null }),
+  useCreateRateCard: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateRateCard: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteRateCard: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpsertRateRules: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+vi.mock("@/hooks/useSurcharges", () => ({
+  useSurcharges: () => ({ data: [], isLoading: false, error: null }),
+  useCreateSurcharge: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateSurcharge: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteSurcharge: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+vi.mock("@/hooks/useCostTypes", () => ({
+  useCostTypes: () => ({ data: [], isLoading: false, error: null }),
+  useCreateCostType: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateCostType: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteCostType: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+}));
+
 // Mock clipboard API and toast
 const mockClipboard = vi.fn().mockResolvedValue(undefined);
 Object.assign(navigator, { clipboard: { writeText: mockClipboard } });
