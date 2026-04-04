@@ -105,18 +105,29 @@ describe("ClientPortal", () => {
     });
   });
 
-  it("shows password input field", async () => {
+  it("shows password input field after switching to password mode", async () => {
+    const user = userEvent.setup();
     renderClientPortal();
+    // Switch to password mode
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Wachtwoord/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Wachtwoord/i }));
     await waitFor(() => {
       const passwordInput = screen.getByPlaceholderText(/wachtwoord/i);
       expect(passwordInput).toBeInTheDocument();
     });
   });
 
-  it("shows login button", async () => {
+  it("shows login button after switching to password mode", async () => {
+    const user = userEvent.setup();
     renderClientPortal();
     await waitFor(() => {
-      const loginBtn = screen.getByRole("button", { name: /Inloggen|Login/i });
+      expect(screen.getByRole("button", { name: /Wachtwoord/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Wachtwoord/i }));
+    await waitFor(() => {
+      const loginBtn = screen.getByRole("button", { name: /^Inloggen$/i });
       expect(loginBtn).toBeInTheDocument();
     });
   });
@@ -124,7 +135,8 @@ describe("ClientPortal", () => {
   it("shows company name in header", async () => {
     renderClientPortal();
     await waitFor(() => {
-      expect(screen.getByText("OrderFlow Suite")).toBeInTheDocument();
+      const matches = screen.getAllByText(/Klantportaal/i);
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -132,12 +144,17 @@ describe("ClientPortal", () => {
   it("calls signInWithPassword on login form submit (handleLogin)", async () => {
     const user = userEvent.setup();
     renderClientPortal();
+    // Switch to password mode first
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Wachtwoord/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Wachtwoord/i }));
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/u@bedrijf/i)).toBeInTheDocument();
     });
     await user.type(screen.getByPlaceholderText(/u@bedrijf/i), "test@example.com");
     await user.type(screen.getByPlaceholderText(/wachtwoord/i), "password123");
-    await user.click(screen.getByRole("button", { name: /Inloggen|Login/i }));
+    await user.click(screen.getByRole("button", { name: /^Inloggen$/i }));
     await waitFor(() => {
       expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
         email: "test@example.com",
@@ -153,12 +170,17 @@ describe("ClientPortal", () => {
     });
     const user = userEvent.setup();
     renderClientPortal();
+    // Switch to password mode first
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Wachtwoord/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Wachtwoord/i }));
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/u@bedrijf/i)).toBeInTheDocument();
     });
     await user.type(screen.getByPlaceholderText(/u@bedrijf/i), "bad@example.com");
     await user.type(screen.getByPlaceholderText(/wachtwoord/i), "wrong");
-    await user.click(screen.getByRole("button", { name: /Inloggen|Login/i }));
+    await user.click(screen.getByRole("button", { name: /^Inloggen$/i }));
     await waitFor(() => {
       expect(screen.getByText(/Ongeldige inloggegevens/i)).toBeInTheDocument();
     });
@@ -180,6 +202,11 @@ describe("ClientPortal", () => {
   it("updates password state on input change (setPassword)", async () => {
     const user = userEvent.setup();
     renderClientPortal();
+    // Switch to password mode first
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Wachtwoord/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Wachtwoord/i }));
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/wachtwoord/i)).toBeInTheDocument();
     });
@@ -191,6 +218,11 @@ describe("ClientPortal", () => {
   it("handles login form submit via Enter key", async () => {
     const user = userEvent.setup();
     renderClientPortal();
+    // Switch to password mode first
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Wachtwoord/i })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Wachtwoord/i }));
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/u@bedrijf/i)).toBeInTheDocument();
     });
