@@ -115,7 +115,7 @@ describe("Orders", () => {
 
   it("has status filter buttons", () => {
     renderOrders();
-    expect(screen.getByText("Alle")).toBeInTheDocument();
+    expect(screen.getAllByText("Alle").length).toBeGreaterThanOrEqual(1);
   });
 
   it("opens import dialog (setImportOpen)", async () => {
@@ -189,7 +189,7 @@ describe("Orders", () => {
   it("clicks Alle filter to reset", async () => {
     const user = userEvent.setup();
     renderOrders();
-    await user.click(screen.getByText("Alle"));
+    await user.click(screen.getAllByText("Alle")[0]);
     expect(mockUseOrders).toHaveBeenCalled();
   });
 

@@ -45,27 +45,65 @@ export function useOrdersByType(orderType?: OrderType) {
   });
 }
 
-/** Create a return order from a parent order, swapping addresses */
+/** Return orders for a specific parent order */
+export function useReturnOrders(parentOrderId: string) {
+  return {
+    queryKey: ["orders", "returns", parentOrderId],
+    enabled: !!parentOrderId,
+    queryFn: async () => {
+      const { data, error } = await fromTable("orders")
+        .select(
+          "id, order_number, order_type, return_reason, parent_order_id, client_name, pickup_address, delivery_address, status, created_at, tenant_id, weight_kg, quantity, unit, priority"
+        )
+        .eq("parent_order_id", parentOrderId)
+        .eq("order_type", "RETOUR")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as ReturnOrderRow[];
+    },
+  };
+}
+
+interface CreateReturnOrderInput {
+  parentOrderId: string;
+  returnReason: ReturnReason;
+  notes?: string;
+  quantity?: number;
+  weight_kg?: number;
+}
+
+/** Create a return order from a parent order, fetching parent and swapping addresses */
 export function useCreateReturnOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: RetourOrderCreate) => {
+    mutationFn: async (input: CreateReturnOrderInput) => {
+      // Step 1: fetch the parent order
+      const { data: parent, error: fetchError } = await fromTable("orders")
+        .select(
+          "id, tenant_id, client_name, pickup_address, delivery_address, weight_kg, quantity, unit, priority"
+        )
+        .eq("id", input.parentOrderId)
+        .single();
+      if (fetchError) throw fetchError;
+
+      // Step 2: insert the return order (swap pickup/delivery)
       const { data, error } = await fromTable("orders")
         .insert({
-          order_type: payload.order_type,
-          return_reason: payload.return_reason,
-          parent_order_id: payload.parent_order_id,
-          client_name: payload.client_name,
-          tenant_id: payload.tenant_id,
+          order_type: "RETOUR",
+          return_reason: input.returnReason,
+          parent_order_id: parent.id,
+          client_name: parent.client_name,
+          tenant_id: parent.tenant_id,
           // Swap: original delivery → new pickup, original pickup → new delivery
-          pickup_address: payload.pickup_address,
-          delivery_address: payload.delivery_address,
-          weight_kg: payload.weight_kg,
-          quantity: payload.quantity,
-          unit: payload.unit,
-          priority: payload.priority,
+          pickup_address: parent.delivery_address,
+          delivery_address: parent.pickup_address,
+          weight_kg: input.weight_kg ?? parent.weight_kg,
+          quantity: input.quantity ?? parent.quantity,
+          unit: parent.unit,
+          priority: parent.priority ?? "normaal",
           status: "PENDING",
           thread_type: "MANUAL",
+          internal_note: input.notes ?? null,
         })
         .select()
         .single();

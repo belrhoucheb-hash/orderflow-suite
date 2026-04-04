@@ -27,7 +27,8 @@ const DIRECTION_LABELS: Record<string, { label: string; color: string; icon: Rea
 };
 
 export function ClientEmballageTab({ clientId }: Props) {
-  const { total, balances, isLoading: balancesLoading } = useClientPackagingBalance(clientId);
+  const { data: balances = [], isLoading: balancesLoading } = useClientPackagingBalance(clientId);
+  const total = balances.reduce((sum, b) => sum + (b.balance ?? 0), 0);
   const { data: movements = [], isLoading: movementsLoading } = usePackagingMovements(clientId);
 
   const isLoading = balancesLoading || movementsLoading;
