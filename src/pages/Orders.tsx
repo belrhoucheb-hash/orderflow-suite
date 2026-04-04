@@ -26,7 +26,12 @@ const priorityDotColors: Record<string, string> = {
   spoed: "text-primary",
 };
 
-const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED"] as const;
+const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED", "RETOUR"] as const;
+
+const ORDER_TYPE_LABELS: Record<string, { label: string; className: string }> = {
+  RETOUR: { label: "Retour", className: "bg-amber-100 text-amber-700 border-amber-200" },
+  EMBALLAGE_RUIL: { label: "Emb. Ruil", className: "bg-violet-100 text-violet-700 border-violet-200" },
+};
 
 const Orders = () => {
   const [search, setSearch] = useState("");
@@ -58,16 +63,13 @@ const Orders = () => {
     setPage(0);
   };
 
-  const handleOrderTypeChange = (value: string) => {
-    setOrderTypeFilter(value);
-    setPage(0);
-  };
-
+  // "RETOUR" filter means order_type=RETOUR; others are status filters
+  const isOrderTypeFilter = statusFilter === "RETOUR";
   const { data, isLoading, isError, refetch } = useOrders({
     page,
     pageSize,
-    statusFilter: statusFilter !== "alle" ? statusFilter : undefined,
-    orderTypeFilter: orderTypeFilter !== "alle" ? orderTypeFilter : undefined,
+    statusFilter: (!isOrderTypeFilter && statusFilter !== "alle") ? statusFilter : undefined,
+    orderTypeFilter: isOrderTypeFilter ? statusFilter : undefined,
     search: search || undefined,
   });
   const rawOrders = data?.orders ?? [];
@@ -217,7 +219,7 @@ const Orders = () => {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {t === "alle" ? "Alle types" : ORDER_TYPE_LABELS[t as OrderType].label}
+              {s === "alle" ? "Alle" : ORDER_TYPE_LABELS[s]?.label ?? getStatusColor(s).label}
             </button>
           ))}
         </div>
@@ -291,7 +293,16 @@ const Orders = () => {
                       {order.totalWeight.toLocaleString()} kg
                     </td>
                     <td className="table-cell">
-                      <StatusBadge status={order.status as OrderStatus} />
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <StatusBadge status={order.status as OrderStatus} />
+                        {order.orderType && order.orderType !== "ZENDING" && (
+                          <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium border",
+                            ORDER_TYPE_LABELS[order.orderType]?.className ?? "bg-muted text-muted-foreground"
+                          )}>
+                            {ORDER_TYPE_LABELS[order.orderType]?.label ?? order.orderType}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="table-cell hidden sm:table-cell">
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground capitalize">
