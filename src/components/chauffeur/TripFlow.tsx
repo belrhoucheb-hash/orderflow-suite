@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, X, Play, MapPin, Navigation, AlertTriangle, Camera, Fingerprint, Package, Truck, ChevronRight, Clock } from "lucide-react";
+import { PackagingRegistration } from "./PackagingRegistration";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ export function TripFlow({ driverId, onStartPOD }: Props) {
   const updateTrip = useUpdateTripStatus();
   const updateStop = useUpdateStopStatus();
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+  const [packagingStopId, setPackagingStopId] = useState<string | null>(null);
 
   const selectedTrip = trips.find(t => t.id === selectedTripId);
   const stops = (selectedTrip as any)?.trip_stops as TripStop[] || [];
@@ -226,14 +228,34 @@ export function TripFlow({ driverId, onStartPOD }: Props) {
                     </Button>
                   )}
                   {stop.stop_status === "LOSSEN" && (
-                    <div className="flex gap-2">
-                      <Button className="flex-1 h-10 bg-green-600 hover:bg-green-700" onClick={() => handleCompleteStop(stop)}>
-                        <Fingerprint className="h-4 w-4 mr-1" /> Aflevering voltooien
-                      </Button>
-                      <Button variant="outline" className="h-10 text-red-600 border-red-200" onClick={() => handleFailStop(stop.id)}>
-                        <AlertTriangle className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <>
+                      {/* Emballage registration inline */}
+                      {packagingStopId === stop.id ? (
+                        <PackagingRegistration
+                          clientId={(stop as any).order?.client_id ?? ""}
+                          orderId={(stop as any).order_id ?? undefined}
+                          tripStopId={stop.id}
+                          onClose={() => setPackagingStopId(null)}
+                        />
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-9 text-xs gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
+                          onClick={() => setPackagingStopId(stop.id)}
+                        >
+                          <Package className="h-3.5 w-3.5" /> Emballage registreren
+                        </Button>
+                      )}
+                      <div className="flex gap-2">
+                        <Button className="flex-1 h-10 bg-green-600 hover:bg-green-700" onClick={() => handleCompleteStop(stop)}>
+                          <Fingerprint className="h-4 w-4 mr-1" /> Aflevering voltooien
+                        </Button>
+                        <Button variant="outline" className="h-10 text-red-600 border-red-200" onClick={() => handleFailStop(stop.id)}>
+                          <AlertTriangle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
