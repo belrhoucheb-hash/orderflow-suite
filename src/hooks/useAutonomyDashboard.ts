@@ -191,7 +191,7 @@ export function useLearningProgress(clientId?: string) {
     queryFn: async (): Promise<LearningMetric[]> => {
       let query = supabase
         .from("confidence_scores" as any)
-        .select("client_id, total_decisions, current_score")
+        .select("client_id, total_decisions, current_score, last_updated, clients(name)")
         .eq("tenant_id", tenant!.id) as any;
 
       if (clientId) {
@@ -203,22 +203,27 @@ export function useLearningProgress(clientId?: string) {
 
       const rows = (data ?? []) as Array<{
         client_id: string;
-        client_name?: string;
         total_decisions: number;
         current_score: number;
-        first_seen?: string;
-        autonomous_since?: string | null;
+        last_updated: string;
+        clients?: { name: string } | null;
       }>;
 
-      return rows.map((r) => ({
-        clientId: r.client_id,
-        clientName: r.client_name ?? r.client_id,
-        totalOrders: r.total_decisions,
-        currentConfidence: r.current_score,
-        firstSeen: r.first_seen ?? "",
-        autonomousSince: r.autonomous_since ?? null,
-        status: classifyLearningStatus(r.current_score, r.autonomous_since ?? null),
-      }));
+      // Determine autonomy threshold from tenant settings
+      const settings = (tenant as any)?.settings;
+      const autonomyThreshold = settings?.autonomy?.global_threshold ?? 95;
+
+      return rows
+        .filter((r) => r.client_id != null)
+        .map((r) => ({
+          clientId: r.client_id,
+          clientName: r.clients?.name ?? r.client_id,
+          totalOrders: r.total_decisions,
+          currentConfidence: r.current_score,
+          firstSeen: r.last_updated ?? "",
+          autonomousSince: r.current_score >= autonomyThreshold ? r.last_updated : null,
+          status: classifyLearningStatus(r.current_score, r.current_score >= autonomyThreshold ? r.last_updated : null),
+        }));
     },
   });
 }

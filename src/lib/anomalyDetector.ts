@@ -111,7 +111,8 @@ export function detectLateArrival(
   thresholdMin: number,
 ): LateStop[] {
   const lateStops: LateStop[] = [];
-  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  // Use local time to match planned_window_end which is stored as local time (e.g. "10:30")
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   for (const stop of remainingStops) {
     // Skip completed/failed stops or stops without geo/window data

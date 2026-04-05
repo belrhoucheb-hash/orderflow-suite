@@ -182,8 +182,8 @@ describe("useDecisionFeed", () => {
 describe("useLearningProgress", () => {
   it("fetches per-client learning metrics and computes status", async () => {
     const mockData = [
-      { client_id: "c1", client_name: "Klant A", total_decisions: 50, current_score: 90, first_seen: "2026-01-01T00:00:00Z", autonomous_since: "2026-03-01T00:00:00Z" },
-      { client_id: "c2", client_name: "Klant B", total_decisions: 10, current_score: 45, first_seen: "2026-03-15T00:00:00Z", autonomous_since: null },
+      { client_id: "c1", total_decisions: 50, current_score: 96, last_updated: "2026-03-01T00:00:00Z", clients: { name: "Klant A" } },
+      { client_id: "c2", total_decisions: 10, current_score: 45, last_updated: "2026-03-15T00:00:00Z", clients: { name: "Klant B" } },
     ];
 
     mockSupabase.from.mockImplementation(() => chainMock(mockData));
