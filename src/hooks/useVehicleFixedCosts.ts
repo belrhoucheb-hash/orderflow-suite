@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fromTable } from "@/lib/supabaseHelpers";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { VehicleFixedCost } from "@/types/costModels";
 
@@ -7,34 +7,39 @@ export function useVehicleFixedCosts(vehicleId: string | null) {
   return useQuery({
     queryKey: ["vehicle_fixed_costs", vehicleId],
     enabled: !!vehicleId,
-    staleTime: 15_000,
+    staleTime: 30_000,
     queryFn: async () => {
-      const { data, error } = await fromTable("vehicle_fixed_costs")
+      const { data, error } = await supabase
+        .from("vehicle_fixed_costs" as any)
         .select("*, cost_types(*)")
         .eq("vehicle_id", vehicleId!)
-        .order("valid_from", { ascending: false });
+        .order("created_at", { ascending: false });
+
       if (error) throw error;
-      return (data ?? []).map((row: any) => ({
-        ...row,
-        cost_type: row.cost_types ?? null,
+      return (data ?? []).map((vfc: any) => ({
+        ...vfc,
+        cost_type: vfc.cost_types ?? null,
       })) as VehicleFixedCost[];
     },
   });
 }
 
+/**
+ * Get total monthly fixed costs for a vehicle.
+ */
 export function useVehicleMonthlyTotal(vehicleId: string | null) {
-  const query = useVehicleFixedCosts(vehicleId);
+  const { data: costs, ...rest } = useVehicleFixedCosts(vehicleId);
+
   const today = new Date().toISOString().split("T")[0];
+  const activeCosts = (costs ?? []).filter((c) => {
+    if (c.valid_from && c.valid_from > today) return false;
+    if (c.valid_until && c.valid_until < today) return false;
+    return true;
+  });
 
-  const total = (query.data ?? [])
-    .filter((cost) => {
-      const fromOk = !cost.valid_from || cost.valid_from <= today;
-      const untilOk = !cost.valid_until || cost.valid_until >= today;
-      return fromOk && untilOk;
-    })
-    .reduce((sum, cost) => sum + cost.monthly_amount, 0);
+  const monthlyTotal = activeCosts.reduce((sum, c) => sum + c.monthly_amount, 0);
 
-  return { ...query, total };
+  return { ...rest, data: { costs: activeCosts, monthlyTotal } };
 }
 
 export interface CreateVehicleFixedCostInput {
@@ -47,10 +52,12 @@ export interface CreateVehicleFixedCostInput {
 }
 
 export function useCreateVehicleFixedCost() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (input: CreateVehicleFixedCostInput) => {
-      const { data, error } = await fromTable("vehicle_fixed_costs")
+      const { data, error } = await supabase
+        .from("vehicle_fixed_costs" as any)
         .insert({
           tenant_id: input.tenant_id,
           vehicle_id: input.vehicle_id,
@@ -58,47 +65,67 @@ export function useCreateVehicleFixedCost() {
           monthly_amount: input.monthly_amount,
           valid_from: input.valid_from ?? null,
           valid_until: input.valid_until ?? null,
-        }).select().single();
+        })
+        .select()
+        .single();
+
       if (error) throw error;
       return data as VehicleFixedCost;
     },
     onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["vehicle_fixed_costs", variables.vehicle_id] });
-      toast.success("Vaste voertuigkost aangemaakt");
+      queryClient.invalidateQueries({ queryKey: ["vehicle_fixed_costs", variables.vehicle_id] });
+      toast.success("Vaste kosten toegevoegd");
     },
-    onError: () => { toast.error("Fout bij aanmaken vaste voertuigkost"); },
+    onError: () => {
+      toast.error("Fout bij toevoegen vaste kosten");
+    },
   });
 }
 
 export function useUpdateVehicleFixedCost() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async ({ id, vehicleId, updates }: { id: string; vehicleId: string; updates: Partial<CreateVehicleFixedCostInput> }) => {
-      const { data, error } = await fromTable("vehicle_fixed_costs")
-        .update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id).select().single();
+      const { data, error } = await supabase
+        .from("vehicle_fixed_costs" as any)
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select()
+        .single();
+
       if (error) throw error;
-      return data as VehicleFixedCost;
+      return { data: data as VehicleFixedCost, vehicleId };
     },
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({ queryKey: ["vehicle_fixed_costs", variables.vehicleId] });
-      toast.success("Vaste voertuigkost bijgewerkt");
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle_fixed_costs", result.vehicleId] });
+      toast.success("Vaste kosten bijgewerkt");
     },
-    onError: () => { toast.error("Fout bij bijwerken vaste voertuigkost"); },
+    onError: () => {
+      toast.error("Fout bij bijwerken vaste kosten");
+    },
   });
 }
 
 export function useDeleteVehicleFixedCost() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async ({ id, vehicleId }: { id: string; vehicleId: string }) => {
-      const { error } = await fromTable("vehicle_fixed_costs").delete().eq("id", id);
+      const { error } = await supabase
+        .from("vehicle_fixed_costs" as any)
+        .delete()
+        .eq("id", id);
+
       if (error) throw error;
-      return { id, vehicleId };
+      return vehicleId;
     },
-    onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ["vehicle_fixed_costs", result.vehicleId] });
-      toast.success("Vaste voertuigkost verwijderd");
+    onSuccess: (vehicleId) => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle_fixed_costs", vehicleId] });
+      toast.success("Vaste kosten verwijderd");
     },
-    onError: () => { toast.error("Fout bij verwijderen vaste voertuigkost"); },
+    onError: () => {
+      toast.error("Fout bij verwijderen vaste kosten");
+    },
   });
 }

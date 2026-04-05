@@ -1,6 +1,10 @@
 import { cn } from "@/lib/utils";
 import type { WindowStatus } from "@/types/timeWindows";
-import { parseMinutes } from "@/lib/timeUtils";
+
+function parseMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
 
 function getStatus(windowStart: string | null, windowEnd: string | null, eta: string | null): WindowStatus {
   if (!windowStart || !windowEnd || !eta) return "ONBEKEND";
@@ -28,14 +32,22 @@ interface Props {
 
 export function TimeWindowBar({ windowStart, windowEnd, eta }: Props) {
   const status = getStatus(windowStart, windowEnd, eta);
+
   return (
     <div className="flex items-center gap-2 text-xs" data-status={status}>
       {windowStart && <span className="text-muted-foreground">{windowStart}</span>}
       <div className="flex-1 relative h-3 rounded-full bg-gray-100 overflow-hidden">
-        <div className={cn("absolute inset-0 rounded-full", STATUS_COLORS[status])} data-status={status} />
+        <div
+          className={cn("absolute inset-0 rounded-full", STATUS_COLORS[status])}
+          data-status={status}
+        />
         {eta && windowStart && windowEnd && (
-          <div className="absolute top-0 bottom-0 w-0.5 bg-black"
-            style={{ left: `${Math.min(100, Math.max(0, ((parseMinutes(eta) - parseMinutes(windowStart)) / (parseMinutes(windowEnd) - parseMinutes(windowStart))) * 100))}%` }} />
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-black"
+            style={{
+              left: `${Math.min(100, Math.max(0, ((parseMinutes(eta) - parseMinutes(windowStart)) / (parseMinutes(windowEnd) - parseMinutes(windowStart))) * 100))}%`,
+            }}
+          />
         )}
       </div>
       {windowEnd && <span className="text-muted-foreground">{windowEnd}</span>}

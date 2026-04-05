@@ -46,6 +46,18 @@ vi.mock("@/components/inbox/utils", () => ({
   getRequiredFilledCount: () => 3,
   getFormErrors: () => null,
   isAddressIncomplete: () => false,
+  isValidAddress: () => true,
+  getAddressError: () => null,
+  ALL_FIELDS: [
+    { key: "pickupAddress", confKey: "pickup_address", label: "Ophaaladres", required: true },
+    { key: "deliveryAddress", confKey: "delivery_address", label: "Afleveradres", required: true },
+    { key: "quantity", confKey: "quantity", label: "Aantal", required: true },
+    { key: "weight", confKey: "weight_kg", label: "Gewicht", required: true },
+    { key: "unit", confKey: "unit", label: "Eenheid", required: false },
+    { key: "transportType", confKey: "transport_type", label: "Type", required: false },
+    { key: "dimensions", confKey: "dimensions", label: "Afmetingen", required: false },
+    { key: "clientName", confKey: "client_name", label: "Klantnaam", required: false },
+  ],
 }));
 
 vi.mock("@/lib/statusColors", () => ({
@@ -1368,8 +1380,9 @@ describe("InboxReviewPanel – Confidence ring hover dropdown", () => {
     expect(screen.getAllByText("Aantal").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Gewicht").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Eenheid")).toBeInTheDocument();
-    expect(screen.getByText("Ophaaldatum")).toBeInTheDocument();
-    expect(screen.getByText("Leverdatum")).toBeInTheDocument();
+    // "Type" and "Afmetingen" also appear in the form section
+    expect(screen.getAllByText("Type").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Afmetingen").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows green color class for field confidence >= 90", async () => {

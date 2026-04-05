@@ -1,8 +1,14 @@
+// src/__tests__/slotAvailability.test.ts
 import { describe, it, expect, vi } from "vitest";
 
-// Mock supabase client before importing the hook
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {},
+  supabase: {
+    from: vi.fn(),
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    },
+  },
 }));
 
 import { computeSlotAvailability } from "@/hooks/useSlotBookings";
@@ -45,7 +51,7 @@ function makeBooking(slotStart: string, status = "GEBOEKT"): SlotBooking {
 
 describe("computeSlotAvailability", () => {
   it("generates correct number of slots", () => {
-    const tw = makeTW();
+    const tw = makeTW(); // 08:00-10:00, 30min = 4 slots
     const result = computeSlotAvailability(tw, []);
     expect(result).toHaveLength(4);
     expect(result[0].slot.start).toBe("08:00");
@@ -69,7 +75,7 @@ describe("computeSlotAvailability", () => {
     const result = computeSlotAvailability(tw, bookings);
     expect(result[0].bookedCount).toBe(2);
     expect(result[0].available).toBe(0);
-    expect(result[1].available).toBe(2);
+    expect(result[1].available).toBe(2); // 08:30 unaffected
   });
 
   it("ignores cancelled and expired bookings", () => {
@@ -81,7 +87,7 @@ describe("computeSlotAvailability", () => {
   });
 
   it("handles 15-minute slot duration", () => {
-    const tw = makeTW({ slot_duration_min: 15 });
+    const tw = makeTW({ slot_duration_min: 15 }); // 08:00-10:00 = 8 slots
     const result = computeSlotAvailability(tw, []);
     expect(result).toHaveLength(8);
     expect(result[0].slot.start).toBe("08:00");

@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { FinancialKPIWidget } from "@/components/dashboard/FinancialKPIWidget";
 import { OperationalForecastWidget } from "@/components/dashboard/OperationalForecastWidget";
 import { MarginWidget } from "@/components/dashboard/MarginWidget";
-import { EmballageWidget } from "@/components/dashboard/EmballageWidget";
 import { toast } from "sonner";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
@@ -103,14 +102,9 @@ const Dashboard = () => {
         <OperationalForecastWidget vehicles={vehicles} orders={orders} />
       </div>
 
-      {/* Margin trend + Emballage widgets */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1">
-          <MarginWidget />
-        </div>
-        <div className="lg:col-span-1">
-          <EmballageWidget />
-        </div>
+      {/* Margin widget */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <MarginWidget />
       </div>
 
       {/* Two column layout */}

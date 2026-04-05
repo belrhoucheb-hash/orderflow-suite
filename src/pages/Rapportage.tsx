@@ -3,13 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3, Clock, Truck, Brain, Users, Loader2, Package, Download,
 } from "lucide-react";
-import { ProfitabilityReport } from "@/components/rapportage/ProfitabilityReport";
-import { EmballageReport } from "@/components/rapportage/EmballageReport";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { ProfitabilityReport } from "@/components/rapportage/ProfitabilityReport";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -795,21 +794,7 @@ const Rapportage = () => {
       </motion.div>
 
       {/* Profitability report */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-      >
-        <ProfitabilityReport />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <EmballageReport />
-      </motion.div>
+      <ProfitabilityReport />
     </div>
   );
 };
