@@ -166,10 +166,27 @@ describe("resolveClientAddress", () => {
 
 // ── learnAddress tests ──
 describe("learnAddress", () => {
-  it("upserts an address entry into client_address_book", async () => {
-    const upsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
-    mockFrom.mockReturnValue({
-      upsert: upsertMock,
+  it("inserts a new address entry when alias does not exist", async () => {
+    const insertMock = vi.fn().mockResolvedValue({ data: null, error: null });
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // select to check existing
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      // insert new
+      return { insert: insertMock };
     });
 
     await learnAddress(
@@ -182,25 +199,40 @@ describe("learnAddress", () => {
       4.22
     );
 
-    expect(mockFrom).toHaveBeenCalledWith("client_address_book");
-    expect(upsertMock).toHaveBeenCalledWith(
-      {
-        tenant_id: "tenant-1",
-        client_id: "client-1",
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
         alias: "De Veiling",
         resolved_address: "Veilingweg 10, 2295 KK Kwintsheul",
         resolved_lat: 52.05,
         resolved_lng: 4.22,
-        last_used_at: expect.any(String),
-      },
-      { onConflict: "tenant_id,client_id,alias" }
+      })
     );
   });
 
-  it("upserts without lat/lng when not provided", async () => {
-    const upsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
-    mockFrom.mockReturnValue({
-      upsert: upsertMock,
+  it("updates existing entry and increments usage_count", async () => {
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    let callCount = 0;
+    mockFrom.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "addr-1", usage_count: 3 },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      return { update: updateMock };
     });
 
     await learnAddress(
@@ -211,14 +243,13 @@ describe("learnAddress", () => {
       "Herengracht 100, 1015 BS Amsterdam"
     );
 
-    expect(upsertMock).toHaveBeenCalledWith(
+    expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        alias: "Kantoor",
         resolved_address: "Herengracht 100, 1015 BS Amsterdam",
         resolved_lat: null,
         resolved_lng: null,
-      }),
-      { onConflict: "tenant_id,client_id,alias" }
+        usage_count: 4,
+      })
     );
   });
 });

@@ -48,6 +48,7 @@ async function getAverageLateness(
   const { data: predictions } = await supabase
     .from("cashflow_predictions")
     .select("predicted_payment_date, actual_payment_date")
+    .eq("tenant_id", tenantId)
     .eq("client_id", clientId);
 
   const resolved = ((predictions ?? []) as Array<{
@@ -145,12 +146,17 @@ export async function getCashflowForecast(
   const today = new Date();
   const endDate = addDays(today, days);
 
-  // Fetch all unpaid predictions within the forecast window
+  // Fetch unpaid predictions within the forecast window
+  const todayStr = today.toISOString().split("T")[0];
+  const endDateStr = endDate.toISOString().split("T")[0];
+
   const { data: predictions } = await supabase
     .from("cashflow_predictions")
     .select("invoice_id, client_id, predicted_payment_date, amount, actual_payment_date")
     .eq("tenant_id", tenantId)
-    .is("actual_payment_date", null);
+    .is("actual_payment_date", null)
+    .gte("predicted_payment_date", todayStr)
+    .lte("predicted_payment_date", endDateStr);
 
   const allPredictions = ((predictions ?? []) as Array<{
     invoice_id: string;
