@@ -97,12 +97,14 @@ export function useResolveDecision() {
       decisionId: string;
       resolution: Resolution;
       actualAction?: Record<string, unknown>;
+      resolvedBy?: string;
     }) => {
       return resolveDecision(
         supabase,
         params.decisionId,
         params.resolution,
-        params.actualAction
+        params.actualAction,
+        params.resolvedBy
       );
     },
     onSuccess: () => {

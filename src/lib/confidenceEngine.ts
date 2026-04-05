@@ -24,7 +24,7 @@ export function computeScoreFromCounts(
   const total = approved + modified + rejected;
   if (total === 0) return 50;
   const weighted = approved * 1.0 + modified * 0.5 + rejected * 0.0;
-  return Math.round((weighted / total) * 100);
+  return Math.round((weighted / total) * 10000) / 100;
 }
 
 /**
@@ -100,13 +100,15 @@ export async function resolveDecision(
   supabase: SupabaseClient,
   decisionId: string,
   resolution: Resolution,
-  actualAction?: Record<string, unknown>
+  actualAction?: Record<string, unknown>,
+  resolvedBy?: string
 ): Promise<void> {
   const { error: updateError } = await supabase
     .from("decision_log")
     .update({
       resolution,
       actual_action: actualAction ?? null,
+      resolved_by: resolvedBy ?? null,
       resolved_at: new Date().toISOString(),
     })
     .eq("id", decisionId);
@@ -176,7 +178,8 @@ export async function shouldAutoExecute(
   tenantId: string,
   decisionType: DecisionType,
   inputConfidence: number,
-  clientId?: string
+  clientId?: string,
+  options?: { orderValueEur?: number; requirements?: string[] }
 ): Promise<ShouldAutoExecuteResult> {
   if (!config.enabled) {
     return {
@@ -187,6 +190,38 @@ export async function shouldAutoExecute(
       threshold: 0,
       combinedScore: 0,
     };
+  }
+
+  // Check value-based guardrail
+  if (
+    options?.orderValueEur != null &&
+    options.orderValueEur > config.max_autonomous_value_eur
+  ) {
+    return {
+      auto: false,
+      reason: `Order value €${options.orderValueEur} exceeds max autonomous value €${config.max_autonomous_value_eur}`,
+      inputConfidence,
+      outcomeConfidence: 0,
+      threshold: 0,
+      combinedScore: 0,
+    };
+  }
+
+  // Check category-based guardrail (e.g. ADR, KOELING always require human)
+  if (options?.requirements?.length && config.require_human_for.length) {
+    const blocked = options.requirements.filter((r) =>
+      config.require_human_for.includes(r)
+    );
+    if (blocked.length > 0) {
+      return {
+        auto: false,
+        reason: `Requirements [${blocked.join(", ")}] require human review`,
+        inputConfidence,
+        outcomeConfidence: 0,
+        threshold: 0,
+        combinedScore: 0,
+      };
+    }
   }
 
   const outcomeConfidence = await getConfidence(
@@ -285,25 +320,48 @@ export async function recalculateScore(
 
   const trend = computeTrend(recentResolutions, previousResolutions);
 
-  const { error: upsertError } = await supabase
+  // Manual upsert to handle NULL client_id correctly
+  // (PostgreSQL treats NULL != NULL, so onConflict won't match NULL client_id rows)
+  const payload = {
+    current_score: currentScore,
+    total_decisions: totalDecisions,
+    approved_count: approved,
+    modified_count: modified,
+    rejected_count: rejected,
+    trend,
+    last_updated: new Date().toISOString(),
+  };
+
+  let existingQuery = supabase
     .from("confidence_scores")
-    .upsert(
-      {
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("decision_type", decisionType);
+
+  if (clientId) {
+    existingQuery = existingQuery.eq("client_id", clientId);
+  } else {
+    existingQuery = existingQuery.is("client_id", null);
+  }
+
+  const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  if (existing) {
+    const { error: updateError } = await supabase
+      .from("confidence_scores")
+      .update(payload)
+      .eq("id", existing.id);
+    if (updateError) throw new Error(updateError.message);
+  } else {
+    const { error: insertError } = await supabase
+      .from("confidence_scores")
+      .insert({
         tenant_id: tenantId,
         decision_type: decisionType,
         client_id: clientId ?? null,
-        current_score: currentScore,
-        total_decisions: totalDecisions,
-        approved_count: approved,
-        modified_count: modified,
-        rejected_count: rejected,
-        trend,
-        last_updated: new Date().toISOString(),
-      },
-      {
-        onConflict: "tenant_id,decision_type,client_id",
-      }
-    );
-
-  if (upsertError) throw new Error(upsertError.message);
+        ...payload,
+      });
+    if (insertError) throw new Error(insertError.message);
+  }
 }
