@@ -116,6 +116,19 @@ serve(async (req) => {
               });
             }
 
+            // Record decision in confidence store for feedback loop
+            await supabase.from("decision_log").insert({
+              tenant_id: rule.tenant_id,
+              decision_type: "DISPATCH",
+              entity_type: "trip",
+              entity_id: trip.id,
+              proposed_action: { action: "auto_dispatch", trip_number: trip.trip_number },
+              input_confidence: 100,
+              model_confidence: 100,
+              resolution: "AUTO_EXECUTED",
+              resolved_at: dispatchNow,
+            });
+
             tenantResult.dispatched++;
             totalDispatched++;
           }
