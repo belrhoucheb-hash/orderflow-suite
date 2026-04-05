@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { AutonomyScoreCard } from "@/components/dashboard/AutonomyScoreCard";
 import { FinancialKPIWidget } from "@/components/dashboard/FinancialKPIWidget";
 import { OperationalForecastWidget } from "@/components/dashboard/OperationalForecastWidget";
 import { MarginWidget } from "@/components/dashboard/MarginWidget";
@@ -105,6 +106,11 @@ const Dashboard = () => {
       {/* Margin widget */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <MarginWidget />
+      </div>
+
+      {/* AI Autonomy widget */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <AutonomyScoreCard compact />
       </div>
 
       {/* Two column layout */}
