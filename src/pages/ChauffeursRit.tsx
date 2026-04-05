@@ -275,6 +275,7 @@ const ChauffeursRit = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [startTime, setStartTime] = useState("07:00");
   const [isDispatching, setIsDispatching] = useState(false);
+  const [activeTab, setActiveTab] = useState<"route" | "ingepland">("route");
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const { tenant } = useTenant();
@@ -464,7 +465,7 @@ const ChauffeursRit = () => {
               if (!selectedVehicleId) return;
               setIsDispatching(true);
               try {
-                const vehicleOrders = orders.filter((o: any) => o.vehicle_id === selectedVehicleId);
+                const vehicleOrders = allOrders.filter((o: any) => o.vehicle_id === selectedVehicleId);
                 if (vehicleOrders.length === 0) { toast.error("Geen orders", { description: "Dit voertuig heeft geen geplande orders" }); return; }
                 const vehicle = vehicles.find((v: any) => v.id === selectedVehicleId);
                 const driver = drivers.find((d: any) => d.current_vehicle_id === selectedVehicleId);
@@ -583,24 +584,63 @@ const ChauffeursRit = () => {
 
               {/* Route & Ingepland tabs */}
               <div className="flex border-b border-border/30">
-                <button className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-primary border-b-2 border-primary">
+                <button
+                  onClick={() => setActiveTab("route")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-2 text-sm transition-colors",
+                    activeTab === "route"
+                      ? "font-semibold text-primary border-b-2 border-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
                   <Route className="h-3 w-3" />ROUTE
                 </button>
-                <button className="flex items-center gap-1.5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <button
+                  onClick={() => setActiveTab("ingepland")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-2 text-sm transition-colors",
+                    activeTab === "ingepland"
+                      ? "font-semibold text-primary border-b-2 border-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
                   <Calendar className="h-3 w-3" />INGEPLAND
                 </button>
               </div>
 
-              {/* Timeline */}
+              {/* Tab content */}
               <div className="p-4 max-h-[calc(100vh-360px)] overflow-y-auto">
-                {stops.map((stop, i) => (
-                  <StopTimelineItem
-                    key={i}
-                    stop={stop}
-                    isFirst={i === 0}
-                    isLast={i === stops.length - 1}
-                  />
-                ))}
+                {activeTab === "route" ? (
+                  stops.map((stop, i) => (
+                    <StopTimelineItem
+                      key={i}
+                      stop={stop}
+                      isFirst={i === 0}
+                      isLast={i === stops.length - 1}
+                    />
+                  ))
+                ) : (
+                  <div className="space-y-3">
+                    {stops.map((stop, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border/30 bg-card">
+                        <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
+                          <span className="text-xs font-bold tabular-nums text-primary">{stop.time}</span>
+                          {stop.endTime && <span className="text-[10px] text-muted-foreground tabular-nums">{stop.endTime}</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{stop.label}</p>
+                          <p className="text-xs text-muted-foreground truncate">{stop.address}</p>
+                        </div>
+                        <span className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-full",
+                          stop.type === "Laden" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                        )}>
+                          {stop.type}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Card>
           ) : (

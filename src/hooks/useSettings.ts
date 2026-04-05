@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 
-export type SettingsCategory = "integrations" | "notifications" | "sms" | "general";
+export type SettingsCategory = "integrations" | "notifications" | "sms" | "general" | "fuel_price";
 
 export function useLoadSettings<T = Record<string, unknown>>(category: SettingsCategory) {
   const { tenant } = useTenant();

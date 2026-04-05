@@ -1,3 +1,8 @@
+/**
+ * Convert a PriceBreakdown into invoice line items
+ * compatible with the existing invoice system.
+ */
+
 import type { PriceBreakdown } from "@/types/rateModels";
 
 export interface PricingInvoiceLine {
@@ -10,6 +15,10 @@ export interface PricingInvoiceLine {
   sort_order: number;
 }
 
+/**
+ * Generate invoice lines from a pricing engine breakdown.
+ * Base rule lines come first, followed by surcharge lines.
+ */
 export function generateInvoiceLinesFromPricing(
   orderId: string,
   breakdown: PriceBreakdown,
@@ -17,6 +26,7 @@ export function generateInvoiceLinesFromPricing(
   const lines: PricingInvoiceLine[] = [];
   let sortOrder = 0;
 
+  // Add base rule lines
   for (const regel of breakdown.regels) {
     lines.push({
       order_id: orderId,
@@ -29,6 +39,7 @@ export function generateInvoiceLinesFromPricing(
     });
   }
 
+  // Add surcharge lines
   for (const toeslag of breakdown.toeslagen) {
     lines.push({
       order_id: orderId,

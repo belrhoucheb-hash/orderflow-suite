@@ -1,6 +1,6 @@
 // src/__tests__/components/TimeWindowManager.test.tsx
-import { render, screen } from "@testing-library/react";
-import { vi, describe, it, expect } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -18,6 +18,8 @@ vi.mock("@/hooks/useTimeWindows", () => ({
 }));
 
 import TimeWindowManager from "@/components/clients/TimeWindowManager";
+
+const DAY_NAMES = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
 
 function createWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

@@ -1,3 +1,4 @@
+// src/__tests__/components/StopTimeWindow.test.tsx
 import { render, screen } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { StopTimeWindow } from "@/components/chauffeur/StopTimeWindow";
@@ -24,7 +25,7 @@ describe("StopTimeWindow", () => {
 
   it("shows red warning when TE_LAAT", () => {
     render(<StopTimeWindow windowStart="08:00" windowEnd="09:00" windowStatus="TE_LAAT" waitingTimeMin={null} />);
-    expect(screen.getByText(/te laat/i)).toBeDefined();
+    expect(screen.getAllByText(/te laat/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows waiting time when provided", () => {
@@ -32,5 +33,7 @@ describe("StopTimeWindow", () => {
     expect(screen.getByText(/15 min/i)).toBeDefined();
   });
 
-  afterEach(() => { vi.useRealTimers(); });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 });

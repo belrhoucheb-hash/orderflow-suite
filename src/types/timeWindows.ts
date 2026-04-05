@@ -1,5 +1,3 @@
-// src/types/timeWindows.ts
-
 // ─── Slot Booking ──────────────────────────────────────────
 
 export type SlotBookingStatus = "GEBOEKT" | "BEVESTIGD" | "GEANNULEERD" | "VERLOPEN";

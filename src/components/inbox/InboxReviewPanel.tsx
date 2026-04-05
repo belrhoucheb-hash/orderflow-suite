@@ -86,8 +86,8 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                   { label: "Aantal", key: "quantity" },
                   { label: "Gewicht", key: "weight_kg" },
                   { label: "Eenheid", key: "unit" },
-                  { label: "Ophaaldatum", key: "pickup_date" },
-                  { label: "Leverdatum", key: "delivery_date" },
+                  { label: "Type", key: "transport_type" },
+                  { label: "Afmetingen", key: "dimensions" },
                 ].map(f => {
                   const fc = form.fieldConfidence || {};
                   const val = fc[f.key] ?? null;

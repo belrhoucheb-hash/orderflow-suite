@@ -1,4 +1,3 @@
-// src/components/clients/TimeWindowManager.tsx
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,8 +26,12 @@ interface FormState {
 }
 
 const defaultForm: FormState = {
-  day_of_week: 0, open_time: "08:00", close_time: "17:00",
-  slot_duration_min: 30, max_concurrent_slots: 1, notes: "",
+  day_of_week: 0,
+  open_time: "08:00",
+  close_time: "17:00",
+  slot_duration_min: 30,
+  max_concurrent_slots: 1,
+  notes: "",
 };
 
 export default function TimeWindowManager({ locationId, tenantId }: Props) {
@@ -45,13 +48,25 @@ export default function TimeWindowManager({ locationId, tenantId }: Props) {
   const handleSave = async () => {
     try {
       if (editingId) {
-        await updateTW.mutateAsync({ id: editingId, client_location_id: locationId, ...form, notes: form.notes || null });
+        await updateTW.mutateAsync({
+          id: editingId,
+          client_location_id: locationId,
+          ...form,
+          notes: form.notes || null,
+        });
         toast({ title: "Tijdvenster bijgewerkt" });
       } else {
-        await createTW.mutateAsync({ client_location_id: locationId, tenant_id: tenantId, ...form, notes: form.notes || null });
+        await createTW.mutateAsync({
+          client_location_id: locationId,
+          tenant_id: tenantId,
+          ...form,
+          notes: form.notes || null,
+        });
         toast({ title: "Tijdvenster toegevoegd" });
       }
-      setShowForm(false); setEditingId(null); setForm(defaultForm);
+      setShowForm(false);
+      setEditingId(null);
+      setForm(defaultForm);
     } catch (e: any) {
       toast({ title: "Fout", description: e.message, variant: "destructive" });
     }
@@ -59,7 +74,14 @@ export default function TimeWindowManager({ locationId, tenantId }: Props) {
 
   const handleEdit = (tw: LocationTimeWindow) => {
     setEditingId(tw.id);
-    setForm({ day_of_week: tw.day_of_week, open_time: tw.open_time, close_time: tw.close_time, slot_duration_min: tw.slot_duration_min, max_concurrent_slots: tw.max_concurrent_slots, notes: tw.notes || "" });
+    setForm({
+      day_of_week: tw.day_of_week,
+      open_time: tw.open_time,
+      close_time: tw.close_time,
+      slot_duration_min: tw.slot_duration_min,
+      max_concurrent_slots: tw.max_concurrent_slots,
+      notes: tw.notes || "",
+    });
     setShowForm(true);
   };
 
@@ -106,7 +128,7 @@ export default function TimeWindowManager({ locationId, tenantId }: Props) {
                   <TableCell>{tw.close_time}</TableCell>
                   <TableCell>{tw.slot_duration_min} min</TableCell>
                   <TableCell>{tw.max_concurrent_slots}</TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{tw.notes || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">{tw.notes || "\u2014"}</TableCell>
                   <TableCell className="flex gap-1">
                     <Button size="icon" variant="ghost" onClick={() => handleEdit(tw)}>
                       <Pencil className="h-3 w-3" />
