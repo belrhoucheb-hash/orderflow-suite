@@ -257,19 +257,25 @@ serve(async (req) => {
       let execError: string | null = null;
 
       try {
+        let updateResult: { error: { message: string } | null };
         switch (actionType) {
           case "CONFIRM_ORDER":
-            await supabase.from("orders").update({ status: "CONFIRMED" }).eq("id", entityId);
+            updateResult = await supabase.from("orders").update({ status: "CONFIRMED" }).eq("id", entityId);
             break;
           case "ASSIGN_VEHICLE":
-            await supabase.from("orders").update({ status: "PLANNED" }).eq("id", entityId);
+            updateResult = await supabase.from("orders").update({ status: "PLANNED" }).eq("id", entityId);
             break;
           case "DISPATCH_TRIP":
-            await supabase.from("trips").update({ dispatch_status: "VERZONDEN" }).eq("id", entityId);
+            updateResult = await supabase.from("trips").update({ dispatch_status: "VERZONDEN" }).eq("id", entityId);
             break;
           case "SEND_INVOICE":
-            await supabase.from("invoices").update({ status: "verzonden" }).eq("id", entityId);
+            updateResult = await supabase.from("invoices").update({ status: "verzonden" }).eq("id", entityId);
             break;
+          default:
+            updateResult = { error: { message: `Unknown action: ${actionType}` } };
+        }
+        if (updateResult.error) {
+          execError = updateResult.error.message;
         }
       } catch (e) {
         execError = e instanceof Error ? e.message : String(e);
