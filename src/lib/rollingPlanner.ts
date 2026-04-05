@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PlanOrder, Assignments } from "@/components/planning/types";
 import type { FleetVehicle } from "@/hooks/useVehicles";
-import type { GeoCoord } from "@/data/geoData";
+import { type GeoCoord, haversineKm } from "@/data/geoData";
+import type { TripStop } from "@/types/dispatch";
 import type {
   PlanningResult,
   PlanningConfidence,
@@ -387,4 +388,48 @@ export async function simulateVehicleRemoval(
     new_assignments: newAssignments,
     confidence,
   };
+}
+
+// ─── Plan E: Re-optimize stop order for replanning ─────────
+
+/**
+ * Re-optimize stop order given a driver's current position.
+ * Sorts remaining stops by proximity (nearest-neighbor heuristic).
+ */
+export function reoptimizeStopOrder(
+  stops: TripStop[],
+  currentPosition: GeoCoord,
+): TripStop[] {
+  if (stops.length <= 1) return [...stops];
+
+  // Nearest-neighbor heuristic from current position
+  const remaining = [...stops];
+  const result: TripStop[] = [];
+  let current: GeoCoord = { ...currentPosition };
+
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const stop = remaining[i];
+      if (stop.planned_latitude == null || stop.planned_longitude == null) {
+        // Put stops without coords at the end
+        continue;
+      }
+      const dist = haversineKm(current, { lat: stop.planned_latitude, lng: stop.planned_longitude });
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+
+    const chosen = remaining.splice(bestIdx, 1)[0];
+    if (chosen.planned_latitude != null && chosen.planned_longitude != null) {
+      current = { lat: chosen.planned_latitude, lng: chosen.planned_longitude };
+    }
+    result.push({ ...chosen, stop_sequence: result.length + 1 });
+  }
+
+  return result;
 }
