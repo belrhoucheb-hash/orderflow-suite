@@ -327,4 +327,48 @@ describe("confidenceEngine — shouldAutoExecute", () => {
     expect(result.threshold).toBe(95);
     expect(result.auto).toBe(true);
   });
+
+  it("should return auto=false when order value exceeds max_autonomous_value_eur", async () => {
+    const mock = createMockSupabase();
+    mock._chain.maybeSingle.mockResolvedValue({
+      data: { current_score: 99 },
+      error: null,
+    });
+
+    const config: AutonomyConfig = {
+      ...DEFAULT_AUTONOMY_CONFIG,
+      enabled: true,
+      max_autonomous_value_eur: 5000,
+    };
+
+    const result = await shouldAutoExecute(mock, config, "t-1", "PRICING", 99, undefined, {
+      orderValueEur: 10000,
+    });
+
+    expect(result.auto).toBe(false);
+    expect(result.reason).toContain("10000");
+    expect(result.reason).toContain("5000");
+  });
+
+  it("should return auto=false when requirements include require_human_for items", async () => {
+    const mock = createMockSupabase();
+    mock._chain.maybeSingle.mockResolvedValue({
+      data: { current_score: 99 },
+      error: null,
+    });
+
+    const config: AutonomyConfig = {
+      ...DEFAULT_AUTONOMY_CONFIG,
+      enabled: true,
+      require_human_for: ["ADR", "KOELING"],
+    };
+
+    const result = await shouldAutoExecute(mock, config, "t-1", "ORDER_INTAKE", 99, undefined, {
+      requirements: ["ADR"],
+    });
+
+    expect(result.auto).toBe(false);
+    expect(result.reason).toContain("ADR");
+    expect(result.reason).toContain("human review");
+  });
 });
