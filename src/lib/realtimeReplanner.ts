@@ -55,6 +55,7 @@ export async function replanOnDelay(
   tripId: string,
   _delayedStopId: string,
   currentPosition: GeoCoord,
+  lateThresholdMin = 15,
 ): Promise<ReplanResult> {
   // 1. Fetch remaining stops
   const { data: remainingStops, error } = await supabase
@@ -88,7 +89,7 @@ export async function replanOnDelay(
       stop_status: s.stop_status,
     })),
     new Date(),
-    15, // Default threshold; caller can override via rules in evaluateDriverPosition
+    lateThresholdMin,
   );
 
   const infeasibleStopIds = lateAfterReplan.map((ls) => ls.stop_id);

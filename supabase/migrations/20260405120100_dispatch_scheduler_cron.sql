@@ -3,8 +3,9 @@
 -- Runs every 5 minutes to auto-dispatch ready trips
 -- ============================================================
 
--- Enable pg_cron if not already enabled
+-- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
 
 -- Schedule the dispatch-scheduler function every 5 minutes
 SELECT cron.schedule(
