@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ValidationItem, PipelineAction } from "@/types/pipeline";
 import { resolveDecision } from "@/lib/confidenceEngine";
 import { executeAction } from "@/lib/pipelineOrchestrator";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const VALIDATION_QUEUE_KEY = ["validation_queue"] as const;
 const VALIDATION_COUNT_KEY = ["validation_queue", "count"] as const;
@@ -47,6 +48,8 @@ export function useApproveValidation() {
 
   return useMutation({
     mutationFn: async (item: ValidationItem) => {
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { error: updateErr } = await supabase
         .from("validation_queue")
         .update({ status: "APPROVED" })
@@ -54,7 +57,7 @@ export function useApproveValidation() {
 
       if (updateErr) throw updateErr;
 
-      await resolveDecision(supabase, item.decision_log_id, "APPROVED", item.proposed_action);
+      await resolveDecision(supabase, item.decision_log_id, "APPROVED", item.proposed_action, user?.id);
 
       const action: PipelineAction = {
         tenantId: item.tenant_id,
@@ -64,7 +67,7 @@ export function useApproveValidation() {
         payload: item.proposed_action,
       };
 
-      await executeAction(supabase as any, action);
+      await executeAction(supabase as SupabaseClient, action);
 
       return item;
     },
@@ -83,6 +86,8 @@ export function useRejectValidation() {
 
   return useMutation({
     mutationFn: async (item: ValidationItem) => {
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { error: updateErr } = await supabase
         .from("validation_queue")
         .update({ status: "REJECTED" })
@@ -90,7 +95,7 @@ export function useRejectValidation() {
 
       if (updateErr) throw updateErr;
 
-      await resolveDecision(supabase, item.decision_log_id, "REJECTED");
+      await resolveDecision(supabase, item.decision_log_id, "REJECTED", undefined, user?.id);
 
       return item;
     },

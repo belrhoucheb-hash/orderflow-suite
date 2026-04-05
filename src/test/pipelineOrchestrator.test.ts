@@ -170,6 +170,24 @@ describe("evaluateNextStep", () => {
     expect(result.evaluationResult).toBe("BLOCKED");
     expect(result.action).toBeNull();
   });
+
+  it("passes correct arguments to shouldAutoExecute", async () => {
+    mockShouldAutoExecute.mockResolvedValue({
+      auto: true, reason: "OK",
+      inputConfidence: 85, outcomeConfidence: 85, threshold: 90, combinedScore: 95,
+    });
+    const sb = createMockSupabase();
+
+    await evaluateNextStep(sb, "t-1", "order", "o-1", "DRAFT");
+
+    expect(mockShouldAutoExecute).toHaveBeenCalledWith(
+      sb,
+      expect.any(Object),
+      "t-1",
+      "ORDER_INTAKE",
+      85
+    );
+  });
 });
 
 // ─── executeAction ───────────────────────────────────────────
