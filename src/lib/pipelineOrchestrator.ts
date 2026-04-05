@@ -217,7 +217,12 @@ export async function processEvent(
   });
 
   if (evaluation.evaluationResult === "AUTO_EXECUTE") {
-    await executeAction(supabase, evaluation.action!);
+    let execError: string | null = null;
+    try {
+      await executeAction(supabase, evaluation.action!);
+    } catch (e) {
+      execError = e instanceof Error ? e.message : String(e);
+    }
 
     await logPipelineEvent(supabase, {
       tenant_id: tenantId,
@@ -226,12 +231,13 @@ export async function processEvent(
       event_type: evaluation.eventType!,
       previous_status: previousStatus,
       new_status: newStatus,
-      evaluation_result: "AUTO_EXECUTE",
+      evaluation_result: execError ? "BLOCKED" : "AUTO_EXECUTE",
       confidence_at_evaluation: evaluation.confidence,
       action_taken: {
         actionType: evaluation.action!.actionType,
         payload: evaluation.action!.payload,
         decisionId: decision.id,
+        error: execError,
       },
     });
   } else {
