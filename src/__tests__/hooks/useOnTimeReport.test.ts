@@ -1,11 +1,11 @@
+// src/__tests__/hooks/useOnTimeReport.test.ts
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: vi.fn(),
     auth: {
-      getSession: vi.fn(),
-      getUser: vi.fn(),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
       onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
     },
   },
@@ -15,15 +15,24 @@ import { calculateOnTimeMetrics, type StopMetric } from "@/hooks/useOnTimeReport
 
 function makeMetric(windowStatus: string, waitingTimeMin: number | null): StopMetric {
   return {
-    id: `s-${Math.random()}`, window_status: windowStatus, waiting_time_min: waitingTimeMin,
-    client_location_id: "loc1", planned_window_start: "08:00", planned_window_end: "10:00",
+    id: `s-${Math.random()}`,
+    window_status: windowStatus,
+    waiting_time_min: waitingTimeMin,
+    client_location_id: "loc1",
+    planned_window_start: "08:00",
+    planned_window_end: "10:00",
     actual_arrival_time: "2026-04-04T09:00:00Z",
   };
 }
 
 describe("calculateOnTimeMetrics", () => {
   it("calculates on-time percentage", () => {
-    const stops = [makeMetric("OP_TIJD", 0), makeMetric("OP_TIJD", 0), makeMetric("TE_LAAT", null), makeMetric("TE_VROEG", 15)];
+    const stops = [
+      makeMetric("OP_TIJD", 0),
+      makeMetric("OP_TIJD", 0),
+      makeMetric("TE_LAAT", null),
+      makeMetric("TE_VROEG", 15),
+    ];
     const result = calculateOnTimeMetrics(stops);
     expect(result.totalStops).toBe(4);
     expect(result.onTimeCount).toBe(2);
@@ -33,9 +42,13 @@ describe("calculateOnTimeMetrics", () => {
   });
 
   it("calculates average wait time", () => {
-    const stops = [makeMetric("TE_VROEG", 10), makeMetric("TE_VROEG", 20), makeMetric("OP_TIJD", 0)];
+    const stops = [
+      makeMetric("TE_VROEG", 10),
+      makeMetric("TE_VROEG", 20),
+      makeMetric("OP_TIJD", 0),
+    ];
     const result = calculateOnTimeMetrics(stops);
-    expect(result.avgWaitMin).toBe(10);
+    expect(result.avgWaitMin).toBe(10); // (10+20+0)/3
   });
 
   it("handles empty array", () => {

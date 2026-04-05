@@ -1,13 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: vi.fn(() => ({
-    select: vi.fn().mockReturnThis(), insert: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(), delete: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: null, error: null }),
-  })) },
+  supabase: {
+    from: vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })),
+  },
 }));
+
 vi.mock("@tanstack/react-query", () => ({
   useQuery: vi.fn(({ queryFn }) => ({ data: null, isLoading: true, queryFn })),
   useMutation: vi.fn(({ mutationFn }) => ({ mutate: mutationFn, mutateAsync: mutationFn })),
@@ -15,7 +21,9 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 describe("useSurcharges hooks", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
   it("module exports all surcharge hooks", async () => {
     const mod = await import("@/hooks/useSurcharges");

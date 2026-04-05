@@ -14,7 +14,7 @@ vi.mock("@/components/planning/planningUtils", () => ({
 }));
 
 vi.mock("@/data/geoData", () => ({
-  haversineKm: vi.fn((_a: any, _b: any) => 30),
+  haversineKm: vi.fn((_a: any, _b: any) => 30), // 30km = 30min at 60km/h
 }));
 
 vi.mock("@/components/planning/types", () => ({
@@ -56,22 +56,21 @@ describe("solveVRP — time window hard constraints", () => {
   const vehicles = [makeVehicle()];
 
   it("rejects order when ETA exceeds time_window_end", () => {
-    // haversineKm always returns 30km; at 60km/h = 30min travel from 06:00 → ETA 06:30
-    // time_window_end "06:15" = 375min, ETA = 390min → infeasible
+    // Order with very early time_window_end — at 60km/h, 30km takes 30min + 30min unload
+    // Start 06:00, arrive ~06:30, but window ends at 06:15 => should skip
     const orders = [makeOrder("o1", { time_window_end: "06:15" })];
     const result = solveVRP(orders, vehicles, coordMap);
     expect(result["v1"] || []).toHaveLength(0);
   });
 
   it("accepts order when ETA is within time_window_end", () => {
-    // ETA = 06:30, time_window_end "08:00" = 480min → feasible
     const orders = [makeOrder("o1", { time_window_start: "06:00", time_window_end: "08:00" })];
     const result = solveVRP(orders, vehicles, coordMap);
     expect(result["v1"]).toHaveLength(1);
   });
 
   it("waits until time_window_start if arriving early", () => {
-    // ETA = 06:30, but time_window_start "10:00" means we wait; time_window_end "11:00" → still feasible
+    // Order at 10:00 start window — driver will arrive before, solver should still accept
     const orders = [makeOrder("o1", { time_window_start: "10:00", time_window_end: "11:00" })];
     const result = solveVRP(orders, vehicles, coordMap);
     expect(result["v1"]).toHaveLength(1);
@@ -79,11 +78,12 @@ describe("solveVRP — time window hard constraints", () => {
 
   it("prioritizes orders with tighter windows", () => {
     const orders = [
-      makeOrder("o1", { time_window_start: "06:00", time_window_end: "18:00" }),
-      makeOrder("o2", { time_window_start: "07:00", time_window_end: "07:30" }),
+      makeOrder("o1", { time_window_start: "06:00", time_window_end: "18:00" }), // wide window
+      makeOrder("o2", { time_window_start: "07:00", time_window_end: "07:30" }), // tight window
     ];
     const result = solveVRP(orders, vehicles, coordMap);
     const assigned = result["v1"] || [];
+    // o2 should come first (tighter window = higher priority)
     if (assigned.length >= 2) {
       expect(assigned[0].id).toBe("o2");
     }

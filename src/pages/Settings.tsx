@@ -28,15 +28,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MasterDataSection } from "@/components/settings/MasterDataSection";
+import { useTenant } from "@/contexts/TenantContext";
+import { toast } from "sonner";
+import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
 import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
-import { NotificationTemplatesSection } from "@/components/settings/NotificationTemplatesSection";
-import { PortalModuleToggle } from "@/components/settings/PortalModuleToggle";
-import { useTenant } from "@/contexts/TenantContext";
-import { toast } from "sonner";
-import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
 
 const Settings = () => {
   const location = useLocation();
@@ -195,8 +193,6 @@ const Settings = () => {
     if (location.pathname.includes("/integraties")) return "integraties";
     if (location.pathname.includes("/tarieven")) return "tarieven";
     if (location.pathname.includes("/kosten")) return "kosten";
-    if (location.pathname.includes("/klantnotificaties")) return "klantnotificaties";
-    if (location.pathname.includes("/portaal")) return "portaal";
     return "algemeen";
   };
 
@@ -256,18 +252,6 @@ const Settings = () => {
               Integraties
             </TabsTrigger>
             <TabsTrigger
-              value="webhooks"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
-            >
-              Webhooks
-            </TabsTrigger>
-            <TabsTrigger
-              value="api"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
-            >
-              API
-            </TabsTrigger>
-            <TabsTrigger
               value="tarieven"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
@@ -280,16 +264,16 @@ const Settings = () => {
               Kosten
             </TabsTrigger>
             <TabsTrigger
-              value="klantnotificaties"
+              value="webhooks"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
-              Klantnotificaties
+              Webhooks
             </TabsTrigger>
             <TabsTrigger
-              value="portaal"
+              value="api"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
-              Portaal
+              API
             </TabsTrigger>
           </TabsList>
         </div>
@@ -981,19 +965,15 @@ const Settings = () => {
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="tarieven" className="space-y-6 outline-none">
+
+        <TabsContent value="tarieven" className="space-y-6">
           <RateCardSettings />
           <SurchargeSettings />
         </TabsContent>
-        <TabsContent value="kosten" className="space-y-6 outline-none">
+
+        <TabsContent value="kosten" className="space-y-6">
           <FuelPriceSettings />
           <CostTypeSettings />
-        </TabsContent>
-        <TabsContent value="klantnotificaties" className="space-y-6 outline-none">
-          <NotificationTemplatesSection />
-        </TabsContent>
-        <TabsContent value="portaal" className="space-y-6 outline-none">
-          <PortalModuleToggle />
         </TabsContent>
       </Tabs>
     </div>

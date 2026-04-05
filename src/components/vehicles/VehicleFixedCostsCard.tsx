@@ -1,4 +1,10 @@
 import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Trash2, Wallet } from "lucide-react";
 import {
   useVehicleMonthlyTotal,
   useCreateVehicleFixedCost,
@@ -8,18 +14,6 @@ import { useCostTypes } from "@/hooks/useCostTypes";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/invoiceUtils";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Trash2, Plus } from "lucide-react";
 
 interface VehicleFixedCostsCardProps {
   vehicleId: string;
@@ -28,179 +22,101 @@ interface VehicleFixedCostsCardProps {
 
 export function VehicleFixedCostsCard({ vehicleId, vehicleName }: VehicleFixedCostsCardProps) {
   const { tenant } = useTenant();
-  const { data: fixedCosts = [], isLoading, total } = useVehicleMonthlyTotal(vehicleId);
-  const createFixedCost = useCreateVehicleFixedCost();
-  const deleteFixedCost = useDeleteVehicleFixedCost();
+  const { data: monthlyData, isLoading } = useVehicleMonthlyTotal(vehicleId);
+  const { data: costTypes } = useCostTypes(true);
+  const createCost = useCreateVehicleFixedCost();
+  const deleteCost = useDeleteVehicleFixedCost();
 
-  // Only VOERTUIG category cost types
-  const { data: allCostTypes = [] } = useCostTypes({ activeOnly: true });
-  const vehicleCostTypes = allCostTypes.filter((ct) => ct.category === "VOERTUIG");
+  const [newCostTypeId, setNewCostTypeId] = useState("");
+  const [newAmount, setNewAmount] = useState("");
 
-  const [showForm, setShowForm] = useState(false);
-  const [costTypeId, setCostTypeId] = useState("");
-  const [monthlyAmount, setMonthlyAmount] = useState("");
+  if (isLoading) return <LoadingState message="Vaste kosten laden..." />;
+
+  const vehicleCostTypes = (costTypes ?? []).filter((ct) => ct.category === "VOERTUIG");
+  const costs = monthlyData?.costs ?? [];
+  const monthlyTotal = monthlyData?.monthlyTotal ?? 0;
 
   const handleCreate = async () => {
-    if (!tenant?.id || !costTypeId || !monthlyAmount) return;
-    const amount = parseFloat(monthlyAmount);
-    if (isNaN(amount) || amount <= 0) return;
-
-    await createFixedCost.mutateAsync({
+    if (!newCostTypeId || !newAmount || !tenant?.id) return;
+    await createCost.mutateAsync({
       tenant_id: tenant.id,
       vehicle_id: vehicleId,
-      cost_type_id: costTypeId,
-      monthly_amount: amount,
+      cost_type_id: newCostTypeId,
+      monthly_amount: parseFloat(newAmount),
     });
-    setCostTypeId("");
-    setMonthlyAmount("");
-    setShowForm(false);
+    setNewCostTypeId("");
+    setNewAmount("");
   };
 
   return (
-    <Card className="rounded-2xl border-border/40">
-      <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <div>
-          <CardTitle className="text-base font-semibold">Vaste kosten</CardTitle>
-          <p className="text-xs text-muted-foreground mt-0.5">{vehicleName}</p>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShowForm((v) => !v)}
-          className="gap-1.5"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Toevoegen
-        </Button>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Wallet className="h-5 w-5" />
+          Vaste Kosten — {vehicleName}
+        </CardTitle>
+        <CardDescription>
+          Maandelijkse vaste kosten zoals lease, verzekering, afschrijving, wegenbelasting.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Create Form */}
-        {showForm && (
-          <div className="border border-border/60 rounded-xl p-4 space-y-4 bg-muted/20">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor={`vfc-type-${vehicleId}`}>Kostentype</Label>
-                <Select value={costTypeId} onValueChange={setCostTypeId}>
-                  <SelectTrigger id={`vfc-type-${vehicleId}`}>
-                    <SelectValue placeholder="Selecteer type..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicleCostTypes.length === 0 ? (
-                      <SelectItem value="_none" disabled>
-                        Geen voertuigtypes beschikbaar
-                      </SelectItem>
-                    ) : (
-                      vehicleCostTypes.map((ct) => (
-                        <SelectItem key={ct.id} value={ct.id}>
-                          {ct.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`vfc-amount-${vehicleId}`}>Maandbedrag (€)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    €
-                  </span>
-                  <Input
-                    id={`vfc-amount-${vehicleId}`}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={monthlyAmount}
-                    onChange={(e) => setMonthlyAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="pl-7"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowForm(false);
-                  setCostTypeId("");
-                  setMonthlyAmount("");
-                }}
-              >
-                Annuleren
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleCreate}
-                disabled={
-                  createFixedCost.isPending ||
-                  !costTypeId ||
-                  !monthlyAmount ||
-                  parseFloat(monthlyAmount) <= 0
-                }
-              >
-                Opslaan
-              </Button>
-            </div>
+        {/* Create form */}
+        <div className="grid grid-cols-12 gap-2 items-end">
+          <div className="col-span-5">
+            <Label className="text-xs">Kostensoort</Label>
+            <Select value={newCostTypeId} onValueChange={setNewCostTypeId}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Selecteer..." /></SelectTrigger>
+              <SelectContent>
+                {vehicleCostTypes.map((ct) => (
+                  <SelectItem key={ct.id} value={ct.id}>{ct.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
+          <div className="col-span-4">
+            <Label className="text-xs">Maandbedrag (EUR)</Label>
+            <Input type="number" step="0.01" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" className="h-9" />
+          </div>
+          <div className="col-span-3">
+            <Button onClick={handleCreate} disabled={!newCostTypeId || !newAmount} className="h-9 w-full">
+              <Plus className="h-4 w-4 mr-1" /> Toevoegen
+            </Button>
+          </div>
+        </div>
 
         {/* List */}
-        {isLoading ? (
-          <LoadingState message="Kosten laden..." />
-        ) : fixedCosts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Geen vaste kosten voor dit voertuig.
-          </p>
-        ) : (
-          <div className="divide-y divide-border/40 rounded-xl border border-border/40 overflow-hidden">
-            {fixedCosts.map((cost) => (
-              <div
-                key={cost.id}
-                className="flex items-center justify-between px-4 py-3 hover:bg-muted/20 transition-colors"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {cost.cost_type?.name ?? "Onbekend"}
-                  </p>
-                  {(cost.valid_from || cost.valid_until) && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {cost.valid_from ?? "..."} — {cost.valid_until ?? "heden"}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 ml-4 shrink-0">
-                  <span className="text-sm font-semibold tabular-nums">
-                    {formatCurrency(cost.monthly_amount)} / mnd
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    disabled={deleteFixedCost.isPending}
-                    onClick={() =>
-                      deleteFixedCost.mutate({ id: cost.id, vehicleId })
-                    }
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+        <div className="space-y-2">
+          {costs.map((cost) => (
+            <div key={cost.id} className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <span className="font-medium">{cost.cost_type?.name ?? "Onbekend"}</span>
               </div>
-            ))}
+              <div className="flex items-center gap-3">
+                <span className="font-mono tabular-nums">{formatCurrency(cost.monthly_amount)} / maand</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => deleteCost.mutateAsync({ id: cost.id, vehicleId })}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Total */}
+        {costs.length > 0 && (
+          <div className="flex justify-between pt-3 border-t">
+            <span className="font-bold">Totaal maandkosten</span>
+            <span className="font-mono tabular-nums font-bold">{formatCurrency(monthlyTotal)}</span>
           </div>
         )}
 
-        {/* Total */}
-        {fixedCosts.length > 0 && (
-          <div className="flex items-center justify-between pt-2 border-t border-border/40">
-            <span className="text-sm font-medium text-muted-foreground">
-              Totaal per maand
-            </span>
-            <span className="text-base font-semibold tabular-nums">
-              {formatCurrency(total)}
-            </span>
-          </div>
+        {costs.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Nog geen vaste kosten geconfigureerd voor dit voertuig.
+          </p>
         )}
       </CardContent>
     </Card>

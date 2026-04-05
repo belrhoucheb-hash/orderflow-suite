@@ -602,6 +602,8 @@ export function useInbox() {
 
   // ─── Auto-extract AI when selecting unprocessed email ───
   const [autoExtracting, setAutoExtracting] = useState(false);
+  const autoExtractingRef = useRef(false);
+  const lastExtractedIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!selected) return;
     if (selected.status !== "DRAFT") return;
@@ -610,11 +612,15 @@ export function useInbox() {
     if (selected.pickup_address || selected.delivery_address) return;
     // No email body to parse
     if (!selected.source_email_body) return;
-    // Prevent re-trigger
-    if (autoExtracting) return;
+    // Prevent re-trigger (use ref to avoid stale closure)
+    if (autoExtractingRef.current) return;
+    // Don't re-extract the same email
+    if (lastExtractedIdRef.current === selected.id) return;
 
     const runExtraction = async () => {
       setAutoExtracting(true);
+      autoExtractingRef.current = true;
+      lastExtractedIdRef.current = selected.id;
       try {
         const tenantId = tenant?.id || "00000000-0000-0000-0000-000000000001";
         const { data: parseResponse, error: parseError } = await supabase.functions.invoke("parse-order", {
@@ -673,10 +679,12 @@ export function useInbox() {
         toast.error("AI extractie mislukt", { description: e.message });
       } finally {
         setAutoExtracting(false);
+        autoExtractingRef.current = false;
       }
     };
 
     runExtraction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]); // Only trigger on selection change
 
   // ─── Keyboard Navigation ───

@@ -1,4 +1,3 @@
--- supabase/migrations/20260404100000_time_windows_and_slots.sql
 -- ============================================================
 -- Feature 1: Tijdvensters & Slotboeking
 -- Creates location_time_windows, slot_bookings, alters trip_stops
@@ -93,9 +92,6 @@ CREATE INDEX idx_slot_bookings_location_date
 
 CREATE INDEX idx_slot_bookings_order
   ON public.slot_bookings (order_id);
-
-CREATE INDEX IF NOT EXISTS idx_location_time_windows_location
-  ON public.location_time_windows (client_location_id, day_of_week);
 
 CREATE TRIGGER update_slot_bookings_updated_at
   BEFORE UPDATE ON public.slot_bookings

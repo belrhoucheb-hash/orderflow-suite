@@ -1,5 +1,3 @@
-// src/types/rateModels.ts
-
 // ─── Rate Card Types ────────────────────────────────────────
 
 export type RuleType =

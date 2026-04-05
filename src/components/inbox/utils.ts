@@ -1,14 +1,30 @@
 import type { OrderDraft, FormState, ClientRecord } from "./types";
 
+// Standard pallet dimensions (LxB in cm)
+const STANDARD_PALLET_DIMENSIONS: Record<string, string> = {
+  europallet: "120x80",
+  europallets: "120x80",
+  pallet: "120x80",
+  pallets: "120x80",
+  blokpallet: "120x100",
+  blokpallets: "120x100",
+};
+
 export function orderToForm(order: OrderDraft): FormState {
+  const unit = order.unit || "Pallets";
+  // Auto-fill standard dimensions for known pallet types
+  let dimensions = order.dimensions || "";
+  if (!dimensions && unit) {
+    dimensions = STANDARD_PALLET_DIMENSIONS[unit.toLowerCase()] || "";
+  }
   return {
     transportType: order.transport_type?.toLowerCase().replace("_", "-") || "direct",
     pickupAddress: order.pickup_address || "",
     deliveryAddress: order.delivery_address || "",
     quantity: order.quantity || 0,
-    unit: order.unit || "Pallets",
+    unit,
     weight: order.weight_kg ? order.weight_kg.toString() : "",
-    dimensions: order.dimensions || "",
+    dimensions,
     requirements: normaliseRequirements(order.requirements || []),
     perUnit: order.is_weight_per_unit,
     internalNote: order.internal_note || "",
@@ -158,18 +174,47 @@ export function tryEnrichAddress(address: string, clients: ClientRecord[]): { en
   return { enriched: [match.address, match.zipcode, match.city].filter(Boolean).join(", "), matchedClient: match.name };
 }
 
-export function getFormErrors(f: FormState | undefined): boolean {
-  return !f?.pickupAddress || !f?.deliveryAddress || !f?.quantity || !f?.weight;
+/**
+ * Validates that an address is not just a city name.
+ * A valid address must contain at least a street with number (digit).
+ * Examples:
+ *   "Groningen" → false
+ *   "Transportweg 12, Rotterdam" → true
+ *   "Industriepark 3, 3899 XC Zeewolde" → true
+ */
+export function isValidAddress(address: string | undefined | null): boolean {
+  if (!address || !address.trim()) return false;
+  const trimmed = address.trim();
+  // Must contain at least one digit (house number / postal code)
+  if (!/\d/.test(trimmed)) return false;
+  // Must be longer than just a number + city (at least street + number)
+  if (trimmed.split(/[\s,]+/).filter(Boolean).length < 2) return false;
+  return true;
 }
 
+export function getAddressError(address: string | undefined | null): string | null {
+  if (!address || !address.trim()) return "Adres is verplicht";
+  if (!isValidAddress(address)) return "Onvolledig adres — straat + huisnummer vereist";
+  return null;
+}
+
+export function getFormErrors(f: FormState | undefined): boolean {
+  if (!f?.pickupAddress || !f?.deliveryAddress || !f?.quantity || !f?.weight) return true;
+  // Block order creation if address is just a city name
+  if (!isValidAddress(f.pickupAddress) || !isValidAddress(f.deliveryAddress)) return true;
+  return false;
+}
+
+// These 8 fields match the per-field confidence dropdown in InboxReviewPanel
 export const ALL_FIELDS = [
-  { key: "pickupAddress", label: "Ophaaladres", required: true },
-  { key: "deliveryAddress", label: "Afleveradres", required: true },
-  { key: "quantity", label: "Aantal", required: true },
-  { key: "weight", label: "Gewicht", required: true },
-  { key: "unit", label: "Eenheid", required: false },
-  { key: "transportType", label: "Type", required: false },
-  { key: "dimensions", label: "Afmetingen", required: false },
+  { key: "pickupAddress", confKey: "pickup_address", label: "Ophaaladres", required: true },
+  { key: "deliveryAddress", confKey: "delivery_address", label: "Afleveradres", required: true },
+  { key: "quantity", confKey: "quantity", label: "Aantal", required: true },
+  { key: "weight", confKey: "weight_kg", label: "Gewicht", required: true },
+  { key: "unit", confKey: "unit", label: "Eenheid", required: false },
+  { key: "transportType", confKey: "transport_type", label: "Type", required: false },
+  { key: "dimensions", confKey: "dimensions", label: "Afmetingen", required: false },
+  { key: "clientName", confKey: "client_name", label: "Klantnaam", required: false },
 ] as const;
 
 export function getFilledCount(f: FormState | undefined): number {
@@ -177,11 +222,14 @@ export function getFilledCount(f: FormState | undefined): number {
   let count = 0;
   if (f.pickupAddress) count++;
   if (f.deliveryAddress) count++;
-  if (f.quantity) count++;
+  if (f.quantity != null && f.quantity > 0) count++;
   if (f.weight) count++;
   if (f.unit) count++;
   if (f.transportType) count++;
   if (f.dimensions) count++;
+  // Count fields with AI confidence as recognized even if not in form
+  const fc = f.fieldConfidence || {};
+  if (fc["client_name"] && fc["client_name"] > 0) count++;
   return count;
 }
 
