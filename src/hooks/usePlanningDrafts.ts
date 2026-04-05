@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Assignments } from "@/components/planning/types";
@@ -314,6 +314,8 @@ export function usePlanningEventsRealtime(
   }) => void,
 ) {
   const queryClient = useQueryClient();
+  const callbackRef = useRef(onPlanningEvent);
+  callbackRef.current = onPlanningEvent;
 
   useEffect(() => {
     const channel = supabase
@@ -322,14 +324,12 @@ export function usePlanningEventsRealtime(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "planning_events" },
         (payload) => {
-          // Invalidate planning drafts so UI picks up new assignments
           queryClient.invalidateQueries({ queryKey: ["planning-drafts"] });
           queryClient.invalidateQueries({ queryKey: ["planning-events"] });
 
-          // Notify caller
-          if (onPlanningEvent && payload.new) {
+          if (callbackRef.current && payload.new) {
             const row = payload.new as Record<string, unknown>;
-            onPlanningEvent({
+            callbackRef.current({
               trigger_type: (row.trigger_type as string) || "UNKNOWN",
               orders_assigned: (row.orders_assigned as number) || 0,
               orders_changed: (row.orders_changed as number) || 0,
@@ -344,7 +344,7 @@ export function usePlanningEventsRealtime(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient, onPlanningEvent]);
+  }, [queryClient]);
 }
 
 // --- Planning Events History ──────────────────────────────────

@@ -309,6 +309,23 @@ export async function periodicOptimize(
   // Record planning event
   await recordPlanningEvent(supabase, tenantId, result);
 
+  // Record decision for confidence feedback loop
+  await recordDecision(supabase, {
+    tenantId,
+    decisionType: "PLANNING",
+    entityType: "order",
+    entityId: date, // Use date as entity for periodic optimizations
+    inputConfidence: confidence.score,
+    modelConfidence: confidence.score,
+    proposedAction: {
+      trigger: "SCHEDULE",
+      orders_evaluated: allOrders.length,
+      orders_assigned: ordersAssigned,
+      orders_changed: ordersChanged,
+    },
+    resolution: autoResult.auto ? "AUTO_EXECUTED" : "PENDING",
+  });
+
   return result;
 }
 

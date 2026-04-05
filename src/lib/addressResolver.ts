@@ -78,7 +78,7 @@ export async function resolveClientAddress(
   );
 
   if (exactMatch) {
-    // Increment usage_count (fire-and-forget)
+    // Increment usage_count (async, log errors)
     supabase
       .from("client_address_book")
       .update({
@@ -86,7 +86,9 @@ export async function resolveClientAddress(
         last_used_at: new Date().toISOString(),
       })
       .eq("id", exactMatch.id)
-      .then(() => {});
+      .then(({ error: updateErr }: any) => {
+        if (updateErr) console.warn("Failed to increment address usage_count:", updateErr.message);
+      });
 
     return {
       resolved_address: exactMatch.resolved_address,
@@ -114,7 +116,7 @@ export async function resolveClientAddress(
   }
 
   if (bestMatch) {
-    // Increment usage_count (fire-and-forget)
+    // Increment usage_count (async, log errors)
     supabase
       .from("client_address_book")
       .update({
@@ -122,7 +124,9 @@ export async function resolveClientAddress(
         last_used_at: new Date().toISOString(),
       })
       .eq("id", bestMatch.id)
-      .then(() => {});
+      .then(({ error: updateErr }: any) => {
+        if (updateErr) console.warn("Failed to increment address usage_count:", updateErr.message);
+      });
 
     return {
       resolved_address: bestMatch.resolved_address,
@@ -152,16 +156,39 @@ export async function learnAddress(
 ): Promise<void> {
   if (!tenantId || !clientId || !alias || !resolvedAddress) return;
 
-  await supabase.from("client_address_book").upsert(
-    {
+  const normalizedAlias = alias.trim();
+
+  // Check if entry already exists to preserve usage_count
+  const { data: existing } = await supabase
+    .from("client_address_book")
+    .select("id, usage_count")
+    .eq("tenant_id", tenantId)
+    .eq("client_id", clientId)
+    .eq("alias", normalizedAlias)
+    .maybeSingle();
+
+  if (existing) {
+    // Update resolved address but increment usage_count
+    await supabase
+      .from("client_address_book")
+      .update({
+        resolved_address: resolvedAddress,
+        resolved_lat: lat ?? null,
+        resolved_lng: lng ?? null,
+        usage_count: (existing.usage_count || 1) + 1,
+        last_used_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id);
+  } else {
+    // Insert new entry
+    await supabase.from("client_address_book").insert({
       tenant_id: tenantId,
       client_id: clientId,
-      alias: alias,
+      alias: normalizedAlias,
       resolved_address: resolvedAddress,
       resolved_lat: lat ?? null,
       resolved_lng: lng ?? null,
       last_used_at: new Date().toISOString(),
-    },
-    { onConflict: "tenant_id,client_id,alias" }
-  );
+    });
+  }
 }
