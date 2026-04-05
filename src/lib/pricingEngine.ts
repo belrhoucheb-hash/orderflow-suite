@@ -16,6 +16,7 @@ import type {
   RuleType,
   SurchargeType,
 } from "@/types/rateModels";
+import type { PriceBreakdownWithConfidence } from "@/types/financial-autonomy";
 import { RULE_TYPE_UNITS } from "@/types/rateModels";
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -263,4 +264,81 @@ export function calculateOrderPrice(
   const totaal = round2(basisbedrag + surchargeTotal);
 
   return { basisbedrag, toeslagen, totaal, regels };
+}
+
+// ─── Confidence-Scored Pricing ─────────────────────────────────
+
+/**
+ * Confidence weights per rule type.
+ * ZONE_TARIEF and VAST_BEDRAG are fixed amounts -> high confidence.
+ * Variable-rate rules (PER_KM, PER_UUR) depend on measured inputs -> medium.
+ * STAFFEL has tier boundaries that can misfire -> lower.
+ */
+const RULE_TYPE_CONFIDENCE: Record<RuleType, number> = {
+  ZONE_TARIEF: 95,
+  VAST_BEDRAG: 95,
+  PER_STOP: 85,
+  PER_PALLET: 80,
+  PER_KM: 75,
+  PER_UUR: 70,
+  PER_KG: 75,
+  STAFFEL: 65,
+};
+
+/**
+ * Calculate order price with a confidence score.
+ *
+ * Confidence is derived from:
+ * 1. Rule type specificity (fixed = high, variable = lower)
+ * 2. Number of applied surcharges (more = less certain)
+ * 3. Historical accuracy for this client (from auto_invoice_log)
+ *
+ * @param order - The order to price
+ * @param rateCard - Active rate card with rules
+ * @param surcharges - Active surcharges
+ * @param historicalAccuracy - Optional: avg price_accuracy_pct from auto_invoice_log (0-100)
+ * @returns PriceBreakdown with a confidence field (0-100)
+ */
+export function calculateWithConfidence(
+  order: PricingOrderInput,
+  rateCard: RateCard,
+  surcharges: Surcharge[],
+  historicalAccuracy?: number,
+): PriceBreakdownWithConfidence {
+  const breakdown = calculateOrderPrice(order, rateCard, surcharges);
+
+  // 1. Base confidence from rule types used
+  const rules = rateCard.rate_rules ?? [];
+  let ruleConfidenceSum = 0;
+  let ruleCount = 0;
+  for (const regel of breakdown.regels) {
+    const ruleTypeConf = RULE_TYPE_CONFIDENCE[regel.rule_type] ?? 70;
+    ruleConfidenceSum += ruleTypeConf;
+    ruleCount++;
+  }
+  const avgRuleConfidence = ruleCount > 0
+    ? ruleConfidenceSum / ruleCount
+    : 50; // No matching rules = very uncertain
+
+  // 2. Surcharge penalty: each applied surcharge reduces confidence slightly
+  const appliedSurchargeCount = breakdown.toeslagen.length;
+  const surchargePenalty = Math.min(appliedSurchargeCount * 3, 15); // Max -15
+
+  // 3. Historical accuracy adjustment
+  let historyAdjustment = 0;
+  if (historicalAccuracy != null) {
+    // Center around 90%: accuracy above 90 boosts, below 90 penalizes
+    historyAdjustment = (historicalAccuracy - 90) * 0.3;
+  }
+
+  // Combine: weighted average
+  let confidence = avgRuleConfidence - surchargePenalty + historyAdjustment;
+
+  // Clamp to 0-100
+  confidence = Math.max(0, Math.min(100, Math.round(confidence * 100) / 100));
+
+  return {
+    ...breakdown,
+    confidence,
+  };
 }
