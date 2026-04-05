@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Assignments } from "@/components/planning/types";
@@ -297,4 +297,75 @@ export function usePlanningDraftsRealtime() {
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
+}
+
+// --- Planning Events Realtime ─────────────────────────────────
+/**
+ * Subscribe to planning_events to show real-time notifications
+ * when the system auto-assigns or re-evaluates orders.
+ */
+export function usePlanningEventsRealtime(
+  onPlanningEvent?: (event: {
+    trigger_type: string;
+    orders_assigned: number;
+    orders_changed: number;
+    auto_executed: boolean;
+    confidence: number;
+  }) => void,
+) {
+  const queryClient = useQueryClient();
+  const callbackRef = useRef(onPlanningEvent);
+  callbackRef.current = onPlanningEvent;
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("planning-events-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "planning_events" },
+        (payload) => {
+          queryClient.invalidateQueries({ queryKey: ["planning-drafts"] });
+          queryClient.invalidateQueries({ queryKey: ["planning-events"] });
+
+          if (callbackRef.current && payload.new) {
+            const row = payload.new as Record<string, unknown>;
+            callbackRef.current({
+              trigger_type: (row.trigger_type as string) || "UNKNOWN",
+              orders_assigned: (row.orders_assigned as number) || 0,
+              orders_changed: (row.orders_changed as number) || 0,
+              auto_executed: (row.auto_executed as boolean) || false,
+              confidence: (row.confidence as number) || 0,
+            });
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+}
+
+// --- Planning Events History ──────────────────────────────────
+/**
+ * Fetch recent planning events for a tenant.
+ */
+export function usePlanningEvents(tenantId: string | undefined, limit: number = 20) {
+  return useQuery({
+    queryKey: ["planning-events", tenantId, limit],
+    enabled: !!tenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("planning_events")
+        .select("*")
+        .eq("tenant_id", tenantId!)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 10_000,
+  });
 }
