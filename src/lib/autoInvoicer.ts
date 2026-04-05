@@ -40,10 +40,12 @@ export async function getHistoricalAccuracy(
   tenantId: string,
   clientId: string,
 ): Promise<number> {
+  // Join through invoices to filter by client_id (auto_invoice_log has no client_id column)
   const { data, error } = await supabase
     .from("auto_invoice_log")
-    .select("price_accuracy_pct")
-    .eq("tenant_id", tenantId);
+    .select("price_accuracy_pct, invoices!inner(client_id)")
+    .eq("tenant_id", tenantId)
+    .eq("invoices.client_id", clientId);
 
   if (error || !data || data.length === 0) {
     return 100;

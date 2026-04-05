@@ -76,6 +76,7 @@ export async function checkAvailableCapacity(
     const { data: unavailable } = await supabase
       .from("vehicle_availability")
       .select("vehicle_id, status")
+      .eq("tenant_id", tenantId)
       .eq("date", date)
       .eq("status", "unavailable")
       .in("vehicle_id", vehicleIds);
@@ -101,6 +102,7 @@ export async function checkAvailableCapacity(
     const { data: existingTrips } = await supabase
       .from("trips")
       .select("vehicle_id, total_weight_kg, total_pallets")
+      .eq("tenant_id", tenantId)
       .eq("date", date)
       .in("vehicle_id", availableIds);
 
