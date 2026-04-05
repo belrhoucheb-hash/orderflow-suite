@@ -59,6 +59,7 @@ const PortalInvoicing = lazy(() => import("@/pages/portal/PortalInvoicing"));
 const PortalReporting = lazy(() => import("@/pages/portal/PortalReporting"));
 const PortalSettings = lazy(() => import("@/pages/portal/PortalSettings"));
 const Dispatch = lazy(() => import("@/pages/Dispatch"));
+const Autonomie = lazy(() => import("@/pages/Autonomie"));
 
 const queryClient = new QueryClient();
 
@@ -106,6 +107,7 @@ const App = () => (
               <Route path="/facturatie/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><FacturatieDetail /></Suspense></ErrorBoundary>} />
               <Route path="/dispatch" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Dispatch /></Suspense></ErrorBoundary>} />
               <Route path="/exceptions" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Exceptions /></Suspense></ErrorBoundary>} />
+              <Route path="/autonomie" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Autonomie /></Suspense></ErrorBoundary>} />
               <Route path="/settings" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />
               <Route path="/settings/stamgegevens" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />
             </Route>
