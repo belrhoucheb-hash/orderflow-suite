@@ -71,6 +71,17 @@ vi.mock("@/hooks/useTrips", () => ({
   useUpdateStopStatus: vi.fn().mockReturnValue({ mutateAsync: vi.fn() }),
 }));
 vi.mock("@/hooks/useInvoices", () => ({ useAutoInvoiceGeneration: vi.fn() }));
+vi.mock("@/hooks/useInbox", () => ({ useInboxSubscription: vi.fn() }));
+vi.mock("@/hooks/useNotificationCenter", () => ({
+  useNotificationCenter: () => ({
+    notifications: [],
+    unreadCount: 0,
+    markAsRead: vi.fn(),
+    markAllAsRead: vi.fn(),
+    dismiss: vi.fn(),
+    isLoading: false,
+  }),
+}));
 vi.mock("@/hooks/useNotifications", () => ({
   useNotifications: () => ({
     notifications: [],

@@ -915,3 +915,30 @@ export function useInbox() {
     deleteMutation,
   };
 }
+
+// ─── Realtime subscription for Inbox auto-refresh ───────────────────
+// Call this in AppLayout (or any top-level component) to keep inbox
+// queries fresh when orders change in the database.
+
+export function useInboxSubscription() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("public:orders:inbox")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["sent-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["concept-orders"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+}
