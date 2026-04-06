@@ -14,6 +14,9 @@ import {
   getCapacityWarning,
   tryEnrichAddress,
   getFormErrors,
+  isValidAddress,
+  penalizeIncompleteAddresses,
+  STANDARD_PALLET_WEIGHT_KG,
 } from "@/components/inbox/utils";
 import { saveCorrection } from "@/hooks/useAIFeedback";
 import { useTenant } from "@/contexts/TenantContext";
@@ -183,14 +186,28 @@ export function useInbox() {
         const parseData = parseResponse;
         const ext = parseData?.extracted || parseData;
 
+        const unitVal = ext.unit || "Pallets";
+        const qtyVal = ext.quantity || 0;
+        // Auto-fill standard pallet dimensions and weight when missing
+        let dimsVal = ext.dimensions || "";
+        if (!dimsVal && unitVal) {
+          const key = unitVal.toLowerCase();
+          const stdDims: Record<string, string> = { europallet: "120x80x145", europallets: "120x80x145", pallet: "120x80x145", pallets: "120x80x145", blokpallet: "120x100x145", blokpallets: "120x100x145" };
+          dimsVal = stdDims[key] || "";
+        }
+        let weightVal = ext.weight_kg?.toString() || "";
+        if (!weightVal && unitVal && qtyVal > 0) {
+          const wpu = STANDARD_PALLET_WEIGHT_KG[unitVal.toLowerCase()];
+          if (wpu) weightVal = (wpu * qtyVal).toString();
+        }
         const parsedForm: FormState = {
           transportType: ext.transport_type || "direct",
           pickupAddress: ext.pickup_address || "",
           deliveryAddress: ext.delivery_address || "",
-          quantity: ext.quantity || 0,
-          unit: ext.unit || "Pallets",
-          weight: ext.weight_kg?.toString() || "",
-          dimensions: ext.dimensions || "",
+          quantity: qtyVal,
+          unit: unitVal,
+          weight: weightVal,
+          dimensions: dimsVal,
           requirements: normaliseRequirements(ext.requirements || []),
           perUnit: ext.is_weight_per_unit || false,
           internalNote: "",
@@ -202,10 +219,12 @@ export function useInbox() {
         if (enrichments.length > 0) toast.success("Adresboek verrijking", { description: enrichments.join(". ") });
         const enrichedForm = enriched as FormState;
         // Normalise confidence: AI may return 0-1 float instead of 0-100
-        const normalizedConfidence =
+        const baseConfidence =
           typeof ext.confidence_score === "number" && ext.confidence_score > 0 && ext.confidence_score <= 1
             ? Math.round(ext.confidence_score * 100)
             : ext.confidence_score;
+        // Penalize confidence when addresses are incomplete (city-only)
+        const normalizedConfidence = penalizeIncompleteAddresses(baseConfidence, enrichedForm.pickupAddress, enrichedForm.deliveryAddress);
 
         await supabase
           .from("orders")
@@ -509,7 +528,7 @@ export function useInbox() {
     return best?.id || null;
   }, [filtered]);
 
-  const formHasErrors = !form?.pickupAddress || !form?.deliveryAddress || !form?.quantity || !form?.weight;
+  const formHasErrors = getFormErrors(form);
 
   // ─── Handlers ───
   const toggleBulkSelect = (id: string) => {
@@ -605,18 +624,24 @@ export function useInbox() {
   const autoExtractingRef = useRef(false);
   const lastExtractedIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!selected) return;
-    if (selected.status !== "DRAFT") return;
+    // Find the selected order directly from drafts to avoid stale `selected` reference
+    const current = drafts.find((d) => d.id === selectedId);
+    if (!current) return;
+    if (current.status !== "DRAFT") return;
     // Already extracted — check DB fields (not formData which persists across selections)
-    if (selected.confidence_score != null && selected.confidence_score > 0) return;
-    if (selected.pickup_address || selected.delivery_address) return;
+    if (current.confidence_score != null && current.confidence_score > 0) return;
+    if (current.pickup_address || current.delivery_address) return;
+    // Also check if form already has AI data (e.g. from test scenario load)
+    const existingForm = formData[current.id];
+    if (existingForm?.pickupAddress && existingForm?.deliveryAddress && Object.keys(existingForm?.fieldConfidence || {}).length > 0) return;
     // No email body to parse
-    if (!selected.source_email_body) return;
+    if (!current.source_email_body) return;
     // Prevent re-trigger (use ref to avoid stale closure)
     if (autoExtractingRef.current) return;
     // Don't re-extract the same email
-    if (lastExtractedIdRef.current === selected.id) return;
+    if (lastExtractedIdRef.current === current.id) return;
 
+    const selected = current; // alias for the rest of the function
     const runExtraction = async () => {
       setAutoExtracting(true);
       autoExtractingRef.current = true;
@@ -630,19 +655,33 @@ export function useInbox() {
         const parseData = parseResponse;
         const ext = parseData?.extracted || parseData;
 
-        const normalizedConfidence =
+        const baseConfidence2 =
           typeof ext.confidence_score === "number" && ext.confidence_score > 0 && ext.confidence_score <= 1
             ? Math.round(ext.confidence_score * 100)
             : ext.confidence_score;
 
+        const unitVal2 = ext.unit || "Pallets";
+        const qtyVal2 = ext.quantity || 0;
+        // Auto-fill standard pallet dimensions and weight when missing
+        let dimsVal2 = ext.dimensions || "";
+        if (!dimsVal2 && unitVal2) {
+          const key = unitVal2.toLowerCase();
+          const stdDims: Record<string, string> = { europallet: "120x80x145", europallets: "120x80x145", pallet: "120x80x145", pallets: "120x80x145", blokpallet: "120x100x145", blokpallets: "120x100x145" };
+          dimsVal2 = stdDims[key] || "";
+        }
+        let weightVal2 = ext.weight_kg?.toString() || "";
+        if (!weightVal2 && unitVal2 && qtyVal2 > 0) {
+          const wpu = STANDARD_PALLET_WEIGHT_KG[unitVal2.toLowerCase()];
+          if (wpu) weightVal2 = (wpu * qtyVal2).toString();
+        }
         const parsedForm: FormState = {
           transportType: ext.transport_type || "direct",
           pickupAddress: ext.pickup_address || "",
           deliveryAddress: ext.delivery_address || "",
-          quantity: ext.quantity || 0,
-          unit: ext.unit || "Pallets",
-          weight: ext.weight_kg?.toString() || "",
-          dimensions: ext.dimensions || "",
+          quantity: qtyVal2,
+          unit: unitVal2,
+          weight: weightVal2,
+          dimensions: dimsVal2,
           requirements: normaliseRequirements(ext.requirements || []),
           perUnit: ext.is_weight_per_unit || false,
           internalNote: "",
@@ -651,6 +690,9 @@ export function useInbox() {
         };
         const { result: enriched, enrichments } = enrichAddresses(parsedForm);
         setFormData((prev) => ({ ...prev, [selected.id]: enriched as FormState }));
+        const enrichedForm2 = enriched as FormState;
+        // Penalize confidence when addresses are incomplete (city-only)
+        const normalizedConfidence = penalizeIncompleteAddresses(baseConfidence2, enrichedForm2.pickupAddress, enrichedForm2.deliveryAddress);
 
         await supabase
           .from("orders")
@@ -685,7 +727,7 @@ export function useInbox() {
 
     runExtraction();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id]); // Only trigger on selection change
+  }, [selectedId, drafts]); // Trigger on selection change and when drafts load/update
 
   // ─── Keyboard Navigation ───
   const filteredRef = useRef(filtered);

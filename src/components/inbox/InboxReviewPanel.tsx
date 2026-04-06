@@ -21,7 +21,7 @@ function FieldConfidenceIndicator({ score }: { score: number | undefined }) {
   }
   return <span title={`AI confidence: ${score}%`} className="inline-flex items-center cursor-help"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>;
 }
-import { getFilledCount, getTotalFields, getRequiredFilledCount, getFormErrors, formatDate, isAddressIncomplete } from "./utils";
+import { getFilledCount, getTotalFields, getRequiredFilledCount, getFormErrors, formatDate, isAddressIncomplete, computeFieldConfidence } from "./utils";
 
 interface Props {
   selected: OrderDraft;
@@ -39,8 +39,8 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
   const formErrors = getFormErrors(form);
   const filledCount = getFilledCount(form);
   const totalFields = getTotalFields();
-  // Confidence badge = actual filled fields percentage (not AI confidence_score)
-  const conf = Math.round((filledCount / totalFields) * 100);
+  // Confidence badge = weighted field recognition percentage (required fields count double)
+  const conf = computeFieldConfidence(form);
   const requiredFilled = getRequiredFilledCount(form);
   const totalRequired = 4;
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -146,10 +146,10 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-1">
                     <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider">{filledCount} van {totalFields} velden herkend</p>
-                    <span className="text-[10px] font-bold text-green-600">{Math.round(filledCount / totalFields * 100)}%</span>
+                    <span className="text-[10px] font-bold text-green-600">{conf}%</span>
                   </div>
                   <div className="w-full bg-green-100 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-green-500 h-full rounded-full transition-all" style={{ width: `${(filledCount / totalFields) * 100}%` }} />
+                    <div className="bg-green-500 h-full rounded-full transition-all" style={{ width: `${conf}%` }} />
                   </div>
                   <p className="text-[9px] text-green-600/70 mt-1 font-medium">
                     📧 {selected.attachments?.length ? `${filledCount > 1 ? filledCount - 1 : filledCount} uit e-mail · 📄 1 uit bijlage` : `${filledCount} uit e-mail`}

@@ -218,6 +218,13 @@ export function AppSidebar() {
             </div>
           )}
           <button
+            onClick={() => navigate("/settings")}
+            className="shrink-0 p-1.5 rounded-md text-sidebar-foreground/30 hover:text-white/70 hover:bg-white/5 transition-colors"
+            aria-label="Instellingen"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+          <button
             onClick={toggleTheme}
             className="shrink-0 p-1.5 rounded-md text-sidebar-foreground/30 hover:text-white/70 hover:bg-white/5 transition-colors"
             aria-label={isDark ? "Licht thema" : "Donker thema"}

@@ -144,14 +144,30 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
       const data = parseResponse;
       const ext = data?.extracted || data;
 
+      const unitVal = ext.unit || "Pallets";
+      const qtyVal = ext.quantity || 0;
+      // Auto-fill standard pallet dimensions and weight when missing
+      let dimsVal = ext.dimensions || "";
+      if (!dimsVal && unitVal) {
+        const key = unitVal.toLowerCase();
+        const stdDims: Record<string, string> = { europallet: "120x80x145", europallets: "120x80x145", pallet: "120x80x145", pallets: "120x80x145", blokpallet: "120x100x145", blokpallets: "120x100x145" };
+        dimsVal = stdDims[key] || "";
+      }
+      let weightVal = ext.weight_kg?.toString() || "";
+      if (!weightVal && unitVal && qtyVal > 0) {
+        const stdWeight: Record<string, number> = { europallet: 25, europallets: 25, pallet: 25, pallets: 25, blokpallet: 25, blokpallets: 25 };
+        const wpu = stdWeight[unitVal.toLowerCase()];
+        if (wpu) weightVal = (wpu * qtyVal).toString();
+      }
+
       onParseResult({
         transportType: ext.transport_type || "direct",
         pickupAddress: ext.pickup_address || "",
         deliveryAddress: ext.delivery_address || "",
-        quantity: ext.quantity || 0,
-        unit: ext.unit || "Pallets",
-        weight: ext.weight_kg?.toString() || "",
-        dimensions: ext.dimensions || "",
+        quantity: qtyVal,
+        unit: unitVal,
+        weight: weightVal,
+        dimensions: dimsVal,
         requirements: ext.requirements || [],
         perUnit: ext.is_weight_per_unit || false,
         fieldSources: {},
