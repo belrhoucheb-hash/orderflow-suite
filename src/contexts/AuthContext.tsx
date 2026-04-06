@@ -24,12 +24,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [isLinkedDriver, setIsLinkedDriver] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchProfileAndRoles = async (userId: string) => {
-    const [profileRes, rolesRes] = await Promise.all([
+    const [profileRes, rolesRes, driverRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url").eq("user_id", userId).single(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
+      supabase.from("drivers" as any).select("id").eq("user_id", userId).single(),
     ]);
 
     if (profileRes.data) {
@@ -38,6 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (rolesRes.data) {
       setRoles(rolesRes.data.map((r) => r.role as AppRole));
     }
+    // User is a linked driver if a driver record with their user_id exists
+    setIsLinkedDriver(!!driverRes.data);
   };
 
   useEffect(() => {
@@ -52,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null);
           setRoles([]);
+          setIsLinkedDriver(false);
         }
         setLoading(false);
       }
@@ -77,17 +82,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setRoles([]);
+    setIsLinkedDriver(false);
   };
 
   // Derive effective role: admin > planner > chauffeur
   // DB app_role enum: "admin" | "medewerker"
-  // "medewerker" maps to "planner"; a user with only a "chauffeur" flag
-  // (stored in localStorage after chauffeur login) maps to "chauffeur".
+  // "medewerker" maps to "planner"; chauffeur requires a linked driver record in DB.
+  // The chauffeur_mode localStorage flag is only a UI indicator — it cannot
+  // grant chauffeur role on its own. The user must also be linked to a driver
+  // record in the drivers table (verified via isLinkedDriver).
   // Future: add "chauffeur" to app_role enum in DB.
   const effectiveRole: EffectiveRole = (() => {
     if (roles.includes("admin")) return "admin";
-    // Check localStorage for chauffeur mode (set during chauffeur-specific login)
-    if (typeof window !== "undefined" && localStorage.getItem("chauffeur_mode") === "true") return "chauffeur";
+    // Only grant chauffeur role if the user is linked to a driver record in DB
+    // AND has the chauffeur_mode UI flag set (prevents localStorage-only bypass)
+    if (
+      isLinkedDriver &&
+      typeof window !== "undefined" &&
+      localStorage.getItem("chauffeur_mode") === "true"
+    ) return "chauffeur";
     // "medewerker" or no roles -> default to planner
     return "planner";
   })();
