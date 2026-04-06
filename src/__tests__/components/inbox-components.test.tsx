@@ -72,8 +72,8 @@ vi.mock("@/hooks/useCapacityMatch", () => ({
 
 // Mock AddressAutocomplete for InboxReviewPanel
 vi.mock("@/components/AddressAutocomplete", () => ({
-  AddressAutocomplete: ({ value, onChange, placeholder, className }: any) => (
-    <input value={value || ""} onChange={(e: any) => onChange(e.target.value)} placeholder={placeholder} className={className} data-testid="address-autocomplete" />
+  AddressAutocomplete: ({ value, onChange, onBlur, placeholder, className }: any) => (
+    <input value={value || ""} onChange={(e: any) => onChange(e.target.value)} onBlur={onBlur} placeholder={placeholder} className={className} data-testid="address-autocomplete" />
   ),
 }));
 
@@ -951,6 +951,7 @@ describe("InboxReviewPanel", () => {
     const addressInputs = screen.getAllByTestId("address-autocomplete");
     fireEvent.change(addressInputs[0], { target: { value: "Utrecht" } });
     expect(onUpdateField).toHaveBeenCalledWith("pickupAddress", "Utrecht");
+    fireEvent.blur(addressInputs[0]);
     expect(onAutoSave).toHaveBeenCalled();
   });
 
@@ -962,6 +963,7 @@ describe("InboxReviewPanel", () => {
     const addressInputs = screen.getAllByTestId("address-autocomplete");
     fireEvent.change(addressInputs[1], { target: { value: "Den Haag" } });
     expect(onUpdateField).toHaveBeenCalledWith("deliveryAddress", "Den Haag");
+    fireEvent.blur(addressInputs[1]);
     expect(onAutoSave).toHaveBeenCalled();
   });
 

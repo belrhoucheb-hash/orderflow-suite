@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
 import { downloadInvoicesCSV, downloadUBL } from "@/lib/invoiceUtils";
@@ -374,8 +374,8 @@ const Facturatie = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5"
-              onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }}>
+            <Button type="button" className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5"
+              onClick={() => setShowNewInvoice(true)}>
               <Plus className="h-4 w-4" /> Nieuwe factuur
             </Button>
           </div>
@@ -489,10 +489,7 @@ const Facturatie = () => {
       </div>
 
       {/* Table Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+      <div
         className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden"
       >
         <div className="overflow-x-auto">
@@ -530,7 +527,10 @@ const Facturatie = () => {
                   return (
                     <tr
                       key={invoice.id}
+                      role="link"
+                      tabIndex={0}
                       onClick={() => navigate(`/facturatie/${invoice.id}`)}
+                      onKeyDown={(e) => { if (e.key === "Enter") navigate(`/facturatie/${invoice.id}`); }}
                       className="hover:bg-muted/20 transition-colors duration-100 group cursor-pointer"
                     >
                       <td className="px-4 py-2">
@@ -659,13 +659,17 @@ const Facturatie = () => {
             Totaal: {formatCurrency(filtered.reduce((s, inv) => s + inv.total, 0))}
           </p>
         </div>
-      </motion.div>
+      </div>
 
       {/* New Invoice Dialog */}
-      <Dialog open={showNewInvoice} onOpenChange={setShowNewInvoice}>
+      <Dialog open={showNewInvoice} onOpenChange={(open) => {
+        setShowNewInvoice(open);
+        if (open) { setSelectedClientId(""); setSelectedOrderIds(new Set()); }
+      }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Nieuwe factuur aanmaken</DialogTitle>
+            <DialogDescription>Selecteer een klant en koppel onverfactureerde orders.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 mt-2">

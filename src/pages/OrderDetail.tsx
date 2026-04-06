@@ -28,6 +28,7 @@ import PodViewer from "@/components/orders/PodViewer";
 import CMRDocument from "@/components/orders/CMRDocument";
 import LabelWorkshop from "@/components/orders/LabelWorkshop";
 import { RecipientFields } from "@/components/orders/RecipientFields";
+import { ReturnOrdersList } from "@/components/orders/ReturnOrdersList";
 import { NotificationLogPanel } from "@/components/orders/NotificationLogPanel";
 import OrderTimeline from "@/components/orders/OrderTimeline";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";

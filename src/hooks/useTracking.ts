@@ -143,11 +143,48 @@ function getStopsWithCoords(trip: Trip): TripStop[] {
 
 function simulatePositionForTrip(trip: Trip): VehiclePosition | null {
   const stops = getStopsWithCoords(trip);
-  if (stops.length < 2) return null;
+
+  // If we have no stops with coordinates, try to use a single stop or default
+  if (stops.length === 0) {
+    // Last resort: place the marker at a default Netherlands position
+    return {
+      vehicleId: trip.vehicle_id,
+      lat: 52.0 + Math.random() * 0.4,
+      lng: 4.8 + Math.random() * 0.6,
+      heading: 0,
+      speed: 0,
+      timestamp: new Date().toISOString(),
+      tripId: trip.id,
+    };
+  }
+
+  if (stops.length < 2) {
+    // Only one stop with coordinates — place the marker there
+    return {
+      vehicleId: trip.vehicle_id,
+      lat: stops[0].planned_latitude!,
+      lng: stops[0].planned_longitude!,
+      heading: 0,
+      speed: 0,
+      timestamp: new Date().toISOString(),
+      tripId: trip.id,
+    };
+  }
 
   // Calculate how far along the trip we should be based on time
   const startTime = trip.actual_start_time || trip.planned_start_time;
-  if (!startTime) return null;
+  if (!startTime) {
+    // No start time — place the marker at the first stop
+    return {
+      vehicleId: trip.vehicle_id,
+      lat: stops[0].planned_latitude!,
+      lng: stops[0].planned_longitude!,
+      heading: 0,
+      speed: 0,
+      timestamp: new Date().toISOString(),
+      tripId: trip.id,
+    };
+  }
 
   const now = Date.now();
   const start = new Date(startTime).getTime();

@@ -5,6 +5,7 @@
 export const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string; label: string }> = {
   DRAFT: { bg: 'bg-blue-500/8', text: 'text-blue-700', dot: 'bg-blue-500', label: 'Nieuw' },
   PENDING: { bg: 'bg-amber-500/8', text: 'text-amber-700', dot: 'bg-amber-500', label: 'In behandeling' },
+  CONFIRMED: { bg: 'bg-amber-500/8', text: 'text-amber-700', dot: 'bg-amber-500', label: 'In behandeling' },
   PLANNED: { bg: 'bg-violet-500/8', text: 'text-violet-700', dot: 'bg-violet-500', label: 'Ingepland' },
   IN_TRANSIT: { bg: 'bg-primary/8', text: 'text-primary', dot: 'bg-primary', label: 'Onderweg' },
   DELIVERED: { bg: 'bg-emerald-500/8', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'Afgeleverd' },

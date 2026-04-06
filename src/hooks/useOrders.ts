@@ -19,6 +19,7 @@ import type { OrderStatus } from "@/lib/statusTransitions";
 const legacyStatusMap: Record<string, OrderStatus> = {
   OPEN: "PENDING",
   WAITING: "PENDING",
+  CONFIRMED: "PENDING",
 };
 
 function normalizeStatus(dbStatus: string): OrderStatus {
@@ -49,7 +50,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
       if (statusFilter && statusFilter !== "alle") {
         // Account for legacy statuses that map to PENDING
         if (statusFilter === "PENDING") {
-          query = query.in("status", ["PENDING", "OPEN", "WAITING"]);
+          query = query.in("status", ["PENDING", "OPEN", "WAITING", "CONFIRMED"]);
         } else {
           query = query.eq("status", statusFilter);
         }
@@ -60,7 +61,19 @@ export function useOrders(options: UseOrdersOptions = {}) {
       }
 
       if (search) {
-        query = query.or(`client_name.ilike.%${search}%,order_number::text.ilike.%${search}%,pickup_address.ilike.%${search}%,delivery_address.ilike.%${search}%`);
+        const parts = [
+          `client_name.ilike.%${search}%`,
+          `pickup_address.ilike.%${search}%`,
+          `delivery_address.ilike.%${search}%`,
+        ];
+        // order_number is an integer column — ilike/::text casts are not
+        // supported by PostgREST.  Only add a numeric filter when the user
+        // types a number so the query doesn't break.
+        const asNum = Number(search);
+        if (!Number.isNaN(asNum) && Number.isInteger(asNum)) {
+          parts.push(`order_number.eq.${asNum}`);
+        }
+        query = query.or(parts.join(","));
       }
 
       const { data, error, count } = await query;
