@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { emitOrderEvent } from "../_shared/eventPipeline.ts";
+
+let emitOrderEvent: any = async () => {};
+try {
+  const ep = await import("../_shared/eventPipeline.ts");
+  emitOrderEvent = ep.emitOrderEvent;
+} catch { /* shared module not available */ }
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "https://orderflow-suite.vercel.app",
