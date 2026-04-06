@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,99 +8,40 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, FileSpreadsheet, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Upload, FileSpreadsheet, Loader2, AlertCircle, CheckCircle2, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useQueryClient } from "@tanstack/react-query";
+import type { BulkImportRow, BulkImportValidation, BulkImportResult, ColumnMapping } from "@/types/bulkImport";
+import { ORDER_FIELDS } from "@/types/bulkImport";
+import {
+  parseCSV,
+  autoDetectColumns,
+  mapRowsToImportData,
+  validateRows,
+} from "@/utils/bulkImportParser";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-interface ParsedRow {
-  client_name: string;
-  pickup_address: string;
-  delivery_address: string;
-  weight_kg: number | null;
-  quantity: number | null;
-  unit: string;
-}
-
-interface ColumnMapping {
-  csvHeader: string;
-  mappedField: keyof ParsedRow | null;
-}
-
-// ── Column mapping configuration ──────────────────────────────────────
-// Maps common Dutch/English CSV header names to order fields.
-// Matching is case-insensitive and uses "contains" logic.
-const FIELD_ALIASES: Record<keyof ParsedRow, string[]> = {
-  client_name: ["klant", "client", "klantnaam", "opdrachtgever", "customer", "bedrijf", "company"],
-  pickup_address: ["ophalen", "pickup", "ophaaladres", "pickup_address", "laden", "vertrek"],
-  delivery_address: ["leveren", "delivery", "afleveradres", "delivery_address", "lossen", "bestemming", "afleveren"],
-  weight_kg: ["gewicht", "weight", "kg", "weight_kg", "massa"],
-  quantity: ["aantal", "quantity", "stuks", "qty", "hoeveelheid"],
-  unit: ["eenheid", "unit", "verpakking", "colli"],
-};
-
-function fuzzyMatchField(header: string): keyof ParsedRow | null {
-  const normalized = header.toLowerCase().trim();
-  for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
-    for (const alias of aliases) {
-      if (normalized === alias || normalized.includes(alias)) {
-        return field as keyof ParsedRow;
-      }
-    }
-  }
-  return null;
-}
-
-// Detect delimiter: semicolon (European CSVs) vs comma
-function detectDelimiter(firstLine: string): string {
-  const semicolons = (firstLine.match(/;/g) || []).length;
-  const commas = (firstLine.match(/,/g) || []).length;
-  return semicolons >= commas ? ";" : ",";
-}
-
-function parseCSVLine(line: string, delimiter: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === delimiter && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  result.push(current.trim());
-  return result;
-}
+type Step = "upload" | "mapping" | "preview" | "importing" | "done";
 
 export function BulkImportDialog({ open, onOpenChange }: Props) {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<"upload" | "preview" | "importing" | "done">("upload");
+  const [step, setStep] = useState<Step>("upload");
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [mappings, setMappings] = useState<ColumnMapping[]>([]);
-  const [rows, setRows] = useState<string[][]>([]);
-  const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ success: number; errors: number } | null>(null);
+  const [rawRows, setRawRows] = useState<string[][]>([]);
+  const [validations, setValidations] = useState<BulkImportValidation[]>([]);
+  const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const reset = useCallback(() => {
@@ -108,9 +49,9 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
     setFileName("");
     setHeaders([]);
     setMappings([]);
-    setRows([]);
-    setImporting(false);
-    setResult(null);
+    setRawRows([]);
+    setValidations([]);
+    setImportResult(null);
     setDragOver(false);
   }, []);
 
@@ -121,6 +62,8 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
     },
     [onOpenChange, reset]
   );
+
+  // ── File processing ────────────────────────────────────────────────
 
   const processFile = useCallback((file: File) => {
     if (!file.name.endsWith(".csv") && !file.name.endsWith(".txt")) {
@@ -138,30 +81,23 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
         return;
       }
 
-      const lines = text
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0);
+      const { headers: parsedHeaders, rows } = parseCSV(text);
 
-      if (lines.length < 2) {
+      if (parsedHeaders.length === 0) {
+        toast.error("Kan geen kolommen detecteren in het bestand");
+        return;
+      }
+      if (rows.length === 0) {
         toast.error("Bestand bevat geen data (alleen header gevonden)");
         return;
       }
 
-      const delimiter = detectDelimiter(lines[0]);
-      const csvHeaders = parseCSVLine(lines[0], delimiter);
-      const csvRows = lines.slice(1).map((line) => parseCSVLine(line, delimiter));
+      const autoMappings = autoDetectColumns(parsedHeaders);
 
-      // Auto-map columns
-      const autoMappings: ColumnMapping[] = csvHeaders.map((h) => ({
-        csvHeader: h,
-        mappedField: fuzzyMatchField(h),
-      }));
-
-      setHeaders(csvHeaders);
+      setHeaders(parsedHeaders);
       setMappings(autoMappings);
-      setRows(csvRows);
-      setStep("preview");
+      setRawRows(rows);
+      setStep("mapping");
     };
     reader.readAsText(file);
   }, []);
@@ -184,57 +120,60 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
     [processFile]
   );
 
-  const updateMapping = (index: number, field: keyof ParsedRow | null) => {
+  // ── Mapping ────────────────────────────────────────────────────────
+
+  const updateMapping = (index: number, field: keyof BulkImportRow | null) => {
     setMappings((prev) =>
-      prev.map((m, i) => (i === index ? { ...m, mappedField: field } : m))
+      prev.map((m, i) => (i === index ? { ...m, orderField: field } : m))
     );
   };
 
-  const getColumnIndex = (field: keyof ParsedRow): number => {
-    return mappings.findIndex((m) => m.mappedField === field);
-  };
+  const hasMappedClient = mappings.some((m) => m.orderField === "clientName");
+
+  const proceedToPreview = useCallback(() => {
+    const importRows = mapRowsToImportData(rawRows, mappings);
+    const validated = validateRows(importRows);
+    setValidations(validated);
+    setStep("preview");
+  }, [rawRows, mappings]);
+
+  // ── Validation stats ───────────────────────────────────────────────
+
+  const validCount = useMemo(() => validations.filter((v) => v.isValid).length, [validations]);
+  const warningCount = useMemo(
+    () => validations.filter((v) => v.isValid && v.warnings.length > 0).length,
+    [validations]
+  );
+  const errorCount = useMemo(() => validations.filter((v) => !v.isValid).length, [validations]);
+
+  // ── Import ─────────────────────────────────────────────────────────
 
   const handleImport = async () => {
-    const clientIdx = getColumnIndex("client_name");
-    if (clientIdx === -1) {
-      toast.error("Kolomkoppeling voor 'Klant' is verplicht");
-      return;
-    }
-
-    setImporting(true);
     setStep("importing");
 
-    let success = 0;
-    let errors = 0;
-
-    // Cache for client lookups to avoid repeated queries
+    const validRows = validations.filter((v) => v.isValid);
+    let imported = 0;
+    const importErrors: BulkImportResult["errors"] = [];
     const clientCache: Record<string, string> = {};
 
-    for (const row of rows) {
+    for (const v of validRows) {
       try {
-        const clientName = row[clientIdx]?.trim();
-        if (!clientName) {
-          errors++;
-          continue;
-        }
+        const { row } = v;
+        const clientName = row.clientName.trim();
 
         // Resolve or create client
         let clientId = clientCache[clientName.toLowerCase()];
         if (!clientId) {
-          // Look up existing client (scoped to tenant)
           const lookupQuery = supabase
             .from("clients")
             .select("id")
             .ilike("name", clientName);
           if (tenant?.id) lookupQuery.eq("tenant_id", tenant.id);
-          const { data: existingClient } = await lookupQuery
-            .limit(1)
-            .maybeSingle();
+          const { data: existingClient } = await lookupQuery.limit(1).maybeSingle();
 
           if (existingClient) {
             clientId = existingClient.id;
           } else {
-            // Create new client (with tenant_id)
             const clientInsert: Record<string, unknown> = { name: clientName };
             if (tenant?.id) clientInsert.tenant_id = tenant.id;
             const { data: newClient, error: clientErr } = await supabase
@@ -244,8 +183,7 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
               .single();
 
             if (clientErr || !newClient) {
-              console.error("Failed to create client:", clientErr);
-              errors++;
+              importErrors.push({ rowIndex: v.rowIndex, message: `Kan klant niet aanmaken: ${clientErr?.message}` });
               continue;
             }
             clientId = newClient.id;
@@ -253,23 +191,19 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
           clientCache[clientName.toLowerCase()] = clientId;
         }
 
-        const pickupIdx = getColumnIndex("pickup_address");
-        const deliveryIdx = getColumnIndex("delivery_address");
-        const weightIdx = getColumnIndex("weight_kg");
-        const quantityIdx = getColumnIndex("quantity");
-        const unitIdx = getColumnIndex("unit");
-
-        const weightRaw = weightIdx >= 0 ? row[weightIdx]?.trim().replace(",", ".") : null;
-        const quantityRaw = quantityIdx >= 0 ? row[quantityIdx]?.trim() : null;
+        const weightRaw = row.weight?.replace(",", ".");
+        const quantityRaw = row.quantity?.replace(",", ".");
 
         const orderData: Record<string, unknown> = {
           client_name: clientName,
           client_id: clientId,
-          pickup_address: pickupIdx >= 0 ? row[pickupIdx]?.trim() || null : null,
-          delivery_address: deliveryIdx >= 0 ? row[deliveryIdx]?.trim() || null : null,
+          pickup_address: row.pickupAddress || null,
+          delivery_address: row.deliveryAddress || null,
           weight_kg: weightRaw ? parseFloat(weightRaw) || null : null,
           quantity: quantityRaw ? parseInt(quantityRaw, 10) || null : null,
-          unit: unitIdx >= 0 ? row[unitIdx]?.trim() || null : null,
+          reference: row.reference || null,
+          notes: row.notes || null,
+          delivery_date: row.deliveryDate || null,
           status: "PENDING",
         };
 
@@ -279,48 +213,48 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
 
         const { error: insertErr } = await supabase.from("orders").insert([orderData]);
         if (insertErr) {
-          console.error("Failed to insert order:", insertErr);
-          errors++;
+          importErrors.push({ rowIndex: v.rowIndex, message: insertErr.message });
         } else {
-          success++;
+          imported++;
         }
-      } catch (err) {
-        console.error("Row import error:", err);
-        errors++;
+      } catch (err: any) {
+        importErrors.push({ rowIndex: v.rowIndex, message: err?.message || "Onbekende fout" });
       }
     }
 
-    setResult({ success, errors });
-    setImporting(false);
+    const result: BulkImportResult = {
+      total: validations.length,
+      imported,
+      skipped: validations.length - validRows.length,
+      errors: importErrors,
+    };
+
+    setImportResult(result);
     setStep("done");
 
-    // Refresh orders list
+    // Refresh queries
     queryClient.invalidateQueries({ queryKey: ["orders"] });
     queryClient.invalidateQueries({ queryKey: ["clients"] });
 
-    if (success > 0) {
-      toast.success(`${success} orders geïmporteerd${errors > 0 ? `, ${errors} fouten` : ""}`);
+    if (imported > 0) {
+      toast.success(`${imported} orders ge\u00EFmporteerd${importErrors.length > 0 ? `, ${importErrors.length} fouten` : ""}`);
     } else {
-      toast.error(`Import mislukt: ${errors} fouten`);
+      toast.error(`Import mislukt: ${importErrors.length} fouten`);
     }
   };
 
-  const previewRows = rows.slice(0, 10);
-  const hasMappedClient = mappings.some((m) => m.mappedField === "client_name");
+  // ── Field options for dropdown ─────────────────────────────────────
 
-  const fieldOptions: { value: keyof ParsedRow | ""; label: string }[] = [
+  const fieldOptions: { value: string; label: string }[] = [
     { value: "", label: "-- Overslaan --" },
-    { value: "client_name", label: "Klant" },
-    { value: "pickup_address", label: "Ophaaladres" },
-    { value: "delivery_address", label: "Afleveradres" },
-    { value: "weight_kg", label: "Gewicht (kg)" },
-    { value: "quantity", label: "Aantal" },
-    { value: "unit", label: "Eenheid" },
+    ...ORDER_FIELDS.map((f) => ({ value: f.value, label: f.label })),
   ];
+
+  // ── Render ─────────────────────────────────────────────────────────
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Orders importeren</DialogTitle>
           <DialogDescription>
@@ -365,28 +299,28 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
           </div>
         )}
 
-        {/* Step 2: Preview & Column Mapping */}
-        {step === "preview" && (
+        {/* Step 2: Column Mapping */}
+        {step === "mapping" && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <FileSpreadsheet className="h-4 w-4" />
               <span>{fileName}</span>
-              <span className="text-xs">({rows.length} rijen gevonden)</span>
+              <span className="text-xs">({rawRows.length} rijen gevonden)</span>
             </div>
 
-            {/* Column Mapping */}
+            {/* Column Mapping Grid */}
             <div>
               <h4 className="text-xs font-bold text-foreground mb-2">Kolomkoppeling</h4>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {mappings.map((mapping, idx) => (
                   <div key={idx} className="flex flex-col gap-1">
-                    <span className="text-xs text-muted-foreground truncate" title={mapping.csvHeader}>
-                      {mapping.csvHeader}
+                    <span className="text-xs text-muted-foreground truncate" title={mapping.csvColumn}>
+                      {mapping.csvColumn}
                     </span>
                     <select
-                      value={mapping.mappedField || ""}
+                      value={mapping.orderField || ""}
                       onChange={(e) =>
-                        updateMapping(idx, (e.target.value || null) as keyof ParsedRow | null)
+                        updateMapping(idx, (e.target.value || null) as keyof BulkImportRow | null)
                       }
                       className="text-xs rounded-md border border-border bg-background px-2 py-1.5 text-foreground"
                     >
@@ -405,22 +339,22 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
               <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <p className="text-xs">
-                  Koppel minimaal de kolom "Klant" om door te gaan.
+                  Koppel minimaal de kolom &quot;Klant&quot; om door te gaan.
                 </p>
               </div>
             )}
 
-            {/* Preview Table */}
+            {/* Preview Table (first 5 rows) */}
             <div>
               <h4 className="text-xs font-bold text-foreground mb-2">
-                Voorbeeld (eerste {Math.min(10, rows.length)} rijen)
+                Voorbeeld (eerste {Math.min(5, rawRows.length)} rijen)
               </h4>
               <div className="border border-border rounded-lg overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-muted/50 border-b border-border">
                       {headers.map((h, i) => {
-                        const mapped = mappings[i]?.mappedField;
+                        const mapped = mappings[i]?.orderField;
                         return (
                           <th
                             key={i}
@@ -431,7 +365,7 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
                             {h}
                             {mapped && (
                               <span className="ml-1 text-[10px] text-primary/60">
-                                ({fieldOptions.find((f) => f.value === mapped)?.label})
+                                ({ORDER_FIELDS.find((f) => f.value === mapped)?.label})
                               </span>
                             )}
                           </th>
@@ -440,14 +374,14 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {previewRows.map((row, rIdx) => (
+                    {rawRows.slice(0, 5).map((row, rIdx) => (
                       <tr key={rIdx} className="border-b border-border/30">
                         {row.map((cell, cIdx) => (
                           <td
                             key={cIdx}
                             className="px-3 py-1.5 text-muted-foreground whitespace-nowrap max-w-[200px] truncate"
                           >
-                            {cell || "—"}
+                            {cell || "\u2014"}
                           </td>
                         ))}
                       </tr>
@@ -459,53 +393,159 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
           </div>
         )}
 
-        {/* Step 3: Importing */}
+        {/* Step 3: Preview & Validate */}
+        {step === "preview" && (
+          <div className="space-y-4">
+            {/* Summary badges */}
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 bg-emerald-500/10">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                {validCount} geldig
+              </Badge>
+              {warningCount > 0 && (
+                <Badge variant="outline" className="text-amber-600 border-amber-500/30 bg-amber-500/10">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  {warningCount} waarschuwingen
+                </Badge>
+              )}
+              {errorCount > 0 && (
+                <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10">
+                  <X className="h-3 w-3 mr-1" />
+                  {errorCount} fouten
+                </Badge>
+              )}
+            </div>
+
+            {/* Validation table */}
+            <div className="border border-border rounded-lg overflow-x-auto max-h-[400px] overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-muted/50 border-b border-border">
+                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground w-10">#</th>
+                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground w-10">Status</th>
+                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Klant</th>
+                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Ophaaladres</th>
+                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Afleveradres</th>
+                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Gewicht</th>
+                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Aantal</th>
+                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Fout / Waarschuwing</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {validations.map((v) => (
+                    <tr
+                      key={v.rowIndex}
+                      className={`border-b border-border/30 ${
+                        !v.isValid ? "bg-destructive/5" : v.warnings.length > 0 ? "bg-amber-500/5" : ""
+                      }`}
+                    >
+                      <td className="px-3 py-1.5 text-muted-foreground tabular-nums">{v.rowIndex + 1}</td>
+                      <td className="px-3 py-1.5">
+                        {!v.isValid ? (
+                          <X className="h-3.5 w-3.5 text-destructive" />
+                        ) : v.warnings.length > 0 ? (
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5 text-foreground/80 max-w-[120px] truncate">{v.row.clientName || "\u2014"}</td>
+                      <td className="px-3 py-1.5 text-muted-foreground max-w-[150px] truncate">{v.row.pickupAddress || "\u2014"}</td>
+                      <td className="px-3 py-1.5 text-muted-foreground max-w-[150px] truncate">{v.row.deliveryAddress || "\u2014"}</td>
+                      <td className="px-3 py-1.5 text-muted-foreground tabular-nums">{v.row.weight || "\u2014"}</td>
+                      <td className="px-3 py-1.5 text-muted-foreground tabular-nums">{v.row.quantity || "\u2014"}</td>
+                      <td className="px-3 py-1.5">
+                        {v.errors.length > 0 && (
+                          <span className="text-destructive">{v.errors.join("; ")}</span>
+                        )}
+                        {v.warnings.length > 0 && (
+                          <span className="text-amber-600">{v.errors.length > 0 ? " | " : ""}{v.warnings.join("; ")}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Importing */}
         {step === "importing" && (
           <div className="flex flex-col items-center justify-center gap-3 py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">
-              Orders worden geïmporteerd...
+              Orders worden ge&iuml;mporteerd...
             </p>
           </div>
         )}
 
-        {/* Step 4: Done */}
-        {step === "done" && result && (
+        {/* Step 5: Done */}
+        {step === "done" && importResult && (
           <div className="flex flex-col items-center justify-center gap-4 py-8">
-            {result.success > 0 ? (
+            {importResult.imported > 0 ? (
               <CheckCircle2 className="h-10 w-10 text-emerald-500" />
             ) : (
               <AlertCircle className="h-10 w-10 text-destructive" />
             )}
             <div className="text-center space-y-1">
               <p className="text-sm font-medium text-foreground">
-                {result.success > 0
-                  ? `${result.success} orders geïmporteerd`
+                {importResult.imported > 0
+                  ? `${importResult.imported} van ${importResult.total} orders ge\u00EFmporteerd`
                   : "Import mislukt"}
               </p>
-              {result.errors > 0 && (
+              {importResult.skipped > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {result.errors} rij(en) met fouten overgeslagen
+                  {importResult.skipped} rij(en) overgeslagen (validatiefouten)
+                </p>
+              )}
+              {importResult.errors.length > 0 && (
+                <p className="text-xs text-destructive">
+                  {importResult.errors.length} rij(en) met importfouten
                 </p>
               )}
             </div>
+            {importResult.errors.length > 0 && (
+              <div className="w-full max-h-[150px] overflow-y-auto border border-border rounded-lg p-2 text-xs">
+                {importResult.errors.map((err, i) => (
+                  <p key={i} className="text-destructive">
+                    Rij {err.rowIndex + 1}: {err.message}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* Footer Actions */}
         <DialogFooter>
-          {step === "preview" && (
+          {step === "mapping" && (
             <div className="flex gap-2 w-full justify-between">
               <Button variant="outline" onClick={reset}>
                 Terug
               </Button>
               <Button
+                onClick={proceedToPreview}
+                disabled={!hasMappedClient}
+                className="btn-primary"
+              >
+                Valideer &amp; Preview
+              </Button>
+            </div>
+          )}
+          {step === "preview" && (
+            <div className="flex gap-2 w-full justify-between">
+              <Button variant="outline" onClick={() => setStep("mapping")}>
+                Terug
+              </Button>
+              <Button
                 onClick={handleImport}
-                disabled={!hasMappedClient || importing}
+                disabled={validCount === 0}
                 className="btn-primary"
               >
                 <Upload className="h-4 w-4 mr-1" />
-                Importeer {rows.length} orders
+                Importeer {validCount} orders
+                {errorCount > 0 && ` (${errorCount} overslaan)`}
               </Button>
             </div>
           )}

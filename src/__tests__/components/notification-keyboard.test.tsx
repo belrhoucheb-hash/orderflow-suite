@@ -50,6 +50,17 @@ vi.mock("@/hooks/useNotifications", () => ({
   useNotifications: () => mockNotifications(),
 }));
 
+vi.mock("@/hooks/useNotificationCenter", () => ({
+  useNotificationCenter: () => ({
+    notifications: [],
+    unreadCount: 0,
+    markAsRead: vi.fn(),
+    markAllAsRead: vi.fn(),
+    dismiss: vi.fn(),
+    isLoading: false,
+  }),
+}));
+
 describe("NotificationCenter", () => {
   beforeEach(() => {
     vi.clearAllMocks();

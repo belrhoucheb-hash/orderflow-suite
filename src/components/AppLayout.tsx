@@ -7,6 +7,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useSLAMonitor } from "@/hooks/useSLAMonitor";
 import { useOrdersSubscription } from "@/hooks/useOrders";
+import { useInboxSubscription } from "@/hooks/useInbox";
 import { useAutoCompleteTripCheck } from "@/hooks/useTrips";
 import { useAutoInvoiceGeneration } from "@/hooks/useInvoices";
 
@@ -15,6 +16,8 @@ export function AppLayout() {
   useSLAMonitor();
   // Listen for realtime database changes for orders
   useOrdersSubscription();
+  // Listen for realtime database changes for inbox (draft/sent/concept orders)
+  useInboxSubscription();
   // Auto-complete trips when all stops reach terminal status (via Realtime)
   useAutoCompleteTripCheck();
   // Auto-generate concept invoices for billing-ready orders
