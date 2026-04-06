@@ -30,9 +30,9 @@ interface AutonomyScoreCardProps {
 }
 
 export function AutonomyScoreCard({ compact = false }: AutonomyScoreCardProps) {
-  const { data, isLoading } = useAutonomyScore();
+  const { data, isLoading, isError } = useAutonomyScore();
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 8 }}
@@ -56,7 +56,25 @@ export function AutonomyScoreCard({ compact = false }: AutonomyScoreCardProps) {
     );
   }
 
-  const overall = Math.round(data.overall);
+  // When query errors or returns no data, show a zero-state instead of infinite loading
+  const resolvedData = data ?? {
+    overall: 0,
+    perModule: {
+      ORDER_INTAKE: 0,
+      PLANNING: 0,
+      DISPATCH: 0,
+      PRICING: 0,
+      INVOICING: 0,
+      CONSOLIDATION: 0,
+    },
+    todayStats: { autonomous: 0, validated: 0, manual: 0 },
+  };
+
+  if (isError) {
+    console.warn("[AutonomyScoreCard] Failed to load autonomy score, showing zero-state");
+  }
+
+  const overall = Math.round(resolvedData.overall);
 
   return (
     <motion.div
@@ -91,19 +109,19 @@ export function AutonomyScoreCard({ compact = false }: AutonomyScoreCardProps) {
         <div className="flex items-center gap-1.5">
           <Bot className="h-3.5 w-3.5 text-emerald-500" />
           <span className="text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">{data.todayStats.autonomous}</span> autonoom
+            <span className="font-semibold text-foreground">{resolvedData.todayStats.autonomous}</span> autonoom
           </span>
         </div>
         <div className="flex items-center gap-1.5">
           <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
           <span className="text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">{data.todayStats.validated}</span> gevalideerd
+            <span className="font-semibold text-foreground">{resolvedData.todayStats.validated}</span> gevalideerd
           </span>
         </div>
         <div className="flex items-center gap-1.5">
           <Edit3 className="h-3.5 w-3.5 text-amber-500" />
           <span className="text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">{data.todayStats.manual}</span> handmatig
+            <span className="font-semibold text-foreground">{resolvedData.todayStats.manual}</span> handmatig
           </span>
         </div>
       </div>
@@ -111,7 +129,7 @@ export function AutonomyScoreCard({ compact = false }: AutonomyScoreCardProps) {
       {/* Per-module breakdown (hidden in compact mode) */}
       {!compact && (
         <div className="space-y-1.5 pt-2 border-t border-border/30">
-          {Object.entries(data.perModule).map(([mod, score]) => (
+          {Object.entries(resolvedData.perModule).map(([mod, score]) => (
             <div key={mod} className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground w-24 truncate">
                 {MODULE_LABELS[mod as DecisionType]}

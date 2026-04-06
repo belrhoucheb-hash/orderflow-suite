@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { getStatusColor } from "@/lib/statusColors";
 import { useOrders } from "@/hooks/useOrders";
 import { supabase } from "@/integrations/supabase/client";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import SmartLabel from "@/components/orders/SmartLabel";
@@ -26,10 +26,11 @@ const priorityDotColors: Record<string, string> = {
   spoed: "text-primary",
 };
 
-const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED", "RETOUR"] as const;
+const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED"] as const;
 
 
 const Orders = () => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("alle");
@@ -64,13 +65,11 @@ const Orders = () => {
     setPage(0);
   };
 
-  // "RETOUR" filter means order_type=RETOUR; others are status filters
-  const isOrderTypeFilter = statusFilter === "RETOUR";
   const { data, isLoading, isError, refetch } = useOrders({
     page,
     pageSize,
-    statusFilter: (!isOrderTypeFilter && statusFilter !== "alle") ? statusFilter : undefined,
-    orderTypeFilter: isOrderTypeFilter ? statusFilter : undefined,
+    statusFilter: (statusFilter !== "alle") ? statusFilter : undefined,
+    orderTypeFilter: (orderTypeFilter !== "alle") ? orderTypeFilter : undefined,
     search: search || undefined,
   });
   const rawOrders = data?.orders ?? [];
@@ -160,11 +159,9 @@ const Orders = () => {
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="h-4 w-4" /> Import
             </Button>
-            <Link to="/orders/nieuw">
-              <Button className="btn-primary">
-                <Plus className="h-4 w-4" /> Nieuwe order
-              </Button>
-            </Link>
+            <Button className="btn-primary" onClick={() => navigate("/orders/nieuw")}>
+              <Plus className="h-4 w-4" /> Nieuwe order
+            </Button>
           </div>
         }
       />
@@ -266,7 +263,8 @@ const Orders = () => {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ delay: idx * 0.02 }}
-                    className="table-row group"
+                    className="table-row group cursor-pointer"
+                    onClick={() => navigate(`/orders/${order.id}`)}
                   >
                     <td className="table-cell">
                       <Link

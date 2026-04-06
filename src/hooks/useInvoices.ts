@@ -83,7 +83,22 @@ export function useInvoices(options: UseInvoicesOptions = {}) {
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (statusFilter && statusFilter !== "alle") {
-        query = query.eq("status", statusFilter);
+        const today = new Date().toISOString().split("T")[0];
+
+        if (statusFilter === "vervallen") {
+          // "Vervallen" is a virtual status: either explicitly set to "vervallen"
+          // in the DB, or "verzonden" with a due_date in the past.
+          query = query.or(
+            `status.eq.vervallen,and(status.eq.verzonden,due_date.lt.${today})`
+          );
+        } else if (statusFilter === "verzonden") {
+          // Exclude overdue invoices from "Verzonden" — those show under "Vervallen".
+          query = query
+            .eq("status", "verzonden")
+            .or(`due_date.is.null,due_date.gte.${today}`);
+        } else {
+          query = query.eq("status", statusFilter);
+        }
       }
 
       if (search) {

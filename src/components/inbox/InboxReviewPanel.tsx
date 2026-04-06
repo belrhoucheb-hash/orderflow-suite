@@ -188,7 +188,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                     <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Ophalen <FieldConfidenceIndicator score={form.fieldConfidence?.pickup_address} /></span>
                   </div>
                   <AddressAutocomplete value={form.pickupAddress} onChange={(v) => { onUpdateField("pickupAddress", v); onAutoSave(); }}
-                    placeholder="Ophaaladres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-0", !form.pickupAddress && "text-red-400 italic font-normal")} />
+                    placeholder="Ophaaladres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text", !form.pickupAddress && "text-red-400 italic font-normal")} />
                   {form.pickupAddress && isAddressIncomplete(form.pickupAddress) && (
                     <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-bold">
                       <AlertTriangle className="h-3 w-3 shrink-0" /> Onvolledig adres — straat + huisnummer nodig
@@ -208,7 +208,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                     <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Lossen <FieldConfidenceIndicator score={form.fieldConfidence?.delivery_address} /></span>
                   </div>
                   <AddressAutocomplete value={form.deliveryAddress} onChange={(v) => { onUpdateField("deliveryAddress", v); onAutoSave(); }}
-                    placeholder="Afleveradres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-0", !form.deliveryAddress && "text-red-400 italic font-normal")} />
+                    placeholder="Afleveradres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text", !form.deliveryAddress && "text-red-400 italic font-normal")} />
                   {form.deliveryAddress && isAddressIncomplete(form.deliveryAddress) && (
                     <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-bold">
                       <AlertTriangle className="h-3 w-3 shrink-0" /> Onvolledig adres — straat + huisnummer nodig
@@ -233,7 +233,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                 <span className="text-xs text-gray-500 font-medium flex items-center gap-1">Aantal <FieldConfidenceIndicator score={form.fieldConfidence?.quantity} /></span>
                 <div className="flex items-center gap-1.5">
                   <Input type="number" value={form.quantity} onChange={(e) => onUpdateField("quantity", Number(e.target.value))} onBlur={onAutoSave}
-                    className="h-7 w-14 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-0" />
+                    className="h-7 w-14 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text" />
                   <Select value={form.unit} onValueChange={(v) => { onUpdateField("unit", v); setTimeout(onAutoSave, 0); }}>
                     <SelectTrigger className="h-7 w-auto border-0 shadow-none bg-transparent p-0 text-xs font-bold gap-1 focus:ring-0"><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="Pallets">Pallets</SelectItem><SelectItem value="Colli">Colli</SelectItem><SelectItem value="Box">Box</SelectItem></SelectContent>
@@ -246,7 +246,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                 <div className="text-right">
                   <div className="flex items-center gap-1">
                     <Input value={form.weight} onChange={(e) => onUpdateField("weight", e.target.value)} onBlur={onAutoSave} placeholder="—"
-                      className={cn("h-7 w-20 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-0 tabular-nums", !form.weight && "text-red-400")} />
+                      className={cn("h-7 w-20 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text tabular-nums", !form.weight && "text-red-400")} />
                     <span className="text-xs font-bold">kg</span>
                   </div>
                   {form.perUnit && form.weight && form.quantity > 0 && (
@@ -267,7 +267,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                 <span className={cn("text-xs font-medium", !form.dimensions ? "text-amber-600" : "text-gray-500")}>Afmetingen</span>
                 <Input value={form.dimensions} onChange={(e) => onUpdateField("dimensions", e.target.value)} onBlur={onAutoSave}
                   placeholder={!form.dimensions ? "Niet opgegeven" : "LxBxH"}
-                  className={cn("h-7 w-28 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-0", !form.dimensions && "text-amber-600 italic")} />
+                  className={cn("h-7 w-28 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text", !form.dimensions && "text-amber-600 italic")} />
               </div>
             </div>
           </div>
