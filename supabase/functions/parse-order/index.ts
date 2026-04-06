@@ -145,7 +145,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { emailBody, pdfUrls, threadContext, tenantId } = await req.json();
+    const { emailBody, pdfUrls, threadContext, tenantId, fewShotExamples } = await req.json();
 
     let tenantIdStr = tenantId;
     if (!tenantIdStr) {
