@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Order } from "@/data/mockData";
 import { logAudit } from "@/lib/auditLog";
+import { emitEventDirect } from "@/hooks/useEventPipeline";
+import type { EventType } from "@/types/events";
 
 // ─── 8.11 Order Status State Machine ─────────────────────────────────
 // Extracted to @/lib/statusTransitions as a pure function (no Supabase dep).
@@ -222,6 +224,18 @@ export function useUpdateOrder() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["orders", variables.id] });
+
+      // Fire-and-forget event pipeline for status changes
+      if (variables.updates.status) {
+        const statusEventMap: Record<string, EventType> = {
+          PLANNED: "order_planned",
+          DELIVERED: "order_delivered",
+        };
+        const eventType = statusEventMap[variables.updates.status];
+        if (eventType) {
+          emitEventDirect(variables.id, eventType, { actorType: "system" });
+        }
+      }
 
       // Fire-and-forget audit trail for order updates (including status changes)
       const changedFields = Object.keys(variables.updates);

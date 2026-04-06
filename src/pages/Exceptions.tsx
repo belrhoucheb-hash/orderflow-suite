@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFleetVehicles } from "@/hooks/useFleet";
+import { useAnomalies, useResolveAnomaly, anomalyToException } from "@/hooks/useAnomalyDetection";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
@@ -12,6 +13,7 @@ import {
   Loader2,
   CheckCircle2,
   Shield,
+  Brain,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -131,9 +133,11 @@ const Exceptions = () => {
   const { data: orderData, isLoading: ordersLoading } = useExceptionOrders();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useFleetVehicles();
   const { data: deliveryExceptions = [], isLoading: dexLoading } = useDeliveryExceptions();
+  const { data: anomalies = [], isLoading: anomaliesLoading } = useAnomalies({ unresolvedOnly: true });
   const resolveException = useResolveException();
+  const resolveAnomaly = useResolveAnomaly();
 
-  const isLoading = ordersLoading || vehiclesLoading || dexLoading;
+  const isLoading = ordersLoading || vehiclesLoading || dexLoading || anomaliesLoading;
 
   const { exceptions, counts } = useMemo(() => {
     if (!orderData) return { exceptions: [] as ExceptionItem[], counts: { delays: 0, missingData: 0, capacity: 0, sla: 0, delivery: 0 } };
@@ -246,6 +250,27 @@ const Exceptions = () => {
       });
     }
 
+    // ── Anomaly-detected items ────────────────────────────────
+    for (const a of anomalies) {
+      const exc = anomalyToException(a);
+      items.push({
+        id: exc.id,
+        type: (exc.type === "Prijs" || exc.type === "Timing" || exc.type === "Compliance" || exc.type === "Patroon")
+          ? "Data mist" as ExceptionType // map non-standard types to nearest existing badge
+          : exc.type === "Capaciteit"
+            ? "Capaciteit" as ExceptionType
+            : "Vertraging" as ExceptionType,
+        urgency: exc.urgency,
+        orderNumber: exc.orderNumber,
+        clientName: exc.clientName,
+        description: exc.description,
+        detectedAt: exc.detectedAt,
+        actionLabel: exc.actionLabel,
+        actionTo: exc.actionTo,
+        source: "db" as const, // treat as DB-sourced so resolve button appears
+      });
+    }
+
     // Sort by urgency (critical first) then by detectedAt (oldest first)
     const urgencyOrder: Record<Urgency, number> = { critical: 0, warning: 1, info: 2 };
     items.sort((a, b) => {
@@ -262,11 +287,12 @@ const Exceptions = () => {
         capacity: fullVehicles.length,
         sla: slaOrders.length,
         delivery: deliveryExceptions.length,
+        anomalies: anomalies.length,
       },
     };
-  }, [orderData, vehicles, deliveryExceptions]);
+  }, [orderData, vehicles, deliveryExceptions, anomalies]);
 
-  const totalCount = counts.delays + counts.missingData + counts.capacity + counts.sla + counts.delivery;
+  const totalCount = counts.delays + counts.missingData + counts.capacity + counts.sla + counts.delivery + (counts.anomalies ?? 0);
 
   if (isLoading) {
     return <LoadingState message="Uitzonderingen laden..." />;
@@ -278,6 +304,7 @@ const Exceptions = () => {
     { label: "Ontbrekende data", value: counts.missingData, icon: Package, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/40" },
     { label: "Capaciteit", value: counts.capacity, icon: Truck, color: "text-violet-600", bg: "bg-violet-50 dark:bg-violet-950/40" },
     { label: "SLA risico", value: counts.sla, icon: Shield, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/40" },
+    { label: "Anomalies", value: counts.anomalies ?? 0, icon: Brain, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/40" },
   ];
 
   return (
@@ -289,7 +316,7 @@ const Exceptions = () => {
       />
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         {kpis.map((kpi, i) => (
           <motion.div
             key={kpi.label}
@@ -373,8 +400,14 @@ const Exceptions = () => {
                         variant="outline"
                         size="sm"
                         className="text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                        disabled={resolveException.isPending}
-                        onClick={() => resolveException.mutate(exc.id)}
+                        disabled={resolveException.isPending || resolveAnomaly.isPending}
+                        onClick={() => {
+                          if (exc.id.startsWith("anomaly-")) {
+                            resolveAnomaly.mutate({ id: exc.id.replace("anomaly-", "") });
+                          } else {
+                            resolveException.mutate(exc.id);
+                          }
+                        }}
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Opgelost

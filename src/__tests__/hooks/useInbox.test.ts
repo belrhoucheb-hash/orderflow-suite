@@ -26,6 +26,10 @@ const { mockFrom, mockSupabase, mockSaveCorrection } = vi.hoisted(() => {
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn() }) }));
 vi.mock("@/hooks/useAIFeedback", () => ({ saveCorrection: mockSaveCorrection }));
+vi.mock("@/hooks/useConfidenceStore", () => ({
+  recordAIDecision: vi.fn().mockResolvedValue({ id: "mock-decision-id" }),
+  resolveAIDecision: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/contexts/TenantContext", () => ({
   useTenant: () => ({ tenant: { id: "tenant-1", name: "Test Tenant", slug: "test", logoUrl: null, primaryColor: "#000" }, loading: false }),
 }));

@@ -300,10 +300,29 @@ describe("useUpdateTripStatus", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("updates trip status to VERZONDEN with timestamp", async () => {
-    mockFrom.mockImplementation(() => ({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    }));
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "trip_stops") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
+        };
+      }
+      if (table === "order_events") {
+        const chain: any = {};
+        chain.select = vi.fn().mockReturnValue(chain);
+        chain.eq = vi.fn().mockReturnValue(chain);
+        chain.order = vi.fn().mockReturnValue(chain);
+        chain.limit = vi.fn().mockReturnValue(chain);
+        chain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+        chain.insert = vi.fn().mockResolvedValue({ data: null, error: null });
+        return chain;
+      }
+      return {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
+    });
 
     const { result } = renderHook(() => useUpdateTripStatus(), { wrapper: createWrapper() });
 
@@ -315,10 +334,29 @@ describe("useUpdateTripStatus", () => {
   });
 
   it("calls logAudit on success", async () => {
-    mockFrom.mockImplementation(() => ({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    }));
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "trip_stops") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
+        };
+      }
+      if (table === "order_events") {
+        const chain: any = {};
+        chain.select = vi.fn().mockReturnValue(chain);
+        chain.eq = vi.fn().mockReturnValue(chain);
+        chain.order = vi.fn().mockReturnValue(chain);
+        chain.limit = vi.fn().mockReturnValue(chain);
+        chain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+        chain.insert = vi.fn().mockResolvedValue({ data: null, error: null });
+        return chain;
+      }
+      return {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      };
+    });
 
     const { result } = renderHook(() => useUpdateTripStatus(), { wrapper: createWrapper() });
 

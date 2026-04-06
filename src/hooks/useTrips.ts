@@ -5,6 +5,7 @@ import { checkTripCompletion } from "@/hooks/useBillingStatus";
 import { toast } from "sonner";
 import type { Trip, TripStop, TripStatus, StopStatus, canTransitionTrip, canTransitionStop } from "@/types/dispatch";
 import { logAudit } from "@/lib/auditLog";
+import { emitEventDirect } from "@/hooks/useEventPipeline";
 
 // ─── Fetch trips for a date ─────────────────────────────────
 export function useTrips(date?: string) {
@@ -135,6 +136,20 @@ export function useUpdateTripStatus() {
 
       const { error } = await supabase.from("trips").update(updates).eq("id", tripId);
       if (error) throw error;
+
+      // Event Pipeline: emit trip_dispatched for all linked orders
+      if (status === "VERZONDEN") {
+        const { data: dispatchStops } = await supabase
+          .from("trip_stops")
+          .select("order_id")
+          .eq("trip_id", tripId);
+        if (dispatchStops) {
+          const orderIds = [...new Set(dispatchStops.map(s => s.order_id).filter(Boolean))] as string[];
+          for (const oid of orderIds) {
+            emitEventDirect(oid, "trip_dispatched", { actorType: "planner", eventData: { tripId } });
+          }
+        }
+      }
 
       // When trip goes ACTIEF, set all linked orders to IN_TRANSIT
       if (status === "ACTIEF") {
