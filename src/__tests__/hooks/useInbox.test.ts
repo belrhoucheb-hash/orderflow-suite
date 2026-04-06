@@ -63,9 +63,12 @@ vi.mock("@/components/inbox/utils", () => ({
   getCapacityWarning: () => null,
   tryEnrichAddress: (addr: string) => ({ enriched: addr, matchedClient: null }),
   getFormErrors: (f: any) => {
-    if (!f.pickupAddress || !f.deliveryAddress || !f.quantity || !f.weight) return "missing fields";
-    return null;
+    if (!f) return true;
+    if (!f.pickupAddress || !f.deliveryAddress || !f.quantity || !f.weight) return true;
+    return false;
   },
+  isValidAddress: (addr: string) => !!addr && /\d/.test(addr) && addr.split(/[\s,]+/).filter(Boolean).length >= 2,
+  penalizeIncompleteAddresses: (conf: any, _p: any, _d: any) => conf,
 }));
 vi.mock("@/lib/companyConfig", () => ({
   DEFAULT_COMPANY: { email: "info@test.com" },

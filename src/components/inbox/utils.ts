@@ -1,13 +1,22 @@
 import type { OrderDraft, FormState, ClientRecord } from "./types";
 
-// Standard pallet dimensions (LxB in cm)
+// Standard pallet dimensions (LxBxH in cm) and weight per unit (kg)
 const STANDARD_PALLET_DIMENSIONS: Record<string, string> = {
-  europallet: "120x80",
-  europallets: "120x80",
-  pallet: "120x80",
-  pallets: "120x80",
-  blokpallet: "120x100",
-  blokpallets: "120x100",
+  europallet: "120x80x145",
+  europallets: "120x80x145",
+  pallet: "120x80x145",
+  pallets: "120x80x145",
+  blokpallet: "120x100x145",
+  blokpallets: "120x100x145",
+};
+
+export const STANDARD_PALLET_WEIGHT_KG: Record<string, number> = {
+  europallet: 25,
+  europallets: 25,
+  pallet: 25,
+  pallets: 25,
+  blokpallet: 25,
+  blokpallets: 25,
 };
 
 export function orderToForm(order: OrderDraft): FormState {
@@ -17,13 +26,21 @@ export function orderToForm(order: OrderDraft): FormState {
   if (!dimensions && unit) {
     dimensions = STANDARD_PALLET_DIMENSIONS[unit.toLowerCase()] || "";
   }
+  // Auto-fill weight for standard pallet types (weight per pallet * quantity)
+  let weight = order.weight_kg ? order.weight_kg.toString() : "";
+  if (!weight && unit && order.quantity && order.quantity > 0) {
+    const weightPerUnit = STANDARD_PALLET_WEIGHT_KG[unit.toLowerCase()];
+    if (weightPerUnit) {
+      weight = (weightPerUnit * order.quantity).toString();
+    }
+  }
   return {
     transportType: order.transport_type?.toLowerCase().replace("_", "-") || "direct",
     pickupAddress: order.pickup_address || "",
     deliveryAddress: order.delivery_address || "",
     quantity: order.quantity || 0,
     unit,
-    weight: order.weight_kg ? order.weight_kg.toString() : "",
+    weight,
     dimensions,
     requirements: normaliseRequirements(order.requirements || []),
     perUnit: order.is_weight_per_unit,
@@ -192,6 +209,23 @@ export function isValidAddress(address: string | undefined | null): boolean {
   return true;
 }
 
+/**
+ * Applies a confidence penalty when extracted addresses are incomplete (city-only).
+ * Each incomplete address reduces confidence by 20 points (clamped to 0).
+ */
+export function penalizeIncompleteAddresses(
+  confidence: number | null | undefined,
+  pickupAddress: string | undefined | null,
+  deliveryAddress: string | undefined | null,
+): number | null | undefined {
+  if (confidence == null) return confidence;
+  let penalty = 0;
+  if (pickupAddress && !isValidAddress(pickupAddress)) penalty += 20;
+  if (deliveryAddress && !isValidAddress(deliveryAddress)) penalty += 20;
+  if (penalty === 0) return confidence;
+  return Math.max(0, Math.round(confidence - penalty));
+}
+
 export function getAddressError(address: string | undefined | null): string | null {
   if (!address || !address.trim()) return "Adres is verplicht";
   if (!isValidAddress(address)) return "Onvolledig adres — straat + huisnummer vereist";
@@ -219,17 +253,32 @@ export const ALL_FIELDS = [
 
 export function getFilledCount(f: FormState | undefined): number {
   if (!f) return 0;
-  let count = 0;
-  if (f.pickupAddress) count++;
-  if (f.deliveryAddress) count++;
-  if (f.quantity != null && f.quantity > 0) count++;
-  if (f.weight) count++;
-  if (f.unit) count++;
-  if (f.transportType) count++;
-  if (f.dimensions) count++;
-  // Count fields with AI confidence as recognized even if not in form
   const fc = f.fieldConfidence || {};
-  if (fc["client_name"] && fc["client_name"] > 0) count++;
+  const hasAnyConfidence = Object.keys(fc).length > 0;
+
+  let count = 0;
+  for (const field of ALL_FIELDS) {
+    // If we have per-field confidence data, use it as source of truth
+    if (hasAnyConfidence) {
+      if (fc[field.confKey] != null && fc[field.confKey] > 0) {
+        count++;
+      }
+    } else {
+      // Fallback: count fields that have non-default values
+      const val = field.key === "clientName" ? null : (f as any)[field.key];
+      if (field.key === "quantity") {
+        if (val != null && val > 0) count++;
+      } else if (field.key === "transportType") {
+        // "direct" is the default — only count if AI actually set it
+        if (val && val !== "direct") count++;
+      } else if (field.key === "unit") {
+        // "Pallets" is the default — only count if AI actually set it
+        if (val && val !== "Pallets") count++;
+      } else {
+        if (val) count++;
+      }
+    }
+  }
   return count;
 }
 
@@ -237,11 +286,58 @@ export function getTotalFields(): number {
   return ALL_FIELDS.length;
 }
 
+/**
+ * Compute a confidence percentage from field recognition data.
+ * When per-field confidence scores are available, uses weighted average of
+ * actual confidence values (required fields weighted 2x).
+ * When not available, falls back to binary filled/not-filled check,
+ * excluding default values like "direct" and "Pallets".
+ * Returns 0-100 integer.
+ */
+export function computeFieldConfidence(f: FormState | undefined): number {
+  if (!f) return 0;
+  const fc = f.fieldConfidence || {};
+  const hasAnyConfidence = Object.keys(fc).length > 0;
+
+  let weightedSum = 0;
+  let weightedTotal = 0;
+  for (const field of ALL_FIELDS) {
+    const weight = field.required ? 2 : 1;
+    weightedTotal += weight;
+
+    if (hasAnyConfidence) {
+      // Use actual confidence value (normalise 0-1 floats to 0-100)
+      let confVal = fc[field.confKey];
+      if (confVal != null && confVal > 0) {
+        if (confVal <= 1) confVal = confVal * 100;
+        weightedSum += weight * (confVal / 100);
+      }
+      // Fields without confidence data contribute 0
+    } else {
+      // Fallback: binary filled/not-filled, excluding defaults
+      const val = field.key === "clientName" ? null : (f as any)[field.key];
+      let isFilled = false;
+      if (field.key === "quantity") {
+        isFilled = val != null && val > 0;
+      } else if (field.key === "transportType") {
+        isFilled = !!val && val !== "direct";
+      } else if (field.key === "unit") {
+        isFilled = !!val && val !== "Pallets";
+      } else {
+        isFilled = !!val;
+      }
+      if (isFilled) weightedSum += weight;
+    }
+  }
+  if (weightedTotal === 0) return 0;
+  return Math.round((weightedSum / weightedTotal) * 100);
+}
+
 export function getRequiredFilledCount(f: FormState | undefined): number {
   if (!f) return 0;
   let count = 0;
-  if (f.pickupAddress) count++;
-  if (f.deliveryAddress) count++;
+  if (f.pickupAddress && isValidAddress(f.pickupAddress)) count++;
+  if (f.deliveryAddress && isValidAddress(f.deliveryAddress)) count++;
   if (f.quantity) count++;
   if (f.weight) count++;
   return count;

@@ -45,6 +45,7 @@ vi.mock("@/components/inbox/utils", () => ({
   getTotalFields: () => 8,
   getRequiredFilledCount: () => 3,
   getFormErrors: () => null,
+  computeFieldConfidence: () => 50,
   isAddressIncomplete: () => false,
   isValidAddress: () => true,
   getAddressError: () => null,
@@ -992,6 +993,7 @@ describe("InboxReviewPanel", () => {
       getTotalFields: () => 8,
       getRequiredFilledCount: () => 1,
       getFormErrors: () => "Missing required",
+      computeFieldConfidence: () => 25,
       isAddressIncomplete: () => false,
     }));
     vi.resetModules();
@@ -1007,6 +1009,7 @@ describe("InboxReviewPanel", () => {
       getTotalFields: () => 8,
       getRequiredFilledCount: () => 3,
       getFormErrors: () => null,
+      computeFieldConfidence: () => 50,
       isAddressIncomplete: () => false,
     }));
     vi.resetModules();
@@ -1498,6 +1501,7 @@ describe("InboxReviewPanel – Address incomplete warning", () => {
       getTotalFields: () => 8,
       getRequiredFilledCount: () => 3,
       getFormErrors: () => null,
+      computeFieldConfidence: () => 50,
       isAddressIncomplete: (addr: string) => !/\d/.test(addr),
     }));
     vi.resetModules();
@@ -1526,6 +1530,7 @@ describe("InboxReviewPanel – Address incomplete warning", () => {
       getTotalFields: () => 8,
       getRequiredFilledCount: () => 3,
       getFormErrors: () => null,
+      computeFieldConfidence: () => 50,
       isAddressIncomplete: () => false,
     }));
     vi.resetModules();
@@ -1539,6 +1544,7 @@ describe("InboxReviewPanel – Address incomplete warning", () => {
       getTotalFields: () => 8,
       getRequiredFilledCount: () => 3,
       getFormErrors: () => null,
+      computeFieldConfidence: () => 50,
       isAddressIncomplete: (addr: string) => !/\d/.test(addr),
     }));
     vi.resetModules();
@@ -1568,6 +1574,7 @@ describe("InboxReviewPanel – Address incomplete warning", () => {
       getTotalFields: () => 8,
       getRequiredFilledCount: () => 3,
       getFormErrors: () => null,
+      computeFieldConfidence: () => 50,
       isAddressIncomplete: () => false,
     }));
     vi.resetModules();
@@ -1581,6 +1588,7 @@ describe("InboxReviewPanel – Address incomplete warning", () => {
       getTotalFields: () => 8,
       getRequiredFilledCount: () => 3,
       getFormErrors: () => null,
+      computeFieldConfidence: () => 50,
       isAddressIncomplete: () => false,
     }));
     vi.resetModules();
