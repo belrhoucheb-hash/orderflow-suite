@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Settings as SettingsIcon,
@@ -51,10 +51,22 @@ const Settings = () => {
   const { tenant } = useTenant();
   const { t, i18n } = useTranslation();
 
-  const handleLanguageChange = (lng: string) => {
+  // Local state mirrors i18n.language so React always re-renders on change.
+  const [currentLang, setCurrentLang] = useState(i18n.language || "nl");
+
+  useEffect(() => {
+    if (!i18n.on) return; // Skip in test environments without full i18n
+    const onChanged = (lng: string) => setCurrentLang(lng);
+    i18n.on("languageChanged", onChanged);
+    return () => { i18n.off?.("languageChanged", onChanged); };
+  }, [i18n]);
+
+  const handleLanguageChange = useCallback((lng: string) => {
     i18n.changeLanguage(lng);
     localStorage.setItem("language", lng);
-  };
+    // Eagerly update local state so Select reflects the new value immediately
+    setCurrentLang(lng);
+  }, [i18n]);
 
   // Branding state
   const [companyName, setCompanyName] = useState("");
@@ -350,7 +362,7 @@ const Settings = () => {
             </CardHeader>
             <CardContent>
               <div className="max-w-xs">
-                <Select value={i18n.language} onValueChange={handleLanguageChange}>
+                <Select value={currentLang} onValueChange={handleLanguageChange}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

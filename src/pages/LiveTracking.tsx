@@ -1,10 +1,20 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import {
   Truck, Clock, AlertTriangle, CheckCircle2, MapPin, Search, Filter,
   Activity, Navigation,
 } from "lucide-react";
+
+// Fix Leaflet default marker icon paths (broken by Vite bundling)
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -153,6 +163,9 @@ const LiveTracking = () => {
         '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
     }).addTo(map);
     mapInstanceRef.current = map;
+    // Ensure the map picks up its container size (flex layouts may not be
+    // settled when the effect first fires).
+    requestAnimationFrame(() => map.invalidateSize());
     return () => {
       map.remove();
       mapInstanceRef.current = null;
