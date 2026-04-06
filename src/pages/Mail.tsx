@@ -160,11 +160,11 @@ export default function Mail() {
   ];
 
   const threadTypeLabel: Record<string, { label: string; color: string }> = {
-    new: { label: "Nieuw", color: "bg-emerald-100 text-emerald-700" },
-    update: { label: "Wijziging", color: "bg-blue-100 text-blue-700" },
-    cancellation: { label: "Annulering", color: "bg-red-100 text-red-700" },
-    confirmation: { label: "Bevestiging", color: "bg-emerald-100 text-emerald-700" },
-    question: { label: "Vraag", color: "bg-violet-100 text-violet-700" },
+    new: { label: "Nieuw", color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" },
+    update: { label: "Wijziging", color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" },
+    cancellation: { label: "Annulering", color: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" },
+    confirmation: { label: "Bevestiging", color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" },
+    question: { label: "Vraag", color: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400" },
   };
 
   return (
@@ -376,7 +376,7 @@ export default function Mail() {
                 {selected.confidenceScore != null && selected.confidenceScore > 0 && (
                   <div className={cn(
                     "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold",
-                    selected.confidenceScore >= 80 ? "bg-emerald-100 text-emerald-700" : selected.confidenceScore >= 60 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                    selected.confidenceScore >= 80 ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" : selected.confidenceScore >= 60 ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
                   )}>
                     <Bot className="h-3.5 w-3.5" />
                     AI: {selected.confidenceScore}%

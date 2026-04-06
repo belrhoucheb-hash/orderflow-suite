@@ -35,11 +35,26 @@ import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
+import { useTranslation } from "react-i18next";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const LANGUAGE_OPTIONS = [
+  { value: "nl", label: "Nederlands" },
+  { value: "en", label: "English" },
+  { value: "de", label: "Deutsch" },
+  { value: "fr", label: "Français" },
+];
 
 const Settings = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { tenant } = useTenant();
+  const { t, i18n } = useTranslation();
+
+  const handleLanguageChange = (lng: string) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem("language", lng);
+  };
 
   // Branding state
   const [companyName, setCompanyName] = useState("");
@@ -325,6 +340,31 @@ const Settings = () => {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="rounded-2xl border-border/40 mt-6">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">{t('settings.language')}</CardTitle>
+              <CardDescription className="text-xs leading-relaxed">
+                {t('settings.languageDescription')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="max-w-xs">
+                <Select value={i18n.language} onValueChange={handleLanguageChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="stamgegevens" className="outline-none">

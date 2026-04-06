@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useGPSTracking, useTimeTracking, useGeofenceCheck, useDriveTime } from "@/hooks/useDriverTracking";
+import { usePositionReporter } from "@/hooks/usePositionReporter";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -302,6 +303,16 @@ export default function ChauffeurApp() {
 
   // -- GPS & Time Tracking --
   const { isTracking, currentPosition, startTracking, stopTracking, error: gpsError } = useGPSTracking(activeDriverId);
+
+  // -- Position Reporter (GPS -> vehicle_positions) --
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
+  const activeDriverVehicleId = drivers?.find(d => d.id === activeDriverId)?.current_vehicle_id || null;
+  const positionReporter = usePositionReporter(
+    activeTripId,
+    activeDriverId,
+    activeDriverVehicleId,
+    null, // tenantId — will be set by RLS context
+  );
   const { isClocked, isOnBreak, clockIn, clockOut, startBreak, endBreak, totalHoursToday, todayEntries } = useTimeTracking(activeDriverId);
 
   // -- Drive Time Monitor (EU 561/2006) --
@@ -833,8 +844,11 @@ export default function ChauffeurApp() {
           </div>
           <div>
             <h2 className="font-semibold text-lg leading-tight">{activeDriver?.name}</h2>
-            <p className="text-xs text-primary-foreground/80 font-medium tracking-wide">
+            <p className="text-xs text-primary-foreground/80 font-medium tracking-wide flex items-center gap-1.5">
               {orders.filter(o => o.status === "DELIVERED").length} / {orders.length} Voltooid
+              {activeTripId && (
+                <span className={`inline-block h-2 w-2 rounded-full ${positionReporter.isTracking ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} title={positionReporter.isTracking ? "GPS tracking actief" : "Geen GPS signaal"} />
+              )}
             </p>
           </div>
         </div>
@@ -1024,6 +1038,14 @@ export default function ChauffeurApp() {
             // Map trip stop to order-like object for POD capture
             const fakeOrder = { id: stop.order_id || stop.id, client_name: stop.contact_name || "", delivery_address: stop.planned_address || "", status: "IN_TRANSIT", _tripStopId: stop.id };
             setSelectedOrder(fakeOrder);
+          }} onTripStarted={(tripId) => {
+            setActiveTripId(tripId);
+            if (!positionReporter.isTracking) positionReporter.startTracking();
+          }} onTripCompleted={(tripId) => {
+            if (activeTripId === tripId) {
+              positionReporter.stopTracking();
+              setActiveTripId(null);
+            }
           }} />
         )}
 

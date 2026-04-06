@@ -180,10 +180,10 @@ describe("Rapportage", () => {
     const user = userEvent.setup();
     renderRapportage();
     await waitFor(() => {
-      const exportBtn = screen.queryByText(/Export|Exporteer|Download/i);
-      expect(exportBtn).toBeInTheDocument();
+      const exportBtns = screen.getAllByText(/Export|Exporteer|Download/i);
+      expect(exportBtns.length).toBeGreaterThan(0);
     });
-    const exportBtn = screen.getByText(/Export|Exporteer|Download/i);
+    const exportBtn = screen.getByText("Exporteer CSV");
     await user.click(exportBtn);
     expect(document.body.textContent).toBeTruthy();
   });

@@ -18,6 +18,7 @@ import type { BulkImportRow, BulkImportValidation, BulkImportResult, ColumnMappi
 import { ORDER_FIELDS } from "@/types/bulkImport";
 import {
   parseCSV,
+  parseExcel,
   autoDetectColumns,
   mapRowsToImportData,
   validateRows,
@@ -66,23 +67,18 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
   // ── File processing ────────────────────────────────────────────────
 
   const processFile = useCallback((file: File) => {
-    if (!file.name.endsWith(".csv") && !file.name.endsWith(".txt")) {
-      toast.error("Alleen CSV-bestanden worden ondersteund (.csv, .txt)");
+    const name = file.name.toLowerCase();
+    const isExcel = name.endsWith(".xlsx") || name.endsWith(".xls");
+    const isCsv = name.endsWith(".csv") || name.endsWith(".txt");
+
+    if (!isExcel && !isCsv) {
+      toast.error("Alleen CSV- en Excel-bestanden worden ondersteund (.csv, .txt, .xlsx, .xls)");
       return;
     }
 
     setFileName(file.name);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (!text || !text.trim()) {
-        toast.error("Bestand is leeg");
-        return;
-      }
-
-      const { headers: parsedHeaders, rows } = parseCSV(text);
-
+    const handleParsed = (parsedHeaders: string[], rows: string[][]) => {
       if (parsedHeaders.length === 0) {
         toast.error("Kan geen kolommen detecteren in het bestand");
         return;
@@ -93,13 +89,37 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
       }
 
       const autoMappings = autoDetectColumns(parsedHeaders);
-
       setHeaders(parsedHeaders);
       setMappings(autoMappings);
       setRawRows(rows);
       setStep("mapping");
     };
-    reader.readAsText(file);
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buffer = e.target?.result as ArrayBuffer;
+        if (!buffer || buffer.byteLength === 0) {
+          toast.error("Bestand is leeg");
+          return;
+        }
+        const { headers: parsedHeaders, rows } = parseExcel(buffer);
+        handleParsed(parsedHeaders, rows);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        if (!text || !text.trim()) {
+          toast.error("Bestand is leeg");
+          return;
+        }
+        const { headers: parsedHeaders, rows } = parseCSV(text);
+        handleParsed(parsedHeaders, rows);
+      };
+      reader.readAsText(file);
+    }
   }, []);
 
   const handleDrop = useCallback(
@@ -280,19 +300,19 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
             <Upload className="h-10 w-10 text-muted-foreground" />
             <div className="text-center">
               <p className="text-sm font-medium text-foreground">
-                Sleep een CSV-bestand hierheen
+                Sleep een CSV- of Excel-bestand hierheen
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 of klik om een bestand te selecteren
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              Ondersteund: .csv (komma of puntkomma gescheiden)
+              Ondersteund: .csv, .xlsx, .xls (komma of puntkomma gescheiden)
             </p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.txt"
+              accept=".csv,.txt,.xlsx,.xls"
               className="hidden"
               onChange={handleFileSelect}
             />

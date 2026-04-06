@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { emitOrderEvent } from "../_shared/eventPipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,8 +208,21 @@ serve(async (req) => {
 
     console.log(`Draft order created: #${order.order_number}`);
 
-    return new Response(JSON.stringify({ 
-      success: true, 
+    // Emit email_received event into the pipeline
+    emitOrderEvent(supabase, {
+      tenantId: tenantIdStr,
+      orderId: order.id,
+      eventType: "email_received",
+      actorType: "system",
+      eventData: {
+        subject: parsed.subject,
+        from: parsed.from,
+        attachments: uploadedAttachments.length,
+      },
+    }).catch((e) => console.error("Event pipeline error:", e));
+
+    return new Response(JSON.stringify({
+      success: true,
       order_id: order.id,
       order_number: order.order_number,
       attachments_uploaded: uploadedAttachments.length,

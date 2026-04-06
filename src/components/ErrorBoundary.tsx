@@ -31,11 +31,11 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center">
-          <div className="rounded-lg border border-red-200 bg-red-50 p-8 max-w-md">
-            <h2 className="text-lg font-semibold text-red-800 mb-2">
+          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-8 max-w-md">
+            <h2 className="text-lg font-semibold text-red-800 dark:text-red-300 mb-2">
               Er is iets misgegaan
             </h2>
-            <p className="text-sm text-red-600 mb-4">
+            <p className="text-sm text-red-600 dark:text-red-400 mb-4">
               {this.state.error?.message || "Een onverwachte fout is opgetreden."}
             </p>
             <button

@@ -111,9 +111,9 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
       </div>
 
       {/* Progress stepper */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3">
+      <div className="bg-card border-b border-border px-6 py-3">
         <div className="flex items-center justify-between relative">
-          <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gray-200 -translate-y-1/2 z-0" />
+          <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-border -translate-y-1/2 z-0" />
           <div className="absolute top-1/2 left-0 w-1/2 h-0.5 bg-green-500 -translate-y-1/2 z-0" />
           {[
             { label: "Ontvangen", done: true, active: false },
@@ -122,11 +122,11 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
           ].map((step, i) => (
             <div key={i} className="relative z-10 flex flex-col items-center gap-1">
               <div className={cn("w-4 h-4 rounded-full flex items-center justify-center",
-                step.done ? "bg-green-500" : step.active ? "bg-green-500 ring-2 ring-green-500 ring-offset-2" : "bg-gray-200"
+                step.done ? "bg-green-500" : step.active ? "bg-green-500 ring-2 ring-green-500 ring-offset-2 dark:ring-offset-card" : "bg-muted"
               )}>
                 {step.done && <Check className="h-2.5 w-2.5 text-white" />}
               </div>
-              <span className={cn("text-[9px] font-bold uppercase", step.done || step.active ? "text-green-600" : "text-gray-400")}>
+              <span className={cn("text-[9px] font-bold uppercase", step.done || step.active ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}>
                 {step.label}
               </span>
             </div>
@@ -145,13 +145,13 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                 <span className="text-green-500 text-lg">✨</span>
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-1">
-                    <p className="text-[10px] font-bold text-green-600 uppercase tracking-wider">{filledCount} van {totalFields} velden herkend</p>
-                    <span className="text-[10px] font-bold text-green-600">{conf}%</span>
+                    <p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">{filledCount} van {totalFields} velden herkend</p>
+                    <span className="text-[10px] font-bold text-green-600 dark:text-green-400">{conf}%</span>
                   </div>
-                  <div className="w-full bg-green-100 h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-green-100 dark:bg-green-900/30 h-1.5 rounded-full overflow-hidden">
                     <div className="bg-green-500 h-full rounded-full transition-all" style={{ width: `${conf}%` }} />
                   </div>
-                  <p className="text-[9px] text-green-600/70 mt-1 font-medium">
+                  <p className="text-[9px] text-green-600/70 dark:text-green-400/70 mt-1 font-medium">
                     📧 {selected.attachments?.length ? `${filledCount > 1 ? filledCount - 1 : filledCount} uit e-mail · 📄 1 uit bijlage` : `${filledCount} uit e-mail`}
                   </p>
                 </div>
