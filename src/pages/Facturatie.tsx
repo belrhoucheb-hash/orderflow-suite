@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
 import { downloadInvoicesCSV, downloadUBL } from "@/lib/invoiceUtils";
@@ -348,6 +348,10 @@ const Facturatie = () => {
   }
 
   return (
+    <Dialog open={showNewInvoice} onOpenChange={(open) => {
+      setShowNewInvoice(open);
+      if (open) { setSelectedClientId(""); setSelectedOrderIds(new Set()); }
+    }}>
     <div className="space-y-5">
       {/* Header */}
       <PageHeader
@@ -374,10 +378,11 @@ const Facturatie = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button type="button" className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5"
-              onClick={() => setShowNewInvoice(true)}>
-              <Plus className="h-4 w-4" /> Nieuwe factuur
-            </Button>
+            <DialogTrigger asChild>
+              <Button type="button" className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
+                <Plus className="h-4 w-4" /> Nieuwe factuur
+              </Button>
+            </DialogTrigger>
           </div>
         }
       />
@@ -661,113 +666,109 @@ const Facturatie = () => {
         </div>
       </div>
 
-      {/* New Invoice Dialog */}
-      <Dialog open={showNewInvoice} onOpenChange={(open) => {
-        setShowNewInvoice(open);
-        if (open) { setSelectedClientId(""); setSelectedOrderIds(new Set()); }
-      }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nieuwe factuur aanmaken</DialogTitle>
-            <DialogDescription>Selecteer een klant en koppel onverfactureerde orders.</DialogDescription>
-          </DialogHeader>
+      {/* New Invoice Dialog Content (Dialog root wraps entire return) */}
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Nieuwe factuur aanmaken</DialogTitle>
+          <DialogDescription>Selecteer een klant en koppel onverfactureerde orders.</DialogDescription>
+        </DialogHeader>
 
-          <div className="space-y-4 mt-2">
-            {/* Client selector */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Klant</label>
-              <select
-                value={selectedClientId}
-                onChange={(e) => { setSelectedClientId(e.target.value); setSelectedOrderIds(new Set()); }}
-                className="w-full h-10 px-3 rounded-lg border border-border/50 bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
-              >
-                <option value="">Selecteer een klant...</option>
-                {clients.filter((c) => c.is_active).map((client) => (
-                  <option key={client.id} value={client.id}>{client.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Uninvoiced orders for this client */}
-            {selectedClientId && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                  Onverfactureerde orders
-                </label>
-                {isLoadingClientOrders ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : clientOrders.length === 0 ? (
-                  <div className="text-center py-6 bg-muted/30 rounded-lg border border-border/30">
-                    <p className="text-sm text-muted-foreground">Geen onverfactureerde orders voor deze klant</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-lg border border-border/30 p-2">
-                    {clientOrders.map((order: any) => (
-                      <label
-                        key={order.id}
-                        className={cn(
-                          "flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors",
-                          selectedOrderIds.has(order.id) ? "bg-primary/5 border border-primary/20" : "hover:bg-muted/40 border border-transparent"
-                        )}
-                      >
-                        <Checkbox
-                          checked={selectedOrderIds.has(order.id)}
-                          onCheckedChange={() => toggleOrderSelection(order.id)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-mono font-medium">#{order.order_number}</span>
-                            {order.quantity > 0 && (
-                              <span className="text-xs text-muted-foreground">{order.quantity} {order.unit || "stuks"}</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {order.pickup_address?.split(",")[0] || "?"} → {order.delivery_address?.split(",")[0] || "?"}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Summary */}
-            {selectedOrderIds.size > 0 && (
-              <div className="bg-muted/30 rounded-lg p-3 border border-border/30">
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">{selectedOrderIds.size}</span> order(s) geselecteerd
-                  {clientRates.length === 0 && (
-                    <span className="text-amber-600 ml-2">— geen tarieven geconfigureerd, lege regels worden aangemaakt</span>
-                  )}
-                </p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowNewInvoice(false)}>
-                Annuleren
-              </Button>
-              <Button
-                onClick={handleCreateInvoice}
-                disabled={!selectedClientId || selectedOrderIds.size === 0 || createInvoiceMutation.isPending}
-                className="gap-2"
-              >
-                {createInvoiceMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4" />
-                )}
-                Factuur aanmaken
-              </Button>
-            </div>
+        <div className="space-y-4 mt-2">
+          {/* Client selector */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Klant</label>
+            <select
+              value={selectedClientId}
+              onChange={(e) => { setSelectedClientId(e.target.value); setSelectedOrderIds(new Set()); }}
+              className="w-full h-10 px-3 rounded-lg border border-border/50 bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
+            >
+              <option value="">Selecteer een klant...</option>
+              {clients.filter((c) => c.is_active).map((client) => (
+                <option key={client.id} value={client.id}>{client.name}</option>
+              ))}
+            </select>
           </div>
-        </DialogContent>
-      </Dialog>
+
+          {/* Uninvoiced orders for this client */}
+          {selectedClientId && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                Onverfactureerde orders
+              </label>
+              {isLoadingClientOrders ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : clientOrders.length === 0 ? (
+                <div className="text-center py-6 bg-muted/30 rounded-lg border border-border/30">
+                  <p className="text-sm text-muted-foreground">Geen onverfactureerde orders voor deze klant</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-lg border border-border/30 p-2">
+                  {clientOrders.map((order: any) => (
+                    <label
+                      key={order.id}
+                      className={cn(
+                        "flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors",
+                        selectedOrderIds.has(order.id) ? "bg-primary/5 border border-primary/20" : "hover:bg-muted/40 border border-transparent"
+                      )}
+                    >
+                      <Checkbox
+                        checked={selectedOrderIds.has(order.id)}
+                        onCheckedChange={() => toggleOrderSelection(order.id)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-mono font-medium">#{order.order_number}</span>
+                          {order.quantity > 0 && (
+                            <span className="text-xs text-muted-foreground">{order.quantity} {order.unit || "stuks"}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {order.pickup_address?.split(",")[0] || "?"} → {order.delivery_address?.split(",")[0] || "?"}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Summary */}
+          {selectedOrderIds.size > 0 && (
+            <div className="bg-muted/30 rounded-lg p-3 border border-border/30">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{selectedOrderIds.size}</span> order(s) geselecteerd
+                {clientRates.length === 0 && (
+                  <span className="text-amber-600 ml-2">— geen tarieven geconfigureerd, lege regels worden aangemaakt</span>
+                )}
+              </p>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setShowNewInvoice(false)}>
+              Annuleren
+            </Button>
+            <Button
+              onClick={handleCreateInvoice}
+              disabled={!selectedClientId || selectedOrderIds.size === 0 || createInvoiceMutation.isPending}
+              className="gap-2"
+            >
+              {createInvoiceMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              Factuur aanmaken
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
     </div>
+    </Dialog>
   );
 };
 
