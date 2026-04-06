@@ -33,7 +33,7 @@ export function useNotifications() {
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
-        .eq("user_id", userId)
+        .or(`user_id.eq.${userId},user_id.is.null`)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) {

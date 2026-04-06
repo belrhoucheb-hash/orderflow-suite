@@ -206,31 +206,39 @@ function simulatePositionForTrip(trip: Trip): VehiclePosition | null {
 /**
  * Fetch the latest real GPS position per trip from the `vehicle_positions` table.
  * Returns a map of tripId -> VehiclePosition.
+ * When positions lack trip_id, falls back to matching by vehicle_id.
  * Polls every 15s.
  */
-export function useRealVehiclePositions(tripIds: string[]) {
+export function useRealVehiclePositions(
+  tripIds: string[],
+  vehicleToTripMap?: Map<string, string>,
+) {
+  const vehicleIds = vehicleToTripMap
+    ? Array.from(vehicleToTripMap.keys())
+    : [];
   return useQuery({
-    queryKey: ["real-vehicle-positions", tripIds.join(",")],
+    queryKey: [
+      "real-vehicle-positions",
+      tripIds.join(","),
+      vehicleIds.join(","),
+    ],
     staleTime: 10_000,
     refetchInterval: 15_000,
     enabled: tripIds.length > 0,
     queryFn: async () => {
-      // Fetch the latest position for each trip using a single query
-      // ordered by recorded_at DESC, then deduplicate client-side
-      const { data, error } = await supabase
+      const posMap = new Map<string, VehiclePosition>();
+
+      // 1. Try fetching by trip_id first
+      const { data: tripData } = await supabase
         .from("vehicle_positions" as any)
         .select("*")
         .in("trip_id", tripIds)
         .order("recorded_at", { ascending: false })
-        .limit(tripIds.length * 5); // buffer for multiple entries
+        .limit(tripIds.length * 5);
 
-      if (error) throw error;
-
-      // Deduplicate: keep only the latest position per trip_id
-      const posMap = new Map<string, VehiclePosition>();
-      for (const row of data || []) {
+      for (const row of tripData || []) {
         const tripId = row.trip_id as string;
-        if (!posMap.has(tripId)) {
+        if (tripId && !posMap.has(tripId)) {
           posMap.set(tripId, {
             vehicleId: (row.vehicle_id as string) || "",
             lat: Number(row.lat),
@@ -243,6 +251,39 @@ export function useRealVehiclePositions(tripIds: string[]) {
         }
       }
 
+      // 2. Fallback: fetch by vehicle_id for trips that have no position yet
+      if (vehicleToTripMap && vehicleToTripMap.size > 0) {
+        const missingVehicleIds = vehicleIds.filter((vid) => {
+          const tid = vehicleToTripMap.get(vid);
+          return tid && !posMap.has(tid);
+        });
+
+        if (missingVehicleIds.length > 0) {
+          const { data: vehData } = await supabase
+            .from("vehicle_positions" as any)
+            .select("*")
+            .in("vehicle_id", missingVehicleIds)
+            .order("recorded_at", { ascending: false })
+            .limit(missingVehicleIds.length * 5);
+
+          for (const row of vehData || []) {
+            const vehicleId = row.vehicle_id as string;
+            const tripId = vehicleToTripMap.get(vehicleId);
+            if (tripId && !posMap.has(tripId)) {
+              posMap.set(tripId, {
+                vehicleId,
+                lat: Number(row.lat),
+                lng: Number(row.lng),
+                heading: Number(row.heading) || 0,
+                speed: Number(row.speed) || 0,
+                timestamp: row.recorded_at as string,
+                tripId,
+              });
+            }
+          }
+        }
+      }
+
       return posMap;
     },
   });
@@ -252,6 +293,7 @@ export function useRealVehiclePositions(tripIds: string[]) {
 
 /**
  * Fetch all active trips (IN_TRANSIT-like statuses: VERZONDEN, ACTIEF, GEACCEPTEERD).
+ * Falls back to orders with IN_TRANSIT status when no trips exist.
  * Polls every 30s.
  */
 export function useActiveTrips() {
@@ -260,13 +302,105 @@ export function useActiveTrips() {
     staleTime: 15_000,
     refetchInterval: 30_000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Try trips table first (dispatch workflow)
+      const { data: tripData, error: tripError } = await supabase
         .from("trips")
         .select("*, trip_stops(*, proof_of_delivery(*))")
         .in("dispatch_status", ["VERZONDEN", "GEACCEPTEERD", "ACTIEF"])
         .order("planned_start_time", { ascending: true });
-      if (error) throw error;
-      return (data || []) as Trip[];
+
+      if (!tripError && tripData && tripData.length > 0) {
+        return tripData as Trip[];
+      }
+
+      // 2. Fallback: query orders with IN_TRANSIT status that have a vehicle assigned
+      const { data: orderData, error: orderError } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("status", "IN_TRANSIT")
+        .order("created_at", { ascending: true });
+
+      if (orderError) throw orderError;
+
+      // Map orders to Trip-like objects so the rest of the tracking pipeline works
+      return ((orderData || []) as any[])
+        .filter((o) => o.vehicle_id)
+        .map((o) => ({
+          id: o.id,
+          tenant_id: o.tenant_id,
+          trip_number: o.order_number ?? 0,
+          vehicle_id: o.vehicle_id,
+          driver_id: o.driver_id ?? null,
+          dispatch_status: "ACTIEF" as const,
+          planned_date: o.created_at?.split("T")[0] ?? "",
+          planned_start_time: o.time_window_start ?? null,
+          actual_start_time: o.created_at ?? null,
+          actual_end_time: null,
+          total_distance_km: null,
+          total_duration_min: null,
+          dispatcher_id: null,
+          dispatched_at: null,
+          received_at: null,
+          accepted_at: null,
+          started_at: o.created_at ?? null,
+          completed_at: null,
+          notes: null,
+          created_at: o.created_at,
+          updated_at: o.updated_at,
+          // Synthesize trip_stops from order pickup/delivery for route display
+          trip_stops: [
+            ...(o.pickup_address
+              ? [
+                  {
+                    id: `${o.id}-pickup`,
+                    trip_id: o.id,
+                    order_id: o.id,
+                    stop_type: "PICKUP",
+                    stop_sequence: 1,
+                    stop_status: "AFGELEVERD",
+                    planned_address: o.pickup_address,
+                    planned_latitude: o.pickup_lat ?? o.geocoded_pickup_lat ?? null,
+                    planned_longitude: o.pickup_lng ?? o.geocoded_pickup_lng ?? null,
+                    planned_time: null,
+                    actual_arrival_time: null,
+                    actual_departure_time: null,
+                    contact_name: null,
+                    contact_phone: null,
+                    instructions: null,
+                    failure_reason: null,
+                    notes: null,
+                    created_at: o.created_at,
+                    updated_at: o.updated_at,
+                  },
+                ]
+              : []),
+            ...(o.delivery_address
+              ? [
+                  {
+                    id: `${o.id}-delivery`,
+                    trip_id: o.id,
+                    order_id: o.id,
+                    stop_type: "DELIVERY",
+                    stop_sequence: 2,
+                    stop_status: "GEPLAND",
+                    planned_address: o.delivery_address,
+                    planned_latitude: o.delivery_lat ?? o.geocoded_delivery_lat ?? null,
+                    planned_longitude: o.delivery_lng ?? o.geocoded_delivery_lng ?? null,
+                    planned_time: null,
+                    actual_arrival_time: null,
+                    actual_departure_time: null,
+                    contact_name: null,
+                    contact_phone: null,
+                    instructions: null,
+                    failure_reason: null,
+                    notes: null,
+                    created_at: o.created_at,
+                    updated_at: o.updated_at,
+                  },
+                ]
+              : []),
+          ],
+        })) as Trip[];
     },
   });
 }
@@ -279,7 +413,18 @@ export function useActiveTrips() {
  */
 export function useVehiclePositions(trips: Trip[]) {
   const tripIds = trips.map((t) => t.id);
-  const { data: realPositions } = useRealVehiclePositions(tripIds);
+  // Build a vehicle_id -> trip_id map so we can match positions by vehicle
+  const vehicleToTripMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of trips) {
+      if (t.vehicle_id) m.set(t.vehicle_id, t.id);
+    }
+    return m;
+  }, [trips]);
+  const { data: realPositions } = useRealVehiclePositions(
+    tripIds,
+    vehicleToTripMap,
+  );
 
   return useQuery({
     queryKey: [

@@ -169,6 +169,7 @@ describe("useNotificationCenter", () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({ data: [], error: null }),
       update: vi.fn().mockReturnThis(),
@@ -240,6 +241,7 @@ describe("useNotificationCenter", () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({ data: dbNotifications, error: null }),
       update: vi.fn().mockReturnThis(),

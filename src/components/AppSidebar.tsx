@@ -88,7 +88,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { profile, user, signOut, isAdmin, effectiveRole } = useAuth();
   const { tenant } = useTenant();
   const { data: exceptionCount = 0 } = useExceptionCount();
@@ -96,9 +96,12 @@ export function AppSidebar() {
   const toItems = (defs: typeof mainItemsDef) =>
     defs.map((d) => ({ title: t(d.titleKey), titleKey: d.titleKey, url: d.url, icon: d.icon }));
 
-  const mainItems = useMemo(() => toItems(mainItemsDef), [t]);
-  const adminItems = useMemo(() => toItems(adminItemsDef), [t]);
-  const chauffeurItems = useMemo(() => toItems(chauffeurItemsDef), [t]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const mainItems = useMemo(() => toItems(mainItemsDef), [t, i18n.language]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const adminItems = useMemo(() => toItems(adminItemsDef), [t, i18n.language]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const chauffeurItems = useMemo(() => toItems(chauffeurItemsDef), [t, i18n.language]);
 
   const visibleMainItems = effectiveRole === "chauffeur" ? chauffeurItems : mainItems;
 

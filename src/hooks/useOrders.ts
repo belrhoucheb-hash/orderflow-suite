@@ -47,7 +47,12 @@ export function useOrders(options: UseOrdersOptions = {}) {
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (statusFilter && statusFilter !== "alle") {
-        query = query.eq("status", statusFilter);
+        // Account for legacy statuses that map to PENDING
+        if (statusFilter === "PENDING") {
+          query = query.in("status", ["PENDING", "OPEN", "WAITING"]);
+        } else {
+          query = query.eq("status", statusFilter);
+        }
       }
 
       if (orderTypeFilter) {
@@ -55,7 +60,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
       }
 
       if (search) {
-        query = query.or(`client_name.ilike.%${search}%,order_number::text.ilike.%${search}%`);
+        query = query.or(`client_name.ilike.%${search}%,order_number::text.ilike.%${search}%,pickup_address.ilike.%${search}%,delivery_address.ilike.%${search}%`);
       }
 
       const { data, error, count } = await query;

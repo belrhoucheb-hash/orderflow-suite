@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
-const { mockUseOrders, mockSupabase } = vi.hoisted(() => {
+const { mockUseOrders, mockSupabase, mockNavigate } = vi.hoisted(() => {
   const mockOrders = [
     { id: "o1", orderNumber: "ORD-001", customer: "Acme BV", status: "DELIVERED", priority: "normaal", totalWeight: 500, pickupAddress: "Amsterdam", deliveryAddress: "Rotterdam", createdAt: "2025-01-10T10:00:00Z" },
     { id: "o2", orderNumber: "ORD-002", customer: "Widget NL", status: "IN_TRANSIT", priority: "spoed", totalWeight: 1200, pickupAddress: "Utrecht", deliveryAddress: "Den Haag", createdAt: "2025-01-11T10:00:00Z" },
@@ -24,7 +24,13 @@ const { mockUseOrders, mockSupabase } = vi.hoisted(() => {
         single: vi.fn().mockResolvedValue({ data: { id: "o1", order_number: 1 }, error: null }),
       }),
     },
+    mockNavigate: vi.fn(),
   };
+});
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return { ...actual, useNavigate: () => mockNavigate };
 });
 
 vi.mock("@/hooks/useOrders", () => ({ useOrders: (...args: any[]) => mockUseOrders(...args) }));
@@ -89,10 +95,13 @@ describe("Orders", () => {
     expect(screen.getByText("Acme BV")).toBeInTheDocument();
   });
 
-  it("links to new order page", () => {
+  it("links to new order page", async () => {
+    const user = userEvent.setup();
     renderOrders();
-    const link = screen.getByText("Nieuwe order").closest("a");
-    expect(link).toHaveAttribute("href", "/orders/nieuw");
+    const btn = screen.getByText("Nieuwe order").closest("button")!;
+    expect(btn).toBeInTheDocument();
+    await user.click(btn);
+    expect(mockNavigate).toHaveBeenCalledWith("/orders/nieuw");
   });
 
   it("shows loading state", () => {

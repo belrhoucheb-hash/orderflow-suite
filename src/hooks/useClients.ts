@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface Client {
   id: string;
@@ -47,16 +48,24 @@ export interface ClientRate {
 }
 
 export function useClients(search?: string) {
+  const { tenant } = useTenant();
+
   return useQuery({
-    queryKey: ["clients", search],
+    queryKey: ["clients", search, tenant?.id],
     staleTime: 60_000,
+    enabled: !!tenant?.id,
     queryFn: async () => {
       // 8.10 – Single query: fetch clients and active order counts in parallel
       // instead of N+1 (one query per client). We fire both requests at once
       // and join the results in memory by client name.
+      //
+      // Explicitly filter by tenant_id to help Postgres use the right index
+      // and to ensure we get all tenant clients even if RLS relies on
+      // current_tenant_id() which may return NULL for dev users.
       let clientQuery = supabase
         .from("clients")
         .select("*")
+        .eq("tenant_id", tenant!.id)
         .order("name")
         .limit(200);
 

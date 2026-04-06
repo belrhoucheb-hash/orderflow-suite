@@ -15,7 +15,7 @@ import { motion } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
-import { downloadInvoicesCSV, downloadUBL, buildInvoiceLines } from "@/lib/invoiceUtils";
+import { downloadInvoicesCSV, downloadUBL } from "@/lib/invoiceUtils";
 import {
   DropdownMenu,
   DropdownMenuContent,
