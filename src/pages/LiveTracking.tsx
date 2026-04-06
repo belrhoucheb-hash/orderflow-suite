@@ -154,22 +154,29 @@ const LiveTracking = () => {
   const stopMarkersRef = useRef<L.Marker[]>([]);
   const polylinesRef = useRef<L.Polyline[]>([]);
 
-  // Init map once
-  useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
-    const map = L.map(mapRef.current, { center: [52.2, 5.3], zoom: 8 });
+  // Init map — use callback ref to guarantee the DOM node exists
+  const mapCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    // Store the node in the regular ref for other effects
+    (mapRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+
+    // Tear down old map if node changed
+    if (mapInstanceRef.current && !node) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+      return;
+    }
+
+    // Already initialized on this node
+    if (!node || mapInstanceRef.current) return;
+
+    const map = L.map(node, { center: [52.2, 5.3], zoom: 8 });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
     }).addTo(map);
     mapInstanceRef.current = map;
-    // Ensure the map picks up its container size (flex layouts may not be
-    // settled when the effect first fires).
+    // Ensure the map picks up its container size
     requestAnimationFrame(() => map.invalidateSize());
-    return () => {
-      map.remove();
-      mapInstanceRef.current = null;
-    };
   }, []);
 
   // Update vehicle markers
@@ -389,7 +396,7 @@ const LiveTracking = () => {
       <div className="flex gap-4" style={{ height: "calc(100vh - 320px)", minHeight: "400px" }}>
         {/* Map */}
         <div className="flex-1 bg-card rounded-xl border border-border/40 overflow-hidden">
-          <div ref={mapRef} className="h-full w-full" />
+          <div ref={mapCallbackRef} className="h-full w-full" />
         </div>
 
         {/* Side panel */}
