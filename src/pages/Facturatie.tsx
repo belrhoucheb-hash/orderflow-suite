@@ -348,10 +348,6 @@ const Facturatie = () => {
   }
 
   return (
-    <Dialog open={showNewInvoice} onOpenChange={(open) => {
-      setShowNewInvoice(open);
-      if (open) { setSelectedClientId(""); setSelectedOrderIds(new Set()); }
-    }}>
     <div className="space-y-5">
       {/* Header */}
       <PageHeader
@@ -378,11 +374,9 @@ const Facturatie = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <DialogTrigger asChild>
-              <Button type="button" className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
-                <Plus className="h-4 w-4" /> Nieuwe factuur
-              </Button>
-            </DialogTrigger>
+            <Button type="button" onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }} className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
+              <Plus className="h-4 w-4" /> Nieuwe factuur
+            </Button>
           </div>
         }
       />
@@ -666,7 +660,7 @@ const Facturatie = () => {
         </div>
       </div>
 
-      {/* New Invoice Dialog Content (Dialog root wraps entire return) */}
+      <Dialog open={showNewInvoice} onOpenChange={setShowNewInvoice}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nieuwe factuur aanmaken</DialogTitle>
@@ -767,8 +761,8 @@ const Facturatie = () => {
           </div>
         </div>
       </DialogContent>
+      </Dialog>
     </div>
-    </Dialog>
   );
 };
 
