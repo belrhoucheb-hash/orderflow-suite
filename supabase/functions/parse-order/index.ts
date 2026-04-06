@@ -1,7 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { recordAIDecision } from "../_shared/confidenceStore.ts";
-import { emitOrderEvent } from "../_shared/eventPipeline.ts";
+
+// Optional imports — these may not be available in all deployments
+let recordAIDecision: any = async () => {};
+let emitOrderEvent: any = async () => {};
+try {
+  const cs = await import("../_shared/confidenceStore.ts");
+  recordAIDecision = cs.recordAIDecision;
+} catch { /* shared module not available */ }
+try {
+  const ep = await import("../_shared/eventPipeline.ts");
+  emitOrderEvent = ep.emitOrderEvent;
+} catch { /* shared module not available */ }
 
 // TODO: replace with tenant_settings lookup when multi-tenant is wired up
 const COMPANY_NAME = "Royalty Cargo";
