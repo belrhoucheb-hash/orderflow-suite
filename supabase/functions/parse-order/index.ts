@@ -1,18 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
-// Optional imports — these may not be available in all deployments
-let recordAIDecision: any = async () => {};
-let emitOrderEvent: any = async () => {};
-try {
-  const cs = await import("../_shared/confidenceStore.ts");
-  recordAIDecision = cs.recordAIDecision;
-} catch { /* shared module not available */ }
-try {
-  const ep = await import("../_shared/eventPipeline.ts");
-  emitOrderEvent = ep.emitOrderEvent;
-} catch { /* shared module not available */ }
-
 // TODO: replace with tenant_settings lookup when multi-tenant is wired up
 const COMPANY_NAME = "Royalty Cargo";
 
@@ -732,35 +720,19 @@ Antwoord als JSON met deze velden:
       );
     }
 
-    // ── Step 6: Record AI decision in confidence store ──
+    // ── Step 6: Record AI decision in confidence store (inline) ──
     if (tenantIdStr) {
       const autoApprove = (extracted.confidence_score ?? 0) >= 95 && !!extracted.client_name;
-      recordAIDecision(supabase, {
-        tenantId: tenantIdStr,
-        decisionType: "order_extraction",
-        entityType: "order",
-        confidenceScore: extracted.confidence_score ?? 0,
-        fieldConfidences: extracted.field_confidence ?? {},
-        aiSuggestion: extracted,
-        wasAutoApproved: autoApprove,
-        modelVersion: "gemini-2.5-flash",
-      }).catch((e) => console.error("Edge confidence store error:", e));
-    }
-
-    // ── Step 7: Emit ai_extraction_completed event ──
-    // Note: orderId is not available here (the client creates the order first),
-    // so the client-side code handles emitEventDirect. This is a fallback if
-    // the function is called with an orderId in the body.
-    const bodyOrderId = (await req.clone().json().catch(() => ({})))?.orderId;
-    if (bodyOrderId && tenantIdStr) {
-      emitOrderEvent(supabase, {
-        tenantId: tenantIdStr,
-        orderId: bodyOrderId,
-        eventType: "ai_extraction_completed",
-        actorType: "ai",
-        confidenceScore: extracted.confidence_score ?? null,
-        eventData: { missingFields: missingFields.length, anomalies: anomalies.length },
-      }).catch((e) => console.error("Edge event pipeline error:", e));
+      supabase.from("ai_decisions").insert({
+        tenant_id: tenantIdStr,
+        decision_type: "order_extraction",
+        entity_type: "order",
+        confidence_score: extracted.confidence_score ?? 0,
+        field_confidences: extracted.field_confidence ?? {},
+        ai_suggestion: extracted,
+        was_auto_approved: autoApprove,
+        model_version: "gemini-2.5-flash",
+      }).then(() => {}).catch((e: any) => console.error("Edge confidence store error:", e));
     }
 
     return new Response(JSON.stringify({
