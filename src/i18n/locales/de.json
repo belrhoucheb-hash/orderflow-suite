@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "inbox": "Posteingang",
+    "orders": "Aufträge",
+    "clients": "Kunden",
+    "planning": "Planungstafel",
+    "dispatch": "Disposition",
+    "tracking": "Live-Tracking",
+    "trips": "Fahrtenübersicht",
+    "drivers": "Fahrer",
+    "fleet": "Flotte",
+    "reporting": "Berichte",
+    "exceptions": "Ausnahmen",
+    "autonomy": "Autonomie",
+    "invoicing": "Fakturierung",
+    "settings": "Einstellungen",
+    "users": "Benutzer",
+    "navigation": "Navigation",
+    "admin": "Admin",
+    "myTrips": "Meine Fahrten"
+  },
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "add": "Hinzufügen",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "export": "Exportieren",
+    "import": "Importieren",
+    "loading": "Laden...",
+    "noResults": "Keine Ergebnisse",
+    "confirm": "Bestätigen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "close": "Schließen",
+    "status": "Status",
+    "actions": "Aktionen",
+    "date": "Datum",
+    "total": "Gesamt"
+  },
+  "orders": {
+    "title": "Aufträge",
+    "newOrder": "Neuer Auftrag",
+    "import": "Importieren",
+    "pickup": "Abholung",
+    "delivery": "Zustellung",
+    "client": "Kunde",
+    "reference": "Referenz",
+    "weight": "Gewicht",
+    "quantity": "Menge",
+    "status": {
+      "draft": "Entwurf",
+      "pending": "In Bearbeitung",
+      "planned": "Geplant",
+      "in_transit": "Unterwegs",
+      "delivered": "Zugestellt"
+    }
+  },
+  "invoicing": {
+    "title": "Fakturierung",
+    "newInvoice": "Neue Rechnung",
+    "invoiceNumber": "Rechnungsnummer",
+    "amount": "Betrag",
+    "dueDate": "Fälligkeitsdatum",
+    "status": {
+      "concept": "Entwurf",
+      "sent": "Gesendet",
+      "paid": "Bezahlt",
+      "overdue": "Überfällig"
+    }
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "masterData": "Stammdaten",
+    "language": "Sprache",
+    "languageDescription": "Wählen Sie die Anwendungssprache."
+  }
+}

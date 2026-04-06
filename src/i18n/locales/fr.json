@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "inbox": "Boîte de réception",
+    "orders": "Commandes",
+    "clients": "Clients",
+    "planning": "Tableau de planification",
+    "dispatch": "Expédition",
+    "tracking": "Suivi en direct",
+    "trips": "Aperçu des trajets",
+    "drivers": "Chauffeurs",
+    "fleet": "Flotte",
+    "reporting": "Rapports",
+    "exceptions": "Exceptions",
+    "autonomy": "Autonomie",
+    "invoicing": "Facturation",
+    "settings": "Paramètres",
+    "users": "Utilisateurs",
+    "navigation": "Navigation",
+    "admin": "Admin",
+    "myTrips": "Mes trajets"
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "add": "Ajouter",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "export": "Exporter",
+    "import": "Importer",
+    "loading": "Chargement...",
+    "noResults": "Aucun résultat",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "close": "Fermer",
+    "status": "Statut",
+    "actions": "Actions",
+    "date": "Date",
+    "total": "Total"
+  },
+  "orders": {
+    "title": "Commandes",
+    "newOrder": "Nouvelle commande",
+    "import": "Importer",
+    "pickup": "Enlèvement",
+    "delivery": "Livraison",
+    "client": "Client",
+    "reference": "Référence",
+    "weight": "Poids",
+    "quantity": "Quantité",
+    "status": {
+      "draft": "Brouillon",
+      "pending": "En attente",
+      "planned": "Planifié",
+      "in_transit": "En transit",
+      "delivered": "Livré"
+    }
+  },
+  "invoicing": {
+    "title": "Facturation",
+    "newInvoice": "Nouvelle facture",
+    "invoiceNumber": "Numéro de facture",
+    "amount": "Montant",
+    "dueDate": "Date d'échéance",
+    "status": {
+      "concept": "Brouillon",
+      "sent": "Envoyé",
+      "paid": "Payé",
+      "overdue": "En retard"
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "masterData": "Données de base",
+    "language": "Langue",
+    "languageDescription": "Choisissez la langue de l'application."
+  }
+}

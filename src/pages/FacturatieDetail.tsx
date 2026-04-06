@@ -23,9 +23,9 @@ import {
 
 const statusStyles: Record<string, { bg: string; text: string; label: string }> = {
   concept: { bg: "bg-muted", text: "text-muted-foreground", label: "Concept" },
-  verzonden: { bg: "bg-blue-100", text: "text-blue-700", label: "Verzonden" },
-  betaald: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Betaald" },
-  vervallen: { bg: "bg-red-100", text: "text-red-700", label: "Vervallen" },
+  verzonden: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", label: "Verzonden" },
+  betaald: { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", label: "Betaald" },
+  vervallen: { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-400", label: "Vervallen" },
 };
 
 function formatCurrency(amount: number): string {

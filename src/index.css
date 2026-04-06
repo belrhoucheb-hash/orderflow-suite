@@ -137,67 +137,103 @@
   }
 
   .dark {
-    --background: 0 0% 5%;
-    --foreground: 0 0% 95%;
+    --background: 222 20% 7%;
+    --foreground: 210 20% 93%;
 
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 95%;
+    --card: 222 18% 10%;
+    --card-foreground: 210 20% 93%;
 
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 222 18% 10%;
+    --popover-foreground: 210 20% 93%;
 
-    --primary: 0 78% 50%;
+    --primary: 0 78% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 12% 40%;
+    --secondary: 30 12% 35%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 222 14% 16%;
+    --muted-foreground: 215 15% 58%;
 
-    --accent: 30 12% 40%;
+    --accent: 30 12% 35%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 30%;
+    --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 0 78% 50%;
+    --border: 222 12% 20%;
+    --input: 222 12% 20%;
+    --ring: 0 78% 55%;
 
-    --sidebar-background: 0 0% 3%;
-    --sidebar-foreground: 0 0% 85%;
-    --sidebar-primary: 0 78% 50%;
+    --sidebar-background: 222 22% 5%;
+    --sidebar-foreground: 210 15% 85%;
+    --sidebar-primary: 0 78% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent: 222 18% 12%;
     --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 0 0% 12%;
-    --sidebar-ring: 0 78% 50%;
+    --sidebar-border: 222 15% 14%;
+    --sidebar-ring: 0 78% 55%;
+
+    /* Dark mode semantic colors */
+    --color-success: #34d399;
+    --color-success-light: rgba(16,185,129,0.15);
+    --color-success-dark: #6ee7b7;
+
+    --color-warning: #fbbf24;
+    --color-warning-light: rgba(245,158,11,0.15);
+    --color-warning-dark: #fcd34d;
+
+    --color-danger: #f87171;
+    --color-danger-light: rgba(239,68,68,0.15);
+    --color-danger-dark: #fca5a5;
+
+    --color-info: #60a5fa;
+    --color-info-light: rgba(59,130,246,0.15);
+    --color-info-dark: #93c5fd;
 
     /* Dark mode status overrides */
     --status-draft-bg: rgba(59,130,246,0.12);
     --status-draft-text: #93c5fd;
     --status-draft-border: rgba(59,130,246,0.25);
+    --status-draft-dot: #60a5fa;
 
     --status-pending-bg: rgba(245,158,11,0.12);
     --status-pending-text: #fcd34d;
     --status-pending-border: rgba(245,158,11,0.25);
+    --status-pending-dot: #fbbf24;
 
     --status-planned-bg: rgba(139,92,246,0.12);
     --status-planned-text: #c4b5fd;
     --status-planned-border: rgba(139,92,246,0.25);
+    --status-planned-dot: #a78bfa;
 
     --status-in-transit-bg: rgba(220,38,38,0.12);
     --status-in-transit-text: #fca5a5;
     --status-in-transit-border: rgba(220,38,38,0.25);
+    --status-in-transit-dot: #f87171;
 
     --status-delivered-bg: rgba(16,185,129,0.12);
     --status-delivered-text: #6ee7b7;
     --status-delivered-border: rgba(16,185,129,0.25);
+    --status-delivered-dot: #34d399;
 
     --status-cancelled-bg: rgba(107,114,128,0.12);
     --status-cancelled-text: #9ca3af;
     --status-cancelled-border: rgba(107,114,128,0.25);
+    --status-cancelled-dot: #6b7280;
+
+    /* Dark mode primary scale */
+    --primary-50: #1a0505;
+    --primary-100: #2d0a0a;
+    --primary-200: #4a1010;
+    --primary-300: #7f1d1d;
+    --primary-400: #b91c1c;
+    --primary-500: #dc2626;
+    --primary-600: #ef4444;
+    --primary-700: #f87171;
+    --primary-800: #fca5a5;
+    --primary-900: #fecaca;
+    --primary-950: #fef2f2;
   }
 }
 

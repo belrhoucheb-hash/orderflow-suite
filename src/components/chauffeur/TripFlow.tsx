@@ -13,9 +13,11 @@ import { toast } from "sonner";
 interface Props {
   driverId: string;
   onStartPOD: (stop: TripStop) => void; // Callback to show POD capture in parent
+  onTripStarted?: (tripId: string) => void;  // Called when trip becomes ACTIEF
+  onTripCompleted?: (tripId: string) => void; // Called when trip is completed
 }
 
-export function TripFlow({ driverId, onStartPOD }: Props) {
+export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted }: Props) {
   const { data: trips = [], isLoading } = useDriverTrips(driverId);
   const updateTrip = useUpdateTripStatus();
   const updateStop = useUpdateStopStatus();
@@ -105,6 +107,7 @@ export function TripFlow({ driverId, onStartPOD }: Props) {
       // Set first stop to ONDERWEG
       const firstStop = sortedStops.find(s => s.stop_status === "GEPLAND");
       if (firstStop) await updateStop.mutateAsync({ stopId: firstStop.id, status: "ONDERWEG" });
+      onTripStarted?.(selectedTrip.id);
       toast.success("Rit gestart");
     } catch (e: any) { toast.error(e.message); }
   };
@@ -133,7 +136,10 @@ export function TripFlow({ driverId, onStartPOD }: Props) {
       // Advance to next stop
       const nextStop = sortedStops.find(s => s.stop_status === "GEPLAND");
       if (nextStop) await updateStop.mutateAsync({ stopId: nextStop.id, status: "ONDERWEG" });
-      else if (selectedTrip) await checkTripCompletion(selectedTrip.id);
+      else if (selectedTrip) {
+        const completed = await checkTripCompletion(selectedTrip.id);
+        if (completed) onTripCompleted?.(selectedTrip.id);
+      }
       toast.info("Probleem gemeld");
     } catch (e: any) { toast.error(e.message); }
   };

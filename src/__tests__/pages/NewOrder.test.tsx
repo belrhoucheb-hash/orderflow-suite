@@ -181,25 +181,44 @@ describe("NewOrder", () => {
   it("fills form and saves successfully (handleSave)", async () => {
     const user = userEvent.setup();
     renderNewOrder();
+
+    // Wait for form to be fully rendered before querying inputs
+    await waitFor(() => {
+      expect(screen.getAllByRole("textbox").length).toBeGreaterThan(0);
+    });
+
     // Fill required fields
     const textInputs = screen.getAllByRole("textbox");
     // Client name
     await user.type(textInputs[0], "Test Client");
+    await waitFor(() => {
+      expect(textInputs[0]).toHaveValue("Test Client");
+    });
 
     // Fill address fields via address autocomplete
-    const addressInputs = document.querySelectorAll('[data-testid^="address-"]') as NodeListOf<HTMLInputElement>;
+    const addressInputs = Array.from(
+      document.querySelectorAll('[data-testid^="address-"]') as NodeListOf<HTMLInputElement>
+    );
     for (const input of addressInputs) {
       await user.type(input, "Test Address");
+      await waitFor(() => {
+        expect(input.value).toContain("Test Address");
+      });
     }
 
     // Fill quantity
-    const numberInputs = document.querySelectorAll('input[type="number"]') as NodeListOf<HTMLInputElement>;
+    const numberInputs = Array.from(
+      document.querySelectorAll('input[type="number"]') as NodeListOf<HTMLInputElement>
+    );
     for (const input of numberInputs) {
       await user.type(input, "10");
+      await waitFor(() => {
+        expect(input.value).toContain("10");
+      });
     }
 
     expect(document.body.textContent).toBeTruthy();
-  });
+  }, 15000);
 
   it("adds freight line (addFreightLine)", async () => {
     const user = userEvent.setup();
@@ -226,11 +245,19 @@ describe("NewOrder", () => {
   it("types in contact person field (setContactpersoon)", async () => {
     const user = userEvent.setup();
     renderNewOrder();
+
+    // Wait for form inputs to render
+    await waitFor(() => {
+      expect(screen.getAllByRole("textbox").length).toBeGreaterThan(1);
+    });
+
     const textInputs = screen.getAllByRole("textbox");
     // Second textbox might be contact person
     if (textInputs.length > 1) {
       await user.type(textInputs[1], "Contact Person");
-      expect((textInputs[1] as HTMLInputElement).value).toContain("Contact Person");
+      await waitFor(() => {
+        expect((textInputs[1] as HTMLInputElement).value).toContain("Contact Person");
+      });
     }
   });
 

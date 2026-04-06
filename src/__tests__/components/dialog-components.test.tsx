@@ -477,7 +477,7 @@ describe("BulkImportDialog", () => {
     const { BulkImportDialog } = await import("@/components/orders/BulkImportDialog");
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     expect(screen.getByText("Orders importeren")).toBeInTheDocument();
-    expect(screen.getByText(/Sleep een CSV-bestand/)).toBeInTheDocument();
+    expect(screen.getByText(/Sleep een CSV- of Excel-bestand/)).toBeInTheDocument();
   });
 
   it("does not render when closed", async () => {
@@ -509,7 +509,7 @@ describe("BulkImportDialog", () => {
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     const fileInput = document.querySelector('input[type="file"]');
     expect(fileInput).toBeInTheDocument();
-    expect(fileInput?.getAttribute("accept")).toBe(".csv,.txt");
+    expect(fileInput?.getAttribute("accept")).toBe(".csv,.txt,.xlsx,.xls");
   });
 
   it("handles non-CSV file with error toast", async () => {
@@ -517,9 +517,9 @@ describe("BulkImportDialog", () => {
     const { BulkImportDialog } = await import("@/components/orders/BulkImportDialog");
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     const fileInput = document.querySelector('input[type="file"]')!;
-    const file = new File(["content"], "test.xlsx", { type: "application/vnd.ms-excel" });
+    const file = new File(["content"], "test.pdf", { type: "application/pdf" });
     fireEvent.change(fileInput, { target: { files: [file] } });
-    expect(toast.error).toHaveBeenCalledWith("Alleen CSV-bestanden worden ondersteund (.csv, .txt)");
+    expect(toast.error).toHaveBeenCalledWith("Alleen CSV- en Excel-bestanden worden ondersteund (.csv, .txt, .xlsx, .xls)");
   });
 
   it("transitions to preview step after uploading a valid CSV", async () => {
@@ -578,9 +578,13 @@ describe("BulkImportDialog", () => {
     const { BulkImportDialog } = await import("@/components/orders/BulkImportDialog");
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     const fileInput = document.querySelector('input[type="file"]')!;
-    const csvContent = "klant;ophalen\nACME;Amsterdam\nBeta;Utrecht\n";
+    const csvContent = "klant;ophalen;leveren\nACME;Amsterdam;Rotterdam\nBeta;Utrecht;Den Haag\n";
     const file = new File([csvContent], "test.csv", { type: "text/csv" });
     fireEvent.change(fileInput, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByText(/Valideer/)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText(/Valideer/));
     await waitFor(() => {
       expect(screen.getByText(/Importeer 2 orders/)).toBeInTheDocument();
     });
@@ -597,7 +601,7 @@ describe("BulkImportDialog", () => {
       expect(screen.getByText("Terug")).toBeInTheDocument();
     });
     fireEvent.click(screen.getByText("Terug"));
-    expect(screen.getByText(/Sleep een CSV-bestand/)).toBeInTheDocument();
+    expect(screen.getByText(/Sleep een CSV- of Excel-bestand/)).toBeInTheDocument();
   });
 
   it("handles empty CSV with error toast", async () => {
@@ -641,7 +645,7 @@ describe("BulkImportDialog", () => {
   it("handles dragOver and dragLeave events on drop zone", async () => {
     const { BulkImportDialog } = await import("@/components/orders/BulkImportDialog");
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    const dropZone = screen.getByText(/Sleep een CSV-bestand/).closest("div[class*='border-dashed']")!;
+    const dropZone = screen.getByText(/Sleep een CSV- of Excel-bestand/).closest("div[class*='border-dashed']")!;
     fireEvent.dragOver(dropZone, { preventDefault: vi.fn() });
     expect(dropZone.className).toContain("border-primary");
     fireEvent.dragLeave(dropZone);
@@ -650,7 +654,7 @@ describe("BulkImportDialog", () => {
   it("handles drop event with valid CSV file", async () => {
     const { BulkImportDialog } = await import("@/components/orders/BulkImportDialog");
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    const dropZone = screen.getByText(/Sleep een CSV-bestand/).closest("div[class*='border-dashed']")!;
+    const dropZone = screen.getByText(/Sleep een CSV- of Excel-bestand/).closest("div[class*='border-dashed']")!;
     const csvContent = "klant;ophalen\nACME;Amsterdam\n";
     const file = new File([csvContent], "drop.csv", { type: "text/csv" });
     fireEvent.drop(dropZone, {
@@ -693,7 +697,7 @@ describe("BulkImportDialog", () => {
     });
     // Click Terug to reset
     fireEvent.click(screen.getByText("Terug"));
-    expect(screen.getByText(/Sleep een CSV-bestand/)).toBeInTheDocument();
+    expect(screen.getByText(/Sleep een CSV- of Excel-bestand/)).toBeInTheDocument();
   });
 
   it("detects comma delimiter in CSV", async () => {

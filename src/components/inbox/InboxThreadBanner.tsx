@@ -35,7 +35,7 @@ export function ThreadDiffBanner({ order }: { order: OrderDraft }) {
     <motion.div
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-blue-200/60 bg-blue-50/50 p-4 space-y-2.5"
+      className="rounded-xl border border-blue-200/60 dark:border-blue-800/60 bg-blue-50/50 dark:bg-blue-950/30 p-4 space-y-2.5"
     >
       <div className="flex items-center gap-2">
         <div className={cn("inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-md border", config.color)}>

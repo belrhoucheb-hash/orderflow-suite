@@ -1,5 +1,33 @@
+import * as XLSX from "xlsx";
 import type { BulkImportRow, BulkImportValidation, ColumnMapping } from "@/types/bulkImport";
 import { isValidAddress } from "@/components/inbox/utils";
+
+// ── Excel Parsing ───────────────────────────────────────────────────
+
+/** Parse an Excel (.xlsx/.xls) ArrayBuffer into { headers, rows } using the same shape as parseCSV */
+export function parseExcel(buffer: ArrayBuffer): { headers: string[]; rows: string[][] } {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return { headers: [], rows: [] };
+
+  const sheet = workbook.Sheets[sheetName];
+  // Convert to array-of-arrays; raw:false gives formatted strings
+  const aoa: string[][] = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: "",
+    raw: false,
+  });
+
+  if (aoa.length === 0) return { headers: [], rows: [] };
+
+  const headers = aoa[0].map((h) => String(h).trim());
+  const rows = aoa.slice(1).filter((r) => r.some((c) => String(c).trim() !== ""));
+
+  return {
+    headers,
+    rows: rows.map((r) => r.map((c) => String(c).trim())),
+  };
+}
 
 // ── CSV Parsing ──────────────────────────────────────────────────────
 

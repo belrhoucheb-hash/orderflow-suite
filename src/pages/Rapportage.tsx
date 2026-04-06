@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart3, Clock, Truck, Brain, Users, Loader2, Package, Download,
+  BarChart3, Clock, Truck, Brain, Users, Loader2, Package, Download, FileText, FileSpreadsheet,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { motion } from "framer-motion";
@@ -10,6 +10,11 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { ProfitabilityReport } from "@/components/rapportage/ProfitabilityReport";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  exportOrderReport,
+  exportOrdersCSV,
+  type ReportOrder,
+} from "@/utils/reportExporter";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell,
@@ -414,7 +419,7 @@ const Rapportage = () => {
       .sort((a, b) => b.value - a.value);
   }, [filteredOrders]);
 
-  /* ---------- Export handler ---------- */
+  /* ---------- Export handlers ---------- */
   const handleExport = () => {
     const exportData = filteredOrders.map((o) => ({
       id: o.id,
@@ -425,6 +430,30 @@ const Rapportage = () => {
       vehicle_id: o.vehicle_id || "",
     }));
     exportToCSV(exportData, `rapportage-orders-${startDate}-tot-${endDate}.csv`);
+  };
+
+  const handleExportPDF = () => {
+    const reportOrders: ReportOrder[] = filteredOrders.map((o) => ({
+      id: o.id,
+      created_at: o.created_at,
+      status: o.status,
+      client_name: o.client_name,
+      vehicle_id: o.vehicle_id,
+      updated_at: o.updated_at,
+    }));
+    exportOrderReport(reportOrders, { startDate, endDate });
+  };
+
+  const handleExportCSV = () => {
+    const reportOrders: ReportOrder[] = filteredOrders.map((o) => ({
+      id: o.id,
+      created_at: o.created_at,
+      status: o.status,
+      client_name: o.client_name,
+      vehicle_id: o.vehicle_id,
+      updated_at: o.updated_at,
+    }));
+    exportOrdersCSV(reportOrders);
   };
 
   if (isLoading) {
@@ -473,6 +502,20 @@ const Rapportage = () => {
             >
               <Download className="h-3.5 w-3.5" />
               Exporteer
+            </button>
+            <button
+              onClick={handleExportPDF}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-foreground text-xs font-medium hover:bg-muted transition-colors"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Exporteer PDF
+            </button>
+            <button
+              onClick={handleExportCSV}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-foreground text-xs font-medium hover:bg-muted transition-colors"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Exporteer CSV
             </button>
           </div>
 

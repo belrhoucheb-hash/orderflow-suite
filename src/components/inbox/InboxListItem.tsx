@@ -21,12 +21,12 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
   const attachmentCount = (draft.attachments as any[])?.length || 0;
 
   const typeBadge = (() => {
-    if (threadType === "cancellation") return { label: "Annulering", cls: "bg-red-100 text-red-700" };
-    if (threadType === "update") return { label: "Update", cls: "bg-blue-100 text-blue-700" };
-    if (threadType === "confirmation") return { label: "Bevestiging", cls: "bg-green-100 text-green-700" };
-    if (threadType === "question") return { label: "Vraag", cls: "bg-violet-100 text-violet-700" };
-    if (isUrgent) return { label: "Urgent", cls: "bg-red-50 text-red-600 font-bold" };
-    return { label: "Aanvraag", cls: "bg-gray-100 text-gray-600" };
+    if (threadType === "cancellation") return { label: "Annulering", cls: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" };
+    if (threadType === "update") return { label: "Update", cls: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" };
+    if (threadType === "confirmation") return { label: "Bevestiging", cls: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" };
+    if (threadType === "question") return { label: "Vraag", cls: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400" };
+    if (isUrgent) return { label: "Urgent", cls: "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-bold" };
+    return { label: "Aanvraag", cls: "bg-muted text-muted-foreground" };
   })();
 
   return (
@@ -35,8 +35,8 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
       isSelected
         ? "border-l-primary bg-primary/5 shadow-inner"
         : isUrgent
-          ? "border-l-primary/60 hover:bg-red-50/30 border-b border-gray-200 animate-[pulse-red-border_2s_infinite]"
-          : "border-l-transparent hover:bg-gray-50 border-b border-gray-200",
+          ? "border-l-primary/60 hover:bg-red-50/30 dark:hover:bg-red-950/20 border-b border-border animate-[pulse-red-border_2s_infinite]"
+          : "border-l-transparent hover:bg-muted/50 border-b border-border",
       isBulkChecked && "bg-primary/5 ring-1 ring-primary/20"
     )}>
       <button onClick={onClick} className="w-full text-left p-4 pl-5">

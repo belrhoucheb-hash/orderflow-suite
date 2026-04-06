@@ -326,7 +326,7 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
                         <div className="mb-3 rounded-lg overflow-hidden border border-border/20"><img src={att.url} alt={att.name} className="w-full h-40 object-cover" /></div>
                       )}
                       <div className="flex items-center gap-3">
-                        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0", isPdf ? "bg-red-50 border border-red-100" : "bg-primary/5 border border-primary/10")}>
+                        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0", isPdf ? "bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900" : "bg-primary/5 border border-primary/10")}>
                           {isPdf ? <FileText className="h-4 w-4 text-red-500" /> : <ImageIcon className="h-4 w-4 text-primary" />}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -436,19 +436,19 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
           </Button>
         </div>
       ) : (
-        <div className="border-t border-gray-200 bg-white shrink-0">
+        <div className="border-t border-border bg-card shrink-0">
           <div className="px-3 pt-3 pb-1 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <p className="text-xs font-semibold text-gray-500 truncate">
+              <p className="text-xs font-semibold text-muted-foreground truncate">
                 {replyMode === "reply" ? `Aan: ${selected.source_email_from}` : "Doorsturen"}
               </p>
               {replyMode === "reply" && (selected.missing_fields || []).length > 0 && (
-                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded shrink-0 flex items-center gap-1">
+                <span className="text-[10px] font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40 px-1.5 py-0.5 rounded shrink-0 flex items-center gap-1">
                   <Sparkles className="h-3 w-3" /> AI concept
                 </span>
               )}
             </div>
-            <button onClick={() => { setReplyMode("none"); setReplyText(""); }} className="text-xs text-gray-400 hover:text-gray-600 shrink-0">
+            <button onClick={() => { setReplyMode("none"); setReplyText(""); }} className="text-xs text-muted-foreground hover:text-foreground shrink-0">
               Annuleren
             </button>
           </div>

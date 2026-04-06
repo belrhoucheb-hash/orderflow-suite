@@ -201,6 +201,53 @@ function simulatePositionForTrip(trip: Trip): VehiclePosition | null {
   };
 }
 
+// ─── Real vehicle positions from Supabase ─────────────────────
+
+/**
+ * Fetch the latest real GPS position per trip from the `vehicle_positions` table.
+ * Returns a map of tripId -> VehiclePosition.
+ * Polls every 15s.
+ */
+export function useRealVehiclePositions(tripIds: string[]) {
+  return useQuery({
+    queryKey: ["real-vehicle-positions", tripIds.join(",")],
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    enabled: tripIds.length > 0,
+    queryFn: async () => {
+      // Fetch the latest position for each trip using a single query
+      // ordered by recorded_at DESC, then deduplicate client-side
+      const { data, error } = await supabase
+        .from("vehicle_positions" as any)
+        .select("*")
+        .in("trip_id", tripIds)
+        .order("recorded_at", { ascending: false })
+        .limit(tripIds.length * 5); // buffer for multiple entries
+
+      if (error) throw error;
+
+      // Deduplicate: keep only the latest position per trip_id
+      const posMap = new Map<string, VehiclePosition>();
+      for (const row of data || []) {
+        const tripId = row.trip_id as string;
+        if (!posMap.has(tripId)) {
+          posMap.set(tripId, {
+            vehicleId: (row.vehicle_id as string) || "",
+            lat: Number(row.lat),
+            lng: Number(row.lng),
+            heading: Number(row.heading) || 0,
+            speed: Number(row.speed) || 0,
+            timestamp: row.recorded_at as string,
+            tripId,
+          });
+        }
+      }
+
+      return posMap;
+    },
+  });
+}
+
 // ─── Hooks ─────────────────────────────────────────────────────
 
 /**
@@ -225,20 +272,36 @@ export function useActiveTrips() {
 }
 
 /**
- * Simulated vehicle positions for active trips.
+ * Vehicle positions for active trips.
+ * Prefers real GPS positions from `vehicle_positions` when available,
+ * falls back to simulated positions for trips without real data.
  * Polls every 15s.
  */
 export function useVehiclePositions(trips: Trip[]) {
+  const tripIds = trips.map((t) => t.id);
+  const { data: realPositions } = useRealVehiclePositions(tripIds);
+
   return useQuery({
-    queryKey: ["vehicle-positions", trips.map((t) => t.id).join(",")],
+    queryKey: [
+      "vehicle-positions",
+      tripIds.join(","),
+      realPositions ? Array.from(realPositions.keys()).join(",") : "",
+    ],
     staleTime: 10_000,
     refetchInterval: 15_000,
     enabled: trips.length > 0,
     queryFn: () => {
       const positions: VehiclePosition[] = [];
       for (const trip of trips) {
-        const pos = simulatePositionForTrip(trip);
-        if (pos) positions.push(pos);
+        // Prefer real position when available
+        const realPos = realPositions?.get(trip.id);
+        if (realPos) {
+          positions.push(realPos);
+        } else {
+          // Fall back to simulated position
+          const simPos = simulatePositionForTrip(trip);
+          if (simPos) positions.push(simPos);
+        }
       }
       return positions;
     },
