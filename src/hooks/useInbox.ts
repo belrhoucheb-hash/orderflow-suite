@@ -19,8 +19,10 @@ import {
   STANDARD_PALLET_WEIGHT_KG,
 } from "@/components/inbox/utils";
 import { saveCorrection } from "@/hooks/useAIFeedback";
+import { recordAIDecision, resolveAIDecision } from "@/hooks/useConfidenceStore";
 import { useTenant } from "@/contexts/TenantContext";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
+import { emitEventDirect } from "@/hooks/useEventPipeline";
 
 export function useInbox() {
   const queryClient = useQueryClient();
@@ -125,6 +127,8 @@ export function useInbox() {
         .single();
 
       if (error) throw error;
+      // Event Pipeline: email received
+      emitEventDirect(newOrder.id, "email_received", { actorType: "system", tenantId: tenantId, eventData: { subject, from: emailFrom } });
       toast.success("E-mail geïmporteerd", { description: `"${subject}" van ${clientName}` });
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
       setSelectedId(newOrder.id);
@@ -178,6 +182,8 @@ export function useInbox() {
         await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
         setSelectedId(newOrder.id);
         toast.success("Test data geladen", { description: `${scenario.label} - AI analyse wordt gestart...` });
+        // Event Pipeline: AI extraction started
+        emitEventDirect(newOrder.id, "ai_extraction_started", { actorType: "ai", tenantId });
 
         const { data: parseResponse, error: parseError } = await supabase.functions.invoke("parse-order", {
           body: { emailBody: scenario.email, pdfUrls: [], threadContext: null, tenantId },
@@ -244,6 +250,26 @@ export function useInbox() {
             follow_up_draft: parseData.follow_up_draft || null,
           })
           .eq("id", newOrder.id);
+        // Event Pipeline: AI extraction completed
+        emitEventDirect(newOrder.id, "ai_extraction_completed", { actorType: "ai", tenantId, confidenceScore: normalizedConfidence });
+        // Record AI decision in confidence store
+        try {
+          const autoApprove = normalizedConfidence >= 95 && !!ext.client_name;
+          const decision = await recordAIDecision({
+            tenantId,
+            decisionType: "order_extraction",
+            entityId: newOrder.id,
+            entityType: "order",
+            confidenceScore: normalizedConfidence,
+            fieldConfidences: ext.field_confidence || {},
+            aiSuggestion: ext,
+            wasAutoApproved: autoApprove,
+          });
+          setDecisionMap((prev) => ({ ...prev, [newOrder.id]: decision.id }));
+        } catch (csErr) {
+          console.error("Confidence store record error:", csErr);
+        }
+
         await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
         toast.success("AI Extractie voltooid", { description: `Confidence: ${normalizedConfidence}%` });
       } catch (e: any) {
@@ -375,9 +401,49 @@ export function useInbox() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: async (_, { id }) => {
+    onSuccess: async (_, { id, form: approvedForm }) => {
       const order = drafts.find((d) => d.id === id);
+      // Event Pipeline: planner approved/corrected
+      const originalForm = formData[id];
+      const wasChanged = originalForm && (
+        originalForm.pickupAddress !== approvedForm.pickupAddress ||
+        originalForm.deliveryAddress !== approvedForm.deliveryAddress ||
+        originalForm.quantity !== approvedForm.quantity ||
+        originalForm.unit !== approvedForm.unit
+      );
+      emitEventDirect(id, wasChanged ? "planner_corrected" : "planner_approved", {
+        actorType: "planner",
+        tenantId: tenant?.id || null,
+      });
       toast.success("Order aangemaakt", { description: `Order #${order?.order_number} is nu actief` });
+
+      // Resolve confidence store decision
+      const aiDecisionId = decisionMap[id];
+      if (aiDecisionId) {
+        try {
+          const originalForm = formData[id];
+          const hasCorrections = originalForm && (
+            originalForm.pickupAddress !== approvedForm.pickupAddress ||
+            originalForm.deliveryAddress !== approvedForm.deliveryAddress ||
+            originalForm.quantity !== approvedForm.quantity ||
+            originalForm.unit !== approvedForm.unit
+          );
+          const outcome = hasCorrections ? "corrected" as const : "accepted" as const;
+          await resolveAIDecision({
+            decisionId: aiDecisionId,
+            outcome,
+            finalValues: approvedForm as unknown as Record<string, unknown>,
+            correctionSummary: hasCorrections ? {
+              pickupChanged: originalForm?.pickupAddress !== approvedForm.pickupAddress,
+              deliveryChanged: originalForm?.deliveryAddress !== approvedForm.deliveryAddress,
+              quantityChanged: originalForm?.quantity !== approvedForm.quantity,
+              unitChanged: originalForm?.unit !== approvedForm.unit,
+            } : undefined,
+          });
+        } catch (csErr) {
+          console.error("Confidence store resolve error:", csErr);
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
 
       if (order?.source_email_from) {
@@ -620,6 +686,8 @@ export function useInbox() {
   };
 
   // ─── Auto-extract AI when selecting unprocessed email ───
+  // Track AI decision IDs for confidence store resolution
+  const [decisionMap, setDecisionMap] = useState<Record<string, string>>({});
   const [autoExtracting, setAutoExtracting] = useState(false);
   const autoExtractingRef = useRef(false);
   const lastExtractedIdRef = useRef<string | null>(null);
@@ -648,6 +716,8 @@ export function useInbox() {
       lastExtractedIdRef.current = selected.id;
       try {
         const tenantId = tenant?.id || "00000000-0000-0000-0000-000000000001";
+        // Event Pipeline: AI extraction started
+        emitEventDirect(selected.id, "ai_extraction_started", { actorType: "ai", tenantId });
         const { data: parseResponse, error: parseError } = await supabase.functions.invoke("parse-order", {
           body: { emailBody: selected.source_email_body, pdfUrls: [], threadContext: null, tenantId },
         });
@@ -712,6 +782,26 @@ export function useInbox() {
             follow_up_draft: parseData.follow_up_draft || null,
           })
           .eq("id", selected.id);
+        // Event Pipeline: AI extraction completed
+        emitEventDirect(selected.id, "ai_extraction_completed", { actorType: "ai", tenantId, confidenceScore: normalizedConfidence });
+
+        // Record AI decision in confidence store
+        try {
+          const autoApprove = normalizedConfidence >= 95 && !!ext.client_name;
+          const decision = await recordAIDecision({
+            tenantId,
+            decisionType: "order_extraction",
+            entityId: selected.id,
+            entityType: "order",
+            confidenceScore: normalizedConfidence,
+            fieldConfidences: ext.field_confidence || {},
+            aiSuggestion: ext,
+            wasAutoApproved: autoApprove,
+          });
+          setDecisionMap((prev) => ({ ...prev, [selected.id]: decision.id }));
+        } catch (csErr) {
+          console.error("Confidence store record error:", csErr);
+        }
 
         await queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
         if (enrichments.length > 0) toast.success("Adresboek verrijking", { description: enrichments.join(". ") });
@@ -778,6 +868,7 @@ export function useInbox() {
     setBulkSelected,
     loadingScenario,
     autoExtracting,
+    decisionMap,
     fileInputRef,
 
     // Data

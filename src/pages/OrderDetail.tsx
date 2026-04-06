@@ -29,6 +29,7 @@ import CMRDocument from "@/components/orders/CMRDocument";
 import LabelWorkshop from "@/components/orders/LabelWorkshop";
 import { RecipientFields } from "@/components/orders/RecipientFields";
 import { NotificationLogPanel } from "@/components/orders/NotificationLogPanel";
+import OrderTimeline from "@/components/orders/OrderTimeline";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
 import { Receipt } from "lucide-react";
@@ -716,6 +717,16 @@ const OrderDetail = () => {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Event Pipeline Timeline */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-display">Event Pipeline</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OrderTimeline orderId={order.id} />
             </CardContent>
           </Card>
 
