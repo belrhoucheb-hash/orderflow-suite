@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useNotifications, type Notification } from "@/hooks/useNotifications";
+import { useNotificationCenter } from "@/hooks/useNotificationCenter";
+import type { NotificationPayload } from "@/types/realtime";
 import { motion, AnimatePresence } from "framer-motion";
 
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
@@ -102,13 +104,24 @@ export function NotificationCenter() {
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const {
-    notifications,
-    unreadCount,
+    notifications: dbNotifications,
+    unreadCount: dbUnreadCount,
     markAsRead,
     markAllAsRead,
     deleteNotification,
     clearAll,
   } = useNotifications();
+
+  // Wire up realtime subscriptions for orders, trips, anomalies.
+  // This hook subscribes to multiple tables and invalidates React Query caches.
+  // We use its unreadCount to supplement the DB-based count.
+  const realtimeCenter = useNotificationCenter();
+
+  // Merge: DB notifications are the canonical source; realtime center
+  // adds cache-invalidation side-effects (the actual notification list
+  // displayed is still the DB-persisted list to avoid duplicates).
+  const notifications = dbNotifications;
+  const unreadCount = dbUnreadCount;
 
   // Close on outside click
   useEffect(() => {
