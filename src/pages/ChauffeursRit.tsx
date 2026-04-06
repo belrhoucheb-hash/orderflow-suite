@@ -463,19 +463,26 @@ const ChauffeursRit = () => {
           <Button size="sm" className="gap-1.5 text-xs bg-primary hover:bg-primary/90" disabled={isDispatching || !selectedVehicleId}
             onClick={async () => {
               if (!selectedVehicleId) return;
+              const vehicleOrders = allOrders.filter((o: any) => o.vehicle_id === selectedVehicleId);
+              if (vehicleOrders.length === 0) {
+                toast.error("Geen orders", { description: "Dit voertuig heeft geen geplande orders" });
+                return;
+              }
+              const vehicle = vehicles.find((v: any) => v.id === selectedVehicleId);
+              const driver = drivers.find((d: any) => d.current_vehicle_id === selectedVehicleId);
+              if (!driver) {
+                toast.error("Geen chauffeur", { description: "Wijs eerst een chauffeur toe aan dit voertuig via Chauffeurs" });
+                return;
+              }
               setIsDispatching(true);
               try {
-                const vehicleOrders = allOrders.filter((o: any) => o.vehicle_id === selectedVehicleId);
-                if (vehicleOrders.length === 0) { toast.error("Geen orders", { description: "Dit voertuig heeft geen geplande orders" }); return; }
-                const vehicle = vehicles.find((v: any) => v.id === selectedVehicleId);
-                const driver = drivers.find((d: any) => d.current_vehicle_id === selectedVehicleId);
                 const tenantId = tenant?.id || "00000000-0000-0000-0000-000000000001";
 
                 // Create trip
                 const trip = await createTripMutation.mutateAsync({
                   tenant_id: tenantId,
                   vehicle_id: selectedVehicleId,
-                  driver_id: driver?.id || null,
+                  driver_id: driver.id,
                   planned_date: new Date().toISOString().split("T")[0],
                   planned_start_time: startTime,
                   stops: vehicleOrders.map((o: any, i: number) => ({
@@ -488,7 +495,7 @@ const ChauffeursRit = () => {
 
                 // Dispatch trip
                 await dispatchTripMutation.mutateAsync(trip.id);
-                toast.success("Rit verzonden", { description: `${vehicleOrders.length} stops verstuurd naar ${driver?.name || vehicle?.name || "chauffeur"}` });
+                toast.success("Rit verzonden", { description: `${vehicleOrders.length} stops verstuurd naar ${driver.name || vehicle?.name || "chauffeur"}` });
               } catch (e: any) {
                 toast.error("Verzenden mislukt", { description: e.message });
               } finally {
@@ -624,18 +631,18 @@ const ChauffeursRit = () => {
                     {stops.map((stop, i) => (
                       <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border/30 bg-card">
                         <div className="flex flex-col items-center gap-0.5 min-w-[50px]">
-                          <span className="text-xs font-bold tabular-nums text-primary">{stop.time}</span>
-                          {stop.endTime && <span className="text-[10px] text-muted-foreground tabular-nums">{stop.endTime}</span>}
+                          <span className="text-xs font-bold tabular-nums text-primary">{stop.timeStart}</span>
+                          {stop.timeEnd && <span className="text-[10px] text-muted-foreground tabular-nums">{stop.timeEnd}</span>}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{stop.label}</p>
-                          <p className="text-xs text-muted-foreground truncate">{stop.address}</p>
+                          <p className="text-sm font-medium truncate">{stop.order.client_name || stop.location}</p>
+                          <p className="text-xs text-muted-foreground truncate">{stop.order.delivery_address || stop.location}</p>
                         </div>
                         <span className={cn(
                           "text-[10px] font-bold px-2 py-0.5 rounded-full",
-                          stop.type === "Laden" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                          stop.action === "Laden" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
                         )}>
-                          {stop.type}
+                          {stop.action}
                         </span>
                       </div>
                     ))}
