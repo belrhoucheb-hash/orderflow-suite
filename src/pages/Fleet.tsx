@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Plus, Truck, Filter, Search, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,6 @@ export default function Fleet() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [featureFilter, setFeatureFilter] = useState("all");
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const navigate = useNavigate();
 
   const filtered = useMemo(() => {
     if (!vehicles) return [];
@@ -168,10 +167,9 @@ export default function Fleet() {
                   const statusCfg = STATUS_CONFIG[v.status] || STATUS_CONFIG.beschikbaar;
                   const util = getUtilization(v);
                   return (
+                    <Link key={v.id} to={`/vloot/${v.id}`} className="block">
                     <Card
-                      key={v.id}
                       className="cursor-pointer hover:shadow-md transition-shadow border-border"
-                      onClick={() => navigate(`/vloot/${v.id}`)}
                     >
                       <CardContent className="p-5 space-y-3">
                         <div className="flex items-start justify-between">
@@ -213,6 +211,7 @@ export default function Fleet() {
                         </div>
                       </CardContent>
                     </Card>
+                    </Link>
                   );
                 })}
               </div>

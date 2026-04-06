@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 interface AddressAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
   className?: string;
 }
@@ -16,7 +17,7 @@ interface Suggestion {
   source: "history" | "google";
 }
 
-export function AddressAutocomplete({ value, onChange, placeholder, className }: AddressAutocompleteProps) {
+export function AddressAutocomplete({ value, onChange, onBlur, placeholder, className }: AddressAutocompleteProps) {
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -106,6 +107,7 @@ export function AddressAutocomplete({ value, onChange, placeholder, className }:
         value={value}
         onChange={e => handleChange(e.target.value)}
         onFocus={() => { if (suggestions.length) setOpen(true); }}
+        onBlur={onBlur}
         placeholder={placeholder}
         className={className}
       />

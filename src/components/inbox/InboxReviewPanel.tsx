@@ -187,7 +187,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Ophalen <FieldConfidenceIndicator score={form.fieldConfidence?.pickup_address} /></span>
                   </div>
-                  <AddressAutocomplete value={form.pickupAddress} onChange={(v) => { onUpdateField("pickupAddress", v); onAutoSave(); }}
+                  <AddressAutocomplete value={form.pickupAddress} onChange={(v) => onUpdateField("pickupAddress", v)} onBlur={onAutoSave}
                     placeholder="Ophaaladres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text", !form.pickupAddress && "text-red-400 italic font-normal")} />
                   {form.pickupAddress && isAddressIncomplete(form.pickupAddress) && (
                     <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-bold">
@@ -207,7 +207,7 @@ export function InboxReviewPanel({ selected, form, isCreatePending, addressSugge
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Lossen <FieldConfidenceIndicator score={form.fieldConfidence?.delivery_address} /></span>
                   </div>
-                  <AddressAutocomplete value={form.deliveryAddress} onChange={(v) => { onUpdateField("deliveryAddress", v); onAutoSave(); }}
+                  <AddressAutocomplete value={form.deliveryAddress} onChange={(v) => onUpdateField("deliveryAddress", v)} onBlur={onAutoSave}
                     placeholder="Afleveradres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text", !form.deliveryAddress && "text-red-400 italic font-normal")} />
                   {form.deliveryAddress && isAddressIncomplete(form.deliveryAddress) && (
                     <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-bold">

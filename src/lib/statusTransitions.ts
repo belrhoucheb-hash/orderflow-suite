@@ -20,6 +20,7 @@ export function isValidStatusTransition(from: string, to: string): boolean {
   const legacyMap: Record<string, OrderStatus> = {
     OPEN: "PENDING",
     WAITING: "PENDING",
+    CONFIRMED: "PENDING",
   };
   const normFrom = (legacyMap[from] ?? from) as OrderStatus;
   const normTo = (legacyMap[to] ?? to) as OrderStatus;

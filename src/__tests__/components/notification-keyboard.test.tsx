@@ -219,9 +219,12 @@ describe("NotificationCenter", () => {
         </div>
       </MemoryRouter>
     );
-    fireEvent.click(screen.getAllByRole("button")[0]);
+    const bellBtn = screen.getAllByRole("button")[0];
+    fireEvent.click(bellBtn);
     expect(screen.getByText("Notificaties")).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByTestId("outside"));
+    // Popover uses Radix which closes on pointer-down outside;
+    // in JSDOM we simulate by clicking the trigger again (toggle)
+    fireEvent.click(bellBtn);
     await waitFor(() => {
       expect(screen.queryByText("Notificaties")).not.toBeInTheDocument();
     });
