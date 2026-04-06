@@ -36,3 +36,16 @@ gcp-service-account.json
 
 # Claude Code configuration
 .claude/
+
+# Lockfiles (npm is primary)
+bun.lock
+bun.lockb
+yarn.lock
+
+# Generated SQL dumps
+combined_setup.sql
+
+# AI/operational work files
+memory/
+work/
+inbox/
