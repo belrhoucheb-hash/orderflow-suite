@@ -23,6 +23,8 @@ import { recordAIDecision, resolveAIDecision } from "@/hooks/useConfidenceStore"
 import { useTenant } from "@/contexts/TenantContext";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 import { emitEventDirect } from "@/hooks/useEventPipeline";
+import { buildFewShotExamples } from "@/utils/fewShotBuilder";
+import type { AIDecision } from "@/types/confidence";
 
 export function useInbox() {
   const queryClient = useQueryClient();
@@ -185,8 +187,39 @@ export function useInbox() {
         // Event Pipeline: AI extraction started
         emitEventDirect(newOrder.id, "ai_extraction_started", { actorType: "ai", tenantId });
 
+        // Fetch few-shot examples for the detected client to include in extraction context
+        let fewShotContext = "";
+        if (clientName) {
+          try {
+            const { data: clientRows } = await supabase
+              .from("clients")
+              .select("id")
+              .ilike("name", `%${clientName}%`)
+              .limit(1);
+            const detectedClientId = clientRows?.[0]?.id;
+            if (detectedClientId) {
+              const { data: corrections } = await supabase
+                .from("ai_decisions")
+                .select("*")
+                .eq("tenant_id", tenantId)
+                .eq("was_corrected", true)
+                .in(
+                  "entity_id",
+                  ((await supabase.from("orders").select("id").eq("client_id", detectedClientId).limit(50)).data ?? []).map((o: { id: string }) => o.id),
+                )
+                .order("created_at", { ascending: false })
+                .limit(10);
+              if (corrections && corrections.length > 0) {
+                fewShotContext = buildFewShotExamples(corrections as unknown as AIDecision[]);
+              }
+            }
+          } catch (e) {
+            console.error("Few-shot fetch error:", e);
+          }
+        }
+
         const { data: parseResponse, error: parseError } = await supabase.functions.invoke("parse-order", {
-          body: { emailBody: scenario.email, pdfUrls: [], threadContext: null, tenantId },
+          body: { emailBody: scenario.email, pdfUrls: [], threadContext: null, tenantId, fewShotExamples: fewShotContext || undefined },
         });
         if (parseError) throw new Error(`Parse-order fout: ${parseError.message}`);
         const parseData = parseResponse;

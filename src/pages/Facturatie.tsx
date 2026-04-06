@@ -25,9 +25,9 @@ import {
 
 const statusStyles: Record<string, string> = {
   concept: "bg-muted text-muted-foreground border-border",
-  verzonden: "bg-blue-500/8 text-blue-700 border-blue-200/60",
-  betaald: "bg-emerald-500/8 text-emerald-700 border-emerald-200/60",
-  vervallen: "bg-red-500/8 text-red-700 border-red-200/60",
+  verzonden: "bg-blue-500/8 text-blue-700 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/60",
+  betaald: "bg-emerald-500/8 text-emerald-700 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60",
+  vervallen: "bg-red-500/8 text-red-700 dark:text-red-400 border-red-200/60 dark:border-red-800/60",
 };
 
 const statusDotColors: Record<string, string> = {
@@ -384,15 +384,15 @@ const Facturatie = () => {
 
       {/* Auto invoice suggestions */}
       {uninvoicedOrders.length > 0 && (
-        <div className="rounded-xl border border-green-200 bg-green-50/50 p-4">
+        <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/30 p-4">
           <div className="flex items-start gap-3">
-            <Sparkles className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+            <Sparkles className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-green-800">{uninvoicedOrders.length} afgeleverde orders zonder factuur</p>
-              <p className="text-xs text-green-600 mt-0.5">Deze orders zijn afgeleverd en kunnen gefactureerd worden.</p>
+              <p className="text-sm font-semibold text-green-800 dark:text-green-300">{uninvoicedOrders.length} afgeleverde orders zonder factuur</p>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Deze orders zijn afgeleverd en kunnen gefactureerd worden.</p>
               <div className="flex flex-wrap gap-2 mt-3">
                 {uninvoicedOrders.slice(0, 5).map((order: any) => (
-                  <Link key={order.id} to={`/orders/${order.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-white border border-green-200 rounded-lg px-2.5 py-1.5 hover:border-green-400 transition-colors">
+                  <Link key={order.id} to={`/orders/${order.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-300 bg-white dark:bg-green-950/50 border border-green-200 dark:border-green-800 rounded-lg px-2.5 py-1.5 hover:border-green-400 dark:hover:border-green-600 transition-colors">
                     #{order.order_number} — {order.client_name}
                     <ArrowRight className="h-3 w-3" />
                   </Link>
@@ -554,7 +554,7 @@ const Facturatie = () => {
                         className={cn(
                           "px-4 py-2 text-sm hidden md:table-cell",
                           overdue
-                            ? "text-red-600 font-medium"
+                            ? "text-red-600 dark:text-red-400 font-medium"
                             : "text-muted-foreground"
                         )}
                       >

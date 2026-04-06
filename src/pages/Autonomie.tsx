@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, GraduationCap, Edit3, Settings, List } from "lucide-react";
+import { Activity, GraduationCap, Edit3, Settings, List, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -12,6 +12,7 @@ import { LearningProgress } from "@/components/dashboard/LearningProgress";
 import { CorrectionLog } from "@/components/dashboard/CorrectionLog";
 import { AutonomyTrendChart } from "@/components/dashboard/AutonomyTrendChart";
 import { useDecisionFeed } from "@/hooks/useAutonomyDashboard";
+import { useTenantLearningStats } from "@/hooks/useAIFeedbackLoop";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -134,6 +135,112 @@ function ThresholdSettings() {
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+// ── Tenant Learning Overview ────────────────────────────────────
+
+function TenantLearningOverview() {
+  const { data: stats, isLoading } = useTenantLearningStats();
+
+  if (isLoading) {
+    return (
+      <div className="animate-pulse space-y-3">
+        <div className="h-20 bg-muted/30 rounded" />
+        <div className="h-20 bg-muted/30 rounded" />
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        Nog geen leerdata beschikbaar
+      </p>
+    );
+  }
+
+  const DeltaIcon =
+    stats.confidenceDelta > 0
+      ? TrendingUp
+      : stats.confidenceDelta < 0
+        ? TrendingDown
+        : Minus;
+  const deltaColor =
+    stats.confidenceDelta > 0
+      ? "text-emerald-600"
+      : stats.confidenceDelta < 0
+        ? "text-red-600"
+        : "text-muted-foreground";
+
+  return (
+    <div className="space-y-4">
+      {/* Confidence trend */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-lg bg-muted/20 border border-border/30 p-3">
+          <p className="text-xs text-muted-foreground mb-1">Gem. confidence deze week</p>
+          <p className="text-lg font-semibold tabular-nums">
+            {Math.round(stats.avgConfidenceThisWeek)}%
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/20 border border-border/30 p-3">
+          <p className="text-xs text-muted-foreground mb-1">Gem. confidence vorige week</p>
+          <p className="text-lg font-semibold tabular-nums">
+            {Math.round(stats.avgConfidenceLastWeek)}%
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/20 border border-border/30 p-3">
+          <p className="text-xs text-muted-foreground mb-1">Verschil</p>
+          <div className="flex items-center gap-1.5">
+            <DeltaIcon className={`h-4 w-4 ${deltaColor}`} />
+            <p className={`text-lg font-semibold tabular-nums ${deltaColor}`}>
+              {stats.confidenceDelta > 0 ? "+" : ""}
+              {stats.confidenceDelta}%
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Top improving clients */}
+      {stats.topImprovingClients.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium mb-2">Meest verbeterde klanten</h4>
+          <div className="space-y-1.5">
+            {stats.topImprovingClients.map((c) => (
+              <div
+                key={c.clientId}
+                className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 border border-border/30"
+              >
+                <span className="text-sm truncate">{c.clientName}</span>
+                <span
+                  className={`text-sm font-medium tabular-nums ${c.delta > 0 ? "text-emerald-600" : c.delta < 0 ? "text-red-600" : "text-muted-foreground"}`}
+                >
+                  {c.delta > 0 ? "+" : ""}
+                  {c.delta}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Most corrected fields */}
+      {stats.mostCorrectedFields.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+            Meest gecorrigeerde velden
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {stats.mostCorrectedFields.map((f) => (
+              <Badge key={f.field} variant="outline" className="text-xs">
+                {f.field} ({f.count}x)
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -329,20 +436,39 @@ const Autonomie = () => {
 
         {/* Learning Tab */}
         <TabsContent value="learning">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                Leerproces per klant
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Hoe snel het systeem per klant leert en zelfstandig wordt
-              </p>
-            </CardHeader>
-            <CardContent>
-              <LearningProgress />
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            {/* Tenant-wide learning stats */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  Leervoortgang
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Hoe de AI-nauwkeurigheid evolueert over tijd
+                </p>
+              </CardHeader>
+              <CardContent>
+                <TenantLearningOverview />
+              </CardContent>
+            </Card>
+
+            {/* Per-client progress */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                  Leerproces per klant
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Hoe snel het systeem per klant leert en zelfstandig wordt
+                </p>
+              </CardHeader>
+              <CardContent>
+                <LearningProgress />
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Corrections Tab */}

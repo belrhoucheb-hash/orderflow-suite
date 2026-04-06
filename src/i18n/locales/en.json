@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "inbox": "Inbox",
+    "orders": "Orders",
+    "clients": "Clients",
+    "planning": "Planning Board",
+    "dispatch": "Dispatch",
+    "tracking": "Live Tracking",
+    "trips": "Trip Overview",
+    "drivers": "Drivers",
+    "fleet": "Fleet",
+    "reporting": "Reporting",
+    "exceptions": "Exceptions",
+    "autonomy": "Autonomy",
+    "invoicing": "Invoicing",
+    "settings": "Settings",
+    "users": "Users",
+    "navigation": "Navigation",
+    "admin": "Admin",
+    "myTrips": "My Trips"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "import": "Import",
+    "loading": "Loading...",
+    "noResults": "No results",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "close": "Close",
+    "status": "Status",
+    "actions": "Actions",
+    "date": "Date",
+    "total": "Total"
+  },
+  "orders": {
+    "title": "Orders",
+    "newOrder": "New order",
+    "import": "Import",
+    "pickup": "Pickup",
+    "delivery": "Delivery",
+    "client": "Client",
+    "reference": "Reference",
+    "weight": "Weight",
+    "quantity": "Quantity",
+    "status": {
+      "draft": "Draft",
+      "pending": "Pending",
+      "planned": "Planned",
+      "in_transit": "In transit",
+      "delivered": "Delivered"
+    }
+  },
+  "invoicing": {
+    "title": "Invoicing",
+    "newInvoice": "New invoice",
+    "invoiceNumber": "Invoice number",
+    "amount": "Amount",
+    "dueDate": "Due date",
+    "status": {
+      "concept": "Draft",
+      "sent": "Sent",
+      "paid": "Paid",
+      "overdue": "Overdue"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "masterData": "Master Data",
+    "language": "Language",
+    "languageDescription": "Choose the application language."
+  }
+}

@@ -1,8 +1,9 @@
 import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Shield, Send, Brain, Radar } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import defaultLogo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
@@ -23,26 +24,30 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const mainItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Inbox", url: "/inbox", icon: Inbox },
-  { title: "Orders", url: "/orders", icon: Package },
-  { title: "Klanten", url: "/klanten", icon: Building2 },
-  { title: "Planbord", url: "/planning", icon: Truck },
-  { title: "Dispatch", url: "/dispatch", icon: Send },
-  { title: "Live Tracking", url: "/tracking", icon: Radar },
-  { title: "Ritoverzicht", url: "/ritten", icon: Route },
-  { title: "Chauffeurs", url: "/chauffeurs", icon: Users },
-  { title: "Vloot", url: "/vloot", icon: Container },
-  { title: "Rapportage", url: "/rapportage", icon: BarChart3 },
-  { title: "Uitzonderingen", url: "/exceptions", icon: Shield },
-  { title: "Autonomie", url: "/autonomie", icon: Brain },
-  { title: "Facturatie", url: "/facturatie", icon: Receipt },
+const mainItemsDef = [
+  { titleKey: "nav.dashboard", url: "/", icon: LayoutDashboard },
+  { titleKey: "nav.inbox", url: "/inbox", icon: Inbox },
+  { titleKey: "nav.orders", url: "/orders", icon: Package },
+  { titleKey: "nav.clients", url: "/klanten", icon: Building2 },
+  { titleKey: "nav.planning", url: "/planning", icon: Truck },
+  { titleKey: "nav.dispatch", url: "/dispatch", icon: Send },
+  { titleKey: "nav.tracking", url: "/tracking", icon: Radar },
+  { titleKey: "nav.trips", url: "/ritten", icon: Route },
+  { titleKey: "nav.drivers", url: "/chauffeurs", icon: Users },
+  { titleKey: "nav.fleet", url: "/vloot", icon: Container },
+  { titleKey: "nav.reporting", url: "/rapportage", icon: BarChart3 },
+  { titleKey: "nav.exceptions", url: "/exceptions", icon: Shield },
+  { titleKey: "nav.autonomy", url: "/autonomie", icon: Brain },
+  { titleKey: "nav.invoicing", url: "/facturatie", icon: Receipt },
 ];
 
-const adminItems = [
-  { title: "Gebruikers", url: "/users", icon: Users },
-  { title: "Instellingen", url: "/settings", icon: Settings },
+const adminItemsDef = [
+  { titleKey: "nav.users", url: "/users", icon: Users },
+  { titleKey: "nav.settings", url: "/settings", icon: Settings },
+];
+
+const chauffeurItemsDef = [
+  { titleKey: "nav.myTrips", url: "/chauffeur", icon: Route },
 ];
 
 function useExceptionCount() {
@@ -78,20 +83,22 @@ function useExceptionCount() {
   });
 }
 
-// Chauffeur only sees the ChauffeurApp (separate route), so no main sidebar items
-// Planner sees all mainItems; Admin sees mainItems + adminItems
-const chauffeurItems = [
-  { title: "Mijn Ritten", url: "/chauffeur", icon: Route },
-];
-
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { profile, user, signOut, isAdmin, effectiveRole } = useAuth();
   const { tenant } = useTenant();
   const { data: exceptionCount = 0 } = useExceptionCount();
+
+  const toItems = (defs: typeof mainItemsDef) =>
+    defs.map((d) => ({ title: t(d.titleKey), titleKey: d.titleKey, url: d.url, icon: d.icon }));
+
+  const mainItems = useMemo(() => toItems(mainItemsDef), [t]);
+  const adminItems = useMemo(() => toItems(adminItemsDef), [t]);
+  const chauffeurItems = useMemo(() => toItems(chauffeurItemsDef), [t]);
 
   const visibleMainItems = effectiveRole === "chauffeur" ? chauffeurItems : mainItems;
 
@@ -136,7 +143,7 @@ export function AppSidebar() {
       <SidebarContent className="px-3">
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/30 text-xs uppercase tracking-[0.15em] font-medium mb-1 px-3">
-            Navigatie
+            {t('nav.navigation')}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
@@ -159,7 +166,7 @@ export function AppSidebar() {
                       >
                         <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
                         <span>{item.title}</span>
-                        {item.title === "Uitzonderingen" && exceptionCount > 0 && !collapsed && (
+                        {item.titleKey === "nav.exceptions" && exceptionCount > 0 && !collapsed && (
                           <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none font-medium">
                             {exceptionCount}
                           </span>
@@ -176,7 +183,7 @@ export function AppSidebar() {
         {isAdmin && (
           <SidebarGroup className="mt-4">
             <SidebarGroupLabel className="text-sidebar-foreground/30 text-xs uppercase tracking-[0.15em] font-medium mb-1 px-3">
-              Admin
+              {t('nav.admin')}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>

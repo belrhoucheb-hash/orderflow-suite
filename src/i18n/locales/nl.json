@@ -1,0 +1,81 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "inbox": "Inbox",
+    "orders": "Orders",
+    "clients": "Klanten",
+    "planning": "Planbord",
+    "dispatch": "Dispatch",
+    "tracking": "Live Tracking",
+    "trips": "Ritoverzicht",
+    "drivers": "Chauffeurs",
+    "fleet": "Vloot",
+    "reporting": "Rapportage",
+    "exceptions": "Uitzonderingen",
+    "autonomy": "Autonomie",
+    "invoicing": "Facturatie",
+    "settings": "Instellingen",
+    "users": "Gebruikers",
+    "navigation": "Navigatie",
+    "admin": "Admin",
+    "myTrips": "Mijn Ritten"
+  },
+  "common": {
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen",
+    "edit": "Bewerken",
+    "add": "Toevoegen",
+    "search": "Zoeken",
+    "filter": "Filteren",
+    "export": "Exporteren",
+    "import": "Importeren",
+    "loading": "Laden...",
+    "noResults": "Geen resultaten",
+    "confirm": "Bevestigen",
+    "back": "Terug",
+    "next": "Volgende",
+    "close": "Sluiten",
+    "status": "Status",
+    "actions": "Acties",
+    "date": "Datum",
+    "total": "Totaal"
+  },
+  "orders": {
+    "title": "Orders",
+    "newOrder": "Nieuwe order",
+    "import": "Importeer",
+    "pickup": "Ophalen",
+    "delivery": "Afleveren",
+    "client": "Klant",
+    "reference": "Referentie",
+    "weight": "Gewicht",
+    "quantity": "Aantal",
+    "status": {
+      "draft": "Concept",
+      "pending": "In behandeling",
+      "planned": "Ingepland",
+      "in_transit": "Onderweg",
+      "delivered": "Afgeleverd"
+    }
+  },
+  "invoicing": {
+    "title": "Facturatie",
+    "newInvoice": "Nieuwe factuur",
+    "invoiceNumber": "Factuurnummer",
+    "amount": "Bedrag",
+    "dueDate": "Vervaldatum",
+    "status": {
+      "concept": "Concept",
+      "sent": "Verzonden",
+      "paid": "Betaald",
+      "overdue": "Vervallen"
+    }
+  },
+  "settings": {
+    "title": "Instellingen",
+    "masterData": "Stamgegevens",
+    "language": "Taal",
+    "languageDescription": "Kies de taal van de applicatie."
+  }
+}

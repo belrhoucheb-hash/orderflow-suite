@@ -58,6 +58,37 @@ vi.mock("@/contexts/TenantContext", () => ({
   TenantProvider: ({ children }: any) => children,
 }));
 
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'nav.dashboard': 'Dashboard',
+        'nav.inbox': 'Inbox',
+        'nav.orders': 'Orders',
+        'nav.clients': 'Klanten',
+        'nav.planning': 'Planbord',
+        'nav.dispatch': 'Dispatch',
+        'nav.tracking': 'Live Tracking',
+        'nav.trips': 'Ritoverzicht',
+        'nav.drivers': 'Chauffeurs',
+        'nav.fleet': 'Vloot',
+        'nav.reporting': 'Rapportage',
+        'nav.exceptions': 'Uitzonderingen',
+        'nav.autonomy': 'Autonomie',
+        'nav.invoicing': 'Facturatie',
+        'nav.users': 'Gebruikers',
+        'nav.settings': 'Instellingen',
+        'sections.navigation': 'Navigatie',
+        'sections.admin': 'Admin',
+        'nav.admin': 'Admin',
+      };
+      return translations[key] || key;
+    },
+    i18n: { language: 'nl', changeLanguage: vi.fn() }
+  }),
+  I18nextProvider: ({ children }: any) => children,
+}));
+
 vi.mock("@/assets/logo.png", () => ({ default: "mock-logo.png" }));
 vi.mock("@/lib/companyConfig", () => ({ DEFAULT_COMPANY: { name: "TestCo", address: "Test Addr 1", country: "NL" } }));
 

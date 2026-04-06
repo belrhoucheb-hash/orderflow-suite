@@ -25,15 +25,15 @@ import {
 
 function VariableHelper({ onInsert }: { onInsert: (variable: string) => void }) {
   return (
-    <div className="border rounded-lg p-3 bg-gray-50/50">
-      <p className="text-xs font-medium text-gray-500 mb-2">Beschikbare variabelen (klik om in te voegen):</p>
+    <div className="border rounded-lg p-3 bg-muted/50">
+      <p className="text-xs font-medium text-muted-foreground mb-2">Beschikbare variabelen (klik om in te voegen):</p>
       <div className="flex flex-wrap gap-1.5">
         {AVAILABLE_VARIABLES.map((v) => (
           <button
             key={v.key}
             type="button"
             onClick={() => onInsert(`{{${v.key}}}`)}
-            className="text-xs px-2 py-1 rounded-md bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors"
+            className="text-xs px-2 py-1 rounded-md bg-card border border-border text-foreground/70 hover:bg-primary/5 hover:border-primary/30 hover:text-primary transition-colors"
             title={`${v.label} — bijv. "${v.example}"`}
           >
             {"{{"}

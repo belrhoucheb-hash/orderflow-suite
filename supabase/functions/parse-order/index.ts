@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { recordAIDecision } from "../_shared/confidenceStore.ts";
+import { emitOrderEvent } from "../_shared/eventPipeline.ts";
 
 // TODO: replace with tenant_settings lookup when multi-tenant is wired up
 const COMPANY_NAME = "Royalty Cargo";
@@ -421,6 +423,10 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
       fetchClientTemplate(clientEmail),
     ]);
     aiContextBlock = correctionsBlock + patternsBlock + templateBlock;
+    // Append client-side few-shot examples from the AI feedback loop (if provided)
+    if (fewShotExamples && typeof fewShotExamples === "string" && fewShotExamples.length > 0) {
+      aiContextBlock += "\n\n" + fewShotExamples;
+    }
 
     const extractionSystemPrompt = `Je bent een logistiek data-extractie assistent voor een Transport Management Systeem (TMS) in Nederland.
 Je analyseert e-mails en PDF-bijlagen en extraheert gestructureerde ordergegevens.
@@ -714,6 +720,37 @@ Antwoord als JSON met deze velden:
       upsertClientTemplate(clientEmail, extracted, extracted.confidence_score).catch(e =>
         console.error("Template upsert background error:", e)
       );
+    }
+
+    // ── Step 6: Record AI decision in confidence store ──
+    if (tenantIdStr) {
+      const autoApprove = (extracted.confidence_score ?? 0) >= 95 && !!extracted.client_name;
+      recordAIDecision(supabase, {
+        tenantId: tenantIdStr,
+        decisionType: "order_extraction",
+        entityType: "order",
+        confidenceScore: extracted.confidence_score ?? 0,
+        fieldConfidences: extracted.field_confidence ?? {},
+        aiSuggestion: extracted,
+        wasAutoApproved: autoApprove,
+        modelVersion: "gemini-2.5-flash",
+      }).catch((e) => console.error("Edge confidence store error:", e));
+    }
+
+    // ── Step 7: Emit ai_extraction_completed event ──
+    // Note: orderId is not available here (the client creates the order first),
+    // so the client-side code handles emitEventDirect. This is a fallback if
+    // the function is called with an orderId in the body.
+    const bodyOrderId = (await req.clone().json().catch(() => ({})))?.orderId;
+    if (bodyOrderId && tenantIdStr) {
+      emitOrderEvent(supabase, {
+        tenantId: tenantIdStr,
+        orderId: bodyOrderId,
+        eventType: "ai_extraction_completed",
+        actorType: "ai",
+        confidenceScore: extracted.confidence_score ?? null,
+        eventData: { missingFields: missingFields.length, anomalies: anomalies.length },
+      }).catch((e) => console.error("Edge event pipeline error:", e));
     }
 
     return new Response(JSON.stringify({
