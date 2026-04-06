@@ -51,8 +51,8 @@ export function ClientPortalTab({ clientId, clientName }: ClientPortalTabProps) 
       });
       toast.success("Uitnodiging verstuurd naar " + inviteEmail);
       setInviteEmail("");
-    } catch (err: any) {
-      toast.error("Uitnodiging mislukt", { description: err.message });
+    } catch (err: unknown) {
+      toast.error("Uitnodiging mislukt", { description: err instanceof Error ? err.message : "Onbekende fout" });
     }
   };
 

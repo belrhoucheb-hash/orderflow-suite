@@ -8,6 +8,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { BarChart3, Download, Loader2, CheckCircle2, TrendingUp } from "lucide-react";
 import { useCurrentPortalUser } from "@/hooks/useClientPortalUsers";
 
+interface PortalOrder {
+  id: string;
+  status: string;
+  weight_kg: number | null;
+  quantity: number | null;
+  created_at: string;
+  time_window_end: string | null;
+  delivered_at: string | null;
+}
+
 interface OrderStats {
   total: number;
   delivered: number;
@@ -20,7 +30,7 @@ export default function PortalReporting() {
   const { data: portalUser } = useCurrentPortalUser();
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<"week" | "month" | "quarter">("month");
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<PortalOrder[]>([]);
 
   useEffect(() => {
     if (!portalUser?.client_id) return;

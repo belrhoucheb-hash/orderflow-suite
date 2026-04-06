@@ -35,7 +35,7 @@ const Orders = () => {
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("alle");
   const [page, setPage] = useState(0);
   const [pageSize] = useState(25);
-  const [printOrder, setPrintOrder] = useState<any>(null);
+  const [printOrder, setPrintOrder] = useState<Record<string, unknown> | null>(null);
   const [printLoading, setPrintLoading] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [importOpen, setImportOpen] = useState(false);

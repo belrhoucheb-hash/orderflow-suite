@@ -21,6 +21,14 @@ import {
 import { PORTAL_ROLE_LABELS } from "@/types/clientPortal";
 import type { PortalRole } from "@/types/clientPortal";
 
+interface ClientLocation {
+  id: string;
+  name: string;
+  address: string;
+  time_window_start?: string | null;
+  time_window_end?: string | null;
+}
+
 export default function PortalSettings() {
   const { data: portalUser } = useCurrentPortalUser();
   const { data: allUsers, isLoading: usersLoading } = useClientPortalUsers(portalUser?.client_id ?? null);
@@ -34,7 +42,7 @@ export default function PortalSettings() {
   const isAdmin = portalUser?.portal_role === "admin";
 
   // Client locations
-  const [locations, setLocations] = useState<any[]>([]);
+  const [locations, setLocations] = useState<ClientLocation[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(true);
 
   useEffect(() => {
@@ -68,8 +76,8 @@ export default function PortalSettings() {
         description: `${inviteEmail} ontvangt een inloglink per e-mail.`,
       });
       setInviteEmail("");
-    } catch (err: any) {
-      toast.error("Uitnodiging mislukt", { description: err.message });
+    } catch (err: unknown) {
+      toast.error("Uitnodiging mislukt", { description: err instanceof Error ? err.message : "Onbekende fout" });
     }
   };
 
@@ -213,7 +221,7 @@ export default function PortalSettings() {
             <p className="text-sm text-gray-400">Nog geen locaties opgeslagen.</p>
           ) : (
             <div className="space-y-2">
-              {locations.map((loc: any) => (
+              {locations.map((loc) => (
                 <div
                   key={loc.id}
                   className="flex items-center gap-3 p-3 rounded-lg border border-gray-100"

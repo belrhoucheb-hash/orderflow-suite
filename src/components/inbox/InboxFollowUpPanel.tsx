@@ -52,9 +52,9 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
       // Mark as sent
       await supabase.from("orders").update({ follow_up_sent_at: new Date().toISOString() }).eq("id", selected.id);
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Send follow-up error:", e);
-      toast.error("Verzenden mislukt", { description: e.message });
+      toast.error("Verzenden mislukt", { description: e instanceof Error ? e.message : "Onbekende fout" });
     } finally {
       setIsSending(false);
     }

@@ -27,7 +27,7 @@ export function BarcodeScanner({ onScan, onClose, isOpen }: BarcodeScannerProps)
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setError("Camera toegang geweigerd. Sta camera-gebruik toe in je browser.");
     }
   }, []);

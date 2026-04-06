@@ -67,8 +67,8 @@ export default function TimeWindowManager({ locationId, tenantId }: Props) {
       setShowForm(false);
       setEditingId(null);
       setForm(defaultForm);
-    } catch (e: any) {
-      toast({ title: "Fout", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Fout", description: e instanceof Error ? e.message : "Onbekende fout", variant: "destructive" });
     }
   };
 
@@ -89,8 +89,8 @@ export default function TimeWindowManager({ locationId, tenantId }: Props) {
     try {
       await deleteTW.mutateAsync({ id: tw.id, locationId });
       toast({ title: "Tijdvenster verwijderd" });
-    } catch (e: any) {
-      toast({ title: "Fout", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Fout", description: e instanceof Error ? e.message : "Onbekende fout", variant: "destructive" });
     }
   };
 

@@ -59,8 +59,8 @@ export function CreateReturnDialog({
       setOpen(false);
       setReason("");
       setNotes("");
-    } catch (err: any) {
-      toast.error(`Fout bij aanmaken retour: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Fout bij aanmaken retour: ${err instanceof Error ? err.message : "Onbekende fout"}`);
     }
   };
 

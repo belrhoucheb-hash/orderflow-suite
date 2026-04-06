@@ -237,8 +237,8 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
         } else {
           imported++;
         }
-      } catch (err: any) {
-        importErrors.push({ rowIndex: v.rowIndex, message: err?.message || "Onbekende fout" });
+      } catch (err: unknown) {
+        importErrors.push({ rowIndex: v.rowIndex, message: err instanceof Error ? err.message : "Onbekende fout" });
       }
     }
 

@@ -63,8 +63,8 @@ export function ReturnOrderDialog({ open, onOpenChange, parentOrder }: Props) {
       toast.success("Retourorder aangemaakt");
       onOpenChange(false);
       setNotes("");
-    } catch (e: any) {
-      toast.error(e.message ?? "Fout bij aanmaken retourorder");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Fout bij aanmaken retourorder");
     }
   };
 

@@ -71,8 +71,8 @@ export function ConsolidationBoard({ plannedDate }: Props) {
           newSequence: 999, // append at end
         });
         toast({ title: "Order verplaatst" });
-      } catch (e: any) {
-        toast({ title: "Fout bij verplaatsen", description: e.message, variant: "destructive" });
+      } catch (e: unknown) {
+        toast({ title: "Fout bij verplaatsen", description: e instanceof Error ? e.message : "Onbekende fout", variant: "destructive" });
       }
     }
   }, [moveOrder, toast]);
@@ -81,8 +81,8 @@ export function ConsolidationBoard({ plannedDate }: Props) {
     try {
       await updateGroup.mutateAsync({ id: groupId, status: "GOEDGEKEURD" });
       toast({ title: "Groep goedgekeurd" });
-    } catch (e: any) {
-      toast({ title: "Fout", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Fout", description: e instanceof Error ? e.message : "Onbekende fout", variant: "destructive" });
     }
   };
 
@@ -90,8 +90,8 @@ export function ConsolidationBoard({ plannedDate }: Props) {
     try {
       await updateGroup.mutateAsync({ id: groupId, status: "VERWORPEN" });
       toast({ title: "Groep verworpen" });
-    } catch (e: any) {
-      toast({ title: "Fout", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Fout", description: e instanceof Error ? e.message : "Onbekende fout", variant: "destructive" });
     }
   };
 

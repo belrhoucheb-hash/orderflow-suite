@@ -202,9 +202,9 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
 
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
       toast.success("AI Extractie voltooid", { description: `Confidence: ${ext.confidence_score}%` });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Parse error:", e);
-      toast.error("Fout bij AI extractie", { description: e.message || "Probeer het opnieuw" });
+      toast.error("Fout bij AI extractie", { description: e instanceof Error ? e.message : "Probeer het opnieuw" });
     } finally {
       setIsParsing(false);
     }
@@ -260,8 +260,8 @@ export function SourcePanel({ selected, form, onParseResult }: { selected: Order
       queryClient.invalidateQueries({ queryKey: ["draft-orders"] });
       setReplyMode("none");
       setReplyText("");
-    } catch (e: any) {
-      toast.error("Verzenden mislukt", { description: e.message });
+    } catch (e: unknown) {
+      toast.error("Verzenden mislukt", { description: e instanceof Error ? e.message : "Onbekende fout" });
     } finally {
       setIsSending(false);
     }

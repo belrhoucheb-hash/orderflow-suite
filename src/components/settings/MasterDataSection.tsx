@@ -90,7 +90,7 @@ export function MasterDataSection() {
   });
 
   const [isAdding, setIsAdding] = useState<string | null>(null); // 'vehicle', 'unit', 'requirement'
-  const [newData, setNewData] = useState<any>({});
+  const [newData, setNewData] = useState<Record<string, string | number>>({});
 
   const addMutation = useMutation({
     mutationFn: async ({ table, payload }: { table: string; payload: any }) => {
