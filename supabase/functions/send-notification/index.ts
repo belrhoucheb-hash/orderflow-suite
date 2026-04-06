@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "https://orderflow-suite.vercel.app",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -20,11 +20,29 @@ interface NotificationPayload {
 }
 
 /**
- * Replace {{variable}} placeholders in a template string.
+ * Sanitize an email address to prevent SMTP injection.
+ */
+function sanitizeEmail(email: string): string | null {
+  // Strip any newlines/carriage returns (SMTP injection prevention)
+  const cleaned = email.replace(/[\r\n]/g, '').trim();
+  // Basic email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(cleaned) ? cleaned : null;
+}
+
+/**
+ * HTML-escape a string to prevent XSS in rendered templates.
+ */
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Replace {{variable}} placeholders in a template string with HTML-escaped values.
  */
 function renderTemplate(template: string, variables: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    return variables[key] ?? "";
+    return escapeHtml(variables[key] ?? "");
   });
 }
 
@@ -220,6 +238,14 @@ serve(async (req) => {
   }
 
   try {
+    // Validate authorization
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -380,7 +406,8 @@ serve(async (req) => {
             results.push({ channel, status: "skipped_prefs" });
             continue;
           }
-          if (!recipientEmail || !recipientEmail.includes("@")) {
+          const sanitizedRecipient = recipientEmail ? sanitizeEmail(recipientEmail) : null;
+          if (!sanitizedRecipient) {
             await supabase.from("notification_log").update({ status: "FAILED", error_message: "No valid recipient email" }).eq("id", logEntry.id);
             results.push({ channel, status: "no_email" });
             continue;
@@ -392,7 +419,7 @@ serve(async (req) => {
           }
 
           await sendEmailSmtp({
-            to: recipientEmail,
+            to: sanitizedRecipient,
             from: smtpUser,
             fromName: `${tenantData?.name ?? "OrderFlow"} Notificaties`,
             subject: renderedSubject,

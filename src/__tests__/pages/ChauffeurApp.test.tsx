@@ -31,7 +31,7 @@ const {
       in: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { pin_hash: "0000", must_change_pin: false }, error: null }),
+      single: vi.fn().mockResolvedValue({ data: { pin_hash: null, must_change_pin: false, failed_pin_attempts: 0, pin_locked_until: null }, error: null }),
       update: vi.fn().mockReturnThis(),
       then: vi.fn().mockImplementation((cb: any) => cb({ data: [], error: null })),
     }),
@@ -269,7 +269,8 @@ describe("ChauffeurApp", () => {
     });
   });
 
-  it("handlePinSubmit - submits PIN and logs in with 0000", async () => {
+  it("handlePinSubmit - forces PIN change when no PIN is set", async () => {
+    // Default mock returns pin_hash: null, so driver must set a PIN
     const user = userEvent.setup();
     renderChauffeurApp();
     await user.click(screen.getByText("Jan Jansen"));
@@ -279,8 +280,9 @@ describe("ChauffeurApp", () => {
     const pinInput = screen.getByPlaceholderText("----");
     await user.type(pinInput, "0000");
     await user.click(screen.getByRole("button", { name: /Inloggen/i }));
+    // Should prompt to set a new PIN, not login
     await waitFor(() => {
-      expect(mockSupabase.from).toHaveBeenCalled();
+      expect(screen.getByText(/Geen PIN ingesteld/)).toBeInTheDocument();
     });
   });
 
@@ -294,10 +296,12 @@ describe("ChauffeurApp", () => {
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({
-        data: { pin_hash: "somehashvalue", must_change_pin: false },
+        data: { pin_hash: "somehashvalue", must_change_pin: false, failed_pin_attempts: 0, pin_locked_until: null },
         error: null,
       }),
-      update: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
       then: vi.fn().mockImplementation((cb: any) => cb({ data: [], error: null })),
     });
 
@@ -317,20 +321,36 @@ describe("ChauffeurApp", () => {
   });
 
   it("handlePinSubmit - locks after 3 wrong attempts", async () => {
+    // Mock: always return a valid PIN hash (that won't match user input),
+    // with incrementing failed attempts tracked via closure
+    let failedAttempts = 0;
     const fromMock = mockSupabase.from as ReturnType<typeof vi.fn>;
-    fromMock.mockReturnValue({
+    fromMock.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { pin_hash: "somehashvalue", must_change_pin: false },
-        error: null,
+      single: vi.fn().mockImplementation(() => {
+        return Promise.resolve({
+          data: {
+            pin_hash: "somehashvalue",
+            must_change_pin: false,
+            failed_pin_attempts: failedAttempts,
+            pin_locked_until: null,
+          },
+          error: null,
+        });
       }),
-      update: vi.fn().mockReturnThis(),
+      update: vi.fn().mockImplementation(() => {
+        // Simulate incrementing failed_pin_attempts on update
+        failedAttempts++;
+        return {
+          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      }),
       then: vi.fn().mockImplementation((cb: any) => cb({ data: [], error: null })),
-    });
+    }));
 
     const user = userEvent.setup();
     renderChauffeurApp();
@@ -339,20 +359,26 @@ describe("ChauffeurApp", () => {
       expect(screen.getByPlaceholderText("----")).toBeInTheDocument();
     });
 
-    // 3 wrong attempts
+    // Submit 3 wrong PINs
     for (let i = 0; i < 3; i++) {
-      const pinInput = screen.getByPlaceholderText("----");
-      await user.clear(pinInput);
-      await user.type(pinInput, "9999");
-      await user.click(screen.getByRole("button", { name: /Inloggen/i }));
-      // Wait for the error
+      // Re-query the input each iteration (it may have been re-rendered)
       await waitFor(() => {
-        expect(screen.getByText(/Onjuiste PIN|Te veel pogingen/)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText("----")).toBeEnabled();
+      });
+      const pinInput = screen.getByPlaceholderText("----");
+      // Use fireEvent to avoid clear() issues with disabled state
+      fireEvent.change(pinInput, { target: { value: "9999" } });
+      await user.click(screen.getByRole("button", { name: /Inloggen/i }));
+      // Wait for error to appear
+      await waitFor(() => {
+        const matches = screen.getAllByText(/Onjuiste PIN|Te veel pogingen|geblokkeerd/i);
+        expect(matches.length).toBeGreaterThan(0);
       });
     }
 
     await waitFor(() => {
-      expect(screen.getByText(/Te veel pogingen/)).toBeInTheDocument();
+      const matches = screen.getAllByText(/Te veel pogingen|geblokkeerd/i);
+      expect(matches.length).toBeGreaterThan(0);
     });
   });
 
@@ -384,7 +410,7 @@ describe("ChauffeurApp", () => {
     });
   });
 
-  it("handlePinSubmit - falls back to 0000 when supabase errors", async () => {
+  it("handlePinSubmit - shows error when supabase errors (no 0000 fallback)", async () => {
     const fromMock = mockSupabase.from as ReturnType<typeof vi.fn>;
     fromMock.mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -409,13 +435,13 @@ describe("ChauffeurApp", () => {
     const pinInput = screen.getByPlaceholderText("----");
     await user.type(pinInput, "0000");
     await user.click(screen.getByRole("button", { name: /Inloggen/i }));
-    // Should login successfully with fallback 0000
+    // Should NOT login — 0000 fallback has been removed as a security fix
     await waitFor(() => {
-      expect(localStorage.getItem("orderflow_driver_id")).toBe("d1");
+      expect(screen.getByText(/Fout bij PIN-verificatie/)).toBeInTheDocument();
     });
   });
 
-  it("handlePinSubmit - shows error on supabase error with non-0000 pin", async () => {
+  it("handlePinSubmit - shows error on supabase error", async () => {
     const fromMock = mockSupabase.from as ReturnType<typeof vi.fn>;
     fromMock.mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -441,7 +467,7 @@ describe("ChauffeurApp", () => {
     await user.type(pinInput, "5678");
     await user.click(screen.getByRole("button", { name: /Inloggen/i }));
     await waitFor(() => {
-      expect(screen.getByText("Onjuiste PIN")).toBeInTheDocument();
+      expect(screen.getByText(/Fout bij PIN-verificatie/)).toBeInTheDocument();
     });
   });
 

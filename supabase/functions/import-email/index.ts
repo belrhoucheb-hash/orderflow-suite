@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { emitOrderEvent } from "../_shared/eventPipeline.ts";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "https://orderflow-suite.vercel.app",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -141,20 +141,30 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Decode JWT from Auth Header
-    let tenantIdStr = "00000000-0000-0000-0000-000000000001"; // Fallback to demo
+    // Decode JWT from Auth Header — require authentication
     const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        try {
-          const payload = JSON.parse(atob(parts[1]));
-          if (payload.app_metadata?.tenant_id) {
-            tenantIdStr = payload.app_metadata.tenant_id;
-          }
-        } catch(e) {}
-      }
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    let tenantIdStr = "";
+    const token = authHeader.replace("Bearer ", "");
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      try {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload.app_metadata?.tenant_id) {
+          tenantIdStr = payload.app_metadata.tenant_id;
+        }
+      } catch(e) {}
+    }
+
+    if (!tenantIdStr) {
+      return new Response(JSON.stringify({ error: "Missing tenant_id in token" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     // Upload attachments to storage

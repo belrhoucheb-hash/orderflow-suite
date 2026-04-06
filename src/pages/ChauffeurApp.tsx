@@ -16,13 +16,127 @@ import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
 import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineStore";
 
-const ORDERFLOW_PIN_SALT = "orderflow-salt";
-
-async function hashPin(pin: string): Promise<string> {
+/**
+ * Hash a PIN using Web Crypto API with a per-driver salt.
+ * The salt includes the driver's ID so each driver has a unique hash
+ * even if they choose the same PIN.
+ */
+async function hashPin(pin: string, driverId: string): Promise<string> {
   const encoder = new TextEncoder();
-  const data = encoder.encode(pin + ORDERFLOW_PIN_SALT);
+  const salt = `orderflow-pin-${driverId}`;
+  const data = encoder.encode(pin + salt);
   const hash = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Record a failed PIN attempt in the database and check if the driver is locked out.
+ * - After 3 failed attempts: lock for 5 minutes
+ * - After 6 failed attempts: lock for 30 minutes
+ * - After 10 failed attempts: lock permanently until admin resets
+ *
+ * TODO: Requires `failed_pin_attempts` (integer, default 0) and
+ *       `pin_locked_until` (timestamptz, nullable) columns on the drivers table.
+ *       Create a migration to add these columns if they don't exist yet.
+ */
+async function recordFailedAttempt(driverId: string): Promise<{ locked: boolean; lockUntil?: Date; attempts: number }> {
+  try {
+    // Increment failed_pin_attempts in drivers table
+    const { data: driver, error: fetchError } = await supabase
+      .from("drivers" as any)
+      .select("failed_pin_attempts, pin_locked_until")
+      .eq("id", driverId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const currentAttempts = ((driver as any)?.failed_pin_attempts ?? 0) + 1;
+    const existingLock = (driver as any)?.pin_locked_until;
+
+    // Check if already permanently locked
+    if (existingLock === "permanent") {
+      return { locked: true, attempts: currentAttempts };
+    }
+
+    // Determine lock duration based on attempt count
+    let lockUntil: string | null = null;
+    let locked = false;
+
+    if (currentAttempts >= 10) {
+      // Permanent lock — requires admin reset
+      lockUntil = "permanent";
+      locked = true;
+    } else if (currentAttempts >= 6) {
+      const lockDate = new Date(Date.now() + 30 * 60 * 1000);
+      lockUntil = lockDate.toISOString();
+      locked = true;
+    } else if (currentAttempts >= 3) {
+      const lockDate = new Date(Date.now() + 5 * 60 * 1000);
+      lockUntil = lockDate.toISOString();
+      locked = true;
+    }
+
+    await supabase
+      .from("drivers" as any)
+      .update({ failed_pin_attempts: currentAttempts, pin_locked_until: lockUntil })
+      .eq("id", driverId);
+
+    return {
+      locked,
+      lockUntil: lockUntil && lockUntil !== "permanent" ? new Date(lockUntil) : undefined,
+      attempts: currentAttempts,
+    };
+  } catch {
+    // If columns don't exist yet, fall back to local tracking only
+    return { locked: false, attempts: 0 };
+  }
+}
+
+/**
+ * Reset failed PIN attempts after a successful login.
+ */
+async function resetFailedAttempts(driverId: string): Promise<void> {
+  try {
+    await supabase
+      .from("drivers" as any)
+      .update({ failed_pin_attempts: 0, pin_locked_until: null })
+      .eq("id", driverId);
+  } catch {
+    // If columns don't exist yet, ignore silently
+  }
+}
+
+/**
+ * Check if a driver is currently locked out based on DB state.
+ */
+async function checkLockStatus(driverId: string): Promise<{ locked: boolean; lockUntil?: Date }> {
+  try {
+    const { data, error } = await supabase
+      .from("drivers" as any)
+      .select("failed_pin_attempts, pin_locked_until")
+      .eq("id", driverId)
+      .single();
+
+    if (error) throw error;
+
+    const lockedUntil = (data as any)?.pin_locked_until;
+    if (!lockedUntil) return { locked: false };
+
+    if (lockedUntil === "permanent") {
+      return { locked: true };
+    }
+
+    const lockDate = new Date(lockedUntil);
+    if (lockDate > new Date()) {
+      return { locked: true, lockUntil: lockDate };
+    }
+
+    // Lock expired — reset
+    await resetFailedAttempts(driverId);
+    return { locked: false };
+  } catch {
+    return { locked: false };
+  }
 }
 
 export default function ChauffeurApp() {
@@ -61,12 +175,24 @@ export default function ChauffeurApp() {
     return () => clearInterval(interval);
   }, [pinLockedUntil]);
 
-  const handleDriverSelect = (driverId: string) => {
+  const handleDriverSelect = async (driverId: string) => {
     setPendingDriverId(driverId);
     setPinInput("");
     setPinError("");
     setPinAttempts(0);
     setPinLockedUntil(null);
+
+    // Check server-side lock status
+    const lockStatus = await checkLockStatus(driverId);
+    if (lockStatus.locked) {
+      if (!lockStatus.lockUntil) {
+        setPinError("Account is permanent geblokkeerd. Neem contact op met de beheerder.");
+        setPinLockedUntil(Date.now() + 999_999_999); // effectively permanent in UI
+      } else {
+        setPinLockedUntil(lockStatus.lockUntil.getTime());
+        setPinError("Account is tijdelijk geblokkeerd.");
+      }
+    }
   };
 
   const handlePinSubmit = async () => {
@@ -76,6 +202,19 @@ export default function ChauffeurApp() {
 
     setPinVerifying(true);
     try {
+      // Re-check server-side lock status before attempting
+      const lockStatus = await checkLockStatus(pendingDriverId);
+      if (lockStatus.locked) {
+        if (!lockStatus.lockUntil) {
+          setPinError("Account is permanent geblokkeerd. Neem contact op met de beheerder.");
+          setPinLockedUntil(Date.now() + 999_999_999);
+        } else {
+          setPinLockedUntil(lockStatus.lockUntil.getTime());
+          setPinError("Account is tijdelijk geblokkeerd.");
+        }
+        return;
+      }
+
       const { data, error } = await supabase
         .from("drivers" as any)
         .select("pin_hash, must_change_pin")
@@ -84,51 +223,53 @@ export default function ChauffeurApp() {
 
       if (error) throw error;
 
-      const storedHash = (data as any)?.pin_hash || "0000";
-      const inputHash = await hashPin(pinInput);
+      const storedHash = (data as any)?.pin_hash;
 
-      // Check hashed match, or plaintext fallback for legacy "0000"
-      const isPlaintextLegacy = storedHash === pinInput && storedHash === "0000";
+      // If no PIN is set, force the driver to create one
+      if (!storedHash) {
+        setShowChangePin(true);
+        setPinError("Geen PIN ingesteld. Stel een nieuwe PIN in.");
+        return;
+      }
+
+      const inputHash = await hashPin(pinInput, pendingDriverId);
       const isHashMatch = inputHash === storedHash;
 
-      if (!isHashMatch && !isPlaintextLegacy) {
+      if (!isHashMatch) {
+        // Record failed attempt server-side
+        const attemptResult = await recordFailedAttempt(pendingDriverId);
         const newAttempts = pinAttempts + 1;
         setPinAttempts(newAttempts);
-        if (newAttempts >= 3) {
-          const lockUntil = Date.now() + 5 * 60 * 1000;
-          setPinLockedUntil(lockUntil);
-          setPinError("Te veel pogingen. Geblokkeerd voor 5 minuten.");
+
+        if (attemptResult.locked) {
+          if (!attemptResult.lockUntil) {
+            setPinError("Account is permanent geblokkeerd. Neem contact op met de beheerder.");
+            setPinLockedUntil(Date.now() + 999_999_999);
+          } else {
+            setPinLockedUntil(attemptResult.lockUntil.getTime());
+            setPinError("Te veel pogingen. Account is tijdelijk geblokkeerd.");
+          }
         } else {
-          setPinError(`Onjuiste PIN. Nog ${3 - newAttempts} poging(en).`);
+          const remaining = 3 - (attemptResult.attempts % 3 || 3);
+          setPinError(`Onjuiste PIN. Nog ${remaining > 0 ? remaining : 0} poging(en).`);
         }
         setPinInput("");
         return;
       }
 
-      // Auto-migrate plaintext "0000" to hashed version
-      if (isPlaintextLegacy) {
-        await supabase
-          .from("drivers" as any)
-          .update({ pin_hash: inputHash })
-          .eq("id", pendingDriverId);
-      }
+      // PIN correct — reset failed attempts
+      await resetFailedAttempts(pendingDriverId);
+      setPinAttempts(0);
 
-      // PIN correct
       if ((data as any)?.must_change_pin) {
         setShowChangePin(true);
       } else {
         setActiveDriverId(pendingDriverId);
         setPendingDriverId(null);
       }
-    } catch (err) {
-      // If pin_hash column doesn't exist yet, accept default "0000"
-      if (pinInput === "0000") {
-        setActiveDriverId(pendingDriverId);
-        setPendingDriverId(null);
-      } else {
-        setPinError("Onjuiste PIN");
-        setPinInput("");
-      }
+    } catch {
+      setPinError("Fout bij PIN-verificatie. Probeer opnieuw.");
+      setPinInput("");
     } finally {
       setPinVerifying(false);
     }
@@ -142,7 +283,7 @@ export default function ChauffeurApp() {
       setPinError("PIN-codes komen niet overeen"); return;
     }
     try {
-      const hashedNewPin = await hashPin(newPin);
+      const hashedNewPin = await hashPin(newPin, pendingDriverId!);
       await supabase
         .from("drivers" as any)
         .update({ pin_hash: hashedNewPin, must_change_pin: false })

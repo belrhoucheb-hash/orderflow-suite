@@ -33,7 +33,7 @@ let authChangeCallback: (event: string, session: any) => void;
 const fakeUser = { id: "user-123", email: "test@example.com" };
 const fakeSession = { user: fakeUser, access_token: "tok" };
 
-function buildFromChain(profileData: any, rolesData: any) {
+function buildFromChain(profileData: any, rolesData: any, driverData: any = null) {
   mockSupabase.from.mockImplementation((table: string) => {
     if (table === "profiles") {
       return {
@@ -48,6 +48,15 @@ function buildFromChain(profileData: any, rolesData: any) {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockResolvedValue({ data: rolesData, error: null }),
+        }),
+      };
+    }
+    if (table === "drivers") {
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: driverData, error: driverData ? null : { code: "PGRST116" } }),
+          }),
         }),
       };
     }
@@ -152,12 +161,13 @@ describe("AuthContext", () => {
     expect(result.current.isAdmin).toBe(false);
   });
 
-  // ── Logged in – chauffeur (via localStorage) ──────────────────────
-  it("detects chauffeur mode from localStorage", async () => {
+  // ── Logged in – chauffeur (via localStorage + linked driver record) ──
+  it("detects chauffeur mode only when user is a linked driver in DB", async () => {
     localStorage.setItem("chauffeur_mode", "true");
     const profileData = { display_name: "Driver", avatar_url: null };
     const rolesData: any[] = [];
-    buildFromChain(profileData, rolesData);
+    // Provide a linked driver record — this is required for chauffeur role
+    buildFromChain(profileData, rolesData, { id: "driver-1" });
     mockSupabase.auth.getSession.mockResolvedValue({ data: { session: fakeSession }, error: null });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -169,12 +179,30 @@ describe("AuthContext", () => {
     expect(result.current.isAdmin).toBe(false);
   });
 
+  // ── localStorage chauffeur_mode alone is NOT enough (security fix) ──
+  it("does NOT grant chauffeur role from localStorage alone without linked driver", async () => {
+    localStorage.setItem("chauffeur_mode", "true");
+    const profileData = { display_name: "Attacker", avatar_url: null };
+    const rolesData: any[] = [];
+    // No linked driver record — chauffeur_mode should be ignored
+    buildFromChain(profileData, rolesData, null);
+    mockSupabase.auth.getSession.mockResolvedValue({ data: { session: fakeSession }, error: null });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await act(async () => { vi.runAllTimers(); });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // Should fall through to planner, NOT chauffeur
+    expect(result.current.effectiveRole).toBe("planner");
+  });
+
   // ── Admin takes priority over chauffeur_mode ───────────────────────
   it("admin role takes priority over chauffeur_mode localStorage", async () => {
     localStorage.setItem("chauffeur_mode", "true");
     const profileData = { display_name: "Admin", avatar_url: null };
     const rolesData = [{ role: "admin" }];
-    buildFromChain(profileData, rolesData);
+    buildFromChain(profileData, rolesData, { id: "driver-1" });
     mockSupabase.auth.getSession.mockResolvedValue({ data: { session: fakeSession }, error: null });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
