@@ -126,3 +126,86 @@ export interface ShouldAutoExecuteResult {
   threshold: number;
   combinedScore: number;
 }
+
+// ─── Confidence Store Types (ai_decisions / confidence_metrics) ──
+
+export type AIDecisionType =
+  | "order_extraction"
+  | "planning_assignment"
+  | "dispatch_auto"
+  | "invoice_auto";
+
+export type DecisionOutcome = "accepted" | "corrected" | "rejected";
+
+export interface AIDecision {
+  id: string;
+  tenant_id: string | null;
+  decision_type: AIDecisionType;
+  entity_id: string | null;
+  entity_type: string | null; // 'order', 'trip', 'invoice'
+  confidence_score: number;
+  field_confidences: Record<string, number>;
+  ai_suggestion: Record<string, unknown>;
+  final_values: Record<string, unknown> | null;
+  was_auto_approved: boolean;
+  was_corrected: boolean;
+  correction_summary: Record<string, unknown> | null;
+  outcome: DecisionOutcome | null;
+  processing_time_ms: number | null;
+  model_version: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface ConfidenceMetrics {
+  id: string;
+  tenant_id: string | null;
+  client_id: string | null;
+  decision_type: string;
+  period_start: string;
+  period_end: string;
+  total_decisions: number;
+  auto_approved_count: number;
+  corrected_count: number;
+  rejected_count: number;
+  avg_confidence: number | null;
+  avg_correction_delta: number | null;
+  automation_rate: number | null;
+  created_at: string;
+}
+
+export interface RecordAIDecisionInput {
+  tenantId: string;
+  decisionType: AIDecisionType;
+  entityId?: string;
+  entityType?: string;
+  confidenceScore: number;
+  fieldConfidences?: Record<string, number>;
+  aiSuggestion: Record<string, unknown>;
+  wasAutoApproved?: boolean;
+  processingTimeMs?: number;
+  modelVersion?: string;
+}
+
+export interface ResolveAIDecisionInput {
+  decisionId: string;
+  outcome: DecisionOutcome;
+  finalValues?: Record<string, unknown>;
+  correctionSummary?: Record<string, unknown>;
+}
+
+export interface DecisionStats {
+  totalDecisions: number;
+  autoApprovedCount: number;
+  correctedCount: number;
+  rejectedCount: number;
+  avgConfidence: number;
+  automationRate: number;
+}
+
+export interface LearningCurvePoint {
+  period: string;
+  avgConfidence: number;
+  automationRate: number;
+  totalDecisions: number;
+}
