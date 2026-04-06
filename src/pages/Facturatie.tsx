@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { formatCurrency, formatDateShort } from "@/lib/formatters";
 import { motion } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -45,21 +46,6 @@ const statusLabels: Record<string, string> = {
 };
 
 const filterOptions = ["alle", "concept", "verzonden", "betaald", "vervallen"] as const;
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("nl-NL", {
-    style: "currency",
-    currency: "EUR",
-  }).format(amount);
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("nl-NL", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
 
 function isOverdue(dueDate: string | null, status: string): boolean {
   if (!dueDate || status !== "verzonden") return false;
@@ -548,7 +534,7 @@ const Facturatie = () => {
                         {invoice.client_name}
                       </td>
                       <td className="px-4 py-2 text-sm text-muted-foreground hidden md:table-cell">
-                        {formatDate(invoice.invoice_date)}
+                        {formatDateShort(invoice.invoice_date)}
                       </td>
                       <td
                         className={cn(
@@ -558,7 +544,7 @@ const Facturatie = () => {
                             : "text-muted-foreground"
                         )}
                       >
-                        {invoice.due_date ? formatDate(invoice.due_date) : "—"}
+                        {invoice.due_date ? formatDateShort(invoice.due_date) : "—"}
                       </td>
                       <td className="px-4 py-2 text-sm text-foreground/80 text-right tabular-nums font-medium">
                         {formatCurrency(invoice.total)}

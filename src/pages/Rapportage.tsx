@@ -28,13 +28,18 @@ function useRawOrders() {
   return useQuery({
     queryKey: ["rapportage-orders"],
     queryFn: async () => {
+      // Default filter: last 90 days to avoid unbounded queries
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from("orders")
         .select("id, created_at, status, updated_at, client_name, vehicle_id")
-        .order("created_at", { ascending: false });
+        .gte("created_at", ninetyDaysAgo)
+        .order("created_at", { ascending: false })
+        .limit(5000);
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 120_000,
   });
 }
 

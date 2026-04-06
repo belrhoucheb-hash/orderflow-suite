@@ -1,13 +1,13 @@
 project_id = "kdszxexyefsbssfhnwxc"
 
 [functions.parse-order]
-verify_jwt = false
+verify_jwt = true
 
 [functions.import-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-follow-up]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-order]
 verify_jwt = false

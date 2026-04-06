@@ -311,30 +311,30 @@ export function useVehicleUtilization() {
       const allOrderIds = [...new Set(Object.values(vehicleOrderIds).flatMap(s => [...s]))];
       if (allOrderIds.length === 0) return {} as Record<string, number>;
 
-      // Fetch weight for those orders
-      const { data: orders, error: ordersError } = await supabase
-        .from("orders")
-        .select("id, weight_kg")
-        .in("id", allOrderIds);
+      // Fetch order weights and vehicle capacities in parallel (both depend only on query 1)
+      const vehicleIds = Object.keys(vehicleOrderIds);
 
-      if (ordersError) throw ordersError;
+      const [ordersResult, vehiclesResult] = await Promise.all([
+        supabase
+          .from("orders")
+          .select("id, weight_kg")
+          .in("id", allOrderIds),
+        supabase
+          .from("vehicles")
+          .select("id, capacity_kg")
+          .in("id", vehicleIds),
+      ]);
+
+      if (ordersResult.error) throw ordersResult.error;
+      if (vehiclesResult.error) throw vehiclesResult.error;
 
       const orderWeights: Record<string, number> = {};
-      for (const o of orders || []) {
+      for (const o of ordersResult.data || []) {
         orderWeights[o.id] = o.weight_kg || 0;
       }
 
-      // Fetch vehicle capacities
-      const vehicleIds = Object.keys(vehicleOrderIds);
-      const { data: vehicles, error: vError } = await supabase
-        .from("vehicles")
-        .select("id, capacity_kg")
-        .in("id", vehicleIds);
-
-      if (vError) throw vError;
-
       const capacities: Record<string, number> = {};
-      for (const v of vehicles || []) {
+      for (const v of vehiclesResult.data || []) {
         capacities[v.id] = v.capacity_kg || 0;
       }
 

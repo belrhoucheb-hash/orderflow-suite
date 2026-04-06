@@ -1,11 +1,11 @@
-import * as XLSX from "xlsx";
 import type { BulkImportRow, BulkImportValidation, ColumnMapping } from "@/types/bulkImport";
 import { isValidAddress } from "@/components/inbox/utils";
 
 // ── Excel Parsing ───────────────────────────────────────────────────
 
 /** Parse an Excel (.xlsx/.xls) ArrayBuffer into { headers, rows } using the same shape as parseCSV */
-export function parseExcel(buffer: ArrayBuffer): { headers: string[]; rows: string[][] } {
+export async function parseExcel(buffer: ArrayBuffer): Promise<{ headers: string[]; rows: string[][] }> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return { headers: [], rows: [] };

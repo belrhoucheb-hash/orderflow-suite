@@ -6,8 +6,9 @@ import { emitOrderEvent } from "../_shared/eventPipeline.ts";
 // TODO: replace with tenant_settings lookup when multi-tenant is wired up
 const COMPANY_NAME = "Royalty Cargo";
 
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "https://orderflow-suite.vercel.app";
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -151,14 +152,16 @@ serve(async (req) => {
     if (!tenantIdStr) {
       const authHeader = req.headers.get("Authorization");
       if (authHeader) {
+        const authClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
         const token = authHeader.replace("Bearer ", "");
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          try {
-            const payload = JSON.parse(atob(parts[1]));
-            tenantIdStr = payload.app_metadata?.tenant_id;
-          } catch (e) {}
+        const { data: { user }, error: authError } = await authClient.auth.getUser(token);
+        if (authError || !user) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
+        tenantIdStr = user.app_metadata?.tenant_id;
       }
     }
 

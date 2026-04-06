@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedPortalRoute } from "@/components/ProtectedPortalRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Loader2 } from "lucide-react";
@@ -62,7 +63,14 @@ const Dispatch = lazy(() => import("@/pages/Dispatch"));
 const LiveTracking = lazy(() => import("@/pages/LiveTracking"));
 const Autonomie = lazy(() => import("@/pages/Autonomie"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+    },
+  },
+});
 
 function PageLoader() {
   return (
@@ -116,7 +124,7 @@ const App = () => (
 
             <Route path="/chauffeur" element={<ProtectedRoute><ErrorBoundary><Suspense fallback={<PageLoader />}><ChauffeurApp /></Suspense></ErrorBoundary></ProtectedRoute>} />
             <Route path="/track" element={<Suspense fallback={<PageLoader />}><TrackTrace /></Suspense>} />
-            <Route path="/portal" element={<Suspense fallback={<PageLoader />}><ClientPortal /></Suspense>}>
+            <Route path="/portal" element={<ProtectedPortalRoute><Suspense fallback={<PageLoader />}><ClientPortal /></Suspense></ProtectedPortalRoute>}>
               <Route index element={<Suspense fallback={<PageLoader />}><PortalOrders /></Suspense>} />
               <Route path="tracking" element={<Suspense fallback={<PageLoader />}><PortalTracking /></Suspense>} />
               <Route path="documenten" element={<Suspense fallback={<PageLoader />}><PortalDocuments /></Suspense>} />

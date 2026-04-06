@@ -43,8 +43,6 @@ export function useInbox() {
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [groupByClient, setGroupByClient] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
-  const [showPickupSuggestions, setShowPickupSuggestions] = useState(false);
-  const [showDeliverySuggestions, setShowDeliverySuggestions] = useState(false);
   const [loadingScenario, setLoadingScenario] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 

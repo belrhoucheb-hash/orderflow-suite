@@ -110,12 +110,16 @@ export default function TrackTrace() {
     }
   };
 
+  // Require a token parameter alongside the order number to prevent enumeration
+  const token = searchParams.get("token");
+  const qParam = searchParams.get("q");
+  const tokenRequired = !!qParam && !token;
+
   // Auto-search from URL ?q= param on mount
   useEffect(() => {
-    const q = searchParams.get("q");
-    if (q) {
-      setQuery(q);
-      handleSearchWithQuery(q);
+    if (qParam && !tokenRequired) {
+      setQuery(qParam);
+      handleSearchWithQuery(qParam);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -129,6 +133,18 @@ export default function TrackTrace() {
   };
 
   const currentStepIndex = order ? (STATUS_ORDER[order.status] ?? -1) : -1;
+
+  if (tokenRequired) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
+        <div className="h-10 w-10 rounded-lg bg-[#dc2626] flex items-center justify-center mb-4">
+          <Truck className="h-5 w-5 text-white" />
+        </div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">Ongeldige tracking link</h1>
+        <p className="text-gray-500 text-sm">Deze link is ongeldig of verlopen. Gebruik de link uit uw bevestigingsmail.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center px-4 py-12">

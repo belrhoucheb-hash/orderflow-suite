@@ -44,7 +44,7 @@ export function useNotifications() {
     },
     enabled: !!userId,
     staleTime: 5_000,
-    refetchInterval: 30_000, // Refetch every 30s as fallback
+    refetchInterval: 120_000, // Refetch every 2min as fallback (realtime handles instant updates)
   });
 
   // Subscribe to realtime inserts for this user

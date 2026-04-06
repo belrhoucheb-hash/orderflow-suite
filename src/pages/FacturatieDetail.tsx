@@ -10,6 +10,7 @@ import { useInvoiceById, useUpdateInvoiceStatus, useUpdateInvoiceLines, type Inv
 import { downloadInvoicePDF } from "@/lib/invoiceUtils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatCurrency, formatDateShort } from "@/lib/formatters";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,14 +28,6 @@ const statusStyles: Record<string, { bg: string; text: string; label: string }> 
   betaald: { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", label: "Betaald" },
   vervallen: { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-400", label: "Vervallen" },
 };
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(amount);
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 
 // Editable line type for local state (may have temporary IDs for new lines)
 interface EditableLine {
@@ -220,7 +213,7 @@ export default function FacturatieDetail() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title={`Factuur ${invoice.invoice_number}`}
-        subtitle={`${invoice.client_name} — ${formatDate(invoice.invoice_date)}`}
+        subtitle={`${invoice.client_name} — ${formatDateShort(invoice.invoice_date)}`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate("/facturatie")} className="gap-1.5">
@@ -284,10 +277,10 @@ export default function FacturatieDetail() {
             <span className="text-muted-foreground">Factuurnummer</span>
             <span className="font-mono font-medium">{invoice.invoice_number}</span>
             <span className="text-muted-foreground">Factuurdatum</span>
-            <span>{formatDate(invoice.invoice_date)}</span>
+            <span>{formatDateShort(invoice.invoice_date)}</span>
             <span className="text-muted-foreground">Vervaldatum</span>
             <span className={isOverdue ? "text-red-600 font-medium" : ""}>
-              {invoice.due_date ? formatDate(invoice.due_date) : "—"}
+              {invoice.due_date ? formatDateShort(invoice.due_date) : "—"}
             </span>
             <span className="text-muted-foreground">BTW percentage</span>
             <span>{invoice.btw_percentage}%</span>

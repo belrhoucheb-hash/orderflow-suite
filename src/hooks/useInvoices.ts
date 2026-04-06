@@ -637,16 +637,17 @@ export function useAutoInvoiceGeneration(enabled = true) {
             const allLines: Omit<InvoiceLine, "id" | "invoice_id" | "created_at">[] = [];
             let sortOrder = 0;
 
-            for (const order of clientOrders) {
-              // Fetch client rates
-              const { data: rates } = await supabase
-                .from("client_rates")
-                .select("*")
-                .eq("client_id", clientId)
-                .eq("is_active", true)
-                .order("rate_type");
+            // Fetch client rates once per client (outside the order loop)
+            const { data: rates } = await supabase
+              .from("client_rates")
+              .select("*")
+              .eq("client_id", clientId)
+              .eq("is_active", true)
+              .order("rate_type");
 
-              const clientRates = (rates ?? []) as ClientRate[];
+            const clientRates = (rates ?? []) as ClientRate[];
+
+            for (const order of clientOrders) {
 
               if (clientRates.length === 0) {
                 // No rates configured — add a placeholder line

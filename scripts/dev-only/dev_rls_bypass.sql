@@ -1,3 +1,4 @@
+-- ⚠️ DEV ONLY — NEVER run this on production! Bypasses all RLS policies.
 -- ============================================================
 -- DEV ONLY: RLS bypass for anon key on dev tenant
 -- Allows the anon/publishable key to read/write all data

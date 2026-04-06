@@ -97,13 +97,13 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
 
     if (isExcel) {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const buffer = e.target?.result as ArrayBuffer;
         if (!buffer || buffer.byteLength === 0) {
           toast.error("Bestand is leeg");
           return;
         }
-        const { headers: parsedHeaders, rows } = parseExcel(buffer);
+        const { headers: parsedHeaders, rows } = await parseExcel(buffer);
         handleParsed(parsedHeaders, rows);
       };
       reader.readAsArrayBuffer(file);

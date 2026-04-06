@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatTimeNL, formatDateWeekday } from "@/lib/formatters";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTrips, useUpdateTripStatus, useDispatchTrip, useTripsRealtime } from "@/hooks/useTrips";
 import { useDrivers } from "@/hooks/useDrivers";
@@ -34,12 +35,12 @@ import {
 // ─── Helpers ────────────────────────────────────────────────
 
 function formatTime(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+  if (!iso) return "\u2014";
+  return formatTimeNL(iso);
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" });
+  return formatDateWeekday(iso);
 }
 
 function getTodayISO(): string {

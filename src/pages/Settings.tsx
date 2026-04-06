@@ -937,7 +937,7 @@ const Settings = () => {
                 <Label className="text-sm font-semibold">Webhook Secret</Label>
                 <div className="flex gap-2">
                   <Input type="password" placeholder="whsec_..." className="flex-1 font-mono" />
-                  <Button variant="outline" onClick={() => toast.success("Webhook secret gegenereerd", { description: "whsec_" + Math.random().toString(36).slice(2, 18) })}>Genereer</Button>
+                  <Button variant="outline" onClick={() => toast.success("Webhook secret gegenereerd", { description: "whsec_" + crypto.randomUUID().replace(/-/g, "") })}>Genereer</Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Optioneel. Wordt meegestuurd als X-Webhook-Secret header voor verificatie.</p>
               </div>

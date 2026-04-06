@@ -289,58 +289,58 @@ function createExcelBuffer(aoa: string[][]): ArrayBuffer {
 }
 
 describe("parseExcel", () => {
-  it("parses a basic Excel file with headers and data rows", () => {
+  it("parses a basic Excel file with headers and data rows", async () => {
     const buffer = createExcelBuffer([
       ["klant", "ophaaladres", "afleveradres", "gewicht"],
       ["Janssen BV", "Keizersgracht 12, Amsterdam", "Stationsweg 3, Utrecht", "1500"],
       ["De Vries", "Havenweg 5, Rotterdam", "Industrieweg 10, Eindhoven", "2000"],
     ]);
-    const { headers, rows } = parseExcel(buffer);
+    const { headers, rows } = await parseExcel(buffer);
     expect(headers).toEqual(["klant", "ophaaladres", "afleveradres", "gewicht"]);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toEqual(["Janssen BV", "Keizersgracht 12, Amsterdam", "Stationsweg 3, Utrecht", "1500"]);
     expect(rows[1][0]).toBe("De Vries");
   });
 
-  it("returns empty for an empty workbook", () => {
+  it("returns empty for an empty workbook", async () => {
     const ws = XLSX.utils.aoa_to_sheet([]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-    const { headers, rows } = parseExcel(buf);
+    const { headers, rows } = await parseExcel(buf);
     expect(headers).toEqual([]);
     expect(rows).toEqual([]);
   });
 
-  it("skips blank rows in the data", () => {
+  it("skips blank rows in the data", async () => {
     const buffer = createExcelBuffer([
       ["klant", "gewicht"],
       ["A", "100"],
       ["", ""],
       ["B", "200"],
     ]);
-    const { rows } = parseExcel(buffer);
+    const { rows } = await parseExcel(buffer);
     expect(rows).toHaveLength(2);
     expect(rows[0][0]).toBe("A");
     expect(rows[1][0]).toBe("B");
   });
 
-  it("trims whitespace from headers and cells", () => {
+  it("trims whitespace from headers and cells", async () => {
     const buffer = createExcelBuffer([
       ["  klant  ", " gewicht "],
       [" Janssen BV ", " 1500 "],
     ]);
-    const { headers, rows } = parseExcel(buffer);
+    const { headers, rows } = await parseExcel(buffer);
     expect(headers).toEqual(["klant", "gewicht"]);
     expect(rows[0]).toEqual(["Janssen BV", "1500"]);
   });
 
-  it("integrates with autoDetectColumns and mapRowsToImportData", () => {
+  it("integrates with autoDetectColumns and mapRowsToImportData", async () => {
     const buffer = createExcelBuffer([
       ["klant", "ophaaladres", "afleveradres", "gewicht", "aantal"],
       ["Test BV", "Straat 1, Amsterdam", "Weg 2, Rotterdam", "500", "10"],
     ]);
-    const { headers, rows } = parseExcel(buffer);
+    const { headers, rows } = await parseExcel(buffer);
     const mappings = autoDetectColumns(headers);
     const importRows = mapRowsToImportData(rows, mappings);
     expect(importRows).toHaveLength(1);
