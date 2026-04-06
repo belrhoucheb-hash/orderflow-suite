@@ -78,7 +78,7 @@ export function useInvoices(options: UseInvoicesOptions = {}) {
     queryFn: async () => {
       let query = supabase
         .from("invoices")
-        .select("*", { count: "exact" })
+        .select("id, tenant_id, invoice_number, client_id, client_name, client_address, client_btw_number, client_kvk_number, status, invoice_date, due_date, subtotal, btw_percentage, btw_amount, total, notes, pdf_url, created_at, updated_at", { count: "exact" })
         .order("invoice_date", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -197,7 +197,7 @@ export function useInvoiceById(id: string | null) {
       // First try with invoice_lines join
       const { data, error } = await supabase
         .from("invoices")
-        .select("*, invoice_lines(*)")
+        .select("id, tenant_id, invoice_number, client_id, client_name, client_address, client_btw_number, client_kvk_number, status, invoice_date, due_date, subtotal, btw_percentage, btw_amount, total, notes, pdf_url, created_at, updated_at, invoice_lines(id, invoice_id, order_id, description, quantity, unit, unit_price, total, sort_order, created_at)")
         .eq("id", id!)
         .single();
 
@@ -212,7 +212,7 @@ export function useInvoiceById(id: string | null) {
       // Fallback: fetch invoice without lines (in case relation doesn't exist yet)
       const { data: fallback, error: fallbackErr } = await supabase
         .from("invoices")
-        .select("*")
+        .select("id, tenant_id, invoice_number, client_id, client_name, client_address, client_btw_number, client_kvk_number, status, invoice_date, due_date, subtotal, btw_percentage, btw_amount, total, notes, pdf_url, created_at, updated_at")
         .eq("id", id!)
         .single();
 
@@ -494,12 +494,12 @@ export function useCalculateOrderCost(orderId: string | null, clientId: string |
       const [orderResult, ratesResult] = await Promise.all([
         supabase
           .from("orders")
-          .select("*")
+          .select("id, quantity, pickup_address, delivery_address, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng")
           .eq("id", orderId!)
           .single(),
         supabase
           .from("client_rates")
-          .select("*")
+          .select("id, client_id, rate_type, description, amount, currency, is_active, created_at")
           .eq("client_id", clientId!)
           .eq("is_active", true)
           .order("rate_type"),
@@ -640,7 +640,7 @@ export function useAutoInvoiceGeneration(enabled = true) {
             // Fetch client rates once per client (outside the order loop)
             const { data: rates } = await supabase
               .from("client_rates")
-              .select("*")
+              .select("id, client_id, rate_type, description, amount, currency, is_active, created_at")
               .eq("client_id", clientId)
               .eq("is_active", true)
               .order("rate_type");
@@ -648,7 +648,6 @@ export function useAutoInvoiceGeneration(enabled = true) {
             const clientRates = (rates ?? []) as ClientRate[];
 
             for (const order of clientOrders) {
-
               if (clientRates.length === 0) {
                 // No rates configured — add a placeholder line
                 allLines.push({

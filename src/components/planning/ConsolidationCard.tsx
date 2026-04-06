@@ -1,3 +1,4 @@
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,8 @@ interface Props {
   onReject: (groupId: string) => void;
 }
 
-export function ConsolidationCard({ group, onApprove, onReject }: Props) {
+// NOTE: Parent should wrap `onApprove` and `onReject` in useCallback to preserve memo benefits.
+function ConsolidationCardInner({ group, onApprove, onReject }: Props) {
   const statusInfo = CONSOLIDATION_STATUS_LABELS[group.status];
   const isProposal = group.status === "VOORSTEL";
 
@@ -93,3 +95,5 @@ export function ConsolidationCard({ group, onApprove, onReject }: Props) {
     </Card>
   );
 }
+
+export const ConsolidationCard = React.memo(ConsolidationCardInner);

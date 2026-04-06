@@ -42,7 +42,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
     queryFn: async () => {
       let query = (supabase as any)
         .from("orders")
-        .select("*", { count: "exact" })
+        .select("id, order_number, status, client_name, pickup_address, delivery_address, weight_kg, vehicle_id, priority, source_email_from, internal_note, time_window_end, created_at, order_type, parent_order_id", { count: "exact" })
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -129,7 +129,7 @@ export function useOrder(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
+        .select("id, order_number, status, client_name, pickup_address, delivery_address, weight_kg, vehicle_id, priority, source_email_from, internal_note, time_window_end, created_at")
         .eq("id", id)
         .single();
         

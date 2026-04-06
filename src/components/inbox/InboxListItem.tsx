@@ -1,3 +1,4 @@
+import React from "react";
 import { Paperclip } from "lucide-react";
 import type { OrderDraft } from "./types";
 import { formatDate, getDeadlineInfo } from "./utils";
@@ -13,7 +14,8 @@ interface Props {
   onClick: () => void;
 }
 
-export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, onClick }: Props) {
+// NOTE: Parent should wrap `onClick` and `onBulkToggle` in useCallback to preserve memo benefits.
+function InboxListItemInner({ draft, isSelected, isBulkChecked, onBulkToggle, onClick }: Props) {
   const deadline = getDeadlineInfo(draft.received_at);
   const isUrgent = deadline.urgency === "red";
   const threadType = draft.thread_type || "new";
@@ -98,3 +100,5 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
     </div>
   );
 }
+
+export const InboxListItem = React.memo(InboxListItemInner);

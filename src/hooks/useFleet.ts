@@ -58,7 +58,7 @@ export function useFleetVehicles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
-        .select("*")
+        .select("id, code, name, plate, type, brand, build_year, capacity_kg, capacity_pallets, cargo_length_cm, cargo_width_cm, cargo_height_cm, features, status, assigned_driver, fuel_consumption, is_active")
         .order("type", { ascending: true });
       if (error) throw error;
       return (data ?? []).map((v: any) => ({
@@ -92,7 +92,7 @@ export function useVehicleById(id: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
-        .select("*")
+        .select("id, code, name, plate, type, brand, build_year, capacity_kg, capacity_pallets, cargo_length_cm, cargo_width_cm, cargo_height_cm, features, status, assigned_driver, fuel_consumption, is_active")
         .eq("id", id!)
         .single();
       if (error) throw error;
@@ -128,7 +128,7 @@ export function useVehicleDocuments(vehicleId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicle_documents")
-        .select("*")
+        .select("id, vehicle_id, doc_type, expiry_date, file_url, notes, created_at")
         .eq("vehicle_id", vehicleId!)
         .order("expiry_date", { ascending: true });
       if (error) throw error;
@@ -145,7 +145,7 @@ export function useVehicleMaintenance(vehicleId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicle_maintenance")
-        .select("*")
+        .select("id, vehicle_id, maintenance_type, description, mileage_km, scheduled_date, completed_date, cost, created_at")
         .eq("vehicle_id", vehicleId!)
         .order("scheduled_date", { ascending: false });
       if (error) throw error;
@@ -200,7 +200,7 @@ export function useUpcomingMaintenance() {
       const today = new Date().toISOString().split("T")[0];
       const { data, error } = await supabase
         .from("vehicle_maintenance")
-        .select("*, vehicles(name, plate)")
+        .select("id, vehicle_id, maintenance_type, description, mileage_km, scheduled_date, completed_date, cost, created_at, vehicles(name, plate)")
         .is("completed_date", null)
         .lte("scheduled_date", today)
         .order("scheduled_date", { ascending: true });
@@ -236,7 +236,7 @@ export function useVehicleAvailability(vehicleId: string | undefined, startDate?
     queryFn: async () => {
       let query = supabase
         .from("vehicle_availability")
-        .select("*")
+        .select("id, vehicle_id, date, status, reason")
         .eq("vehicle_id", vehicleId!);
       if (startDate) query = query.gte("date", startDate);
       if (endDate) query = query.lte("date", endDate);

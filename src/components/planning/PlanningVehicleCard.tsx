@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { 
@@ -32,7 +32,8 @@ import {
 } from "./planningUtils";
 import { PlanningOrderRow } from "./PlanningOrderRow";
 
-export function PlanningVehicleCard({
+// NOTE: Parent should wrap callback props (onRemove, onReorder, onOptimize, onHoverVehicle, onHoverOrder, onStartTimeChange, onDriverChange) in useCallback to preserve memo benefits.
+function PlanningVehicleCardInner({
   vehicle,
   assigned,
   onRemove,
@@ -337,3 +338,5 @@ export function PlanningVehicleCard({
     </Card>
   );
 }
+
+export const PlanningVehicleCard = React.memo(PlanningVehicleCardInner);

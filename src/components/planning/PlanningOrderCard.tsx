@@ -1,3 +1,4 @@
+import React from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { MapPin, AlertTriangle, Snowflake, Clock } from "lucide-react";
@@ -20,7 +21,8 @@ function isTightWindow(from: string, to: string): boolean {
   return diffMinutes > 0 && diffMinutes < 120;
 }
 
-export function PlanningOrderCard({
+// NOTE: Parent should wrap `onHover` in useCallback to preserve memo benefits.
+function PlanningOrderCardInner({
   order,
   overlay,
   onHover,
@@ -104,3 +106,5 @@ export function PlanningOrderCard({
     </div>
   );
 }
+
+export const PlanningOrderCard = React.memo(PlanningOrderCardInner);

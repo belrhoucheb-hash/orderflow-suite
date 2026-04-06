@@ -56,7 +56,7 @@ export function useClients(search?: string) {
       // and join the results in memory by client name.
       let clientQuery = supabase
         .from("clients")
-        .select("*")
+        .select("id, name, contact_person, email, phone, address, zipcode, city, country, kvk_number, btw_number, payment_terms, is_active, created_at")
         .order("name")
         .limit(200);
 
@@ -96,7 +96,7 @@ export function useClientLocations(clientId: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("client_locations")
-        .select("*")
+        .select("id, client_id, label, address, zipcode, city, country, location_type, time_window_start, time_window_end, max_vehicle_length, notes, created_at")
         .eq("client_id", clientId!)
         .order("label");
       if (error) throw error;
@@ -113,7 +113,7 @@ export function useClientRates(clientId: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("client_rates")
-        .select("*")
+        .select("id, client_id, rate_type, description, amount, currency, is_active, created_at")
         .eq("client_id", clientId!)
         .order("rate_type");
       if (error) throw error;
@@ -130,7 +130,7 @@ export function useClientOrders(clientName: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
+        .select("id, order_number, status, pickup_address, delivery_address, created_at")
         .ilike("client_name", `%${clientName}%`)
         .order("created_at", { ascending: false })
         .limit(50);
