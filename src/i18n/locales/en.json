@@ -39,7 +39,72 @@
     "status": "Status",
     "actions": "Actions",
     "date": "Date",
-    "total": "Total"
+    "total": "Total",
+    "all": "All",
+    "new": "New",
+    "active": "Active",
+    "onTime": "On time",
+    "delayed": "Delayed",
+    "exportPDF": "Export PDF",
+    "exportCSV": "Export CSV",
+    "exportExcel": "Export Excel"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Overview of your TMS platform"
+    },
+    "orders": {
+      "title": "Order List",
+      "search": "Search by order number or client...",
+      "newOrder": "New order",
+      "import": "Import"
+    },
+    "clients": {
+      "title": "Clients",
+      "newClient": "New client"
+    },
+    "planning": {
+      "title": "Planning Board"
+    },
+    "dispatch": {
+      "title": "Dispatch"
+    },
+    "tracking": {
+      "title": "Live Tracking",
+      "subtitle": "Real-time overview of all active trips"
+    },
+    "fleet": {
+      "title": "Fleet",
+      "newVehicle": "New vehicle"
+    },
+    "invoicing": {
+      "title": "Invoicing",
+      "newInvoice": "New invoice"
+    },
+    "reporting": {
+      "title": "Reporting"
+    },
+    "exceptions": {
+      "title": "Exceptions"
+    },
+    "autonomy": {
+      "title": "Autonomy"
+    },
+    "settings": {
+      "title": "Settings",
+      "subtitle": "Manage your TMS platform configuration and master data.",
+      "tabs": {
+        "general": "General",
+        "masterData": "Master Data",
+        "branding": "Branding",
+        "notifications": "Notifications",
+        "sms": "SMS",
+        "integrations": "Integrations"
+      },
+      "language": "Language",
+      "languageDescription": "Choose the application language."
+    }
   },
   "orders": {
     "title": "Orders",

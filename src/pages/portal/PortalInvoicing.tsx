@@ -11,11 +11,10 @@ interface Invoice {
   id: string;
   invoice_number: string;
   status: string;
-  total_amount: number;
-  tax_amount: number;
-  issued_at: string;
-  due_date: string;
-  paid_at: string | null;
+  total: number;
+  btw_amount: number;
+  invoice_date: string;
+  due_date: string | null;
   pdf_url: string | null;
 }
 
@@ -49,7 +48,7 @@ export default function PortalInvoicing() {
         .from("invoices" as any)
         .select("*")
         .eq("client_id", portalUser.client_id)
-        .order("issued_at", { ascending: false });
+        .order("invoice_date", { ascending: false });
 
       if (!error) setInvoices((data ?? []) as Invoice[]);
       setLoading(false);
@@ -60,11 +59,11 @@ export default function PortalInvoicing() {
 
   const totalOutstanding = invoices
     .filter((i) => i.status === "SENT" || i.status === "OVERDUE")
-    .reduce((sum, i) => sum + (i.total_amount ?? 0), 0);
+    .reduce((sum, i) => sum + (i.total ?? 0), 0);
 
   const totalPaid = invoices
     .filter((i) => i.status === "PAID")
-    .reduce((sum, i) => sum + (i.total_amount ?? 0), 0);
+    .reduce((sum, i) => sum + (i.total ?? 0), 0);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(amount);
@@ -132,16 +131,16 @@ export default function PortalInvoicing() {
                       </Badge>
                     </div>
                     <p className="text-xs text-gray-500">
-                      Datum: {new Date(invoice.issued_at).toLocaleDateString("nl-NL")}
+                      Datum: {new Date(invoice.invoice_date).toLocaleDateString("nl-NL")}
                       {invoice.due_date && ` | Vervaldatum: ${new Date(invoice.due_date).toLocaleDateString("nl-NL")}`}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-gray-900">
-                      {formatCurrency(invoice.total_amount)}
+                      {formatCurrency(invoice.total)}
                     </p>
                     <p className="text-xs text-gray-400">
-                      incl. {formatCurrency(invoice.tax_amount)} BTW
+                      incl. {formatCurrency(invoice.btw_amount)} BTW
                     </p>
                   </div>
                   {invoice.pdf_url && (

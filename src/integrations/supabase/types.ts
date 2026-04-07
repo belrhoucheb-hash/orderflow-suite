@@ -934,6 +934,9 @@ export type Database = {
           invoice_ref: string | null
           is_weight_per_unit: boolean
           missing_fields: string[] | null
+          client_id: string | null
+          notes: string | null
+          notification_preferences: Json
           order_number: number
           parent_order_id: string | null
           pickup_address: string | null
@@ -942,10 +945,14 @@ export type Database = {
           pod_signature_url: string | null
           pod_signed_at: string | null
           pod_signed_by: string | null
+          portal_submitted_at: string | null
+          portal_submitted_by: string | null
           priority: string
           quantity: number | null
           received_at: string | null
+          reference: string | null
           requirements: string[] | null
+          source: string
           source_email_body: string | null
           source_email_from: string | null
           source_email_subject: string | null
@@ -972,6 +979,7 @@ export type Database = {
           billing_ready_at?: string | null
           billing_status?: string | null
           changes_detected?: Json | null
+          client_id?: string | null
           client_name?: string | null
           cmr_generated_at?: string | null
           cmr_number?: string | null
@@ -992,6 +1000,8 @@ export type Database = {
           invoice_ref?: string | null
           is_weight_per_unit?: boolean
           missing_fields?: string[] | null
+          notes?: string | null
+          notification_preferences?: Json
           order_number?: number
           parent_order_id?: string | null
           pickup_address?: string | null
@@ -1000,10 +1010,14 @@ export type Database = {
           pod_signature_url?: string | null
           pod_signed_at?: string | null
           pod_signed_by?: string | null
+          portal_submitted_at?: string | null
+          portal_submitted_by?: string | null
           priority?: string
           quantity?: number | null
           received_at?: string | null
+          reference?: string | null
           requirements?: string[] | null
+          source?: string
           source_email_body?: string | null
           source_email_from?: string | null
           source_email_subject?: string | null
@@ -1030,6 +1044,7 @@ export type Database = {
           billing_ready_at?: string | null
           billing_status?: string | null
           changes_detected?: Json | null
+          client_id?: string | null
           client_name?: string | null
           cmr_generated_at?: string | null
           cmr_number?: string | null
@@ -1050,6 +1065,8 @@ export type Database = {
           invoice_ref?: string | null
           is_weight_per_unit?: boolean
           missing_fields?: string[] | null
+          notes?: string | null
+          notification_preferences?: Json
           order_number?: number
           parent_order_id?: string | null
           pickup_address?: string | null
@@ -1058,10 +1075,14 @@ export type Database = {
           pod_signature_url?: string | null
           pod_signed_at?: string | null
           pod_signed_by?: string | null
+          portal_submitted_at?: string | null
+          portal_submitted_by?: string | null
           priority?: string
           quantity?: number | null
           received_at?: string | null
+          reference?: string | null
           requirements?: string[] | null
+          source?: string
           source_email_body?: string | null
           source_email_from?: string | null
           source_email_subject?: string | null

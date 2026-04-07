@@ -220,7 +220,7 @@ export default function PortalSettings() {
                 >
                   <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{loc.name}</p>
+                    <p className="text-sm font-medium text-gray-900">{loc.label ?? loc.name}</p>
                     <p className="text-xs text-gray-500 truncate">{loc.address}</p>
                     {loc.time_window_start && loc.time_window_end && (
                       <p className="text-xs text-gray-400">

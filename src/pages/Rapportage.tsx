@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   exportOrderReport,
   exportOrdersCSV,
+  exportOrdersExcel,
   type ReportOrder,
 } from "@/utils/reportExporter";
 import {
@@ -456,6 +457,18 @@ const Rapportage = () => {
     exportOrdersCSV(reportOrders);
   };
 
+  const handleExportExcel = () => {
+    const reportOrders: ReportOrder[] = filteredOrders.map((o) => ({
+      id: o.id,
+      created_at: o.created_at,
+      status: o.status,
+      client_name: o.client_name,
+      vehicle_id: o.vehicle_id,
+      updated_at: o.updated_at,
+    }));
+    exportOrdersExcel(reportOrders);
+  };
+
   if (isLoading) {
     return <LoadingState message="Rapportage laden..." />;
   }
@@ -516,6 +529,13 @@ const Rapportage = () => {
             >
               <FileSpreadsheet className="h-3.5 w-3.5" />
               Exporteer CSV
+            </button>
+            <button
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-foreground text-xs font-medium hover:bg-muted transition-colors"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Exporteer Excel
             </button>
           </div>
 

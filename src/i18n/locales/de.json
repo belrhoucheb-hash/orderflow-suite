@@ -2,12 +2,12 @@
   "nav": {
     "dashboard": "Dashboard",
     "inbox": "Posteingang",
-    "orders": "Aufträge",
+    "orders": "Auftr\u00e4ge",
     "clients": "Kunden",
     "planning": "Planungstafel",
     "dispatch": "Disposition",
     "tracking": "Live-Tracking",
-    "trips": "Fahrtenübersicht",
+    "trips": "Fahrten\u00fcbersicht",
     "drivers": "Fahrer",
     "fleet": "Flotte",
     "reporting": "Berichte",
@@ -23,26 +23,91 @@
   "common": {
     "save": "Speichern",
     "cancel": "Abbrechen",
-    "delete": "Löschen",
+    "delete": "L\u00f6schen",
     "edit": "Bearbeiten",
-    "add": "Hinzufügen",
+    "add": "Hinzuf\u00fcgen",
     "search": "Suchen",
     "filter": "Filtern",
     "export": "Exportieren",
     "import": "Importieren",
     "loading": "Laden...",
     "noResults": "Keine Ergebnisse",
-    "confirm": "Bestätigen",
-    "back": "Zurück",
+    "confirm": "Best\u00e4tigen",
+    "back": "Zur\u00fcck",
     "next": "Weiter",
-    "close": "Schließen",
+    "close": "Schlie\u00dfen",
     "status": "Status",
     "actions": "Aktionen",
     "date": "Datum",
-    "total": "Gesamt"
+    "total": "Gesamt",
+    "all": "Alle",
+    "new": "Neu",
+    "active": "Aktiv",
+    "onTime": "P\u00fcnktlich",
+    "delayed": "Versp\u00e4tet",
+    "exportPDF": "PDF exportieren",
+    "exportCSV": "CSV exportieren",
+    "exportExcel": "Excel exportieren"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "\u00dcbersicht Ihrer TMS-Plattform"
+    },
+    "orders": {
+      "title": "Auftragsliste",
+      "search": "Suche nach Auftragsnummer oder Kunde...",
+      "newOrder": "Neuer Auftrag",
+      "import": "Importieren"
+    },
+    "clients": {
+      "title": "Kunden",
+      "newClient": "Neuer Kunde"
+    },
+    "planning": {
+      "title": "Planungstafel"
+    },
+    "dispatch": {
+      "title": "Disposition"
+    },
+    "tracking": {
+      "title": "Live-Tracking",
+      "subtitle": "Echtzeit-\u00dcbersicht aller aktiven Fahrten"
+    },
+    "fleet": {
+      "title": "Flotte",
+      "newVehicle": "Neues Fahrzeug"
+    },
+    "invoicing": {
+      "title": "Fakturierung",
+      "newInvoice": "Neue Rechnung"
+    },
+    "reporting": {
+      "title": "Berichte"
+    },
+    "exceptions": {
+      "title": "Ausnahmen"
+    },
+    "autonomy": {
+      "title": "Autonomie"
+    },
+    "settings": {
+      "title": "Einstellungen",
+      "subtitle": "Verwalten Sie die Konfiguration und Stammdaten Ihrer TMS-Plattform.",
+      "tabs": {
+        "general": "Allgemein",
+        "masterData": "Stammdaten",
+        "branding": "Branding",
+        "notifications": "Benachrichtigungen",
+        "sms": "SMS",
+        "integrations": "Integrationen"
+      },
+      "language": "Sprache",
+      "languageDescription": "W\u00e4hlen Sie die Anwendungssprache."
+    }
   },
   "orders": {
-    "title": "Aufträge",
+    "title": "Auftr\u00e4ge",
     "newOrder": "Neuer Auftrag",
     "import": "Importieren",
     "pickup": "Abholung",
@@ -64,18 +129,18 @@
     "newInvoice": "Neue Rechnung",
     "invoiceNumber": "Rechnungsnummer",
     "amount": "Betrag",
-    "dueDate": "Fälligkeitsdatum",
+    "dueDate": "F\u00e4lligkeitsdatum",
     "status": {
       "concept": "Entwurf",
       "sent": "Gesendet",
       "paid": "Bezahlt",
-      "overdue": "Überfällig"
+      "overdue": "\u00dcberf\u00e4llig"
     }
   },
   "settings": {
     "title": "Einstellungen",
     "masterData": "Stammdaten",
     "language": "Sprache",
-    "languageDescription": "Wählen Sie die Anwendungssprache."
+    "languageDescription": "W\u00e4hlen Sie die Anwendungssprache."
   }
 }

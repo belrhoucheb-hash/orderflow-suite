@@ -39,7 +39,72 @@
     "status": "Status",
     "actions": "Acties",
     "date": "Datum",
-    "total": "Totaal"
+    "total": "Totaal",
+    "all": "Alle",
+    "new": "Nieuw",
+    "active": "Actief",
+    "onTime": "Op tijd",
+    "delayed": "Vertraagd",
+    "exportPDF": "Exporteer PDF",
+    "exportCSV": "Exporteer CSV",
+    "exportExcel": "Exporteer Excel"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Overzicht van uw TMS platform"
+    },
+    "orders": {
+      "title": "Orderlijst",
+      "search": "Zoek op ordernummer of klant...",
+      "newOrder": "Nieuwe order",
+      "import": "Import"
+    },
+    "clients": {
+      "title": "Klanten",
+      "newClient": "Nieuwe klant"
+    },
+    "planning": {
+      "title": "Planbord"
+    },
+    "dispatch": {
+      "title": "Dispatch"
+    },
+    "tracking": {
+      "title": "Live Tracking",
+      "subtitle": "Real-time overzicht van alle actieve ritten"
+    },
+    "fleet": {
+      "title": "Vloot",
+      "newVehicle": "Nieuw voertuig"
+    },
+    "invoicing": {
+      "title": "Facturatie",
+      "newInvoice": "Nieuwe factuur"
+    },
+    "reporting": {
+      "title": "Rapportage"
+    },
+    "exceptions": {
+      "title": "Uitzonderingen"
+    },
+    "autonomy": {
+      "title": "Autonomie"
+    },
+    "settings": {
+      "title": "Instellingen",
+      "subtitle": "Beheer uw TMS platform configuratie en stamgegevens.",
+      "tabs": {
+        "general": "Algemeen",
+        "masterData": "Stamgegevens",
+        "branding": "Branding",
+        "notifications": "Notificaties",
+        "sms": "SMS",
+        "integrations": "Integraties"
+      },
+      "language": "Taal",
+      "languageDescription": "Kies de taal van de applicatie."
+    }
   },
   "orders": {
     "title": "Orders",

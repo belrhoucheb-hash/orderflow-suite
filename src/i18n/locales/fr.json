@@ -1,20 +1,20 @@
 {
   "nav": {
     "dashboard": "Tableau de bord",
-    "inbox": "Boîte de réception",
+    "inbox": "Bo\u00eete de r\u00e9ception",
     "orders": "Commandes",
     "clients": "Clients",
     "planning": "Tableau de planification",
-    "dispatch": "Expédition",
+    "dispatch": "Exp\u00e9dition",
     "tracking": "Suivi en direct",
-    "trips": "Aperçu des trajets",
+    "trips": "Aper\u00e7u des trajets",
     "drivers": "Chauffeurs",
     "fleet": "Flotte",
     "reporting": "Rapports",
     "exceptions": "Exceptions",
     "autonomy": "Autonomie",
     "invoicing": "Facturation",
-    "settings": "Paramètres",
+    "settings": "Param\u00e8tres",
     "users": "Utilisateurs",
     "navigation": "Navigation",
     "admin": "Admin",
@@ -31,7 +31,7 @@
     "export": "Exporter",
     "import": "Importer",
     "loading": "Chargement...",
-    "noResults": "Aucun résultat",
+    "noResults": "Aucun r\u00e9sultat",
     "confirm": "Confirmer",
     "back": "Retour",
     "next": "Suivant",
@@ -39,42 +39,107 @@
     "status": "Statut",
     "actions": "Actions",
     "date": "Date",
-    "total": "Total"
+    "total": "Total",
+    "all": "Tous",
+    "new": "Nouveau",
+    "active": "Actif",
+    "onTime": "\u00c0 l'heure",
+    "delayed": "Retard\u00e9",
+    "exportPDF": "Exporter PDF",
+    "exportCSV": "Exporter CSV",
+    "exportExcel": "Exporter Excel"
+  },
+  "pages": {
+    "dashboard": {
+      "title": "Tableau de bord",
+      "subtitle": "Aper\u00e7u de votre plateforme TMS"
+    },
+    "orders": {
+      "title": "Liste des commandes",
+      "search": "Rechercher par num\u00e9ro de commande ou client...",
+      "newOrder": "Nouvelle commande",
+      "import": "Importer"
+    },
+    "clients": {
+      "title": "Clients",
+      "newClient": "Nouveau client"
+    },
+    "planning": {
+      "title": "Tableau de planification"
+    },
+    "dispatch": {
+      "title": "Exp\u00e9dition"
+    },
+    "tracking": {
+      "title": "Suivi en direct",
+      "subtitle": "Vue en temps r\u00e9el de tous les trajets actifs"
+    },
+    "fleet": {
+      "title": "Flotte",
+      "newVehicle": "Nouveau v\u00e9hicule"
+    },
+    "invoicing": {
+      "title": "Facturation",
+      "newInvoice": "Nouvelle facture"
+    },
+    "reporting": {
+      "title": "Rapports"
+    },
+    "exceptions": {
+      "title": "Exceptions"
+    },
+    "autonomy": {
+      "title": "Autonomie"
+    },
+    "settings": {
+      "title": "Param\u00e8tres",
+      "subtitle": "G\u00e9rez la configuration et les donn\u00e9es de base de votre plateforme TMS.",
+      "tabs": {
+        "general": "G\u00e9n\u00e9ral",
+        "masterData": "Donn\u00e9es de base",
+        "branding": "Image de marque",
+        "notifications": "Notifications",
+        "sms": "SMS",
+        "integrations": "Int\u00e9grations"
+      },
+      "language": "Langue",
+      "languageDescription": "Choisissez la langue de l'application."
+    }
   },
   "orders": {
     "title": "Commandes",
     "newOrder": "Nouvelle commande",
     "import": "Importer",
-    "pickup": "Enlèvement",
+    "pickup": "Enl\u00e8vement",
     "delivery": "Livraison",
     "client": "Client",
-    "reference": "Référence",
+    "reference": "R\u00e9f\u00e9rence",
     "weight": "Poids",
-    "quantity": "Quantité",
+    "quantity": "Quantit\u00e9",
     "status": {
       "draft": "Brouillon",
       "pending": "En attente",
-      "planned": "Planifié",
+      "planned": "Planifi\u00e9",
       "in_transit": "En transit",
-      "delivered": "Livré"
+      "delivered": "Livr\u00e9"
     }
   },
   "invoicing": {
     "title": "Facturation",
     "newInvoice": "Nouvelle facture",
-    "invoiceNumber": "Numéro de facture",
+    "invoiceNumber": "Num\u00e9ro de facture",
     "amount": "Montant",
-    "dueDate": "Date d'échéance",
+    "dueDate": "Date d'\u00e9ch\u00e9ance",
     "status": {
       "concept": "Brouillon",
-      "sent": "Envoyé",
-      "paid": "Payé",
+      "sent": "Envoy\u00e9",
+      "paid": "Pay\u00e9",
       "overdue": "En retard"
     }
   },
   "settings": {
-    "title": "Paramètres",
-    "masterData": "Données de base",
+    "title": "Param\u00e8tres",
+    "masterData": "Donn\u00e9es de base",
     "language": "Langue",
     "languageDescription": "Choisissez la langue de l'application."
   }

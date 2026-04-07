@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { vi, describe, it, expect } from "vitest";
 import { Package, Truck, Search as SearchIcon } from "lucide-react";
 
@@ -118,12 +118,16 @@ describe("SearchInput", () => {
     expect(screen.getByPlaceholderText("Zoeken...")).toBeInTheDocument();
   });
 
-  it("calls onChange on input", async () => {
+  it("calls onChange on input after debounce", async () => {
+    vi.useFakeTimers();
     const onChange = vi.fn();
     const { SearchInput } = await import("@/components/ui/SearchInput");
-    render(<SearchInput value="" onChange={onChange} />);
+    render(<SearchInput value="" onChange={onChange} debounceMs={300} />);
     fireEvent.change(screen.getByPlaceholderText("Zoeken..."), { target: { value: "test" } });
+    expect(onChange).not.toHaveBeenCalledWith("test");
+    act(() => { vi.advanceTimersByTime(300); });
     expect(onChange).toHaveBeenCalledWith("test");
+    vi.useRealTimers();
   });
 
   it("shows clear button when value is non-empty", async () => {
