@@ -3,6 +3,24 @@ import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import nl from "@/i18n/locales/nl.json";
+
+function resolveKey(obj: any, path: string): string {
+  const parts = path.split(".");
+  let cur = obj;
+  for (const p of parts) {
+    if (cur && typeof cur === "object" && p in cur) cur = cur[p];
+    else return path;
+  }
+  return typeof cur === "string" ? cur : path;
+}
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => resolveKey(nl, key),
+    i18n: { language: "nl", changeLanguage: vi.fn(), on: vi.fn(), off: vi.fn() },
+  }),
+}));
 
 // ── Hoisted mocks ──────────────────────────────────────────────────
 const { mockUseInvoices, mockCreateInvoice, mockDownloadCSV, mockDownloadUBL } = vi.hoisted(() => ({

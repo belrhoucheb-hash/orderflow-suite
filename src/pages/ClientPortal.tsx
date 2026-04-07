@@ -97,7 +97,7 @@ export default function ClientPortal() {
           const { data: clientMatch } = await supabase
             .from("clients")
             .select("id, name, tenant_id")
-            .eq("contact_email", user.email ?? "")
+            .eq("email", user.email ?? "")
             .maybeSingle();
 
           if (clientMatch) {
@@ -128,14 +128,14 @@ export default function ClientPortal() {
         if (resolvedTenantId) {
           const { data: tenant } = await supabase
             .from("tenants")
-            .select("name, logo, primary_color")
+            .select("name, logo_url, primary_color")
             .eq("id", resolvedTenantId)
             .maybeSingle();
 
           if (tenant) {
             setTenantBranding({
               name: tenant.name,
-              logo: tenant.logo ?? null,
+              logo: tenant.logo_url ?? null,
               primaryColor: (tenant.primary_color as string) ?? "#dc2626",
             });
           }

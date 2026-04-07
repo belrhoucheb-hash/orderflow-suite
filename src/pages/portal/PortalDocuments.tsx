@@ -35,38 +35,50 @@ export default function PortalDocuments() {
     const load = async () => {
       setLoading(true);
 
-      // Fetch POD documents from proof_of_delivery table via orders
-      const { data: pods, error: podErr } = await supabase
-        .from("proof_of_delivery" as any)
-        .select("id, trip_stop_id, photo_url, signature_url, created_at, trip_stops!inner(order_id, orders!inner(order_number, client_id))")
-        .eq("trip_stops.orders.client_id", portalUser!.client_id);
+      // Fetch orders for this client, then look up their POD records
+      const { data: clientOrders } = await supabase
+        .from("orders")
+        .select("id, order_number")
+        .eq("client_id", portalUser!.client_id);
 
-      // Build documents list from available sources
       const docs: Document[] = [];
 
-      if (pods && !podErr) {
-        for (const pod of pods as any[]) {
-          const orderNum = pod.trip_stops?.orders?.order_number;
-          const orderId = pod.trip_stops?.order_id;
-          if (pod.photo_url) {
-            docs.push({
-              id: `pod-photo-${pod.id}`,
-              order_id: orderId,
-              order_number: orderNum,
-              type: "POD",
-              file_url: pod.photo_url,
-              created_at: pod.created_at,
-            });
-          }
-          if (pod.signature_url) {
-            docs.push({
-              id: `pod-sig-${pod.id}`,
-              order_id: orderId,
-              order_number: orderNum,
-              type: "POD",
-              file_url: pod.signature_url,
-              created_at: pod.created_at,
-            });
+      if (clientOrders && clientOrders.length > 0) {
+        const orderIds = clientOrders.map((o) => o.id);
+        const orderMap = new Map(clientOrders.map((o) => [o.id, o.order_number]));
+
+        const { data: pods, error: podErr } = await supabase
+          .from("proof_of_delivery" as any)
+          .select("id, order_id, photos, signature_url, created_at")
+          .in("order_id", orderIds);
+
+        if (pods && !podErr) {
+          for (const pod of pods as any[]) {
+            const orderNum = orderMap.get(pod.order_id) ?? 0;
+            // photos is a JSONB array of URLs
+            const photoUrls = Array.isArray(pod.photos) ? pod.photos : [];
+            for (const url of photoUrls) {
+              if (typeof url === "string" && url) {
+                docs.push({
+                  id: `pod-photo-${pod.id}-${docs.length}`,
+                  order_id: pod.order_id,
+                  order_number: orderNum,
+                  type: "POD",
+                  file_url: url,
+                  created_at: pod.created_at,
+                });
+              }
+            }
+            if (pod.signature_url) {
+              docs.push({
+                id: `pod-sig-${pod.id}`,
+                order_id: pod.order_id,
+                order_number: orderNum,
+                type: "POD",
+                file_url: pod.signature_url,
+                created_at: pod.created_at,
+              });
+            }
           }
         }
       }

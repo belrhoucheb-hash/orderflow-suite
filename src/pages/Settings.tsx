@@ -231,8 +231,8 @@ const Settings = () => {
   return (
     <div className="flex flex-col gap-6 h-full pb-12">
       <PageHeader
-        title="Instellingen"
-        subtitle="Beheer uw TMS platform configuratie en stamgegevens."
+        title={t('pages.settings.title')}
+        subtitle={t('pages.settings.subtitle')}
       />
 
       <Tabs 
@@ -246,37 +246,37 @@ const Settings = () => {
               value="algemeen" 
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
-              Algemeen
+              {t('pages.settings.tabs.general')}
             </TabsTrigger>
-            <TabsTrigger 
-              value="stamgegevens" 
+            <TabsTrigger
+              value="stamgegevens"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
-              Stamgegevens
+              {t('pages.settings.tabs.masterData')}
             </TabsTrigger>
-            <TabsTrigger 
-              value="branding" 
+            <TabsTrigger
+              value="branding"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
-              Branding
+              {t('pages.settings.tabs.branding')}
             </TabsTrigger>
             <TabsTrigger
               value="notificaties"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
-              Notificaties
+              {t('pages.settings.tabs.notifications')}
             </TabsTrigger>
             <TabsTrigger
               value="sms"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
-              SMS
+              {t('pages.settings.tabs.sms')}
             </TabsTrigger>
             <TabsTrigger
               value="integraties"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
-              Integraties
+              {t('pages.settings.tabs.integrations')}
             </TabsTrigger>
             <TabsTrigger
               value="tarieven"

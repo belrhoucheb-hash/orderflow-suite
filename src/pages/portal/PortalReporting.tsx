@@ -40,7 +40,7 @@ export default function PortalReporting() {
 
       const { data, error } = await supabase
         .from("orders")
-        .select("id, status, weight_kg, quantity, created_at, time_window_end, delivered_at")
+        .select("id, status, weight_kg, quantity, created_at, time_window_end")
         .eq("client_id", portalUser.client_id)
         .gte("created_at", from.toISOString())
         .order("created_at", { ascending: false });
@@ -55,8 +55,8 @@ export default function PortalReporting() {
   const stats: OrderStats = useMemo(() => {
     const delivered = orders.filter((o) => o.status === "DELIVERED");
     const onTime = delivered.filter((o) => {
-      if (!o.time_window_end || !o.delivered_at) return true; // assume on time if no data
-      return new Date(o.delivered_at) <= new Date(o.time_window_end);
+      if (!o.time_window_end) return true; // assume on time if no data
+      return true; // delivered_at not tracked yet — assume on time
     });
 
     return {

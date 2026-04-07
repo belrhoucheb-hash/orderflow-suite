@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTranslation } from "react-i18next";
 
 const statusStyles: Record<string, string> = {
   concept: "bg-muted text-muted-foreground border-border",
@@ -67,6 +68,7 @@ function isOverdue(dueDate: string | null, status: string): boolean {
 }
 
 const Facturatie = () => {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -351,7 +353,7 @@ const Facturatie = () => {
     <div className="space-y-5">
       {/* Header */}
       <PageHeader
-        title="Facturatie"
+        title={t('pages.invoicing.title')}
         subtitle={`${totalCount} facturen in totaal`}
         actions={
           <div className="flex items-center gap-2">
@@ -375,7 +377,7 @@ const Facturatie = () => {
               </DropdownMenuContent>
             </DropdownMenu>
             <Button type="button" onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }} className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
-              <Plus className="h-4 w-4" /> Nieuwe factuur
+              <Plus className="h-4 w-4" /> {t('pages.invoicing.newInvoice')}
             </Button>
           </div>
         }

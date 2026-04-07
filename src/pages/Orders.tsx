@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getStatusColor } from "@/lib/statusColors";
@@ -40,12 +40,6 @@ const Orders = () => {
   const [printLoading, setPrintLoading] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(timer);
-  }, [search]);
 
   const handleSort = (field: string) => {
     setSortConfig((prev) =>
@@ -76,7 +70,7 @@ const Orders = () => {
     pageSize,
     statusFilter: (statusFilter !== "alle") ? statusFilter : undefined,
     orderTypeFilter: (orderTypeFilter !== "alle") ? orderTypeFilter : undefined,
-    search: debouncedSearch || undefined,
+    search: search || undefined,
   });
   const rawOrders = data?.orders ?? [];
   const totalCount = data?.totalCount ?? 0;

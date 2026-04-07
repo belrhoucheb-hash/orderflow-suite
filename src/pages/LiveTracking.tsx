@@ -22,6 +22,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useVehicles } from "@/hooks/useVehicles";
 import {
@@ -82,6 +83,7 @@ const FILTER_OPTIONS: { key: StatusFilter; label: string }[] = [
 // ─── Component ─────────────────────────────────────────────────
 
 const LiveTracking = () => {
+  const { t } = useTranslation();
   const { data: trips = [], isLoading, isError, refetch } = useActiveTrips();
   const { data: drivers = [] } = useDrivers();
   const { data: vehicles = [] } = useVehicles();
@@ -332,8 +334,8 @@ const LiveTracking = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Live Tracking"
-        subtitle="Real-time overzicht van alle actieve ritten"
+        title={t('pages.tracking.title')}
+        subtitle={t('pages.tracking.subtitle')}
       />
 
       {/* KPI Strip */}
