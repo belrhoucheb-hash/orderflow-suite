@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { isValidAddress } from "@/components/inbox/utils";
-import { useTenant } from "@/contexts/TenantContext";
+import { useTenantOptional } from "@/contexts/TenantContext";
 import { createShipmentWithLegs, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,7 +47,7 @@ const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long",
 
 const NewOrder = () => {
   const navigate = useNavigate();
-  const { tenant } = useTenant();
+  const { tenant } = useTenantOptional();
   const [saving, setSaving] = useState(false);
   const [trajectPreview, setTrajectPreview] = useState<TrajectPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -70,6 +70,7 @@ const NewOrder = () => {
   const [clientName, setClientName] = useState("");
   const [contactpersoon, setContactpersoon] = useState("");
   const [transportType, setTransportType] = useState("");
+  const [afdeling, setAfdeling] = useState("");
   const [voertuigtype, setVoertuigtype] = useState("");
   const [chauffeur, setChauffeur] = useState("");
   const [mrnDoc, setMrnDoc] = useState("");
@@ -200,6 +201,7 @@ const NewOrder = () => {
         client_name: clientName.trim(),
         client_id: null,
         transport_type: transportType || null,
+        afdeling: afdeling || null,
         weight_kg: weightKg ? parseInt(weightKg) : null,
         quantity: quantity ? parseInt(quantity) : null,
         unit: transportEenheid || null,
@@ -278,6 +280,7 @@ const NewOrder = () => {
           pickup_address: pickup,
           delivery_address: delivery,
           client_name: clientName.trim(),
+          afdeling: afdeling || null,
         },
         tenant.id,
       )
@@ -295,7 +298,7 @@ const NewOrder = () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [freightLines, clientName, tenant?.id]);
+  }, [freightLines, clientName, afdeling, tenant?.id]);
 
   const mainTabs: { key: MainTab; label: string }[] = [
     { key: "algemeen", label: "ALGEMEEN" },
@@ -511,6 +514,16 @@ const NewOrder = () => {
                     <SelectItem value="koel">Koel</SelectItem>
                     <SelectItem value="retour">Retour</SelectItem>
                     <SelectItem value="express">Express</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-0.5">
+                <span className="text-xs text-muted-foreground font-medium">Afdeling:</span>
+                <Select value={afdeling} onValueChange={setAfdeling}>
+                  <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="Selecter..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="OPS">Operations</SelectItem>
+                    <SelectItem value="EXPORT">Export</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
