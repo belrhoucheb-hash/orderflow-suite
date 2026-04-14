@@ -4,11 +4,12 @@ import { createNotification } from "@/hooks/useNotifications";
 
 // SLA deadline = 4 hours after received_at
 const SLA_HOURS = 4;
-const CHECK_INTERVAL_MS = 60_000; // Check every 60 seconds
 
 export function useSLAMonitor() {
   const notifiedRef = useRef<Set<string>>(new Set());
 
+  // Initial fetch at mount — periodic checks are handled server-side via pg_cron
+  // and realtime events are received via the subscription below.
   useEffect(() => {
     const checkSLA = async () => {
       try {
@@ -62,11 +63,7 @@ export function useSLAMonitor() {
       }
     };
 
-    // Run immediately, then on interval
     checkSLA();
-    const interval = setInterval(checkSLA, CHECK_INTERVAL_MS);
-
-    return () => clearInterval(interval);
   }, []);
 
   // Also listen to realtime order changes for instant notifications

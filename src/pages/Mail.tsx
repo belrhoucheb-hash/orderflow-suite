@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from "react";
-import { Mail as MailIcon, Send, FileEdit, Inbox, Search, Star, StarOff, Paperclip, Clock, ChevronLeft, Reply, Forward, RefreshCw, Plus, Bot, CheckCircle2, Save } from "lucide-react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { Mail as MailIcon, Send, FileEdit, Inbox, Search, Star, StarOff, Paperclip, Clock, ChevronLeft, Reply, Forward, RefreshCw, Plus, Bot, CheckCircle2, Save, Archive, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -52,7 +53,15 @@ export default function Mail() {
   const [folder, setFolder] = useState<Folder>("inbox");
   const [selectedId, setSelectedId] = useState<string>("");
   const [search, setSearch] = useState("");
-  const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
+  const [starredIds, setStarredIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("mail-stars");
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    localStorage.setItem("mail-stars", JSON.stringify(starredIds));
+  }, [starredIds]);
   const [showCompose, setShowCompose] = useState(false);
   const [composeBody, setComposeBody] = useState("");
   const [composeTo, setComposeTo] = useState("");
@@ -122,7 +131,7 @@ export default function Mail() {
       threadType: r.thread_type || "new",
       confidenceScore: r.confidence_score,
       status: r.status,
-      isStarred: starredIds.has(r.id),
+      isStarred: starredIds.includes(r.id),
       followUpSentAt: r.follow_up_sent_at,
     })),
     [rawEmails, starredIds]
@@ -140,11 +149,7 @@ export default function Mail() {
   const selected = filtered.find(e => e.id === selectedId);
 
   const toggleStar = (id: string) => {
-    setStarredIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setStarredIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   const folderCounts = {
@@ -322,6 +327,28 @@ export default function Mail() {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 {/* Archiveren & verwijderen: binnenkort beschikbaar */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0}>
+                        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" disabled>
+                          <Archive className="h-3.5 w-3.5" /> Archiveren
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Binnenkort beschikbaar</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0}>
+                        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" disabled>
+                          <Trash2 className="h-3.5 w-3.5" /> Verwijderen
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Binnenkort beschikbaar</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5"

@@ -171,17 +171,25 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
   const handleImport = async () => {
     setStep("importing");
 
+    const CHUNK_SIZE = 50;
     const validRows = validations.filter((v) => v.isValid);
-    let imported = 0;
+    let successCount = 0;
+    let failureCount = 0;
+    const failures: { row: number; error: string }[] = [];
     const importErrors: BulkImportResult["errors"] = [];
     const clientCache: Record<string, string> = {};
+
+    // Step 1: Resolve client_id per row (keeps tenant-aware client creation logic intact)
+    // and build order payloads. Rows with client resolution failures are recorded as failures
+    // and excluded from the batch insert.
+    type PreparedRow = { rowIndex: number; data: Record<string, unknown> };
+    const prepared: PreparedRow[] = [];
 
     for (const v of validRows) {
       try {
         const { row } = v;
         const clientName = row.clientName.trim();
 
-        // Resolve or create client
         let clientId = clientCache[clientName.toLowerCase()];
         if (!clientId) {
           const lookupQuery = supabase
@@ -203,7 +211,10 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
               .single();
 
             if (clientErr || !newClient) {
-              importErrors.push({ rowIndex: v.rowIndex, message: `Kan klant niet aanmaken: ${clientErr?.message}` });
+              const msg = `Kan klant niet aanmaken: ${clientErr?.message}`;
+              importErrors.push({ rowIndex: v.rowIndex, message: msg });
+              failures.push({ row: v.rowIndex, error: msg });
+              failureCount++;
               continue;
             }
             clientId = newClient.id;
@@ -231,20 +242,54 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
           orderData.tenant_id = tenant.id;
         }
 
-        const { error: insertErr } = await supabase.from("orders").insert([orderData]);
-        if (insertErr) {
-          importErrors.push({ rowIndex: v.rowIndex, message: insertErr.message });
+        prepared.push({ rowIndex: v.rowIndex, data: orderData });
+      } catch (err: any) {
+        const msg = err?.message || "Onbekende fout";
+        importErrors.push({ rowIndex: v.rowIndex, message: msg });
+        failures.push({ row: v.rowIndex, error: msg });
+        failureCount++;
+      }
+    }
+
+    // Step 2: Batch insert in chunks of 50. On chunk failure, fall back to per-row
+    // inserts within that chunk so a single bad row doesn't kill the whole chunk.
+    for (let i = 0; i < prepared.length; i += CHUNK_SIZE) {
+      const chunk = prepared.slice(i, i + CHUNK_SIZE);
+      try {
+        const { error: chunkErr } = await supabase
+          .from("orders")
+          .insert(chunk.map((p) => p.data) as any);
+
+        if (chunkErr) {
+          console.warn(`Chunk insert failed (rows ${chunk[0].rowIndex}-${chunk[chunk.length - 1].rowIndex}):`, chunkErr.message);
+          // Fallback per-row so we can pinpoint failures and keep successes
+          for (const p of chunk) {
+            const { error: rowErr } = await supabase.from("orders").insert([p.data] as any);
+            if (rowErr) {
+              importErrors.push({ rowIndex: p.rowIndex, message: rowErr.message });
+              failures.push({ row: p.rowIndex, error: rowErr.message });
+              failureCount++;
+            } else {
+              successCount++;
+            }
+          }
         } else {
-          imported++;
+          successCount += chunk.length;
         }
       } catch (err: any) {
-        importErrors.push({ rowIndex: v.rowIndex, message: err?.message || "Onbekende fout" });
+        const msg = err?.message || "Onbekende fout bij chunk-insert";
+        console.warn(`Chunk threw (rows ${chunk[0].rowIndex}-${chunk[chunk.length - 1].rowIndex}):`, msg);
+        for (const p of chunk) {
+          importErrors.push({ rowIndex: p.rowIndex, message: msg });
+          failures.push({ row: p.rowIndex, error: msg });
+          failureCount++;
+        }
       }
     }
 
     const result: BulkImportResult = {
       total: validations.length,
-      imported,
+      imported: successCount,
       skipped: validations.length - validRows.length,
       errors: importErrors,
     };
@@ -256,10 +301,14 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
     queryClient.invalidateQueries({ queryKey: ["orders"] });
     queryClient.invalidateQueries({ queryKey: ["clients"] });
 
-    if (imported > 0) {
-      toast.success(`${imported} orders ge\u00EFmporteerd${importErrors.length > 0 ? `, ${importErrors.length} fouten` : ""}`);
+    if (failureCount > 0) {
+      console.log("Bulk import failures:", failures);
+    }
+
+    if (successCount > 0) {
+      toast.success(`${successCount} orders ge\u00EFmporteerd, ${failureCount} mislukt`);
     } else {
-      toast.error(`Import mislukt: ${importErrors.length} fouten`);
+      toast.error(`${successCount} orders ge\u00EFmporteerd, ${failureCount} mislukt`);
     }
   };
 

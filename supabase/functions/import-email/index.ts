@@ -236,6 +236,49 @@ serve(async (req) => {
       },
     }).catch((e) => console.error("Event pipeline error:", e));
 
+    // Fire-and-forget AI-extractie zodat handmatige imports dezelfde kwaliteit krijgen
+    // als poll-inbox. parse-order is stateless (emailBody in, extracted out) dus we
+    // roepen hem aan en updaten de order zelf met de extractie. Faalt stil.
+    (async () => {
+      try {
+        const pdfUrls = uploadedAttachments
+          .filter((a) => a.type === "application/pdf")
+          .map((a) => a.url);
+        if (!parsed.body && pdfUrls.length === 0) return;
+
+        const parseResp = await fetch(`${supabaseUrl}/functions/v1/parse-order`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+          body: JSON.stringify({ emailBody: parsed.body, pdfUrls, tenantId: tenantIdStr }),
+        });
+        if (!parseResp.ok) {
+          console.error("parse-order failed:", parseResp.status, await parseResp.text());
+          return;
+        }
+        const parseData = await parseResp.json();
+        const extracted = parseData.extracted;
+        if (!extracted) return;
+
+        await supabase.from("orders").update({
+          client_name: extracted.client_name || null,
+          transport_type: extracted.transport_type || null,
+          pickup_address: extracted.pickup_address || null,
+          delivery_address: extracted.delivery_address || null,
+          quantity: extracted.quantity || null,
+          unit: extracted.unit || null,
+          weight_kg: extracted.weight_kg || null,
+          is_weight_per_unit: extracted.is_weight_per_unit || false,
+          dimensions: extracted.dimensions || null,
+          requirements: extracted.requirements || [],
+          confidence_score: extracted.confidence_score || 0,
+          missing_fields: parseData?.missing_fields || [],
+          follow_up_draft: parseData?.follow_up_draft || null,
+        }).eq("id", order.id);
+      } catch (e) {
+        console.error("parse-order post-import failed", e);
+      }
+    })();
+
     return new Response(JSON.stringify({
       success: true,
       order_id: order.id,

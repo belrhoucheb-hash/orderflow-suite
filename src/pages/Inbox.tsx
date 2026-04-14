@@ -9,6 +9,7 @@ import { InboxReviewPanel } from "@/components/inbox/InboxReviewPanel";
 import { TEST_SCENARIOS, getFormErrors } from "@/components/inbox/utils";
 import { useInbox } from "@/hooks/useInbox";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function Inbox() {
   const {
@@ -223,15 +224,33 @@ export default function Inbox() {
                   >
                     Goedkeuren
                   </button>
-                  <button
-                    onClick={() => {
-                      Array.from(bulkSelected).forEach((id) => deleteMutation.mutate(id));
-                      setBulkSelected(new Set());
-                    }}
-                    className="text-xs font-semibold text-red-600 hover:underline"
-                  >
-                    Verwijder
-                  </button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="text-xs font-semibold text-red-600 hover:underline">
+                        Verwijder
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{bulkSelected.size} orders permanent verwijderen?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Deze actie kan niet ongedaan gemaakt worden. Weet je het zeker?
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuleren</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            Array.from(bulkSelected).forEach((id) => deleteMutation.mutate(id));
+                            setBulkSelected(new Set());
+                          }}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Bevestigen
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                   <button onClick={() => setBulkSelected(new Set())} className="text-xs text-gray-400 hover:underline">
                     Annuleer
                   </button>

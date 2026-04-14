@@ -20,6 +20,9 @@ export function useTrips(date?: string) {
 
       if (date) {
         query = query.eq("planned_date", date);
+      } else {
+        // Defensive cap to avoid full table scans when no date filter is applied
+        query = query.limit(500);
       }
 
       const { data, error } = await query;
