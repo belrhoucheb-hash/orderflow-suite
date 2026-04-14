@@ -68,7 +68,7 @@ function mapOrderRow(o: any, departmentCode?: string | null): Order {
     vehicle: o.vehicle_id ?? undefined,
     createdAt: o.created_at,
     estimatedDelivery,
-    notes: o.internal_note || "",
+    notes: (o.notes || o.internal_note || "").toString(),
     orderType: o.order_type ?? "ZENDING",
     parentOrderId: o.parent_order_id ?? null,
     departmentId: o.department_id ?? null,

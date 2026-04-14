@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
-import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload } from "lucide-react";
+import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getStatusColor } from "@/lib/statusColors";
 import { useOrders } from "@/hooks/useOrders";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useUnreadNoteOrderIds } from "@/hooks/useOrderNotesRead";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
@@ -99,6 +100,7 @@ const Orders = () => {
     departmentFilter: selectedDepartmentId,
     search: search || undefined,
   } as any);
+  const { unreadOrderIds } = useUnreadNoteOrderIds();
   const rawOrders = data?.orders ?? [];
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -244,14 +246,23 @@ const Orders = () => {
               setPage(0);
             }}
           >
-            <SelectTrigger className="h-9 w-52 text-xs font-normal bg-card border-border/60 hover:border-border transition-colors">
+            <SelectTrigger
+              style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-caption)" }}
+              className="h-9 w-auto min-w-[9rem] gap-2 border-transparent bg-transparent px-2 font-medium uppercase tracking-[0.14em] text-muted-foreground/80 hover:text-[hsl(var(--gold-deep))] focus:outline-none focus-visible:text-[hsl(var(--gold-deep))] data-[state=open]:text-[hsl(var(--gold-deep))] transition-colors shadow-none"
+            >
+              <SlidersHorizontal className="h-3 w-3 shrink-0 opacity-60" />
               <SelectValue placeholder="Filter" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="alle" className="text-xs">Alle orders</SelectItem>
               <SelectSeparator />
               <SelectGroup>
-                <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</SelectLabel>
+                <SelectLabel
+                  style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-caption)" }}
+                  className="uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] font-semibold select-none"
+                >
+                  Status
+                </SelectLabel>
                 {filterOptions.filter(s => s !== "alle").map((s) => (
                   <SelectItem key={`status:${s}`} value={`status:${s}`} className="text-xs">
                     {getStatusColor(s).label}
@@ -260,7 +271,7 @@ const Orders = () => {
               </SelectGroup>
               <SelectSeparator />
               <SelectGroup>
-                <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">Type</SelectLabel>
+                <SelectLabel className="font-display text-[10px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] font-semibold select-none">Type</SelectLabel>
                 {["ZENDING", "RETOUR", "EMBALLAGE_RUIL"].map((t) => (
                   <SelectItem key={`type:${t}`} value={`type:${t}`} className="text-xs">
                     {ORDER_TYPE_LABELS[t]?.label ?? t}
@@ -278,9 +289,9 @@ const Orders = () => {
                 setOrderTypeFilter("alle");
                 setPage(0);
               }}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2"
+              className="font-display text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 hover:text-[hsl(var(--gold-deep))] transition-colors px-1"
             >
-              Reset
+              Wissen
             </button>
           )}
         </div>
@@ -326,13 +337,17 @@ const Orders = () => {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ delay: idx * 0.02 }}
-                    className="table-row group cursor-pointer"
+                    className={cn(
+                      "table-row group cursor-pointer",
+                      unreadOrderIds.has(order.id) && "shadow-[inset_2px_0_0_0_#3b82f6]",
+                    )}
                     onClick={() => navigate(`/orders/${order.id}`)}
                   >
                     <td className="table-cell">
                       <Link
                         to={`/orders/${order.id}`}
                         className="font-mono text-sm font-medium text-foreground hover:text-primary transition-colors"
+                        title={order.notes?.trim() || undefined}
                       >
                         {order.orderNumber}
                       </Link>
@@ -356,7 +371,7 @@ const Orders = () => {
                     </td>
                     <td className="table-cell">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <StatusBadge status={order.status as OrderStatus} />
+                        <StatusBadge status={order.status as OrderStatus} variant="luxe" />
                         <InfoStatusBadge status={order.infoStatus} size="sm" iconOnly />
                         {order.orderType && order.orderType !== "ZENDING" && (
                           <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium border",

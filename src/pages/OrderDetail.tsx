@@ -1,5 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft, MapPin, Package, Truck, User, Clock, FileText,
   MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2,
@@ -36,6 +36,7 @@ import { OrderInfoRequestsCard } from "@/components/orders/OrderInfoRequestsCard
 import { InfoStatusBadge } from "@/components/orders/InfoStatusBadge";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
+import { useOrderNotesRead } from "@/hooks/useOrderNotesRead";
 import { Receipt } from "lucide-react";
 import { ReturnOrderDialog } from "@/components/orders/ReturnOrderDialog";
 import { CreateReturnDialog } from "@/components/orders/CreateReturnDialog";
@@ -63,6 +64,13 @@ const OrderDetail = () => {
   const [isGeneratingCmr, setIsGeneratingCmr] = useState(false);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const createInvoiceMutation = useCreateInvoice();
+  const { hasUnread: notesHasUnread, markAsRead: markNotesAsRead } = useOrderNotesRead(id);
+
+  useEffect(() => {
+    if (notesHasUnread) {
+      markNotesAsRead();
+    }
+  }, [notesHasUnread, markNotesAsRead]);
 
   // ─── Inline Editing State ───
   const [isEditing, setIsEditing] = useState(false);
@@ -428,7 +436,7 @@ const OrderDetail = () => {
           subtitle={order.client_name || "Onbekende klant"}
           actions={
             <div className="flex items-center gap-2">
-              <StatusBadge status={order.status as OrderStatus} />
+              <StatusBadge status={order.status as OrderStatus} variant="luxe" />
               <InfoStatusBadge status={order.info_status} />
             </div>
           }
@@ -458,6 +466,26 @@ const OrderDetail = () => {
             {reopenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
             Heropen Order
           </Button>
+        </div>
+      )}
+
+      {/* Referentie & Opmerkingen — subtiele banner, zichtbaar maar niet schreeuwerig */}
+      {(order.notes?.trim() || order.reference?.trim()) && (
+        <div className="rounded-lg border border-amber-200/70 bg-amber-50/50 px-4 py-3 flex items-start gap-3">
+          <MessageSquare className="h-4 w-4 text-amber-700/80 shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-1">
+            <p className="text-[11px] font-semibold tracking-wide text-amber-900/80 uppercase">
+              Referentie & Opmerkingen
+            </p>
+            {order.reference?.trim() && (
+              <p className="text-sm text-foreground/90">
+                <span className="text-muted-foreground">Ref: </span>{order.reference}
+              </p>
+            )}
+            {order.notes?.trim() && (
+              <p className="text-sm text-foreground/90 whitespace-pre-wrap">{order.notes}</p>
+            )}
+          </div>
         </div>
       )}
 
