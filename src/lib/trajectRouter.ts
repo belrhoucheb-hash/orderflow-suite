@@ -52,6 +52,7 @@ export interface LegTemplate {
 export interface MatchConditions {
   pickup_address_contains?: string[];
   delivery_address_contains?: string[];
+  transport_type_equals?: string;
   default?: boolean;
   [key: string]: unknown;
 }
@@ -130,6 +131,11 @@ export function evaluateMatch(
   }
   if (Array.isArray(conditions.delivery_address_contains)) {
     checks.push(containsAny(booking.delivery_address, conditions.delivery_address_contains));
+  }
+  if (typeof conditions.transport_type_equals === "string") {
+    const expected = conditions.transport_type_equals.toLowerCase();
+    const actual = (booking.transport_type ?? "").toString().toLowerCase();
+    checks.push(actual === expected);
   }
 
   if (checks.length === 0) return false;
