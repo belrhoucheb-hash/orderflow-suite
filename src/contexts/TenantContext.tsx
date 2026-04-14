@@ -168,3 +168,14 @@ export function useTenant() {
   }
   return ctx;
 }
+
+/**
+ * Soft variant: geeft `null` terug wanneer geen TenantProvider beschikbaar is
+ * (bijv. in unit tests met een bare QueryClient wrapper). Gebruiken in hooks
+ * die gracefully moeten kunnen werken zonder tenant-context.
+ */
+export function useTenantOptional(): { tenant: { id: string } | null } {
+  const ctx = useContext(TenantContext);
+  if (ctx === undefined) return { tenant: null };
+  return { tenant: ctx.tenant ? { id: ctx.tenant.id } : null };
+}
