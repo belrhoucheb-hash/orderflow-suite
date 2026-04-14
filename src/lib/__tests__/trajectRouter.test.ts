@@ -142,6 +142,24 @@ describe("evaluateMatch", () => {
     ).toBe(false);
   });
 
+  it("matches transport_type_equals case-insensitively", () => {
+    const booking: BookingInput = {
+      pickup_address: "hoofdweg 1",
+      delivery_address: "dubai",
+      transport_type: "export",
+    };
+    expect(evaluateMatch(booking, { transport_type_equals: "EXPORT" })).toBe(true);
+    expect(evaluateMatch(booking, { transport_type_equals: "IMPORT" })).toBe(false);
+  });
+
+  it("returns false for transport_type_equals when booking has no transport_type", () => {
+    const booking: BookingInput = {
+      pickup_address: "hoofdweg 1",
+      delivery_address: "dubai",
+    };
+    expect(evaluateMatch(booking, { transport_type_equals: "EXPORT" })).toBe(false);
+  });
+
   it("ANDs multiple conditions", () => {
     const booking: BookingInput = {
       pickup_address: "RCS Hub Schiphol",
