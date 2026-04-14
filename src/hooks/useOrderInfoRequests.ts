@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "@/contexts/TenantContext";
+import { useTenantOptional } from "@/contexts/TenantContext";
 
 export type InfoStatus = "COMPLETE" | "AWAITING_INFO" | "OVERDUE";
 
@@ -55,7 +55,7 @@ export const TRACKABLE_FIELDS: Array<{ name: string; label: string }> = [
 ];
 
 export function useOrderInfoRequests(orderId: string | null | undefined) {
-  const { tenant } = useTenant();
+  const { tenant } = useTenantOptional();
 
   return useQuery({
     queryKey: ["order_info_requests", orderId, tenant?.id],
@@ -74,7 +74,7 @@ export function useOrderInfoRequests(orderId: string | null | undefined) {
 }
 
 export function useCreateInfoRequest() {
-  const { tenant } = useTenant();
+  const { tenant } = useTenantOptional();
   const qc = useQueryClient();
 
   return useMutation({

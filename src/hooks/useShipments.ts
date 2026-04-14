@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "@/contexts/TenantContext";
+import { useTenant, useTenantOptional } from "@/contexts/TenantContext";
 import type { Order } from "@/data/mockData";
 import type { OrderStatus } from "@/lib/statusTransitions";
 import { fetchDepartmentsCached } from "@/hooks/useDepartments";
@@ -81,7 +81,7 @@ function mapOrderRow(o: any, departmentCode?: string | null): Order {
 
 export function useShipments(options: UseShipmentsOptions = {}) {
   const { page = 0, pageSize = 25, statusFilter, search } = options;
-  const { tenant } = useTenant();
+  const { tenant } = useTenantOptional();
   const queryClient = useQueryClient();
 
   return useQuery({
@@ -173,7 +173,7 @@ export function useShipments(options: UseShipmentsOptions = {}) {
 }
 
 export function useShipment(id: string | null | undefined) {
-  const { tenant } = useTenant();
+  const { tenant } = useTenantOptional();
   const queryClient = useQueryClient();
 
   return useQuery({

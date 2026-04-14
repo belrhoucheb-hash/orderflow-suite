@@ -58,7 +58,7 @@ describe("NewOrder", () => {
 
   it("shows Klant/Opdrachtgever field", () => {
     renderNewOrder();
-    expect(screen.getByText(/Klant|Opdrachtgever/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Klant|Opdrachtgever/i).length).toBeGreaterThan(0);
   });
 
   it("shows financieel tab and switches to it (setMainTab)", async () => {
