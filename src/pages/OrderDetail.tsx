@@ -4,7 +4,7 @@ import {
   ArrowLeft, MapPin, Package, Truck, User, Clock, FileText,
   MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2,
   Undo2, Send, Loader2, Printer, Warehouse, ScrollText, Image,
-  Save, X, Bell
+  Save, X, Bell, Copy
 } from "lucide-react";
 import { ClickableAddress } from "@/components/ClickableAddress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -199,6 +199,57 @@ const OrderDetail = () => {
       toast.success("Order heropend", { description: `Order #${order?.order_number} is terug in behandeling` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+
+  // Duplicate order mutation — creates a new DRAFT order with a copy of the fields
+  const duplicateMutation = useMutation({
+    mutationFn: async (src: any) => {
+      // Strip identity + status + trip coupling + generated fields so we get a clean DRAFT
+      const {
+        id: _id,
+        order_number: _order_number,
+        created_at: _created_at,
+        updated_at: _updated_at,
+        received_at: _received_at,
+        status: _status,
+        vehicle_id: _vehicle_id,
+        cmr_number: _cmr_number,
+        cmr_generated_at: _cmr_generated_at,
+        invoice_id: _invoice_id,
+        pod_signed_at: _pod_signed_at,
+        pod_signed_by: _pod_signed_by,
+        warehouse_received_at: _warehouse_received_at,
+        follow_up_sent_at: _follow_up_sent_at,
+        parent_order_id: _parent_order_id,
+        ...rest
+      } = src || {};
+
+      const payload = {
+        ...rest,
+        status: "DRAFT",
+        internal_note: src?.internal_note
+          ? `${src.internal_note}\n[DUPLICAAT van #${src.order_number}]`
+          : `[DUPLICAAT van #${src.order_number}]`,
+      };
+
+      const { data, error } = await supabase
+        .from("orders")
+        .insert([payload])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data: any) => {
+      toast.success("Order gedupliceerd", {
+        description: `Nieuwe concept order aangemaakt op basis van #${order?.order_number}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      if (data?.id) navigate(`/orders/${data.id}`);
+    },
+    onError: (e: Error) => {
+      toast.error("Dupliceren mislukt", { description: e.message });
     },
   });
 
@@ -752,6 +803,22 @@ const OrderDetail = () => {
                 onClick={startEditing}>
                 <Edit className="h-4 w-4" />
                 Bewerken
+              </Button>
+            )}
+            {/* Duplicate order — creates a new DRAFT with copied fields */}
+            {!isEditing && (
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => duplicateMutation.mutate(order)}
+                disabled={duplicateMutation.isPending}
+              >
+                {duplicateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+                Dupliceer order
               </Button>
             )}
             {/* Retour aanmaken — only for ZENDING orders that are not cancelled */}

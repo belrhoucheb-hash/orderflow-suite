@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTrips, useUpdateTripStatus, useDispatchTrip, useTripsRealtime } from "@/hooks/useTrips";
+import BulkActionFeedback, { type BulkActionFailure } from "@/components/BulkActionFeedback";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useVehicles } from "@/hooks/useVehicles";
 import {
@@ -77,7 +78,13 @@ const Dispatch = () => {
   // Bulk dispatch state
   const [selectedTrips, setSelectedTrips] = useState<Set<string>>(new Set());
   const [bulkDispatchOpen, setBulkDispatchOpen] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; errors: string[] } | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkFeedback, setBulkFeedback] = useState<{
+    open: boolean;
+    successCount: number;
+    failureCount: number;
+    failures: BulkActionFailure[];
+  }>({ open: false, successCount: 0, failureCount: 0, failures: [] });
 
   // Confirmation dialog state
   const [confirmDispatch, setConfirmDispatch] = useState<{ tripId: string; tripNumber: number } | null>(null);
@@ -165,29 +172,44 @@ const Dispatch = () => {
     }
   };
 
-  // Bulk dispatch action
+  // Bulk dispatch action — runs all selected trips in parallel via Promise.allSettled
+  // and reports results via the reusable BulkActionFeedback dialog.
   const executeBulkDispatch = async () => {
     const ids = Array.from(selectedTrips);
     const total = ids.length;
-    setBulkProgress({ done: 0, total, errors: [] });
-    const errors: string[] = [];
-    for (let i = 0; i < ids.length; i++) {
-      try {
-        await dispatchTrip.mutateAsync(ids[i]);
-      } catch (e: any) {
-        const trip = trips.find((t) => t.id === ids[i]);
-        errors.push(`Rit #${trip?.trip_number ?? "?"}: ${e.message || "Fout"}`);
+    if (total === 0) return;
+
+    setBulkRunning(true);
+    const results = await Promise.allSettled(
+      ids.map((id) => dispatchTrip.mutateAsync(id)),
+    );
+
+    const failures: BulkActionFailure[] = [];
+    let successCount = 0;
+    results.forEach((res, idx) => {
+      if (res.status === "fulfilled") {
+        successCount++;
+      } else {
+        const trip = trips.find((t) => t.id === ids[idx]);
+        const reason = (res.reason as any)?.message || "Onbekende fout";
+        failures.push({
+          label: `Rit #${trip?.trip_number ?? "?"}`,
+          error: reason,
+        });
       }
-      setBulkProgress({ done: i + 1, total, errors: [...errors] });
-    }
-    if (errors.length === 0) {
+    });
+
+    const failureCount = failures.length;
+    if (failureCount === 0) {
       toast.success(`${total} ritten verzonden`);
     } else {
-      toast.warning(`${total - errors.length}/${total} ritten verzonden, ${errors.length} mislukt`);
+      toast.warning(`${successCount}/${total} ritten verzonden, ${failureCount} mislukt`);
     }
+
     setSelectedTrips(new Set());
     setBulkDispatchOpen(false);
-    setBulkProgress(null);
+    setBulkRunning(false);
+    setBulkFeedback({ open: true, successCount, failureCount, failures });
   };
 
   // Stats
@@ -339,16 +361,15 @@ const Dispatch = () => {
               Selecteer alles ({conceptTripsInView.length})
             </label>
           </div>
-          {selectedTrips.size > 0 && (
-            <Button
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setBulkDispatchOpen(true)}
-            >
-              <Send className="h-3.5 w-3.5" />
-              Verzend geselecteerde ({selectedTrips.size})
-            </Button>
-          )}
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setBulkDispatchOpen(true)}
+            disabled={selectedTrips.size === 0}
+          >
+            <Send className="h-3.5 w-3.5" />
+            Verzend {selectedTrips.size} geselecteerde {selectedTrips.size === 1 ? "rit" : "ritten"}
+          </Button>
         </div>
       )}
 
@@ -641,35 +662,20 @@ const Dispatch = () => {
       </Dialog>
 
       {/* Bulk dispatch confirmation dialog */}
-      <Dialog open={bulkDispatchOpen} onOpenChange={(open) => { if (!open && !bulkProgress) setBulkDispatchOpen(false); }}>
+      <Dialog open={bulkDispatchOpen} onOpenChange={(open) => { if (!open && !bulkRunning) setBulkDispatchOpen(false); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Ritten verzenden</DialogTitle>
+            <DialogTitle>Verzend {selectedTrips.size} geselecteerde ritten</DialogTitle>
             <DialogDescription>
-              {bulkProgress ? (
-                <span className="flex flex-col gap-2">
-                  <span>Voortgang: {bulkProgress.done}/{bulkProgress.total} ritten verzonden</span>
-                  <span className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                    <span
-                      className="bg-primary h-2 block rounded-full transition-all"
-                      style={{ width: `${(bulkProgress.done / bulkProgress.total) * 100}%` }}
-                    />
-                  </span>
-                  {bulkProgress.errors.length > 0 && (
-                    <span className="text-red-600 text-xs">
-                      {bulkProgress.errors.map((err, i) => <span key={i} className="block">{err}</span>)}
-                    </span>
-                  )}
-                </span>
-              ) : (
-                `${selectedTrips.size} ritten verzenden naar chauffeurs?`
-              )}
+              {bulkRunning
+                ? `Bezig met verzenden van ${selectedTrips.size} ritten...`
+                : `${selectedTrips.size} ritten verzenden naar chauffeurs?`}
             </DialogDescription>
           </DialogHeader>
-          {!bulkProgress && (
+          {!bulkRunning && (
             <DialogFooter>
               <Button variant="outline" onClick={() => setBulkDispatchOpen(false)}>Annuleren</Button>
-              <Button onClick={executeBulkDispatch}>
+              <Button onClick={executeBulkDispatch} disabled={selectedTrips.size === 0}>
                 <Send className="h-3.5 w-3.5 mr-1.5" />
                 Verzenden
               </Button>
@@ -677,6 +683,16 @@ const Dispatch = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Bulk action feedback dialog — shown after Promise.allSettled completes */}
+      <BulkActionFeedback
+        open={bulkFeedback.open}
+        onOpenChange={(open) => setBulkFeedback((prev) => ({ ...prev, open }))}
+        title="Resultaat batch dispatch"
+        successCount={bulkFeedback.successCount}
+        failureCount={bulkFeedback.failureCount}
+        failures={bulkFeedback.failures}
+      />
     </div>
   );
 };
