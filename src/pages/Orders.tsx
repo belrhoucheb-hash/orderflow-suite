@@ -3,7 +3,15 @@ import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, Chev
 import { Button } from "@/components/ui/button";
 import { getStatusColor } from "@/lib/statusColors";
 import { useOrders } from "@/hooks/useOrders";
+import { useDepartments } from "@/hooks/useDepartments";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -34,6 +42,7 @@ const Orders = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("alle");
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("alle");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("alle");
   const [page, setPage] = useState(0);
   const [pageSize] = useState(25);
   const [printOrder, setPrintOrder] = useState<any>(null);
@@ -65,13 +74,26 @@ const Orders = () => {
     setPage(0);
   };
 
+  const handleDepartmentFilterChange = (value: string) => {
+    setDepartmentFilter(value);
+    setPage(0);
+  };
+
+  const { data: departments } = useDepartments?.() ?? { data: [] as Array<{ id: string; code: string; name: string; color: string | null }> };
+
+  const selectedDepartmentId = useMemo(() => {
+    if (departmentFilter === "alle") return undefined;
+    return departments?.find((d) => d.code === departmentFilter)?.id;
+  }, [departmentFilter, departments]);
+
   const { data, isLoading, isError, refetch } = useOrders({
     page,
     pageSize,
     statusFilter: (statusFilter !== "alle") ? statusFilter : undefined,
     orderTypeFilter: (orderTypeFilter !== "alle") ? orderTypeFilter : undefined,
+    departmentFilter: selectedDepartmentId,
     search: search || undefined,
-  });
+  } as any);
   const rawOrders = data?.orders ?? [];
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
