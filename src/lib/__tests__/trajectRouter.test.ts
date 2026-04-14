@@ -89,6 +89,7 @@ import {
   resolveHubAddress,
   createShipmentWithLegs,
   evaluateMatch,
+  inferAfdeling,
   type TrajectRule,
   type BookingInput,
 } from "@/lib/trajectRouter";
@@ -142,22 +143,22 @@ describe("evaluateMatch", () => {
     ).toBe(false);
   });
 
-  it("matches transport_type_equals case-insensitively", () => {
+  it("matches afdeling_equals case-insensitively", () => {
     const booking: BookingInput = {
       pickup_address: "hoofdweg 1",
       delivery_address: "dubai",
-      transport_type: "export",
+      afdeling: "export",
     };
-    expect(evaluateMatch(booking, { transport_type_equals: "EXPORT" })).toBe(true);
-    expect(evaluateMatch(booking, { transport_type_equals: "IMPORT" })).toBe(false);
+    expect(evaluateMatch(booking, { afdeling_equals: "EXPORT" })).toBe(true);
+    expect(evaluateMatch(booking, { afdeling_equals: "OPS" })).toBe(false);
   });
 
-  it("returns false for transport_type_equals when booking has no transport_type", () => {
+  it("returns false for afdeling_equals when booking has no afdeling", () => {
     const booking: BookingInput = {
       pickup_address: "hoofdweg 1",
       delivery_address: "dubai",
     };
-    expect(evaluateMatch(booking, { transport_type_equals: "EXPORT" })).toBe(false);
+    expect(evaluateMatch(booking, { afdeling_equals: "EXPORT" })).toBe(false);
   });
 
   it("ANDs multiple conditions", () => {
@@ -178,6 +179,29 @@ describe("evaluateMatch", () => {
         delivery_address_contains: ["Rotterdam"],
       }),
     ).toBe(false);
+  });
+});
+
+// ─── inferAfdeling ───────────────────────────────────────────────────────
+
+describe("inferAfdeling", () => {
+  it("returns null when either address missing", () => {
+    expect(inferAfdeling(null, "RCS export")).toBeNull();
+    expect(inferAfdeling("hoofdweg 1", "")).toBeNull();
+  });
+
+  it("returns EXPORT when delivery is RCS export", () => {
+    expect(inferAfdeling("hoofdweg 1", "RCS Export Schiphol")).toBe("EXPORT");
+    expect(inferAfdeling("hoofdweg 1", "royalty cargo export")).toBe("EXPORT");
+  });
+
+  it("returns OPS when delivery is RCS import", () => {
+    expect(inferAfdeling("hoofdweg 1", "RCS Import Schiphol")).toBe("OPS");
+  });
+
+  it("returns OPS when no RCS involved", () => {
+    expect(inferAfdeling("hoofdweg 1", "Rotterdam")).toBe("OPS");
+    expect(inferAfdeling("hoofdweg 1", "Dubai, UAE")).toBe("OPS");
   });
 });
 
@@ -334,7 +358,7 @@ describe("createShipmentWithLegs", () => {
       quantity: 2,
     };
 
-    const result = await createShipmentWithLegs(booking, TENANT, "user-1");
+    const result = await createShipmentWithLegs(booking, TENANT);
 
     // Shipment
     expect(result.shipment).toBeTruthy();
@@ -416,5 +440,40 @@ describe("createShipmentWithLegs", () => {
     expect(result.legs[0].department_id).toBe("dept-ops-id");
     expect(result.legs[0].pickup_address).toBe("Amsterdam");
     expect(result.legs[0].delivery_address).toBe("Rotterdam");
+  });
+
+  it("creates EXPORT placeholder leg where leg-2 from/to both resolve to delivery_address", async () => {
+    const rule = makeRule({
+      id: "rule-export-afdeling",
+      name: "Export via afdeling",
+      priority: 20,
+      match_conditions: { afdeling_equals: "EXPORT" },
+      legs_template: [
+        { sequence: 1, from: "pickup", to: "delivery", department_code: "OPS", leg_role: "OPS_PICKUP" },
+        { sequence: 2, from: "delivery", to: "delivery", department_code: "EXPORT", leg_role: "EXPORT_LEG" },
+      ],
+    });
+    setTable("traject_rules", { rows: [rule] });
+    setTable("departments", {
+      rows: [
+        { id: "dept-ops-id", code: "OPS" },
+        { id: "dept-export-id", code: "EXPORT" },
+      ],
+    });
+
+    const result = await createShipmentWithLegs(
+      {
+        pickup_address: "hoofdweg 1",
+        delivery_address: "RCS Export",
+        afdeling: "EXPORT",
+      },
+      TENANT,
+    );
+
+    expect(result.legs).toHaveLength(2);
+    const leg2 = result.legs[1];
+    expect(leg2.pickup_address).toBe("RCS Export");
+    expect(leg2.delivery_address).toBe("RCS Export");
+    expect(leg2.pickup_address).toBe(leg2.delivery_address);
   });
 });

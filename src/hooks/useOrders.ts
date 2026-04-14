@@ -146,7 +146,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
           vehicle: o.vehicle_id ?? undefined,
           createdAt: o.created_at,
           estimatedDelivery,
-          notes: o.internal_note || "",
+          notes: (o.notes || o.internal_note || "").toString(),
           orderType: (o as any).order_type ?? "ZENDING",
           parentOrderId: o.parent_order_id ?? null,
           departmentId,

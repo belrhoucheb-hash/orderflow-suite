@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { isValidAddress } from "@/components/inbox/utils";
 import { useTenantOptional } from "@/contexts/TenantContext";
-import { createShipmentWithLegs, type BookingInput } from "@/lib/trajectRouter";
+import { createShipmentWithLegs, inferAfdeling, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
@@ -71,6 +71,7 @@ const NewOrder = () => {
   const [contactpersoon, setContactpersoon] = useState("");
   const [transportType, setTransportType] = useState("");
   const [afdeling, setAfdeling] = useState("");
+  const [afdelingManual, setAfdelingManual] = useState(false);
   const [voertuigtype, setVoertuigtype] = useState("");
   const [chauffeur, setChauffeur] = useState("");
   const [mrnDoc, setMrnDoc] = useState("");
@@ -262,6 +263,15 @@ const NewOrder = () => {
     } finally { setSaving(false); }
   };
 
+  // Auto-infer afdeling zolang de planner 'm niet handmatig heeft gekozen.
+  useEffect(() => {
+    if (afdelingManual) return;
+    const pickup = freightLines.find((f) => f.activiteit === "Laden")?.locatie || "";
+    const delivery = freightLines.find((f) => f.activiteit === "Lossen")?.locatie || "";
+    const inferred = inferAfdeling(pickup, delivery);
+    setAfdeling(inferred ?? "");
+  }, [freightLines, afdelingManual]);
+
   // Live traject-preview zodra beide adressen ingevuld zijn.
   useEffect(() => {
     const pickup = freightLines.find((f) => f.activiteit === "Laden")?.locatie || "";
@@ -398,10 +408,17 @@ const NewOrder = () => {
           )}>
             <Route className="h-4 w-4 mt-0.5 shrink-0" />
             <div className="flex-1 space-y-1">
-              <div className="font-semibold">
-                {trajectPreview.legs.length > 1
-                  ? `Deze boeking wordt gesplitst in ${trajectPreview.legs.length} legs`
-                  : `Traject: ${trajectPreview.rule?.name ?? ""}`}
+              <div className="font-semibold flex items-center gap-2">
+                <span>
+                  {trajectPreview.legs.length > 1
+                    ? `Deze boeking wordt gesplitst in ${trajectPreview.legs.length} legs`
+                    : `Traject: ${trajectPreview.rule?.name ?? ""}`}
+                </span>
+                {afdeling && (
+                  <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/70 border">
+                    Afdeling: {afdeling}
+                  </span>
+                )}
               </div>
               <ul className="space-y-0.5">
                 {trajectPreview.legs.map((leg) => (
@@ -519,7 +536,10 @@ const NewOrder = () => {
               </div>
               <div className="space-y-0.5">
                 <span className="text-xs text-muted-foreground font-medium">Afdeling:</span>
-                <Select value={afdeling} onValueChange={setAfdeling}>
+                <Select
+                  value={afdeling}
+                  onValueChange={(v) => { setAfdelingManual(true); setAfdeling(v); }}
+                >
                   <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="Selecter..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="OPS">Operations</SelectItem>
@@ -602,17 +622,18 @@ const NewOrder = () => {
               <h3 className="text-sm font-bold text-foreground">Vrachtplanning</h3>
               <div className="bg-card border border-border rounded-lg overflow-x-auto">
                 {/* Table header */}
-                <div className="grid grid-cols-[140px_1fr_180px_140px_140px_40px] gap-px bg-muted/60 px-3 py-2 border-b border-border min-w-[780px]">
+                <div className="grid grid-cols-[140px_1fr_180px_140px_140px_90px_40px] gap-px bg-muted/60 px-3 py-2 border-b border-border min-w-[780px]">
                   <span className="text-xs font-bold text-foreground">Type Activiteit</span>
                   <span className="text-xs font-bold text-foreground">Locatie/Adres</span>
                   <span className="text-xs font-bold text-foreground">Datum & Tijd</span>
                   <span className="text-xs font-bold text-foreground">Referentie</span>
                   <span className="text-xs font-bold text-foreground">Opmerkingen</span>
+                  <span className="text-xs font-bold text-foreground">Afdeling</span>
                   <span />
                 </div>
                 {/* Rows */}
                 {freightLines.map((line) => (
-                  <div key={line.id} className="grid grid-cols-[140px_1fr_180px_140px_140px_40px] gap-2 px-3 py-1.5 border-b border-border/50 items-center min-w-[780px]">
+                  <div key={line.id} className="grid grid-cols-[140px_1fr_180px_140px_140px_90px_40px] gap-2 px-3 py-1.5 border-b border-border/50 items-center min-w-[780px]">
                     <Select value={line.activiteit} onValueChange={v => updateFreightLine(line.id, "activiteit", v)}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
@@ -655,6 +676,22 @@ const NewOrder = () => {
                       onChange={e => updateFreightLine(line.id, "opmerkingen", e.target.value)}
                       className="h-8 text-xs"
                     />
+                    <div className="flex items-center">
+                      {afdeling && (
+                        <span
+                          className={cn(
+                            "text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded border",
+                            line.activiteit === "Laden"
+                              ? "bg-blue-50 text-blue-800 border-blue-200"
+                              : afdeling === "EXPORT"
+                                ? "bg-amber-50 text-amber-800 border-amber-200"
+                                : "bg-blue-50 text-blue-800 border-blue-200",
+                          )}
+                        >
+                          {line.activiteit === "Laden" ? "OPS" : afdeling}
+                        </span>
+                      )}
+                    </div>
                     <button
                       onClick={() => removeFreightLine(line.id)}
                       className="text-muted-foreground hover:text-destructive transition-colors p-1"

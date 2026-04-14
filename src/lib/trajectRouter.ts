@@ -27,6 +27,7 @@ export interface BookingInput {
   quantity?: number | null;
   unit?: string | null;
   transport_type?: string | null;
+  afdeling?: string | null;  // department code: 'OPS' | 'EXPORT' | ...
   priority?: string | null;
   requirements?: string[] | null;
   pickup_date?: string | null;
@@ -52,7 +53,7 @@ export interface LegTemplate {
 export interface MatchConditions {
   pickup_address_contains?: string[];
   delivery_address_contains?: string[];
-  transport_type_equals?: string;
+  afdeling_equals?: string;
   default?: boolean;
   [key: string]: unknown;
 }
@@ -132,14 +133,35 @@ export function evaluateMatch(
   if (Array.isArray(conditions.delivery_address_contains)) {
     checks.push(containsAny(booking.delivery_address, conditions.delivery_address_contains));
   }
-  if (typeof conditions.transport_type_equals === "string") {
-    const expected = conditions.transport_type_equals.toLowerCase();
-    const actual = (booking.transport_type ?? "").toString().toLowerCase();
+  if (typeof conditions.afdeling_equals === "string") {
+    const expected = conditions.afdeling_equals.toLowerCase();
+    const actual = (booking.afdeling ?? "").toString().toLowerCase();
     checks.push(actual === expected);
   }
 
   if (checks.length === 0) return false;
   return checks.every(Boolean);
+}
+
+// ─── Afdeling-inference ───────────────────────────────────────────────────
+
+const EXPORT_DELIVERY_MARKERS = ["rcs export", "rcs_export", "royalty cargo export"];
+
+/**
+ * Leidt de afdeling af uit pickup + delivery adressen. Business-rules:
+ *   1. Delivery = RCS export → EXPORT (2 legs: OPS pickup + EXPORT placeholder)
+ *   2. Anders (incl. RCS import en alle niet-hub adressen) → OPS (1 leg)
+ *
+ * Dit is puur een UI/preview-hint — de traject_rules blijven autoritatief.
+ */
+export function inferAfdeling(
+  pickup: string | null | undefined,
+  delivery: string | null | undefined,
+): "OPS" | "EXPORT" | null {
+  if (!pickup || !delivery) return null;
+  const d = delivery.toLowerCase();
+  if (EXPORT_DELIVERY_MARKERS.some((m) => d.includes(m))) return "EXPORT";
+  return "OPS";
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────
@@ -233,7 +255,6 @@ function resolveEndpoint(
 export async function createShipmentWithLegs(
   booking: BookingInput,
   tenantId: string,
-  userId?: string,
 ): Promise<CreateShipmentResult> {
   const rule = await matchTrajectRule(booking, tenantId);
   if (!rule) {
@@ -328,16 +349,15 @@ export async function createShipmentWithLegs(
       transport_type: booking.transport_type ?? null,
       priority: booking.priority ?? "normaal",
       requirements: booking.requirements ?? null,
-      pickup_date: booking.pickup_date ?? null,
-      delivery_date: booking.delivery_date ?? null,
-      pickup_time_window_start: booking.pickup_time_window_start ?? null,
-      pickup_time_window_end: booking.pickup_time_window_end ?? null,
-      delivery_time_window_start: booking.delivery_time_window_start ?? null,
-      delivery_time_window_end: booking.delivery_time_window_end ?? null,
+      time_window_start: booking.pickup_time_window_start ?? null,
+      time_window_end:
+        leg.to === "delivery"
+          ? booking.delivery_time_window_end ?? booking.pickup_time_window_end ?? null
+          : leg.to === "hub"
+            ? null
+            : booking.pickup_time_window_end ?? null,
       notes: booking.notes ?? null,
       // order_number: laat leeg; bestaande trigger vult aan.
-      // created_by (optioneel audit-trail)
-      ...(userId ? { created_by: userId } : {}),
     };
 
     const { data: orderData, error: orderErr } = await (supabase as any)
