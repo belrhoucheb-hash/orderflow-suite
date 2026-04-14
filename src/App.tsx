@@ -49,6 +49,7 @@ const Rapportage = lazy(() => import("@/pages/Rapportage"));
 const Facturatie = lazy(() => import("@/pages/Facturatie"));
 const FacturatieDetail = lazy(() => import("@/pages/FacturatieDetail"));
 const ChauffeurApp = lazy(() => import("@/pages/ChauffeurApp"));
+const PreviewPreDepartureModal = lazy(() => import("@/pages/PreviewPreDepartureModal"));
 const TrackTrace = lazy(() => import("@/pages/TrackTrace"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const Exceptions = lazy(() => import("@/pages/Exceptions"));
@@ -129,6 +130,7 @@ const App = () => (
             </Route>
 
             <Route path="/chauffeur" element={<ProtectedRoute><ErrorBoundary><Suspense fallback={<PageLoader />}><ChauffeurApp /></Suspense></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/chauffeur/preview-modal" element={<Suspense fallback={<PageLoader />}><PreviewPreDepartureModal /></Suspense>} />
             <Route path="/track" element={<Suspense fallback={<PageLoader />}><TrackTrace /></Suspense>} />
             <Route path="/portal" element={<Suspense fallback={<PageLoader />}><ClientPortal /></Suspense>}>
               <Route index element={<Suspense fallback={<PageLoader />}><PortalOrders /></Suspense>} />
