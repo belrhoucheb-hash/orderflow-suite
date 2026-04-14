@@ -8,7 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -217,47 +220,53 @@ const Orders = () => {
           className="flex-1 min-w-0 sm:max-w-md"
         />
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-            <SelectTrigger className="h-9 w-40 text-xs font-normal bg-card border-border/60 hover:border-border transition-colors">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {filterOptions.map((s) => (
-                <SelectItem key={s} value={s} className="text-xs">
-                  {s === "alle" ? "Alle statussen" : getStatusColor(s).label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
+          {/* Gecombineerde filter: status + type in één dropdown.
+              Encoded value-prefix onderscheidt de twee dimensies. */}
           <Select
-            value={infoFilter}
-            onValueChange={(v: "alle" | "open" | "overdue") => {
-              setInfoFilter(v);
+            value={
+              statusFilter !== "alle"
+                ? `status:${statusFilter}`
+                : orderTypeFilter !== "alle"
+                ? `type:${orderTypeFilter}`
+                : "alle"
+            }
+            onValueChange={(v) => {
+              if (v === "alle") {
+                setStatusFilter("alle");
+                setOrderTypeFilter("alle");
+              } else if (v.startsWith("status:")) {
+                setStatusFilter(v.slice(7));
+                setOrderTypeFilter("alle");
+              } else if (v.startsWith("type:")) {
+                setOrderTypeFilter(v.slice(5));
+                setStatusFilter("alle");
+              }
               setPage(0);
             }}
           >
-            <SelectTrigger className="h-9 w-44 text-xs font-normal bg-card border-border/60 hover:border-border transition-colors">
-              <SelectValue placeholder="Info-status" />
+            <SelectTrigger className="h-9 w-52 text-xs font-normal bg-card border-border/60 hover:border-border transition-colors">
+              <SelectValue placeholder="Filter" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="alle" className="text-xs">Alle info-statussen</SelectItem>
-              <SelectItem value="open" className="text-xs">Openstaande info</SelectItem>
-              <SelectItem value="overdue" className="text-xs">Verlopen info</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={orderTypeFilter} onValueChange={handleOrderTypeChange}>
-            <SelectTrigger className="h-9 w-36 text-xs font-normal bg-card border-border/60 hover:border-border transition-colors">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="alle" className="text-xs">Alle types</SelectItem>
-              {["ZENDING", "RETOUR", "EMBALLAGE_RUIL"].map((t) => (
-                <SelectItem key={t} value={t} className="text-xs">
-                  {ORDER_TYPE_LABELS[t]?.label ?? t}
-                </SelectItem>
-              ))}
+              <SelectItem value="alle" className="text-xs">Alle orders</SelectItem>
+              <SelectSeparator />
+              <SelectGroup>
+                <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</SelectLabel>
+                {filterOptions.filter(s => s !== "alle").map((s) => (
+                  <SelectItem key={`status:${s}`} value={`status:${s}`} className="text-xs">
+                    {getStatusColor(s).label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              <SelectSeparator />
+              <SelectGroup>
+                <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">Type</SelectLabel>
+                {["ZENDING", "RETOUR", "EMBALLAGE_RUIL"].map((t) => (
+                  <SelectItem key={`type:${t}`} value={`type:${t}`} className="text-xs">
+                    {ORDER_TYPE_LABELS[t]?.label ?? t}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
 
