@@ -22,6 +22,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { KPIStrip, type KPIItem } from "@/components/ui/KPIStrip";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Badge } from "@/components/ui/badge";
+import { InfoStatusBadge } from "@/components/orders/InfoStatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { OrderStatus } from "@/components/ui/StatusBadge";
 import { BulkImportDialog } from "@/components/orders/BulkImportDialog";
@@ -43,6 +44,7 @@ const Orders = () => {
   const [statusFilter, setStatusFilter] = useState<string>("alle");
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("alle");
   const [departmentFilter, setDepartmentFilter] = useState<string>("alle");
+  const [infoFilter, setInfoFilter] = useState<"alle" | "open" | "overdue">("alle");
   const [page, setPage] = useState(0);
   const [pageSize] = useState(25);
   const [printOrder, setPrintOrder] = useState<any>(null);
@@ -98,10 +100,16 @@ const Orders = () => {
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
+  const filteredByInfo = useMemo(() => {
+    if (infoFilter === "alle") return rawOrders;
+    if (infoFilter === "overdue") return rawOrders.filter(o => o.infoStatus === "OVERDUE");
+    return rawOrders.filter(o => o.infoStatus === "AWAITING_INFO" || o.infoStatus === "OVERDUE");
+  }, [rawOrders, infoFilter]);
+
   const orders = useMemo(() => {
-    if (!sortConfig) return rawOrders;
+    if (!sortConfig) return filteredByInfo;
     const { field, direction } = sortConfig;
-    const sorted = [...rawOrders].sort((a, b) => {
+    const sorted = [...filteredByInfo].sort((a, b) => {
       let aVal: string | number = "";
       let bVal: string | number = "";
       switch (field) {
@@ -226,7 +234,28 @@ const Orders = () => {
             ))}
           </div>
         </div>
-        {/* Order type filter pills */}
+        {/* §22 Info-tracking filter + Order type filter pills */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 w-fit">
+            {([
+              { key: "alle", label: "Alle info" },
+              { key: "open", label: "⏳ Openstaand" },
+              { key: "overdue", label: "🔴 Verlopen" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => { setInfoFilter(opt.key); setPage(0); }}
+                className={cn(
+                  "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
+                  infoFilter === opt.key
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 w-fit">
           {["alle", "ZENDING", "RETOUR", "EMBALLAGE_RUIL"].map((t) => (
             <button
@@ -242,6 +271,7 @@ const Orders = () => {
               {t === "alle" ? "Alle" : ORDER_TYPE_LABELS[t]?.label ?? t}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -316,6 +346,7 @@ const Orders = () => {
                     <td className="table-cell">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <StatusBadge status={order.status as OrderStatus} />
+                        <InfoStatusBadge status={order.infoStatus} size="sm" iconOnly />
                         {order.orderType && order.orderType !== "ZENDING" && (
                           <span className={cn("inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium border",
                             ORDER_TYPE_LABELS[order.orderType as OrderType]?.color ?? "bg-muted text-muted-foreground"

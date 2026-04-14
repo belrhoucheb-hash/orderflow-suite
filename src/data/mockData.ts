@@ -31,6 +31,8 @@ export interface Order {
   shipmentId?: string | null;
   legNumber?: number | null;
   legRole?: string | null;
+  /** §22 info-tracking: parallelle dimensie naast status */
+  infoStatus?: "COMPLETE" | "AWAITING_INFO" | "OVERDUE" | null;
 }
 
 export interface Vehicle {
