@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock } from "lucide-react";
+import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route } from "lucide-react";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateOrder } from "@/hooks/useOrders";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { isValidAddress } from "@/components/inbox/utils";
+import { useTenant } from "@/contexts/TenantContext";
+import { createShipmentWithLegs, type BookingInput } from "@/lib/trajectRouter";
+import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 
 type MainTab = "algemeen" | "financieel" | "facturen" | "callbacks" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
@@ -43,8 +45,10 @@ const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long",
 
 const NewOrder = () => {
   const navigate = useNavigate();
-  const createOrder = useCreateOrder();
+  const { tenant } = useTenant();
   const [saving, setSaving] = useState(false);
+  const [trajectPreview, setTrajectPreview] = useState<TrajectPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [mainTab, setMainTab] = useState<MainTab>("algemeen");
   const [bottomTab, setBottomTab] = useState<BottomTab>("vrachmeen");
 
@@ -177,48 +181,71 @@ const NewOrder = () => {
     setErrors({});
     setSaving(true);
     try {
-      // Collect extra fields that don't have dedicated DB columns
-      const extraFields = {
-        contactpersoon: contactpersoon || null,
-        voertuigtype: voertuigtype || null,
-        chauffeur: chauffeur || null,
-        mrn_doc: mrnDoc || null,
-        afstand_km: afstand || null,
-        totale_duur: totaleDuur || null,
-        freight_lines: freightLines.map(fl => ({
-          activiteit: fl.activiteit,
-          locatie: fl.locatie,
-          datum: fl.datum,
-          tijd: fl.tijd,
-          referentie: fl.referentie,
-          opmerkingen: fl.opmerkingen,
-        })),
-      };
+      if (!tenant?.id) throw new Error("Geen actieve tenant gevonden");
 
-      await createOrder.mutateAsync({
+      const booking: BookingInput = {
+        pickup_address: pickupLine?.locatie || null,
+        delivery_address: deliveryLine?.locatie || null,
         client_name: clientName.trim(),
+        client_id: null,
         transport_type: transportType || null,
         weight_kg: weightKg ? parseInt(weightKg) : null,
         quantity: quantity ? parseInt(quantity) : null,
         unit: transportEenheid || null,
-        pickup_address: pickupLine?.locatie || null,
-        delivery_address: deliveryLine?.locatie || null,
-        pickup_time_from: pickupTimeFrom || null,
-        pickup_time_to: pickupTimeTo || null,
-        delivery_time_from: deliveryTimeFrom || null,
-        delivery_time_to: deliveryTimeTo || null,
-        dimensions: afmetingen || null,
-        internal_note: referentie || null,
-        invoice_ref: pickupLine?.referentie || deliveryLine?.referentie || null,
-        attachments: extraFields,
-        status: "DRAFT",
-      });
-      toast.success("Order aangemaakt");
-      if (andClose) navigate("/orders");
+        pickup_time_window_start: pickupTimeFrom || null,
+        pickup_time_window_end: pickupTimeTo || null,
+        delivery_time_window_start: deliveryTimeFrom || null,
+        delivery_time_window_end: deliveryTimeTo || null,
+        notes: referentie || null,
+      };
+
+      const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);
+      toast.success(
+        legs.length > 1
+          ? `Shipment aangemaakt met ${legs.length} legs (${legs.map((l) => l.leg_role).join(" + ")})`
+          : "Order aangemaakt",
+      );
+      if (andClose) {
+        // Navigeer naar de eerste leg; OrderDetail toont de shipment-context
+        if (legs[0]?.id) navigate(`/orders/${legs[0].id}`);
+        else navigate("/orders");
+      }
     } catch (e: any) {
       toast.error(e.message || "Fout bij opslaan");
     } finally { setSaving(false); }
   };
+
+  // Live traject-preview zodra beide adressen ingevuld zijn.
+  useEffect(() => {
+    const pickup = freightLines.find((f) => f.activiteit === "Laden")?.locatie || "";
+    const delivery = freightLines.find((f) => f.activiteit === "Lossen")?.locatie || "";
+    if (!tenant?.id || !pickup || !delivery) {
+      setTrajectPreview(null);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    previewLegs(
+      {
+        pickup_address: pickup,
+        delivery_address: delivery,
+        client_name: clientName.trim(),
+      },
+      tenant.id,
+    )
+      .then((p) => {
+        if (!cancelled) setTrajectPreview(p);
+      })
+      .catch(() => {
+        if (!cancelled) setTrajectPreview(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [freightLines, clientName, tenant?.id]);
 
   const mainTabs: { key: MainTab; label: string }[] = [
     { key: "algemeen", label: "ALGEMEEN" },
@@ -306,6 +333,51 @@ const NewOrder = () => {
           </button>
         ))}
       </div>
+
+      {/* ── Traject-preview banner ── */}
+      {trajectPreview && trajectPreview.matched && trajectPreview.legs.length > 0 && (
+        <div className="bg-card border-b border-border px-4 py-2">
+          <div className={cn(
+            "flex items-start gap-2 rounded-md border px-3 py-2 text-xs",
+            trajectPreview.legs.length > 1
+              ? "border-amber-300 bg-amber-50 text-amber-900"
+              : "border-blue-300 bg-blue-50 text-blue-900",
+          )}>
+            <Route className="h-4 w-4 mt-0.5 shrink-0" />
+            <div className="flex-1 space-y-1">
+              <div className="font-semibold">
+                {trajectPreview.legs.length > 1
+                  ? `Deze boeking wordt gesplitst in ${trajectPreview.legs.length} legs`
+                  : `Traject: ${trajectPreview.rule?.name ?? ""}`}
+              </div>
+              <ul className="space-y-0.5">
+                {trajectPreview.legs.map((leg) => (
+                  <li key={leg.sequence} className="flex items-baseline gap-2">
+                    <span className="font-medium">#{leg.sequence}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-white/70 border">
+                      {leg.department_code}
+                    </span>
+                    <span className="truncate">{leg.from || "?"} → {leg.to || "?"}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+      {trajectPreview && !trajectPreview.matched && trajectPreview.reason && (
+        <div className="bg-card border-b border-border px-4 py-2">
+          <div className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900">
+            <Route className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>{trajectPreview.reason}</span>
+          </div>
+        </div>
+      )}
+      {previewLoading && !trajectPreview && (
+        <div className="bg-card border-b border-border px-4 py-1 text-xs text-muted-foreground">
+          Traject-preview wordt berekend…
+        </div>
+      )}
 
       {/* ── Body ── */}
       <div className="flex-1 overflow-y-auto">

@@ -4,8 +4,9 @@ import {
   ArrowLeft, MapPin, Package, Truck, User, Clock, FileText,
   MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2,
   Undo2, Send, Loader2, Printer, Warehouse, ScrollText, Image,
-  Save, X, Bell
+  Save, X, Bell, Route, ArrowRight
 } from "lucide-react";
+import { useShipment } from "@/hooks/useShipments";
 import { ClickableAddress } from "@/components/ClickableAddress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -429,6 +430,9 @@ const OrderDetail = () => {
           className="flex-1"
         />
       </div>
+
+      {/* Shipment context banner (toont andere legs uit dezelfde shipment) */}
+      <ShipmentBanner shipmentId={order.shipment_id ?? null} currentOrderId={order.id} />
 
       {/* Cancellation banner */}
       {isCancelled && (
@@ -962,6 +966,80 @@ const OrderDetail = () => {
           }}
         />
       )}
+    </div>
+  );
+};
+
+// ─── ShipmentBanner ────────────────────────────────────────────────────────
+// Toont bovenaan OrderDetail de shipment-context: welke legs zijn er, welke
+// is de huidige, klik om naar een andere leg te navigeren. Alleen zichtbaar
+// wanneer de order tot een shipment met ≥1 leg behoort.
+
+const ShipmentBanner = ({
+  shipmentId,
+  currentOrderId,
+}: {
+  shipmentId: string | null;
+  currentOrderId: string;
+}) => {
+  const { data: shipment } = useShipment(shipmentId);
+  const navigate = useNavigate();
+
+  if (!shipmentId || !shipment || !shipment.legs?.length) return null;
+  // Bij 1-leg shipments is de context triviaal; niet tonen.
+  if (shipment.legs.length <= 1) return null;
+
+  const shipNumber = shipment.shipment_number
+    ? `SHP-${new Date(shipment.created_at).getFullYear()}-${String(shipment.shipment_number).padStart(4, "0")}`
+    : shipment.id.slice(0, 8);
+
+  return (
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+      <div className="flex items-start gap-3">
+        <Route className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+        <div className="flex-1 space-y-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-sm font-semibold text-amber-900">
+              Shipment {shipNumber} · {shipment.legs.length} legs
+            </p>
+            <span className="text-xs text-amber-700">
+              {shipment.origin_address} → {shipment.destination_address}
+            </span>
+          </div>
+          <ul className="space-y-1">
+            {shipment.legs.map((leg) => {
+              const isCurrent = leg.id === currentOrderId;
+              return (
+                <li key={leg.id}>
+                  <button
+                    type="button"
+                    onClick={() => !isCurrent && navigate(`/orders/${leg.id}`)}
+                    disabled={isCurrent}
+                    className={cn(
+                      "w-full flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs text-left transition",
+                      isCurrent
+                        ? "border-amber-400 bg-amber-100 text-amber-900 cursor-default font-semibold"
+                        : "border-amber-200 bg-white/60 text-amber-900 hover:bg-white",
+                    )}
+                  >
+                    <span className="font-mono text-[10px] w-6">#{leg.legNumber ?? "?"}</span>
+                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 uppercase tracking-wider">
+                      {leg.departmentCode ?? "—"}
+                    </Badge>
+                    <span className="truncate flex-1">
+                      {leg.pickupAddress} <ArrowRight className="inline h-3 w-3" /> {leg.deliveryAddress}
+                    </span>
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                      {leg.status}
+                    </Badge>
+                    {isCurrent && <CheckCircle2 className="h-3 w-3 text-amber-700" />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 };
