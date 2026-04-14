@@ -9,6 +9,7 @@ import { checkTripCompletion } from "@/hooks/useBillingStatus";
 import { TripStatusBadge, StopStatusBadge, TripProgressBar } from "@/components/dispatch/TripStatusBadge";
 import type { Trip, TripStop } from "@/types/dispatch";
 import { toast } from "sonner";
+import { PreDepartureInfoCheck } from "./PreDepartureInfoCheck";
 
 interface Props {
   driverId: string;
@@ -23,6 +24,8 @@ export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted 
   const updateStop = useUpdateStopStatus();
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [packagingStopId, setPackagingStopId] = useState<string | null>(null);
+  const [pendingStartTripId, setPendingStartTripId] = useState<string | null>(null);
+  const plannerPhone = (import.meta as any).env?.VITE_PLANNER_PHONE ?? null;
 
   const selectedTrip = trips.find(t => t.id === selectedTripId);
   const stops = (selectedTrip as any)?.trip_stops as TripStop[] || [];
@@ -100,17 +103,29 @@ export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted 
     } catch (e: any) { toast.error(e.message); }
   };
 
-  const handleStartTrip = async () => {
+  /** §22 REQ-22.6 — triggert pre-departure info-check, die bij ok de echte start doet. */
+  const handleStartTrip = () => {
     if (!selectedTrip) return;
+    setPendingStartTripId(selectedTrip.id);
+  };
+
+  const doStartTrip = async () => {
+    if (!selectedTrip) return;
+    setPendingStartTripId(null);
     try {
       await updateTrip.mutateAsync({ tripId: selectedTrip.id, status: "ACTIEF" });
-      // Set first stop to ONDERWEG
       const firstStop = sortedStops.find(s => s.stop_status === "GEPLAND");
       if (firstStop) await updateStop.mutateAsync({ stopId: firstStop.id, status: "ONDERWEG" });
       onTripStarted?.(selectedTrip.id);
       toast.success("Rit gestart");
     } catch (e: any) { toast.error(e.message); }
   };
+
+  const orderIdsInTrip: string[] = Array.from(new Set(
+    sortedStops
+      .map(s => (s as any).order_id as string | null | undefined)
+      .filter((v): v is string => !!v)
+  ));
 
   const handleArrived = async (stopId: string) => {
     try {
@@ -152,6 +167,13 @@ export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted 
 
   return (
     <div className="flex flex-col h-full">
+      <PreDepartureInfoCheck
+        open={!!pendingStartTripId}
+        orderIds={orderIdsInTrip}
+        plannerPhone={plannerPhone}
+        onCancel={() => setPendingStartTripId(null)}
+        onProceed={doStartTrip}
+      />
       {/* Trip header */}
       <div className="p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between mb-2">

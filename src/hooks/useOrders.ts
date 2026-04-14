@@ -5,6 +5,8 @@ import type { Order } from "@/data/mockData";
 import { logAudit } from "@/lib/auditLog";
 import { emitEventDirect } from "@/hooks/useEventPipeline";
 import type { EventType } from "@/types/events";
+import { useTenantOptional } from "@/contexts/TenantContext";
+import { fetchDepartmentsCached } from "@/hooks/useDepartments";
 
 // ─── 8.11 Order Status State Machine ─────────────────────────────────
 // Extracted to @/lib/statusTransitions as a pure function (no Supabase dep).
@@ -45,9 +47,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 export function useOrders(options: UseOrdersOptions = {}) {
   const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter } = options;
+  const queryClient = useQueryClient();
+  const { tenant } = useTenantOptional();
 
   return useQuery({
-    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter }],
+    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, tenantId: tenant?.id }],
     staleTime: 5_000,
     queryFn: async () => {
       let query = (supabase as any)
@@ -89,21 +93,25 @@ export function useOrders(options: UseOrdersOptions = {}) {
         query = query.or(parts.join(","));
       }
 
-      // Parallel: orders + departments lookup (so we can map department_id → code client-side
-      // without paying the cost of a join on every row).
-      const [ordersResult, deptsResult] = await Promise.all([
+      // Perf: departments via gedeelde cache (1x per tenant per 60s).
+      // Fault-tolerant: faalt de departments-fetch, dan nog steeds orders tonen
+      // (met lege departmentCode). Zo blokkeert een RLS/seed-probleem niet de
+      // hele dashboard.
+      const [ordersResult, departments] = await Promise.all([
         query,
-        (supabase as any)
-          .from("departments")
-          .select("id, code, name"),
+        tenant?.id
+          ? fetchDepartmentsCached(queryClient, tenant.id).catch((e) => {
+              console.warn("[useOrders] departments fetch failed, continuing without codes:", e);
+              return [] as Awaited<ReturnType<typeof fetchDepartmentsCached>>;
+            })
+          : Promise.resolve([]),
       ]);
 
       const { data, error, count } = ordersResult;
       if (error) throw error;
-      if (deptsResult.error) throw deptsResult.error;
 
       const deptCodeById: Record<string, string> = {};
-      (deptsResult.data ?? []).forEach((d: any) => {
+      departments.forEach((d) => {
         deptCodeById[d.id] = d.code;
       });
 
@@ -146,6 +154,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
           shipmentId: (o as any).shipment_id ?? null,
           legNumber: (o as any).leg_number ?? null,
           legRole: (o as any).leg_role ?? null,
+          infoStatus: ((o as any).info_status ?? null) as any,
         };
       });
 
@@ -176,6 +185,8 @@ export function useOrdersSubscription() {
 }
 
 export function useOrder(id: string) {
+  const queryClient = useQueryClient();
+  const { tenant } = useTenantOptional();
   return useQuery({
     queryKey: ["orders", id],
     staleTime: 5_000,
@@ -200,16 +211,16 @@ export function useOrder(id: string) {
         estimatedDelivery = new Date(created.getTime() + hoursOffset * 60 * 60 * 1000).toISOString();
       }
 
-      // Resolve department code if department_id is present
+      // Resolve department code via gedeelde cache. Fault-tolerant.
       const departmentId = (data as any).department_id ?? null;
       let departmentCode: string | null = null;
-      if (departmentId) {
-        const { data: dept } = await (supabase as any)
-          .from("departments")
-          .select("code")
-          .eq("id", departmentId)
-          .maybeSingle();
-        departmentCode = dept?.code ?? null;
+      if (departmentId && tenant?.id) {
+        try {
+          const departments = await fetchDepartmentsCached(queryClient, tenant.id);
+          departmentCode = departments.find((d) => d.id === departmentId)?.code ?? null;
+        } catch (e) {
+          console.warn("[useOrder] departments fetch failed:", e);
+        }
       }
 
       return {
@@ -233,6 +244,7 @@ export function useOrder(id: string) {
         shipmentId: (data as any).shipment_id ?? null,
         legNumber: (data as any).leg_number ?? null,
         legRole: (data as any).leg_role ?? null,
+        infoStatus: ((data as any).info_status ?? null) as any,
       } as Order;
     },
     enabled: !!id,

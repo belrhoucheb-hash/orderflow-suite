@@ -13,6 +13,8 @@ import { isValidAddress } from "@/components/inbox/utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { createShipmentWithLegs, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
+import { supabase } from "@/integrations/supabase/client";
+import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
 
 type MainTab = "algemeen" | "financieel" | "facturen" | "callbacks" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
@@ -89,6 +91,15 @@ const NewOrder = () => {
 
   // Freight summary (items added via "Toevoegen aan Vrachtlijst")
   const [freightSummary, setFreightSummary] = useState<FreightSummaryItem[]>([]);
+
+  // §22 Info-tracking: welke velden "volgt van klant"
+  const [infoFollows, setInfoFollows] = useState<Record<string, boolean>>({});
+  const [infoContactName, setInfoContactName] = useState("");
+  const [infoContactEmail, setInfoContactEmail] = useState("");
+
+  const toggleInfoFollow = (fieldName: string) => {
+    setInfoFollows(prev => ({ ...prev, [fieldName]: !prev[fieldName] }));
+  };
 
   // Financieel state
   const [tariefType, setTariefType] = useState("");
@@ -200,6 +211,40 @@ const NewOrder = () => {
       };
 
       const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);
+
+      // §22 Info-tracking: insert info-requests voor elk veld dat "volgt van klant"
+      const checkedFields = TRACKABLE_FIELDS.filter(f => infoFollows[f.name]);
+      if (checkedFields.length > 0 && legs.length > 0) {
+        const pickupIso = (() => {
+          const d = pickupLine?.datum;
+          const t = pickupLine?.tijd || pickupTimeFrom;
+          if (!d) return null;
+          const combined = t ? `${d}T${t}:00` : `${d}T08:00:00`;
+          const parsed = new Date(combined);
+          return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+        })();
+        const expected_by = defaultExpectedBy(pickupIso);
+        const rows = legs.flatMap((leg: any) =>
+          checkedFields.map(f => ({
+            tenant_id: tenant.id,
+            order_id: leg.id,
+            field_name: f.name,
+            field_label: f.label,
+            status: "PENDING",
+            promised_by_name: infoContactName.trim() || (contactpersoon || null),
+            promised_by_email: infoContactEmail.trim() || null,
+            expected_by,
+          }))
+        );
+        const { error: infoErr } = await (supabase as any)
+          .from("order_info_requests")
+          .insert(rows);
+        if (infoErr) {
+          console.warn("[NewOrder] info-request insert faalde:", infoErr);
+          toast.warning("Order opgeslagen, maar info-tracking kon niet worden aangemaakt");
+        }
+      }
+
       toast.success(
         legs.length > 1
           ? `Shipment aangemaakt met ${legs.length} legs (${legs.map((l) => l.leg_role).join(" + ")})`
@@ -223,27 +268,32 @@ const NewOrder = () => {
       setTrajectPreview(null);
       return;
     }
+    // Debounce 400ms: voorkomt dat preview bij elke letter een DB-roundtrip doet
+    // + stopt ook de flickerende "geen rule gevonden"-melding tijdens typen.
     let cancelled = false;
-    setPreviewLoading(true);
-    previewLegs(
-      {
-        pickup_address: pickup,
-        delivery_address: delivery,
-        client_name: clientName.trim(),
-      },
-      tenant.id,
-    )
-      .then((p) => {
-        if (!cancelled) setTrajectPreview(p);
-      })
-      .catch(() => {
-        if (!cancelled) setTrajectPreview(null);
-      })
-      .finally(() => {
-        if (!cancelled) setPreviewLoading(false);
-      });
+    const timer = setTimeout(() => {
+      setPreviewLoading(true);
+      previewLegs(
+        {
+          pickup_address: pickup,
+          delivery_address: delivery,
+          client_name: clientName.trim(),
+        },
+        tenant.id,
+      )
+        .then((p) => {
+          if (!cancelled) setTrajectPreview(p);
+        })
+        .catch(() => {
+          if (!cancelled) setTrajectPreview(null);
+        })
+        .finally(() => {
+          if (!cancelled) setPreviewLoading(false);
+        });
+    }, 400);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [freightLines, clientName, tenant?.id]);
 
@@ -482,6 +532,56 @@ const NewOrder = () => {
                 <span className="text-xs text-muted-foreground font-medium">MRN doc:</span>
                 <Input value={mrnDoc} onChange={e => setMrnDoc(e.target.value)} className="h-8 text-xs w-36" />
               </div>
+            </div>
+
+            {/* ── §22 Info volgt van klant ── */}
+            <div className="bg-amber-50/40 border border-amber-200 rounded-lg p-3 space-y-2">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="space-y-0.5">
+                  <h3 className="text-xs font-bold text-foreground">
+                    Info volgt nog van klant <span className="text-[10px] font-normal text-muted-foreground">(optioneel — blokkeert inplannen niet)</span>
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Aangevinkte velden komen op de rappellijst. T-4u vóór pickup stuurt het systeem een herinnering; T-1u escalatie naar planner.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
+                {TRACKABLE_FIELDS.map(f => (
+                  <label key={f.name} className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!infoFollows[f.name]}
+                      onChange={() => toggleInfoFollow(f.name)}
+                      className="h-3.5 w-3.5 rounded border-border accent-amber-600"
+                    />
+                    <span>{f.label}</span>
+                  </label>
+                ))}
+              </div>
+              {Object.values(infoFollows).some(Boolean) && (
+                <div className="flex flex-wrap gap-2 pt-1 border-t border-amber-200">
+                  <div className="space-y-0.5 flex-1 min-w-[180px]">
+                    <span className="text-[11px] text-muted-foreground font-medium">Contactpersoon die levert:</span>
+                    <Input
+                      value={infoContactName}
+                      onChange={e => setInfoContactName(e.target.value)}
+                      placeholder="Naam"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-0.5 flex-1 min-w-[200px]">
+                    <span className="text-[11px] text-muted-foreground font-medium">E-mail voor herinneringen:</span>
+                    <Input
+                      type="email"
+                      value={infoContactEmail}
+                      onChange={e => setInfoContactEmail(e.target.value)}
+                      placeholder="klant@voorbeeld.nl"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── Vrachtplanning ── */}

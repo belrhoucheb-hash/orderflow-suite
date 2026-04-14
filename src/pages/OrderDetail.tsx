@@ -32,6 +32,8 @@ import { RecipientFields } from "@/components/orders/RecipientFields";
 import { ReturnOrdersList } from "@/components/orders/ReturnOrdersList";
 import { NotificationLogPanel } from "@/components/orders/NotificationLogPanel";
 import OrderTimeline from "@/components/orders/OrderTimeline";
+import { OrderInfoRequestsCard } from "@/components/orders/OrderInfoRequestsCard";
+import { InfoStatusBadge } from "@/components/orders/InfoStatusBadge";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
 import { Receipt } from "lucide-react";
@@ -425,7 +427,10 @@ const OrderDetail = () => {
           title={`Order #${order.order_number}`}
           subtitle={order.client_name || "Onbekende klant"}
           actions={
-            <StatusBadge status={order.status as OrderStatus} />
+            <div className="flex items-center gap-2">
+              <StatusBadge status={order.status as OrderStatus} />
+              <InfoStatusBadge status={order.info_status} />
+            </div>
           }
           className="flex-1"
         />
@@ -459,6 +464,12 @@ const OrderDetail = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left column */}
         <div className="lg:col-span-2 space-y-4">
+          {/* §22 Info-tracking — altijd zichtbaar zodat planner kan toevoegen */}
+          <OrderInfoRequestsCard
+            orderId={order.id}
+            pickupAtIso={order.time_window_start ?? null}
+          />
+
           {/* Route */}
           <Card>
             <CardHeader className="pb-3">

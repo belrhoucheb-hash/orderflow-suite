@@ -4,6 +4,7 @@ import { MapPin, AlertTriangle, Snowflake, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type PlanOrder } from "./types";
 import { getCity, getTotalWeight, hasTag } from "./planningUtils";
+import { InfoStatusBadge } from "@/components/orders/InfoStatusBadge";
 
 function getTimeWindow(order: PlanOrder): string {
   if (order.time_window_start && order.time_window_end) {
@@ -73,6 +74,7 @@ export function PlanningOrderCard({
               <Snowflake className="h-2.5 w-2.5" />KOEL
             </span>
           )}
+          <InfoStatusBadge status={order.info_status} size="sm" iconOnly />
         </div>
       </div>
       <p className="text-sm font-medium truncate text-foreground">{order.client_name || "Onbekend"}</p>
