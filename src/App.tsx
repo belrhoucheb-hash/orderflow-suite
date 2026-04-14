@@ -62,7 +62,21 @@ const Dispatch = lazy(() => import("@/pages/Dispatch"));
 const LiveTracking = lazy(() => import("@/pages/LiveTracking"));
 const Autonomie = lazy(() => import("@/pages/Autonomie"));
 
-const queryClient = new QueryClient();
+// Performance: saner React Query defaults.
+//   * staleTime 60s — avoids instant re-fetch op elk mount.
+//   * refetchOnWindowFocus off — voorkomt full reload bij tab-switch.
+//   * retry 1 — laat fouten snel terugzien ipv 3x wachten.
+// Per-query overrides blijven mogelijk via queryOptions.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function PageLoader() {
   return (

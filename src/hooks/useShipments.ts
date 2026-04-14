@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import type { Order } from "@/data/mockData";
 import type { OrderStatus } from "@/lib/statusTransitions";
+import { fetchDepartmentsCached } from "@/hooks/useDepartments";
 
 // Legacy → canonical mapping (mirrors useOrders.ts)
 const legacyStatusMap: Record<string, OrderStatus> = {
@@ -81,6 +82,7 @@ function mapOrderRow(o: any, departmentCode?: string | null): Order {
 export function useShipments(options: UseShipmentsOptions = {}) {
   const { page = 0, pageSize = 25, statusFilter, search } = options;
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
 
   return useQuery({
     queryKey: [
@@ -119,8 +121,8 @@ export function useShipments(options: UseShipmentsOptions = {}) {
 
       const shipmentIds = (shipmentsData ?? []).map((s: any) => s.id);
 
-      // Parallel: legs + departments lookup
-      const [legsResult, deptsResult] = await Promise.all([
+      // Perf: departments via gedeelde cache. Fault-tolerant.
+      const [legsResult, departments] = await Promise.all([
         shipmentIds.length > 0
           ? (supabase as any)
               .from("orders")
@@ -128,17 +130,16 @@ export function useShipments(options: UseShipmentsOptions = {}) {
               .in("shipment_id", shipmentIds)
               .order("leg_number", { ascending: true })
           : Promise.resolve({ data: [], error: null }),
-        (supabase as any)
-          .from("departments")
-          .select("id, code")
-          .eq("tenant_id", tenant!.id),
+        fetchDepartmentsCached(queryClient, tenant!.id).catch((e) => {
+          console.warn("[useShipments] departments fetch failed:", e);
+          return [] as Awaited<ReturnType<typeof fetchDepartmentsCached>>;
+        }),
       ]);
 
       if (legsResult.error) throw legsResult.error;
-      if (deptsResult.error) throw deptsResult.error;
 
       const deptCodeById: Record<string, string> = {};
-      (deptsResult.data ?? []).forEach((d: any) => {
+      departments.forEach((d) => {
         deptCodeById[d.id] = d.code;
       });
 
@@ -173,6 +174,7 @@ export function useShipments(options: UseShipmentsOptions = {}) {
 
 export function useShipment(id: string | null | undefined) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
 
   return useQuery({
     queryKey: ["shipments", id, tenant?.id],
@@ -188,23 +190,22 @@ export function useShipment(id: string | null | undefined) {
       if (error) throw error;
       if (!shipment) return null;
 
-      const [legsResult, deptsResult] = await Promise.all([
+      const [legsResult, departments] = await Promise.all([
         (supabase as any)
           .from("orders")
           .select("*")
           .eq("shipment_id", shipment.id)
           .order("leg_number", { ascending: true }),
-        (supabase as any)
-          .from("departments")
-          .select("id, code")
-          .eq("tenant_id", tenant!.id),
+        fetchDepartmentsCached(queryClient, tenant!.id).catch((e) => {
+          console.warn("[useShipment] departments fetch failed:", e);
+          return [] as Awaited<ReturnType<typeof fetchDepartmentsCached>>;
+        }),
       ]);
 
       if (legsResult.error) throw legsResult.error;
-      if (deptsResult.error) throw deptsResult.error;
 
       const deptCodeById: Record<string, string> = {};
-      (deptsResult.data ?? []).forEach((d: any) => {
+      departments.forEach((d) => {
         deptCodeById[d.id] = d.code;
       });
 

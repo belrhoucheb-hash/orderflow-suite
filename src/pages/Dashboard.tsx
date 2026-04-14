@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import {
   Truck, MapPin, CheckCircle2, AlertTriangle, Clock,
   TrendingUp, ArrowRight, CalendarClock, Phone, Mail,
@@ -13,7 +13,11 @@ import { Button } from "@/components/ui/button";
 import { AutonomyScoreCard } from "@/components/dashboard/AutonomyScoreCard";
 import { FinancialKPIWidget } from "@/components/dashboard/FinancialKPIWidget";
 import { OperationalForecastWidget } from "@/components/dashboard/OperationalForecastWidget";
-import { MarginWidget } from "@/components/dashboard/MarginWidget";
+// Perf: MarginWidget trekt de recharts bundle (~410KB) mee; lazy houdt die
+// uit de initial Dashboard-load en laadt 'm pas als het widget rendert.
+const MarginWidget = lazy(() =>
+  import("@/components/dashboard/MarginWidget").then((m) => ({ default: m.MarginWidget })),
+);
 import { toast } from "sonner";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
@@ -105,7 +109,9 @@ const Dashboard = () => {
 
       {/* Margin widget */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MarginWidget />
+        <Suspense fallback={<div className="h-64 rounded-lg border border-border bg-card animate-pulse" />}>
+          <MarginWidget />
+        </Suspense>
       </div>
 
       {/* AI Autonomy widget */}
