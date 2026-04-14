@@ -208,34 +208,28 @@ const Orders = () => {
         ]}
       />
 
-      {/* Search & Filters */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <SearchInput
-            value={search}
-            onChange={handleSearchChange}
-            placeholder="Zoek op ordernummer of klant..."
-            className="flex-1 max-w-md"
-          />
-          <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 overflow-x-auto max-w-full">
-            {filterOptions.map((s) => (
-              <button
-                key={s}
-                onClick={() => handleStatusFilterChange(s)}
-                className={cn(
-                  "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
-                  statusFilter === s
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {s === "alle" ? "Alle" : getStatusColor(s).label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* §22 Info-tracking filter (dropdown) + Order type filter pills */}
+      {/* Search & Filters — clean, minimalist */}
+      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+        <SearchInput
+          value={search}
+          onChange={handleSearchChange}
+          placeholder="Zoek op ordernummer of klant..."
+          className="flex-1 min-w-0 sm:max-w-md"
+        />
         <div className="flex items-center gap-2 flex-wrap">
+          <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+            <SelectTrigger className="h-9 w-40 text-xs font-normal bg-card border-border/60 hover:border-border transition-colors">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              {filterOptions.map((s) => (
+                <SelectItem key={s} value={s} className="text-xs">
+                  {s === "alle" ? "Alle statussen" : getStatusColor(s).label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select
             value={infoFilter}
             onValueChange={(v: "alle" | "open" | "overdue") => {
@@ -243,31 +237,43 @@ const Orders = () => {
               setPage(0);
             }}
           >
-            <SelectTrigger className="h-9 w-48 text-xs">
+            <SelectTrigger className="h-9 w-44 text-xs font-normal bg-card border-border/60 hover:border-border transition-colors">
               <SelectValue placeholder="Info-status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="alle">Alle info-statussen</SelectItem>
-              <SelectItem value="open">Openstaande info</SelectItem>
-              <SelectItem value="overdue">Verlopen info</SelectItem>
+              <SelectItem value="alle" className="text-xs">Alle info-statussen</SelectItem>
+              <SelectItem value="open" className="text-xs">Openstaande info</SelectItem>
+              <SelectItem value="overdue" className="text-xs">Verlopen info</SelectItem>
             </SelectContent>
           </Select>
-        <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 w-fit">
-          {["alle", "ZENDING", "RETOUR", "EMBALLAGE_RUIL"].map((t) => (
+
+          <Select value={orderTypeFilter} onValueChange={handleOrderTypeChange}>
+            <SelectTrigger className="h-9 w-36 text-xs font-normal bg-card border-border/60 hover:border-border transition-colors">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="alle" className="text-xs">Alle types</SelectItem>
+              {["ZENDING", "RETOUR", "EMBALLAGE_RUIL"].map((t) => (
+                <SelectItem key={t} value={t} className="text-xs">
+                  {ORDER_TYPE_LABELS[t]?.label ?? t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {(statusFilter !== "alle" || infoFilter !== "alle" || orderTypeFilter !== "alle") && (
             <button
-              key={t}
-              onClick={() => handleOrderTypeChange(t)}
-              className={cn(
-                "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
-                orderTypeFilter === t
-                  ? "bg-foreground text-background shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
+              onClick={() => {
+                setStatusFilter("alle");
+                setInfoFilter("alle");
+                setOrderTypeFilter("alle");
+                setPage(0);
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2"
             >
-              {t === "alle" ? "Alle" : ORDER_TYPE_LABELS[t]?.label ?? t}
+              Reset
             </button>
-          ))}
-        </div>
+          )}
         </div>
       </div>
 
