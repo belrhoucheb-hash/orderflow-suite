@@ -32,13 +32,22 @@ export interface UseOrdersOptions {
   statusFilter?: string;
   orderTypeFilter?: string;
   search?: string;
+  /**
+   * Prio 1: filter orders by department.
+   * Accepts a department UUID. Non-uuid values are ignored (use
+   * `useDepartments()` to resolve a code → uuid upstream).
+   */
+  departmentFilter?: string;
 }
 
+// RFC4122 v1-v5 UUID validator (simple shape check)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function useOrders(options: UseOrdersOptions = {}) {
-  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search } = options;
+  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter } = options;
 
   return useQuery({
-    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search }],
+    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter }],
     staleTime: 5_000,
     queryFn: async () => {
       let query = (supabase as any)
@@ -60,6 +69,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
         query = query.eq("order_type", orderTypeFilter);
       }
 
+      if (departmentFilter && UUID_RE.test(departmentFilter)) {
+        query = query.eq("department_id", departmentFilter);
+      }
+
       if (search) {
         const parts = [
           `client_name.ilike.%${search}%`,
@@ -76,9 +89,23 @@ export function useOrders(options: UseOrdersOptions = {}) {
         query = query.or(parts.join(","));
       }
 
-      const { data, error, count } = await query;
+      // Parallel: orders + departments lookup (so we can map department_id → code client-side
+      // without paying the cost of a join on every row).
+      const [ordersResult, deptsResult] = await Promise.all([
+        query,
+        (supabase as any)
+          .from("departments")
+          .select("id, code, name"),
+      ]);
 
+      const { data, error, count } = ordersResult;
       if (error) throw error;
+      if (deptsResult.error) throw deptsResult.error;
+
+      const deptCodeById: Record<string, string> = {};
+      (deptsResult.data ?? []).forEach((d: any) => {
+        deptCodeById[d.id] = d.code;
+      });
 
       const orders = (data ?? []).map((o): Order => {
         // Compute estimatedDelivery from available data
@@ -92,6 +119,9 @@ export function useOrders(options: UseOrdersOptions = {}) {
           const hoursOffset = (priority === "spoed" || priority === "hoog") ? 4 : 24;
           estimatedDelivery = new Date(created.getTime() + hoursOffset * 60 * 60 * 1000).toISOString();
         }
+
+        const departmentId = (o as any).department_id ?? null;
+        const departmentCode = departmentId ? deptCodeById[departmentId] ?? null : null;
 
         return {
           id: o.id,
@@ -111,6 +141,11 @@ export function useOrders(options: UseOrdersOptions = {}) {
           notes: o.internal_note || "",
           orderType: (o as any).order_type ?? "ZENDING",
           parentOrderId: o.parent_order_id ?? null,
+          departmentId,
+          departmentCode,
+          shipmentId: (o as any).shipment_id ?? null,
+          legNumber: (o as any).leg_number ?? null,
+          legRole: (o as any).leg_role ?? null,
         };
       });
 
@@ -150,7 +185,7 @@ export function useOrder(id: string) {
         .select("*")
         .eq("id", id)
         .single();
-        
+
       if (error) throw error;
       if (!data) return null;
 
@@ -163,6 +198,18 @@ export function useOrder(id: string) {
         const priority = (data.priority || "normaal").toLowerCase();
         const hoursOffset = (priority === "spoed" || priority === "hoog") ? 4 : 24;
         estimatedDelivery = new Date(created.getTime() + hoursOffset * 60 * 60 * 1000).toISOString();
+      }
+
+      // Resolve department code if department_id is present
+      const departmentId = (data as any).department_id ?? null;
+      let departmentCode: string | null = null;
+      if (departmentId) {
+        const { data: dept } = await (supabase as any)
+          .from("departments")
+          .select("code")
+          .eq("id", departmentId)
+          .maybeSingle();
+        departmentCode = dept?.code ?? null;
       }
 
       return {
@@ -181,6 +228,11 @@ export function useOrder(id: string) {
         createdAt: data.created_at,
         estimatedDelivery,
         notes: data.internal_note || "",
+        departmentId,
+        departmentCode,
+        shipmentId: (data as any).shipment_id ?? null,
+        legNumber: (data as any).leg_number ?? null,
+        legRole: (data as any).leg_role ?? null,
       } as Order;
     },
     enabled: !!id,
