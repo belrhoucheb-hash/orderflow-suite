@@ -234,28 +234,24 @@ const Orders = () => {
             ))}
           </div>
         </div>
-        {/* §22 Info-tracking filter + Order type filter pills */}
+        {/* §22 Info-tracking filter (dropdown) + Order type filter pills */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 w-fit">
-            {([
-              { key: "alle", label: "Alle info" },
-              { key: "open", label: "⏳ Openstaand" },
-              { key: "overdue", label: "🔴 Verlopen" },
-            ] as const).map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => { setInfoFilter(opt.key); setPage(0); }}
-                className={cn(
-                  "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
-                  infoFilter === opt.key
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <Select
+            value={infoFilter}
+            onValueChange={(v: "alle" | "open" | "overdue") => {
+              setInfoFilter(v);
+              setPage(0);
+            }}
+          >
+            <SelectTrigger className="h-9 w-48 text-xs">
+              <SelectValue placeholder="Info-status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="alle">Alle info-statussen</SelectItem>
+              <SelectItem value="open">Openstaande info</SelectItem>
+              <SelectItem value="overdue">Verlopen info</SelectItem>
+            </SelectContent>
+          </Select>
         <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 w-fit">
           {["alle", "ZENDING", "RETOUR", "EMBALLAGE_RUIL"].map((t) => (
             <button
