@@ -55,15 +55,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  DRAFT: { label: "Nieuw", color: "bg-muted text-muted-foreground" },
-  PENDING: { label: "In behandeling", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  OPEN: { label: "In behandeling", color: "bg-amber-100 text-amber-700 border-amber-200" }, // legacy
-  PLANNED: { label: "Ingepland", color: "bg-violet-100 text-violet-700 border-violet-200" },
-  IN_TRANSIT: { label: "Onderweg", color: "bg-primary/10 text-primary border-primary/20" },
-  DELIVERED: { label: "Afgeleverd", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  CANCELLED: { label: "Geannuleerd", color: "bg-destructive/10 text-destructive border-destructive/20" },
-};
+import { STATUS_MAP } from "@/lib/orderDisplay";
 
 const OrderDetail = () => {
   const { id } = useParams();

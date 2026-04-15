@@ -3,6 +3,7 @@ import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, Chev
 import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
+import { INFO_STATUS_LABEL, priorityDotColors } from "@/lib/orderDisplay";
 import { useOrders } from "@/hooks/useOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUnreadNoteOrderIds } from "@/hooks/useOrderNotesRead";
@@ -46,20 +47,7 @@ function formatOrderDate(value: string | null | undefined): { label: string; too
   return { label, tooltip };
 }
 
-const priorityDotColors: Record<string, string> = {
-  laag: "text-muted-foreground/40",
-  normaal: "text-blue-400",
-  hoog: "text-amber-500",
-  spoed: "text-primary",
-};
-
 const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED"] as const;
-
-const INFO_STATUS_LABEL: Record<string, string> = {
-  COMPLETE: "Compleet",
-  AWAITING_INFO: "Openstaand",
-  OVERDUE: "Verlopen",
-};
 
 function exportOrders(orders: Array<any>, baseName: string) {
   if (orders.length === 0) return;

@@ -17,16 +17,7 @@ export type { OrderStatus } from "@/lib/statusTransitions";
 import { VALID_TRANSITIONS } from "@/lib/statusTransitions";
 import type { OrderStatus } from "@/lib/statusTransitions";
 
-// Map legacy DB statuses to the canonical status model
-const legacyStatusMap: Record<string, OrderStatus> = {
-  OPEN: "PENDING",
-  WAITING: "PENDING",
-  CONFIRMED: "PENDING",
-};
-
-function normalizeStatus(dbStatus: string): OrderStatus {
-  return (legacyStatusMap[dbStatus] ?? dbStatus) as OrderStatus;
-}
+import { normalizeStatus } from "@/lib/orderDisplay";
 
 export interface UseOrdersOptions {
   page?: number;
