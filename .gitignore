@@ -36,3 +36,6 @@ gcp-service-account.json
 
 # Claude Code configuration
 .claude/
+
+# Supabase CLI local cache
+supabase/.temp/
