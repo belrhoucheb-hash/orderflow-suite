@@ -1344,3 +1344,40 @@
 .leaflet-pane.leaflet-popup-pane {
   z-index: 4 !important;
 }
+
+/* Inbox luxe AI highlights — 3 levels of confidence */
+.inbox-hl {
+  font-weight: 500;
+  cursor: help;
+  padding: 0 2px 1px;
+  border-radius: 2px;
+  transition: background .15s, box-shadow .15s;
+  position: relative;
+}
+.inbox-hl--ok {
+  background: linear-gradient(180deg, transparent 60%, hsl(var(--gold) / 0.25) 60%, hsl(var(--gold) / 0.25) 90%, transparent 90%);
+  border-bottom: 1px solid hsl(var(--gold-deep) / 0.65);
+}
+.inbox-hl--ok:hover { background: linear-gradient(180deg, transparent 50%, hsl(var(--gold) / 0.45) 50%, hsl(var(--gold) / 0.45) 92%, transparent 92%); }
+.inbox-hl--warn {
+  background: linear-gradient(180deg, transparent 60%, hsl(32 85% 55% / 0.22) 60%, hsl(32 85% 55% / 0.22) 90%, transparent 90%);
+  border-bottom: 1px dashed hsl(32 70% 40%);
+}
+.inbox-hl--warn:hover { background: linear-gradient(180deg, transparent 50%, hsl(32 85% 55% / 0.4) 50%, hsl(32 85% 55% / 0.4) 92%, transparent 92%); }
+.inbox-hl--err {
+  background: linear-gradient(180deg, transparent 60%, hsl(0 78% 55% / 0.2) 60%, hsl(0 78% 55% / 0.2) 90%, transparent 90%);
+  border-bottom: 1px solid hsl(0 78% 45%);
+}
+.inbox-hl--err:hover { background: linear-gradient(180deg, transparent 50%, hsl(0 78% 55% / 0.35) 50%, hsl(0 78% 55% / 0.35) 92%, transparent 92%); }
+
+/* Cross-pane hover linkage target */
+.inbox-field-linked {
+  outline: 2px solid hsl(var(--gold-deep));
+  outline-offset: 2px;
+  border-radius: 6px;
+  background: hsl(var(--gold) / 0.08) !important;
+  transition: outline .12s, background .12s;
+}
+.inbox-hl.inbox-field-linked {
+  background: hsl(var(--gold) / 0.35) !important;
+}

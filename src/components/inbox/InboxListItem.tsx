@@ -1,9 +1,7 @@
-import { Paperclip } from "lucide-react";
+import { PlusCircle, RotateCw, Ban, CheckCircle2, HelpCircle } from "lucide-react";
 import type { OrderDraft } from "./types";
-import { formatDate, getDeadlineInfo } from "./utils";
+import { formatDate } from "./utils";
 import { cn } from "@/lib/utils";
-import { ORDER_SOURCE_LABELS, ORDER_SOURCE_COLORS } from "@/types/clientPortal";
-import type { OrderSource } from "@/types/clientPortal";
 
 interface Props {
   draft: OrderDraft;
@@ -11,90 +9,146 @@ interface Props {
   isBulkChecked?: boolean;
   onBulkToggle?: (id: string) => void;
   onClick: () => void;
+  bulkMode?: boolean;
 }
 
-export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, onClick }: Props) {
-  const deadline = getDeadlineInfo(draft.received_at);
-  const isUrgent = deadline.urgency === "red";
-  const threadType = draft.thread_type || "new";
-  const isUnread = !draft.confidence_score;
-  const attachmentCount = (draft.attachments as any[])?.length || 0;
+const TYPE_META: Record<string, { label: string; Icon: any; stripe: string }> = {
+  new: { label: "Nieuwe aanvraag", Icon: PlusCircle, stripe: "hsl(var(--border))" },
+  update: { label: "Update op eerder bericht", Icon: RotateCw, stripe: "hsl(var(--gold))" },
+  cancellation: { label: "Annulering", Icon: Ban, stripe: "hsl(0 60% 50%)" },
+  confirmation: { label: "Bevestiging", Icon: CheckCircle2, stripe: "hsl(142 50% 42%)" },
+  question: { label: "Vraag", Icon: HelpCircle, stripe: "hsl(210 50% 55%)" },
+};
 
-  const typeBadge = (() => {
-    if (threadType === "cancellation") return { label: "Annulering", cls: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" };
-    if (threadType === "update") return { label: "Update", cls: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" };
-    if (threadType === "confirmation") return { label: "Bevestiging", cls: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" };
-    if (threadType === "question") return { label: "Vraag", cls: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400" };
-    if (isUrgent) return { label: "Urgent", cls: "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-bold" };
-    return { label: "Aanvraag", cls: "bg-muted text-muted-foreground" };
-  })();
+export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, onClick, bulkMode }: Props) {
+  const threadType = draft.thread_type || "new";
+  const meta = TYPE_META[threadType] || TYPE_META.new;
+  const { Icon, label, stripe } = meta;
+  const isUnread = !draft.confidence_score;
+  const isCancel = threadType === "cancellation";
 
   return (
-    <div className={cn(
-      "relative w-full text-left transition-all border-l-[4px] group",
-      isSelected
-        ? "border-l-primary bg-primary/5 shadow-inner"
-        : isUrgent
-          ? "border-l-primary/60 hover:bg-red-50/30 dark:hover:bg-red-950/20 border-b border-border animate-[pulse-red-border_2s_infinite]"
-          : "border-l-transparent hover:bg-muted/50 border-b border-border",
-      isBulkChecked && "bg-primary/5 ring-1 ring-primary/20"
-    )}>
-      <button onClick={onClick} className="w-full text-left p-4 pl-5">
-        {/* Unread dot — left edge */}
-        {isUnread && (
-          <div className="absolute top-1/2 -translate-y-1/2 left-1 w-1.5 h-1.5 bg-primary rounded-full group-hover:opacity-0 transition-opacity" />
-        )}
-        {/* Bulk checkbox — replaces dot on hover */}
-        {onBulkToggle && (
-          <input type="checkbox" checked={isBulkChecked || false}
-            onChange={() => onBulkToggle(draft.id)}
-            className="absolute top-1/2 -translate-y-1/2 left-0.5 w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary/20 opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
-            onClick={(e) => e.stopPropagation()} />
-        )}
+    <div
+      className={cn(
+        "relative w-full text-left cursor-pointer group transition-colors",
+        "border-b",
+        isSelected
+          ? "bg-[hsl(var(--gold-soft)/0.45)]"
+          : bulkMode && isBulkChecked
+            ? "bg-[hsl(var(--muted)/0.55)]"
+            : "hover:bg-[hsl(var(--muted)/0.35)]",
+      )}
+      style={{
+        paddingLeft: bulkMode ? 56 : 36,
+        paddingRight: 14,
+        paddingTop: 11,
+        paddingBottom: 11,
+        borderBottomColor: "hsl(var(--border) / 0.35)",
+      }}
+      onClick={onClick}
+    >
+      {/* Left stripe */}
+      <span
+        aria-hidden
+        className="absolute pointer-events-none"
+        style={{
+          left: isSelected ? 0 : 4,
+          top: isSelected ? 0 : 8,
+          bottom: isSelected ? 0 : 8,
+          width: isSelected ? 2 : 3,
+          borderRadius: isSelected ? 0 : 2,
+          background: isSelected ? "hsl(var(--gold))" : stripe,
+        }}
+      />
 
-        {/* Row 1: Client name + timestamp */}
-        <div className="flex justify-between items-start mb-1">
-          <span className={cn("text-sm text-gray-900 leading-tight", isSelected || isUrgent ? "font-bold" : "font-medium")}>
-            {draft.client_name || "Onbekend"}
-          </span>
-          <span className="text-[11px] font-medium text-gray-400 tabular-nums shrink-0 ml-2">
-            {formatDate(draft.received_at)}
-          </span>
-        </div>
-
-        {/* Row 2: Badge + order number + attachment count */}
-        <div className="flex items-center gap-2 mb-1">
-          <span className={cn("text-[10px] px-1.5 py-0.5 uppercase tracking-wider rounded-sm", typeBadge.cls)}>
-            {typeBadge.label}
-          </span>
-          <span className={cn("text-xs font-mono", isUrgent ? "text-primary font-bold" : "text-gray-500 font-medium")}>
-            #{draft.order_number}
-          </span>
-          {draft.source && draft.source !== "INTERN" && (
-            <span className={cn(
-              "text-[10px] px-1.5 py-0 border-0 rounded-full",
-              ORDER_SOURCE_COLORS[draft.source as OrderSource] ?? "bg-gray-100 text-gray-600"
-            )}>
-              {ORDER_SOURCE_LABELS[draft.source as OrderSource] ?? draft.source}
-            </span>
+      {/* Type icon or bulk checkbox */}
+      {bulkMode ? (
+        <input
+          type="checkbox"
+          checked={isBulkChecked || false}
+          onChange={(e) => {
+            e.stopPropagation();
+            onBulkToggle?.(draft.id);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "absolute appearance-none cursor-pointer rounded-[4px] border-[1.5px]",
+            "focus:outline-none",
           )}
-          {attachmentCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px] text-gray-400 ml-auto">
-              <Paperclip className="h-3 w-3" /> {attachmentCount}
-            </span>
+          style={{
+            left: 14,
+            top: "50%",
+            width: 16,
+            height: 16,
+            transform: "translateY(-50%)",
+            borderColor: isBulkChecked ? "hsl(var(--gold-deep))" : "hsl(var(--border))",
+            background: isBulkChecked
+              ? "linear-gradient(180deg, hsl(var(--gold)), hsl(var(--gold-deep)))"
+              : "hsl(var(--card))",
+            backgroundImage: isBulkChecked
+              ? `linear-gradient(180deg, hsl(var(--gold)), hsl(var(--gold-deep))), url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 5l2 2 4-4' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>")`
+              : undefined,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
+          }}
+        />
+      ) : (
+        <span
+          title={label}
+          aria-label={label}
+          className={cn(
+            "absolute grid place-items-center pointer-events-none",
+            isSelected ? "text-[hsl(var(--gold-deep))]" : "text-muted-foreground/50",
           )}
-        </div>
+          style={{ left: 14, top: 14, width: 14, height: 14 }}
+        >
+          <Icon
+            className={cn("h-[12px] w-[12px]", isCancel && !isSelected && "text-[hsl(0_60%_50%)]/70")}
+            strokeWidth={1.75}
+          />
+        </span>
+      )}
 
-        {/* Row 3: Subject */}
-        <p className="text-xs font-semibold text-gray-900 truncate mb-1">
-          {draft.source_email_subject || "Geen onderwerp"}
-        </p>
+      {/* Row 1: from + time */}
+      <div className="flex items-center gap-2 mb-[2px]">
+        <span
+          className={cn(
+            "flex-1 min-w-0 truncate text-[13px]",
+            isUnread ? "font-semibold text-foreground" : "font-medium text-foreground/90",
+          )}
+          style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.005em" }}
+        >
+          {draft.client_name || draft.source_email_from || "Onbekend"}
+        </span>
+        {draft.confidence_score !== null && draft.confidence_score !== undefined && (
+          <span
+            className="shrink-0 text-[10px] font-semibold tabular-nums px-[7px] py-[1px] rounded-full"
+            style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              color: "hsl(var(--gold-deep))",
+              background: "hsl(var(--gold-soft))",
+            }}
+          >
+            ORD-{draft.order_number}
+          </span>
+        )}
+        <span
+          className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+          style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "0.01em" }}
+        >
+          {formatDate(draft.received_at)}
+        </span>
+      </div>
 
-        {/* Row 4: Preview */}
-        <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
-          {draft.source_email_body?.slice(0, 140) || ""}
-        </p>
-      </button>
+      {/* Row 2: subject */}
+      <p
+        className={cn(
+          "truncate leading-[1.4] text-[12.5px]",
+          isUnread ? "text-foreground font-medium" : "text-muted-foreground",
+        )}
+      >
+        {draft.source_email_subject || "Geen onderwerp"}
+      </p>
     </div>
   );
 }
