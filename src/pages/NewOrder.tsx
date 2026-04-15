@@ -196,9 +196,16 @@ const NewOrder = () => {
     try {
       if (!tenant?.id) throw new Error("Geen actieve tenant gevonden");
 
+      const lossenLocaties = freightLines
+        .filter(f => f.activiteit === "Lossen" && f.locatie?.trim())
+        .map(f => f.locatie.trim());
+      const finalDeliveryAddress =
+        lossenLocaties.length >= 2 ? lossenLocaties[lossenLocaties.length - 1] : undefined;
+
       const booking: BookingInput = {
         pickup_address: pickupLine?.locatie || null,
         delivery_address: deliveryLine?.locatie || null,
+        final_delivery_address: finalDeliveryAddress,
         client_name: clientName.trim(),
         client_id: null,
         transport_type: transportType || null,
@@ -248,10 +255,57 @@ const NewOrder = () => {
         }
       }
 
-      toast.success(
+      // Auto-rappel voor EXPORT placeholder leg-2: pickup === delivery betekent
+      // dat de echte eindbestemming (Dubai, etc.) nog volgt van de klant.
+      let exportRappelCreated = false;
+      if (
+        legs.length === 2 &&
+        (legs[1] as any).leg_role === "EXPORT_LEG" &&
+        (legs[1] as any).pickup_address &&
+        (legs[1] as any).pickup_address === (legs[1] as any).delivery_address
+      ) {
+        try {
+          const { data: existing } = await (supabase as any)
+            .from("order_info_requests")
+            .select("id")
+            .eq("order_id", (legs[1] as any).id)
+            .eq("field_name", "delivery_address")
+            .eq("status", "PENDING")
+            .maybeSingle();
+          if (!existing) {
+            const leg0Start = (legs[0] as any).time_window_start as string | null | undefined;
+            const base = leg0Start ? new Date(leg0Start) : new Date(Date.now() + 24 * 3600 * 1000);
+            const expected_by = leg0Start
+              ? new Date(base.getTime() - 24 * 3600 * 1000).toISOString()
+              : base.toISOString();
+            const { error: rappelErr } = await (supabase as any)
+              .from("order_info_requests")
+              .insert({
+                order_id: (legs[1] as any).id,
+                tenant_id: tenant.id,
+                field_name: "delivery_address",
+                field_label: "Eindbestemming export",
+                status: "PENDING",
+                expected_by,
+                promised_by_name: null,
+              });
+            if (rappelErr) {
+              console.warn("[NewOrder] export-rappel insert faalde:", rappelErr);
+            } else {
+              exportRappelCreated = true;
+            }
+          }
+        } catch (e) {
+          console.warn("[NewOrder] export-rappel check faalde:", e);
+        }
+      }
+
+      const baseMsg =
         legs.length > 1
           ? `Shipment aangemaakt met ${legs.length} legs (${legs.map((l) => l.leg_role).join(" + ")})`
-          : "Order aangemaakt",
+          : "Order aangemaakt";
+      toast.success(
+        exportRappelCreated ? `${baseMsg} — Rappel voor eindbestemming is aangemaakt` : baseMsg,
       );
       if (andClose) {
         // Navigeer naar de eerste leg; OrderDetail toont de shipment-context
@@ -544,6 +598,7 @@ const NewOrder = () => {
                   <SelectContent>
                     <SelectItem value="OPS">Operations</SelectItem>
                     <SelectItem value="EXPORT">Export</SelectItem>
+                    <SelectItem value="IMPORT">Import</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
