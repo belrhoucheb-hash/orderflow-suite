@@ -46,6 +46,10 @@ const {
         getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: "https://test.com/sig.png" } }),
       }),
     },
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: "test-user-id" } }, error: null }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+    },
   },
   mockSavePendingPOD: vi.fn().mockResolvedValue(undefined),
   mockGetPendingPODs: vi.fn().mockResolvedValue([]),
@@ -66,6 +70,11 @@ const {
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
+
+// VehicleCheckScreen-gate altijd open in tests, anders blokkeert het de dashboard.
+vi.mock("@/hooks/useVehicleCheck", () => ({
+  useVehicleCheckGate: () => ({ data: { passed: true }, isLoading: false, refetch: vi.fn() }),
+}));
 
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), {
@@ -958,11 +967,11 @@ describe("ChauffeurApp", () => {
     });
   });
 
-  it("fetchDriverOrders - driver without vehicle gets empty orders", async () => {
-    // d2 has no current_vehicle_id
+  it("driver without vehicle ziet no-vehicle gate, geen dashboard", async () => {
+    // d2 has no current_vehicle_id, vehicle-check gate blokkeert dashboard
     renderWithActiveDriver("d2");
     await waitFor(() => {
-      expect(screen.getByText(/Piet Pietersen/)).toBeInTheDocument();
+      expect(screen.getByText(/Geen voertuig toegewezen/)).toBeInTheDocument();
     });
   });
 

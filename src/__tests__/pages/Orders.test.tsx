@@ -23,6 +23,11 @@ const { mockUseOrders, mockSupabase, mockNavigate } = vi.hoisted(() => {
         select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: { id: "o1", order_number: 1 }, error: null }),
       }),
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "test-user-id" } }, error: null }),
+        getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+        onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+      },
     },
     mockNavigate: vi.fn(),
   };
@@ -86,7 +91,8 @@ describe("Orders", () => {
 
   it("shows order count subtitle", () => {
     renderOrders();
-    expect(screen.getByText("3 transportopdrachten in totaal")).toBeInTheDocument();
+    // Header eyebrow toont totaalcount: "3 orders" (luxe refactor)
+    expect(screen.getByText(/3 orders/i)).toBeInTheDocument();
   });
 
   it("displays orders in table", () => {
@@ -107,7 +113,8 @@ describe("Orders", () => {
   it("shows loading state", () => {
     mockUseOrders.mockReturnValueOnce({ data: null, isLoading: true, isError: false, refetch: vi.fn() });
     renderOrders();
-    expect(document.querySelector(".loading-spinner")).toBeInTheDocument();
+    // Luxe refactor toont skeleton i.p.v. spinner
+    expect(document.querySelector(".skeleton-luxe")).toBeInTheDocument();
   });
 
   it("shows error state", () => {
@@ -137,7 +144,8 @@ describe("Orders", () => {
 
   it("shows pagination info", () => {
     renderOrders();
-    expect(screen.getByText(/1-3 van 3 transportopdrachten/)).toBeInTheDocument();
+    // Pagination luxe: "1–3 van 3" (en-dash, geen suffix meer)
+    expect(screen.getByText(/1.{1,3}3 van 3/)).toBeInTheDocument();
   });
 
   it("order numbers link to detail page", () => {
@@ -334,7 +342,9 @@ describe("Orders", () => {
   // ── refetch on error ──
   it("clicks Opnieuw proberen on error state", async () => {
     const mockRefetch = vi.fn();
-    mockUseOrders.mockReturnValueOnce({ data: null, isLoading: false, isError: true, refetch: mockRefetch });
+    // mockReturnValue (geen Once), de component kan meerdere keren renderen
+    // tijdens userEvent.click, anders pakt re-render het default-mock op.
+    mockUseOrders.mockReturnValue({ data: null, isLoading: false, isError: true, refetch: mockRefetch });
     const user = userEvent.setup();
     renderOrders();
     await user.click(screen.getByText("Opnieuw proberen"));
@@ -359,7 +369,9 @@ describe("Orders", () => {
   it("shows 0 transportopdrachten when empty", () => {
     mockUseOrders.mockReturnValueOnce({ data: { orders: [], totalCount: 0 }, isLoading: false, isError: false, refetch: vi.fn() });
     renderOrders();
-    expect(screen.getByText("0 transportopdrachten")).toBeInTheDocument();
+    // Footer toont "0 orders" bij lege lijst (luxe refactor). Header eyebrow
+    // toont ook "0 orders", dus minstens één voorkomen verwacht.
+    expect(screen.getAllByText(/0 orders/i).length).toBeGreaterThanOrEqual(1);
   });
 
   // ── close import dialog (onOpenChange) ──
@@ -375,6 +387,7 @@ describe("Orders", () => {
   // ── Spoed/Hoog priority count in stats ──
   it("counts spoed and hoog priorities in KPI strip", () => {
     renderOrders();
-    expect(screen.getByText("Spoed / Hoog")).toBeInTheDocument();
+    // Luxe ticker label wijzigde van "Spoed / Hoog" naar "Met prioriteit"
+    expect(screen.getByText("Met prioriteit")).toBeInTheDocument();
   });
 });
