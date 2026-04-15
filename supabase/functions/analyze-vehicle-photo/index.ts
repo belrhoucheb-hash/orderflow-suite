@@ -64,10 +64,15 @@ async function fetchWithRetry(
   throw lastErr ?? new Error("fetchWithRetry: onverwachte toestand");
 }
 
-function geminiUrl(): string {
+// API-key hoort niet in de URL, anders lekt hij in error-traces, access-logs
+// en exception-stacks. Gemini ondersteunt `x-goog-api-key` als officiele header.
+const GEMINI_ENDPOINT =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+
+function geminiApiKey(): string {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw new Error("GEMINI_API_KEY is not configured");
-  return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+  return key;
 }
 
 async function fetchAsBase64(url: string): Promise<{ data: string; mime: string }> {
@@ -137,9 +142,12 @@ serve(async (req) => {
       },
     };
 
-    const resp = await fetchWithRetry(geminiUrl(), {
+    const resp = await fetchWithRetry(GEMINI_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": geminiApiKey(),
+      },
       body: JSON.stringify(body),
     });
 
