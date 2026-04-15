@@ -5,16 +5,7 @@ import type { Order } from "@/data/mockData";
 import type { OrderStatus } from "@/lib/statusTransitions";
 import { fetchDepartmentsCached } from "@/hooks/useDepartments";
 
-// Legacy → canonical mapping (mirrors useOrders.ts)
-const legacyStatusMap: Record<string, OrderStatus> = {
-  OPEN: "PENDING",
-  WAITING: "PENDING",
-  CONFIRMED: "PENDING",
-};
-
-function normalizeStatus(dbStatus: string): OrderStatus {
-  return (legacyStatusMap[dbStatus] ?? dbStatus) as OrderStatus;
-}
+import { normalizeStatus } from "@/lib/orderDisplay";
 
 export interface Shipment {
   id: string;
