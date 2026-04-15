@@ -1,0 +1,1255 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>Inbox left-pane · v3 premium</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --primary: 0 78% 42%;
+    --muted: 30 8% 93%;
+    --muted-foreground: 0 0% 40%;
+    --border: 30 8% 88%;
+    --gold: 38 35% 55%;
+    --gold-deep: 32 42% 42%;
+    --gold-soft: 38 45% 92%;
+    --ink: 0 0% 10%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 85%;
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  }
+  html, body {
+    font-family: var(--font-ui);
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(ellipse 700px 350px at 50% -150px, hsl(var(--gold-soft) / 0.45), transparent 60%),
+      hsl(30 10% 96%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+    font-size: 15px;
+  }
+  .ribbon {
+    max-width: 360px;
+    margin: 16px auto 0;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    text-align: center;
+  }
+  .page {
+    max-width: 360px;
+    margin: 28px auto;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 16px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.04),
+      0 12px 32px -14px hsl(var(--ink) / 0.18);
+    position: relative;
+    overflow: hidden;
+    height: 760px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Embed-mode: vult iframe, geen outer shadow/border/radius (outer container handelt dat) */
+  body.embed { background: transparent; }
+  body.embed #dev-ribbon { display: none; }
+  body.embed .page {
+    max-width: 100%;
+    margin: 0;
+    height: 100vh;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  body.embed .page::before { display: none; }
+  /* Luxe scrollbar — licht goud default, donkerder tijdens scrollen */
+  /* GLOBAAL goud scrollbar (altijd, ook zonder embed) */
+  html, body, *, .page, .list { scrollbar-width: thin !important; scrollbar-color: hsl(var(--gold) / 0.3) transparent !important; }
+  ::-webkit-scrollbar { width: 6px !important; height: 6px !important; }
+  ::-webkit-scrollbar-track { background: transparent !important; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--gold) / 0.25) !important;
+    border-radius: 3px !important;
+    transition: background .2s !important;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--gold) / 0.5) !important; }
+  ::-webkit-scrollbar-thumb:active { background: hsl(var(--gold-deep) / 0.75) !important; }
+  .page::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+    z-index: 5;
+  }
+
+  /* ── Page header · compact (1 regel) ── */
+  .hd {
+    flex-shrink: 0;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .hd__title {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: hsl(var(--foreground));
+  }
+  .hd__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+  .hd__meta strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+  .hd__meta-dot {
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+  .hd__meta em {
+    font-style: normal;
+    color: hsl(0 55% 45%);
+    font-weight: 500;
+  }
+
+  /* ── Top: search + tabs ── */
+  .top {
+    flex-shrink: 0;
+    padding: 14px 14px 0;
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+  }
+  .search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .search {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+  .search svg {
+    position: absolute;
+    left: 10px; top: 50%;
+    transform: translateY(-50%);
+    width: 13px; height: 13px;
+    stroke-width: 1.75;
+    color: hsl(var(--muted-foreground));
+  }
+  .search input {
+    width: 100%;
+    height: 36px;
+    padding: 0 10px 0 32px;
+    background: hsl(var(--muted) / 0.5);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: hsl(var(--foreground));
+    transition: all .15s;
+  }
+  .search input:focus {
+    outline: none;
+    background: hsl(var(--card));
+    border-color: hsl(var(--gold) / 0.5);
+    box-shadow: 0 0 0 3px hsl(var(--gold) / 0.12);
+  }
+  .search input::placeholder { color: hsl(var(--muted-foreground) / 0.7); }
+  .search__kbd {
+    position: absolute;
+    right: 8px; top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 3px;
+    padding: 1px 4px;
+    letter-spacing: 0.02em;
+  }
+
+  /* Filter tabs */
+  .tabs {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+  }
+  .filter-btn {
+    width: 36px; height: 36px;
+    display: grid;
+    place-items: center;
+    background: hsl(var(--muted) / 0.5);
+    border: 1px solid hsl(var(--border));
+    border-radius: 8px;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: all .12s;
+    flex-shrink: 0;
+  }
+  .filter-btn:hover {
+    border-color: hsl(var(--gold) / 0.3);
+    background: hsl(var(--muted) / 0.7);
+    color: hsl(var(--foreground));
+  }
+  .filter-btn svg { width: 14px; height: 14px; stroke-width: 1.75; }
+  .filter-btn--active {
+    background: linear-gradient(180deg, hsl(var(--gold-soft)) 0%, hsl(var(--gold-soft) / 0.6) 100%);
+    border-color: hsl(var(--gold) / 0.6);
+    color: hsl(var(--gold-deep));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+  }
+
+  .filter-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+  .filter-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 220px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 4px 12px -2px hsl(var(--ink) / 0.08),
+      0 18px 40px -12px hsl(var(--ink) / 0.2);
+    display: none;
+    z-index: 20;
+  }
+  .filter-pop::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 12px; right: 12px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .filter-pop.is-open { display: block; animation: pop .15s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .filter-pop__grp { padding: 6px 0; border-bottom: 1px solid hsl(var(--border) / 0.5); }
+  .filter-pop__grp:last-of-type { border-bottom: 0; }
+  .filter-pop__lbl {
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    margin: 0 0 6px;
+  }
+  .filter-pop__opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 4px;
+    font-size: 12.5px;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  .filter-pop__opt:hover { background: hsl(var(--gold-soft) / 0.5); }
+  .filter-pop__opt input {
+    accent-color: hsl(var(--gold-deep));
+    cursor: pointer;
+  }
+  .filter-pop__foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px 2px 2px;
+  }
+  .filter-pop__clear {
+    background: transparent;
+    border: 0;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    padding: 4px 8px;
+  }
+  .filter-pop__clear:hover { color: hsl(var(--foreground)); }
+  .filter-pop__apply {
+    background: hsl(var(--foreground));
+    color: hsl(var(--card));
+    border: 0;
+    padding: 5px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  .tab {
+    position: relative;
+    padding: 8px 0 10px;
+    background: transparent;
+    border: 0;
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+    border-bottom: 1.5px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .tab:hover { color: hsl(var(--foreground)); }
+  .tab__count {
+    font-size: 10.5px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground) / 0.7);
+    letter-spacing: 0.02em;
+  }
+  .tab--active { color: hsl(var(--foreground)); font-weight: 600; border-bottom-color: hsl(var(--foreground)); }
+  .tab--active .tab__count { color: hsl(var(--foreground)); }
+  .tab--active::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 50%;
+    transform: translateX(-50%);
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+  }
+
+  /* ── List ── */
+  .list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .list::-webkit-scrollbar { width: 6px; }
+  .list::-webkit-scrollbar-track { background: transparent; }
+  .list::-webkit-scrollbar-thumb {
+    background: hsl(var(--gold) / 0.25);
+    border-radius: 3px;
+    transition: background .2s;
+  }
+  .list::-webkit-scrollbar-thumb:hover { background: hsl(var(--gold) / 0.5); }
+  .list::-webkit-scrollbar-thumb:active { background: hsl(var(--gold-deep) / 0.75); }
+  .list { scrollbar-width: thin; scrollbar-color: hsl(var(--gold) / 0.3) transparent; }
+
+  .item {
+    display: block;
+    padding: 11px 14px 11px 36px;
+    border-bottom: 1px solid hsl(var(--border) / 0.25);
+    cursor: pointer;
+    position: relative;
+    transition: background .12s;
+  }
+  .item:not(.item--active):hover { background: hsl(var(--muted) / 0.35); }
+  .item--active {
+    background: hsl(var(--gold-soft) / 0.35);
+  }
+
+  /* Kleurstreep links per type, dun verticaal 3px met inset zodat hij niet kleeft aan checkbox */
+  .item::before {
+    content: '';
+    position: absolute;
+    left: 4px; top: 8px; bottom: 8px;
+    width: 3px;
+    border-radius: 2px;
+    background: hsl(var(--border));
+    z-index: 1;
+  }
+  .item--type-new::before     { background: hsl(var(--border)); }
+  .item--type-update::before  { background: hsl(var(--gold)); }
+  .item--type-question::before{ background: hsl(210 50% 55%); }
+  .item--type-cancel::before  { background: hsl(0 60% 50%); }
+  .item--type-confirm::before { background: hsl(142 50% 42%); }
+  .item--active::before {
+    background: hsl(var(--gold));
+    top: 0; bottom: 0;
+    border-radius: 0;
+    width: 2px;
+    left: 0;
+  }
+
+  /* Type-icoon links als klein secundair signaal, de kleurstreep doet het primaire werk */
+  .item__type-icon {
+    position: absolute;
+    left: 14px; top: 14px;
+    width: 14px; height: 14px;
+    display: grid;
+    place-items: center;
+    color: hsl(var(--muted-foreground) / 0.5);
+    cursor: help;
+  }
+  .item__type-icon svg { width: 10px; height: 10px; stroke-width: 1.75; }
+  .item--active .item__type-icon { color: hsl(var(--gold-deep) / 0.7); }
+
+  /* Bulk-mode: type-icoon blijft zichtbaar, aparte checkbox komt links erbij */
+  body.bulk-mode .item { padding-left: 56px; }
+  body.bulk-mode .item__type-icon { left: 34px; }
+  body.bulk-mode .item__check { opacity: 1; pointer-events: auto; }
+  body.bulk-mode .reason-pop { display: none; }
+
+  /* Selected item: subtiele muted wash, geen goud stripe (anders verwarrend met active) */
+  body.bulk-mode .item--selected {
+    background: hsl(var(--muted) / 0.55);
+  }
+  body.bulk-mode .item--active::before,
+  body.bulk-mode .item--active { background: transparent; }
+  body.bulk-mode .item--active.item--selected { background: hsl(var(--muted) / 0.55); }
+
+  /* Bulk-top bar — lichte card-stijl met goud accent (past bij luxe) */
+  .bulk-top {
+    display: none;
+    padding: 10px 14px;
+    background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.35) 100%);
+    color: hsl(var(--foreground));
+    align-items: center;
+    gap: 4px;
+    border-bottom: 1px solid hsl(var(--gold) / 0.25);
+    position: relative;
+  }
+  .bulk-top::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 14px; right: 14px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  body.bulk-mode .bulk-top { display: flex; }
+  .bulk-top__count {
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+    margin-right: 8px;
+  }
+  .bulk-top__count strong {
+    color: hsl(var(--gold-deep));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .bulk-top__act {
+    background: transparent;
+    border: 0;
+    color: hsl(var(--foreground));
+    padding: 4px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  .bulk-top__act:hover {
+    background: hsl(var(--gold-soft));
+    color: hsl(var(--gold-deep));
+  }
+  .bulk-top__act--danger { color: hsl(0 55% 45%); }
+  .bulk-top__act--danger:hover {
+    background: hsl(0 70% 96%);
+    color: hsl(0 55% 38%);
+  }
+  .bulk-top__close {
+    margin-left: auto;
+    width: 22px; height: 22px;
+    background: transparent;
+    border: 0;
+    color: hsl(var(--muted-foreground));
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+  .bulk-top__close:hover { color: hsl(var(--foreground)); background: hsl(var(--muted) / 0.5); }
+  .bulk-top__close svg { width: 13px; height: 13px; stroke-width: 1.75; }
+
+  /* Reason-tooltip op hover van type-icoon */
+  .reason-pop {
+    position: absolute;
+    left: 38px; top: 4px;
+    width: 260px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.35);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 4px 12px -2px hsl(var(--ink) / 0.1),
+      0 18px 40px -12px hsl(var(--ink) / 0.22);
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-4px);
+    transition: opacity .15s, transform .15s;
+  }
+  .reason-pop::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 12px; right: 12px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .item__type-icon:hover .reason-pop,
+  .reason-pop:hover {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+  .reason-pop__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid hsl(var(--border) / 0.6);
+  }
+  .reason-pop__type {
+    font-family: var(--font-display);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.005em;
+  }
+  .reason-pop__conf {
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: hsl(var(--gold-deep));
+    padding: 1px 7px;
+    background: hsl(var(--gold-soft));
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+  }
+  .reason-pop__lbl {
+    font-family: var(--font-display);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 5px;
+  }
+  .reason-pop ul {
+    margin: 0; padding: 0; list-style: none;
+    font-size: 11.5px;
+    color: hsl(var(--foreground));
+    line-height: 1.5;
+  }
+  .reason-pop li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+  }
+  .reason-pop li::before {
+    content: '';
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+    flex-shrink: 0;
+  }
+  .reason-pop li code {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 10.5px;
+    color: hsl(var(--gold-deep));
+    background: hsl(var(--gold-soft) / 0.6);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .reason-pop__override {
+    margin-top: 8px;
+    padding-top: 7px;
+    border-top: 1px solid hsl(var(--border) / 0.6);
+    display: flex;
+    justify-content: space-between;
+  }
+  .reason-pop__override button {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    color: hsl(var(--gold-deep));
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: hsl(var(--gold) / 0.4);
+  }
+  .reason-pop__override .muted {
+    color: hsl(var(--muted-foreground));
+    text-decoration: none;
+  }
+
+  .item__top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 3px;
+  }
+  .item__from {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.005em;
+  }
+  .item--unread .item__from {
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+  .item--unread .item__from::before {
+    content: '';
+    display: inline-block;
+    width: 7px; height: 7px;
+    margin-right: 7px;
+    vertical-align: 1px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+    box-shadow: 0 0 0 2px hsl(var(--gold-soft) / 0.6);
+  }
+  /* Als vaste klant al een gouden dot toont, onderdruk de unread-pseudo-dot */
+  .item--unread .item__from:has(.item__vip)::before { display: none; }
+  .item__time {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground));
+    flex-shrink: 0;
+    letter-spacing: 0.01em;
+  }
+
+  /* Concept-order indicator, rechts in item__top vóór de tijd */
+  .item__concept {
+    flex-shrink: 0;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+    color: hsl(var(--gold-deep));
+    background: hsl(var(--gold-soft));
+    padding: 2px 7px;
+    border-radius: 999px;
+    line-height: 1.4;
+  }
+  .item__concept--ai {
+    background: transparent;
+    padding: 0;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+    box-shadow: 0 0 0 2px hsl(var(--gold-soft) / 0.7);
+    animation: concept-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes concept-pulse {
+    0%, 100% { opacity: 0.45; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+
+  /* Vaste-klant ster, kleine gouden vulling vóór de naam */
+  .item__vip {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+    margin-right: 6px;
+    vertical-align: 2px;
+    flex-shrink: 0;
+  }
+  .item__subject {
+    font-size: 12.5px;
+    color: hsl(var(--muted-foreground));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+  .item--unread .item__subject {
+    color: hsl(var(--foreground));
+    font-weight: 500;
+  }
+
+  /* Tweede regel: route of lading-hint */
+  .item__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item__meta svg {
+    width: 10px; height: 10px;
+    stroke-width: 1.75;
+    color: hsl(var(--gold-deep));
+    flex-shrink: 0;
+  }
+  .item__meta-sep {
+    color: hsl(var(--gold) / 0.7);
+    padding: 0 1px;
+    font-weight: 400;
+  }
+  .item__meta-cargo {
+    color: hsl(var(--muted-foreground));
+  }
+  .item--active .item__meta,
+  .item--unread .item__meta { color: hsl(var(--foreground) / 0.7); }
+  .item__subject em {
+    font-style: normal;
+    color: hsl(var(--muted-foreground));
+    font-size: 11px;
+    margin-right: 4px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+  .item--action .item__subject em { color: hsl(0 55% 42%); }
+  .item--active .item__subject em { color: hsl(var(--gold-deep)); }
+
+  /* Bulk-select checkbox (hover in normaal, permanent in bulk-mode) */
+  .item__check {
+    position: absolute;
+    left: 14px; top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    border: 1.5px solid hsl(var(--border));
+    border-radius: 4px;
+    background: hsl(var(--card));
+    appearance: none;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity .12s, border-color .12s, background .12s;
+  }
+  body:not(.bulk-mode) .item:hover .item__check {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  body:not(.bulk-mode) .item:hover .item__type-icon {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .item__type-icon {
+    transition: opacity .12s;
+  }
+  .item__check:hover { border-color: hsl(var(--gold) / 0.6); }
+  .item__check:checked {
+    opacity: 1;
+    pointer-events: auto;
+    background: linear-gradient(180deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+    border-color: hsl(var(--gold-deep));
+  }
+  .item__check:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px; top: 1px;
+    width: 4px; height: 9px;
+    border: solid hsl(var(--card));
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+
+  /* ── Footer: keyboard hint + import ── */
+  .foot {
+    flex-shrink: 0;
+    padding: 10px 14px;
+    border-top: 1px solid hsl(var(--border) / 0.5);
+    background: hsl(var(--muted) / 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    color: hsl(var(--muted-foreground));
+  }
+  .foot__kbds {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    letter-spacing: 0.01em;
+  }
+  .kbd {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 3px;
+    padding: 1px 4px;
+    letter-spacing: 0;
+  }
+  .foot__import {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: hsl(var(--gold-deep));
+    font: inherit;
+    cursor: pointer;
+  }
+  .foot__import svg { width: 11px; height: 11px; stroke-width: 1.75; }
+  .foot__import:hover { text-decoration: underline; text-underline-offset: 2px; text-decoration-color: hsl(var(--gold) / 0.5); }
+
+  /* ── Bulk-action bar (toont wanneer items geselecteerd) ── */
+  .bulk-bar {
+    position: absolute;
+    left: 10px; right: 10px;
+    bottom: 52px;
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.06),
+      0 8px 24px -8px hsl(var(--ink) / 0.4);
+    z-index: 10;
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    animation: pop-in .15s ease-out;
+  }
+  .bulk-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 10px; right: 10px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .bulk-bar.is-visible { display: flex; }
+  .bulk-bar__count {
+    font-weight: 600;
+    color: hsl(var(--gold-light, 42 55% 72%));
+  }
+  .bulk-bar__act {
+    background: transparent;
+    border: 0;
+    color: hsl(var(--sidebar-foreground));
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font: inherit;
+  }
+  .bulk-bar__act:hover { background: hsl(0 0% 100% / 0.06); }
+  .bulk-bar__act--danger { color: hsl(0 60% 70%); }
+  .bulk-bar__act--danger:hover { background: hsl(0 60% 40% / 0.2); }
+  .bulk-bar__sep { width: 1px; height: 16px; background: hsl(var(--sidebar-foreground) / 0.15); }
+  .bulk-bar__close {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    color: hsl(var(--sidebar-foreground) / 0.6);
+    cursor: pointer;
+    padding: 2px;
+    display: inline-flex;
+  }
+  .bulk-bar__close svg { width: 13px; height: 13px; stroke-width: 1.75; }
+</style>
+</head>
+<body>
+
+<div class="ribbon" id="dev-ribbon">docs/mockups/inbox-left-v3.html · left-pane standalone</div>
+
+<div class="page">
+
+  <!-- ── Header · compact ── -->
+  <div class="hd">
+    <h1 class="hd__title">Inbox</h1>
+    <div class="hd__meta">
+      <strong>47</strong>
+      <span class="hd__meta-dot"></span>
+      <em>3 te reviewen</em>
+    </div>
+  </div>
+
+  <!-- ── Top: search + tabs ── -->
+  <div class="top">
+    <div class="search-row">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input placeholder="Zoek op klant, adres, ordernr…" />
+        <span class="search__kbd">/</span>
+      </div>
+      <div class="filter-wrap">
+      <button class="filter-btn" id="filter-btn" title="Verfijn filters" aria-label="Filter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+      </button>
+      <div class="filter-pop" id="filter-pop">
+        <div class="filter-pop__grp">
+          <div class="filter-pop__lbl">Klant</div>
+          <label class="filter-pop__opt"><input type="checkbox"> Vaste klanten</label>
+          <label class="filter-pop__opt"><input type="checkbox"> Nieuwe klanten</label>
+        </div>
+        <div class="filter-pop__grp">
+          <div class="filter-pop__lbl">Tijd</div>
+          <label class="filter-pop__opt"><input type="radio" name="dt" checked> Alles</label>
+          <label class="filter-pop__opt"><input type="radio" name="dt"> Vandaag</label>
+          <label class="filter-pop__opt"><input type="radio" name="dt"> Deze week</label>
+        </div>
+        <div class="filter-pop__foot">
+          <button class="filter-pop__clear">Reset</button>
+          <button class="filter-pop__apply">Toepassen</button>
+        </div>
+      </div>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab tab--active">Alle <span class="tab__count">47</span></button>
+      <button class="tab">Actie <span class="tab__count">3</span></button>
+    </div>
+  </div>
+
+  <!-- ── Bulk-top bar (alleen zichtbaar in bulk-mode) ── -->
+  <div class="bulk-top">
+    <span class="bulk-top__count"><strong id="bulk-count-top">0</strong> geselecteerd</span>
+    <button class="bulk-top__act">Goedkeur</button>
+    <button class="bulk-top__act">Archiveer</button>
+    <button class="bulk-top__act bulk-top__act--danger">Verwijder</button>
+    <button class="bulk-top__close" id="bulk-exit" aria-label="Sluit selectie">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <!-- ── List ── -->
+  <div class="list">
+
+    <!-- NIEUW = + circle -->
+    <div class="item item--active item--type-new">
+<span class="item__type-icon" title="Nieuwe order">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+      </span>
+      <div class="item__top">
+        <span class="item__from"><span class="item__vip" title="Vaste klant" aria-label="Vaste klant"></span>Van der Berg Logistics</span>
+        <span class="item__concept" title="Concept-order gereed">concept</span>
+        <span class="item__time">09:42</span>
+      </div>
+      <div class="item__subject">Spoedorder 16 april</div>
+    </div>
+
+    <!-- UPDATE = rotate -->
+    <div class="item item--unread item--type-update">
+<span class="item__type-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg>
+        <div class="reason-pop">
+          <div class="reason-pop__head">
+            <span class="reason-pop__type">Update</span>
+            <span class="reason-pop__conf">94%</span>
+          </div>
+          <div class="reason-pop__lbl">Gedetecteerd omdat</div>
+          <ul>
+            <li><code>RE:</code> in onderwerp</li>
+            <li>Verwijst naar <code>FL-APR-0019</code></li>
+            <li>Thread-ID gematcht met eerdere mail</li>
+          </ul>
+          <div class="reason-pop__override">
+            <button>Wijzig type</button>
+            <button class="muted">Details</button>
+          </div>
+        </div>
+      </span>
+      <div class="item__top">
+        <span class="item__from"><span class="item__vip" title="Vaste klant" aria-label="Vaste klant"></span>FlowerLink International</span>
+        <span class="item__concept" title="Concept-order gereed">concept</span>
+        <span class="item__time">09:51</span>
+      </div>
+      <div class="item__subject">RE: FL-APR-0019, pickup-tijd aangepast</div>
+    </div>
+
+    <!-- NIEUW + unread -->
+    <div class="item item--unread item--type-new">
+<span class="item__type-icon" title="Nieuwe order">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+      </span>
+      <div class="item__top">
+        <span class="item__from"><span class="item__vip" title="Vaste klant" aria-label="Vaste klant"></span>Kramer Transport</span>
+        <span class="item__concept item__concept--ai" title="AI maakt concept, bezig"></span>
+        <span class="item__time">08:17</span>
+      </div>
+      <div class="item__subject">Transportverzoek ADR 18 apr</div>
+    </div>
+
+    <!-- VRAAG = help-circle -->
+    <div class="item item--type-question">
+<span class="item__type-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+        <div class="reason-pop">
+          <div class="reason-pop__head">
+            <span class="reason-pop__type">Vraag</span>
+            <span class="reason-pop__conf">68%</span>
+          </div>
+          <div class="reason-pop__lbl">Gedetecteerd omdat</div>
+          <ul>
+            <li>Vraagteken in onderwerp</li>
+            <li>Zin &quot;kunnen jullie&quot; in body</li>
+            <li>Geen concrete lading of ordernummer</li>
+          </ul>
+          <div class="reason-pop__override">
+            <button>Wijzig type</button>
+            <button class="muted">Details</button>
+          </div>
+        </div>
+      </span>
+      <div class="item__top">
+        <span class="item__from">MedSupply Nederland</span>
+        <span class="item__time">07:58</span>
+      </div>
+      <div class="item__subject">Kunnen jullie morgen een Schiphol-rit?</div>
+    </div>
+
+    <!-- ANNULERING = slash-circle (rood accent) -->
+    <div class="item item--type-cancel">
+<span class="item__type-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+        <div class="reason-pop">
+          <div class="reason-pop__head">
+            <span class="reason-pop__type">Annulering</span>
+            <span class="reason-pop__conf">97%</span>
+          </div>
+          <div class="reason-pop__lbl">Gedetecteerd omdat</div>
+          <ul>
+            <li>Woord <code>annulering</code> in onderwerp</li>
+            <li>Zin &quot;kan niet leveren&quot; in body</li>
+            <li>Verwijst naar actieve <code>ORD-0841</code></li>
+          </ul>
+          <div class="reason-pop__override">
+            <button>Wijzig type</button>
+            <button class="muted">Details</button>
+          </div>
+        </div>
+      </span>
+      <div class="item__top">
+        <span class="item__from"><span class="item__vip" title="Vaste klant" aria-label="Vaste klant"></span>AutoParts Europa</span>
+        <span class="item__concept" title="Concept-order gereed">concept</span>
+        <span class="item__time">gisteren</span>
+      </div>
+      <div class="item__subject">Annulering ORD-0841, kan niet leveren</div>
+    </div>
+
+    <!-- BEVESTIGING = check-circle -->
+    <div class="item item--type-confirm">
+<span class="item__type-icon" title="Bevestiging">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+      </span>
+      <div class="item__top">
+        <span class="item__from">BlueWave Shipping</span>
+        <span class="item__time">gisteren</span>
+      </div>
+      <div class="item__subject">BW-0408 akkoord met offerte</div>
+    </div>
+
+    <!-- NIEUW · routine -->
+    <div class="item item--type-new">
+<span class="item__type-icon" title="Nieuwe order">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+      </span>
+      <div class="item__top">
+        <span class="item__from">Van Dijk Vers</span>
+        <span class="item__concept" title="Concept-order gereed">concept</span>
+        <span class="item__time">ma</span>
+      </div>
+      <div class="item__subject">Wekelijkse rit</div>
+    </div>
+
+    <div class="item item--type-new">
+<span class="item__type-icon" title="Nieuwe order">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+      </span>
+      <div class="item__top">
+        <span class="item__from">Oostlandse Kassen</span>
+        <span class="item__concept" title="Concept-order gereed">concept</span>
+        <span class="item__time">zo</span>
+      </div>
+      <div class="item__subject">Export bloemen</div>
+    </div>
+
+    <div class="item item--type-new">
+<span class="item__type-icon" title="Nieuwe order">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+      </span>
+      <div class="item__top">
+        <span class="item__from">Royal Frozen Foods</span>
+        <span class="item__concept" title="Concept-order gereed">concept</span>
+        <span class="item__time">zo</span>
+      </div>
+      <div class="item__subject">Weekorder koeltransport</div>
+    </div>
+
+    <!-- BEVESTIGING -->
+    <div class="item item--type-confirm">
+<span class="item__type-icon" title="Bevestiging">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+      </span>
+      <div class="item__top">
+        <span class="item__from"><span class="item__vip" title="Vaste klant" aria-label="Vaste klant"></span>Kramer Transport</span>
+        <span class="item__time">vr</span>
+      </div>
+      <div class="item__subject">KT-2026-0411 bevestiging lading</div>
+    </div>
+
+  </div>
+
+
+
+</div>
+
+<script>
+  // Embed-mode detection
+  if (new URLSearchParams(location.search).has('embed')) document.body.classList.add('embed');
+
+  // Inject tweede regel (route/lading) + checkbox per item
+  const ROUTES = [
+    ['ROT', 'ANT', 'Spoed, 14 pal'],
+    ['AMS', 'BCN', 'Bloemen, 8 pal'],
+    ['AMS', 'PRG', 'ADR, 12 pal'],
+    [null, null, 'Schiphol, intl'],
+    ['DUS', 'EIN', 'was ORD-0841'],
+    [null, null, 'Offerte akkoord'],
+    ['BNV', 'BRD', 'Wekelijks, vers'],
+    ['NLW', 'HAM', 'Export bloemen'],
+    ['ZDM', 'UTR', 'Koel, 6 pal'],
+    [null, null, 'KT-2026-0411']
+  ];
+  const ARROW_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h15M14 6l6 6-6 6"/></svg>';
+  const CLOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 2"/></svg>';
+  document.querySelectorAll('.list .item').forEach((el, i) => {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'item__check';
+    cb.setAttribute('aria-label', 'Selecteer bericht');
+    el.prepend(cb);
+    const data = ROUTES[i] || [null, null, ''];
+    const [from, to, cargo] = data;
+    const meta = document.createElement('div');
+    meta.className = 'item__meta';
+    if (from && to) {
+      meta.innerHTML = `${ARROW_SVG}<span>${from}</span><span class="item__meta-sep">→</span><span>${to}</span><span class="item__meta-sep">·</span><span class="item__meta-cargo">${cargo}</span>`;
+    } else {
+      meta.innerHTML = `${CLOCK_SVG}<span class="item__meta-cargo">${cargo}</span>`;
+    }
+    el.appendChild(meta);
+  });
+
+  // Checkbox klik: toggle selectie zonder item te openen
+  document.querySelectorAll('.item__check').forEach(cb => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', (e) => {
+      const item = e.target.closest('.item');
+      item.classList.toggle('item--selected', e.target.checked);
+      if (e.target.checked) document.body.classList.add('bulk-mode');
+      updateBulkCount();
+    });
+  });
+
+  // Bulk-mode via checkbox-selectie, sluiten via X in bulk-top
+  const bulkExit = document.getElementById('bulk-exit');
+  const bulkCountTop = document.getElementById('bulk-count-top');
+  function updateBulkCount() {
+    const n = document.querySelectorAll('.item--selected').length;
+    bulkCountTop.textContent = n;
+    if (n === 0) document.body.classList.remove('bulk-mode');
+  }
+  bulkExit.addEventListener('click', () => {
+    document.body.classList.remove('bulk-mode');
+    document.querySelectorAll('.item--selected').forEach(x => {
+      x.classList.remove('item--selected');
+      const cb = x.querySelector('.item__check');
+      if (cb) cb.checked = false;
+    });
+    updateBulkCount();
+  });
+
+  // Item click: normaal = open, bulk-mode = toggle select
+  document.querySelectorAll('.item').forEach(i => {
+    i.addEventListener('click', () => {
+      if (document.body.classList.contains('bulk-mode')) {
+        i.classList.toggle('item--selected');
+        updateBulkCount();
+      } else {
+        document.querySelectorAll('.item').forEach(x => x.classList.remove('item--active'));
+        i.classList.add('item--active');
+        i.classList.remove('item--unread');
+      }
+    });
+  });
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('tab--active'));
+      t.classList.add('tab--active');
+    });
+  });
+
+
+  // Filter popover
+  const fBtn = document.getElementById('filter-btn');
+  const fPop = document.getElementById('filter-pop');
+  fBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    fPop.classList.toggle('is-open');
+    fBtn.classList.toggle('filter-btn--active', fPop.classList.contains('is-open'));
+  });
+  document.addEventListener('click', (e) => {
+    if (!fPop.contains(e.target) && e.target !== fBtn) {
+      fPop.classList.remove('is-open');
+      fBtn.classList.remove('filter-btn--active');
+    }
+  });
+</script>
+</body>
+</html>

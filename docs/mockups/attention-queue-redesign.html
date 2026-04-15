@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>Aandacht — Planner-queue</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --primary: 0 78% 42%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 30 8% 93%;
+    --muted-foreground: 0 0% 40%;
+    --border: 30 8% 88%;
+    --input: 30 8% 85%;
+    --gold: 38 35% 55%;
+    --gold-deep: 32 42% 42%;
+    --gold-light: 42 55% 72%;
+    --gold-soft: 38 45% 92%;
+    --ink: 0 0% 10%;
+    --page-bg: 30 10% 96%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 85%;
+
+    --urg-now-bg:    hsl(0 78% 97%);
+    --urg-now-text:  hsl(0 78% 38%);
+    --urg-now-border: hsl(0 78% 85%);
+    --urg-now-dot:   hsl(0 78% 55%);
+
+    --urg-1h-bg:    hsl(32 90% 97%);
+    --urg-1h-text:  hsl(32 70% 35%);
+    --urg-1h-border: hsl(32 80% 85%);
+    --urg-1h-dot:   hsl(32 90% 55%);
+
+    --urg-day-bg:   hsl(210 70% 97%);
+    --urg-day-text: hsl(210 70% 35%);
+    --urg-day-border: hsl(210 70% 85%);
+    --urg-day-dot:  hsl(210 80% 55%);
+
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  body {
+    font-family: var(--font-ui);
+    font-size: 0.9375rem;
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(ellipse 900px 400px at 50% -180px, hsl(var(--gold-soft) / 0.5), transparent 60%),
+      hsl(var(--page-bg));
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+  }
+
+  .ribbon {
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.375rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .ribbon .tag { color: hsl(var(--gold)); font-weight: 600; }
+
+  /* ─── Hero header ─── */
+  .greeting-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: hsl(var(--gold-deep));
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+  .greeting-eyebrow::before {
+    content: '';
+    width: 20px; height: 1px;
+    background: hsl(var(--gold));
+  }
+  .greeting-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: hsl(var(--foreground));
+    line-height: 1.1;
+  }
+  .greeting-title em {
+    font-style: normal;
+    color: hsl(var(--gold-deep));
+    font-variant-numeric: tabular-nums;
+  }
+  .greeting-sub {
+    margin-top: 0.75rem;
+    font-size: 0.9375rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.5;
+    max-width: 580px;
+  }
+  .greeting-sub strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Urgency filter-tabs (vervanger van KPI strip) ─── */
+  .urg-tabs {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    padding: 0 0.25rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+  }
+  .urg-tab {
+    position: relative;
+    padding: 0.75rem 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: -0.005em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: color .15s;
+    border-bottom: 1.5px solid transparent;
+    margin-bottom: -1px;
+  }
+  .urg-tab:hover { color: hsl(var(--foreground)); }
+  .urg-tab__count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: hsl(var(--muted) / 0.7);
+    color: hsl(var(--muted-foreground));
+    min-width: 22px;
+    text-align: center;
+  }
+  .urg-tab--active {
+    color: hsl(var(--foreground));
+    border-bottom-color: var(--tab-accent, hsl(var(--foreground)));
+  }
+  .urg-tab--active::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 50%;
+    transform: translateX(-50%);
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+  }
+  .urg-tab--active .urg-tab__count {
+    background: var(--tab-accent-bg, hsl(var(--foreground)));
+    color: var(--tab-accent-fg, hsl(var(--card)));
+  }
+  .urg-tab[data-urg="now"]  .urg-tab__count { color: var(--urg-now-text); background: var(--urg-now-bg); }
+  .urg-tab[data-urg="now"].urg-tab--active  { --tab-accent: var(--urg-now-dot); --tab-accent-bg: var(--urg-now-dot); --tab-accent-fg: white; }
+  .urg-tab[data-urg="1h"]   .urg-tab__count { color: var(--urg-1h-text);  background: var(--urg-1h-bg); }
+  .urg-tab[data-urg="1h"].urg-tab--active   { --tab-accent: var(--urg-1h-dot); --tab-accent-bg: var(--urg-1h-dot); --tab-accent-fg: white; }
+  .urg-tab[data-urg="day"]  .urg-tab__count { color: var(--urg-day-text); background: var(--urg-day-bg); }
+  .urg-tab[data-urg="day"].urg-tab--active  { --tab-accent: var(--urg-day-dot); --tab-accent-bg: var(--urg-day-dot); --tab-accent-fg: white; }
+  .urg-tab[data-urg="week"] .urg-tab__count { color: hsl(var(--gold-deep)); background: hsl(var(--gold-soft)); }
+  .urg-tab[data-urg="week"].urg-tab--active { --tab-accent: hsl(var(--gold)); --tab-accent-bg: hsl(var(--gold)); --tab-accent-fg: white; }
+  .urg-tab[data-urg="all"]  .urg-tab__count { background: transparent; border: 1px solid hsl(var(--border)); }
+
+  /* ─── Hairline ─── */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--gold) / 0.35) 50%, transparent 100%);
+  }
+
+  /* ─── Section header ─── */
+  .section-hd {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .section-hd__title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .section-hd__title em {
+    font-style: normal;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+  .section-hd__dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--section-dot, hsl(var(--gold)));
+    box-shadow: 0 0 0 3px hsl(var(--card)), 0 0 0 5px var(--section-halo, transparent);
+  }
+  .section-hd[data-urg="now"] { --section-dot: var(--urg-now-dot); --section-halo: hsl(0 78% 55% / 0.18); }
+  .section-hd[data-urg="1h"]  { --section-dot: var(--urg-1h-dot);  --section-halo: hsl(32 90% 55% / 0.2); }
+  .section-hd[data-urg="day"] { --section-dot: var(--urg-day-dot); --section-halo: hsl(210 80% 55% / 0.18); }
+
+  /* ─── Attention card (core unit) ─── */
+  .att {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 1rem;
+    padding: 1.25rem 1.5rem;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.04),
+      0 4px 12px -6px hsl(var(--ink) / 0.08);
+    position: relative;
+    overflow: hidden;
+    transition: all .18s;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  .att:hover {
+    border-color: hsl(var(--gold) / 0.35);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 2px 4px hsl(var(--ink) / 0.05),
+      0 12px 28px -12px hsl(var(--ink) / 0.15);
+  }
+  .att::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+    background: var(--att-accent, hsl(var(--gold)));
+  }
+  .att[data-urg="now"] { --att-accent: linear-gradient(180deg, var(--urg-now-dot), hsl(0 78% 38%)); }
+  .att[data-urg="1h"]  { --att-accent: linear-gradient(180deg, var(--urg-1h-dot), hsl(32 70% 42%)); }
+  .att[data-urg="day"] { --att-accent: linear-gradient(180deg, var(--urg-day-dot), hsl(210 70% 42%)); }
+
+  /* Left side: question + context */
+  .att__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.625rem;
+  }
+  .att__type {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 0.1875rem 0.5rem;
+    border-radius: 0.3125rem;
+    background: hsl(var(--muted) / 0.6);
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
+  }
+  .att__type--info   { background: hsl(32 80% 94%); color: hsl(32 70% 35%); border-color: hsl(32 80% 82%); }
+  .att__type--plan   { background: hsl(258 55% 94%); color: hsl(258 55% 40%); border-color: hsl(258 55% 82%); }
+  .att__type--res    { background: hsl(0 78% 96%);  color: hsl(0 78% 40%);  border-color: hsl(0 78% 85%); }
+  .att__type--pmt    { background: hsl(var(--gold-soft) / 0.6); color: hsl(var(--gold-deep)); border-color: hsl(var(--gold) / 0.3); }
+  .att__type--price  { background: hsl(210 70% 96%); color: hsl(210 70% 35%); border-color: hsl(210 70% 82%); }
+  .att__type--cust   { background: hsl(158 50% 94%); color: hsl(158 55% 30%); border-color: hsl(158 45% 78%); }
+
+  .att__order-ref {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 0.1875rem 0.5rem;
+    background: hsl(var(--gold-soft) / 0.6);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 0.3125rem;
+  }
+  .att__client {
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .att__client strong { color: hsl(var(--foreground)); font-weight: 500; }
+  .att__deadline {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--att-deadline-color, hsl(var(--muted-foreground)));
+    padding: 0.1875rem 0.5rem;
+    border-radius: 999px;
+    background: var(--att-deadline-bg, hsl(var(--muted) / 0.5));
+    letter-spacing: 0.02em;
+  }
+  .att[data-urg="now"] .att__deadline { --att-deadline-color: var(--urg-now-text); --att-deadline-bg: var(--urg-now-bg); }
+  .att[data-urg="1h"]  .att__deadline { --att-deadline-color: var(--urg-1h-text);  --att-deadline-bg: var(--urg-1h-bg); }
+  .att[data-urg="day"] .att__deadline { --att-deadline-color: var(--urg-day-text); --att-deadline-bg: var(--urg-day-bg); }
+
+  .att__question {
+    font-family: var(--font-display);
+    font-size: 1.0625rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.015em;
+    margin-bottom: 0.75rem;
+  }
+
+  /* System proposal block */
+  .att__proposal {
+    margin-bottom: 0.875rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.3) 100%);
+    border: 1px solid hsl(var(--gold) / 0.2);
+    border-radius: 0.625rem;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .att__proposal::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent);
+  }
+  .att__proposal-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .att__proposal-label {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--gold-deep));
+  }
+  .att__proposal-text {
+    font-size: 0.875rem;
+    color: hsl(var(--foreground));
+    line-height: 1.45;
+  }
+
+  /* Confidence bar */
+  .conf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .conf__label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.04em;
+  }
+  .conf__bar {
+    width: 100px;
+    height: 4px;
+    background: hsl(var(--muted) / 0.8);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+  .conf__bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+    border-radius: 999px;
+  }
+  .conf__val {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--gold-deep));
+  }
+  .conf--low .conf__bar-fill { background: linear-gradient(90deg, hsl(32 90% 60%), hsl(32 70% 40%)); }
+  .conf--low .conf__val { color: hsl(32 70% 40%); }
+
+  /* History trail */
+  .att__history {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.875rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed hsl(var(--border) / 0.7);
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+  }
+  .att__history svg {
+    flex-shrink: 0;
+    color: hsl(var(--muted-foreground));
+  }
+  .att__history strong {
+    color: hsl(var(--foreground));
+    font-weight: 500;
+  }
+
+  /* Right side: actions */
+  .att__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 200px;
+  }
+  .att-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    padding: 0 1rem;
+    border-radius: 0.625rem;
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .att-btn--primary {
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    color: white;
+    box-shadow:
+      0 1px 2px hsl(var(--primary) / 0.3),
+      0 4px 10px -2px hsl(var(--primary) / 0.25),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  }
+  .att-btn--primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px hsl(var(--primary) / 0.35), 0 8px 18px -2px hsl(var(--primary) / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  }
+  .att-btn--ghost {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border) / 0.7);
+    color: hsl(var(--foreground));
+  }
+  .att-btn--ghost:hover {
+    background: hsl(var(--gold-soft) / 0.4);
+    border-color: hsl(var(--gold) / 0.3);
+  }
+  .att-btn--subtle {
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    height: 2rem;
+  }
+  .att-btn--subtle:hover {
+    color: hsl(var(--foreground));
+    background: hsl(var(--muted) / 0.4);
+  }
+
+  /* Keyboard hint */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px; height: 18px;
+    padding: 0 4px;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--muted) / 0.6);
+    border: 1px solid hsl(var(--border));
+    border-radius: 4px;
+    letter-spacing: 0;
+    margin-left: 0.375rem;
+  }
+
+  /* Morning action bar */
+  .morning-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, hsl(var(--sidebar-background)) 0%, hsl(var(--sidebar-background)) 60%, hsl(32 42% 25%) 100%);
+    color: hsl(var(--sidebar-foreground));
+    border-radius: 0.875rem;
+    font-size: 0.8125rem;
+    border: 1px solid hsl(var(--gold) / 0.2);
+    box-shadow: 0 4px 12px -4px hsl(var(--ink) / 0.3);
+  }
+  .morning-bar__kbd-hint {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: hsl(var(--sidebar-foreground) / 0.6);
+  }
+  .morning-bar__kbd-hint .kbd {
+    background: hsl(var(--sidebar-foreground) / 0.08);
+    border-color: hsl(var(--sidebar-foreground) / 0.15);
+    color: hsl(var(--sidebar-foreground) / 0.9);
+  }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.3) 100%);
+    border: 1px solid hsl(var(--gold) / 0.2);
+    border-radius: 1rem;
+  }
+  .empty__title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-bottom: 0.25rem;
+  }
+  .empty__sub {
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<div class="ribbon">
+  <span><span class="tag">Mockup</span> &nbsp; Aandacht — planner queue</span>
+  <span style="opacity:0.4; letter-spacing:0;">docs/mockups/attention-queue-redesign.html</span>
+</div>
+
+<div class="max-w-[1200px] mx-auto px-8 pt-8 pb-12 space-y-6">
+
+  <!-- ═══ Hero: goedemorgen ═══ -->
+  <div>
+    <div class="greeting-eyebrow">Planner · aandachtsveld</div>
+    <h1 class="greeting-title">Goedemorgen Badr — <em>12</em> items voor jou</h1>
+    <p class="greeting-sub">
+      Het systeem heeft vannacht <strong>203 orders</strong> autonoom afgehandeld.
+      <strong>12</strong> hebben jouw beslissing nodig, waarvan <strong>3</strong> op dit moment kritiek zijn.
+      Verwachte doorlooptijd: <strong>~45 minuten</strong>.
+    </p>
+  </div>
+
+  <!-- ═══ Morning bar — quick status ═══ -->
+  <div class="morning-bar">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold));"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+    <span>15 apr · woensdag · <strong style="color: white; font-weight: 600;">07:48</strong> — systeem is sinds 00:00 actief en heeft <strong style="color: white;">47 planningsbeslissingen</strong> genomen</span>
+    <div class="morning-bar__kbd-hint">
+      <span>Sneltoetsen:</span>
+      <span class="kbd">J</span> <span class="kbd">K</span> navigeer
+      <span class="kbd">1</span> akkoord
+      <span class="kbd">2</span> wijzig
+    </div>
+  </div>
+
+  <!-- ═══ Urgency filter-tabs ═══ -->
+  <div class="urg-tabs">
+    <button class="urg-tab urg-tab--active" data-urg="now">Nu kritiek <span class="urg-tab__count">3</span></button>
+    <button class="urg-tab" data-urg="1h">Binnen 1 uur <span class="urg-tab__count">5</span></button>
+    <button class="urg-tab" data-urg="day">Vandaag <span class="urg-tab__count">4</span></button>
+    <button class="urg-tab" data-urg="week">Deze week <span class="urg-tab__count">7</span></button>
+    <button class="urg-tab" data-urg="all" style="margin-left: auto;">Alles <span class="urg-tab__count">19</span></button>
+  </div>
+
+  <!-- ═══ NU · kritiek ═══ -->
+  <div class="space-y-3">
+    <div class="hairline"></div>
+    <div class="section-hd" data-urg="now">
+      <div class="section-hd__title">
+        <span class="section-hd__dot"></span>
+        Nu · kritiek <em>3</em>
+      </div>
+      <span style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Zonder ingreep binnen 30 min: order loopt vast</span>
+    </div>
+
+    <!-- Item 1 — Info-tracking T-1u escalatie -->
+    <article class="att" data-urg="now">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--info">Info-tracking · escalatie</span>
+          <span class="att__order-ref">ORD-2026-04-0847</span>
+          <span class="att__client">Van der Berg Logistics · <strong>Rotterdam → Düsseldorf</strong></span>
+          <span class="att__deadline">pickup over 0:12</span>
+        </div>
+        <div class="att__question">
+          Klant reageert niet op MRN-verzoek sinds 07:21. Bellen of wachten tot T-0?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Bel direct Jan de Vries (<strong>06 12 34 56 78</strong>) — hoofdcontact VDB voor export-documentatie. Laatste e-mail geopend om 07:19 (delivery bevestigd).
+          </div>
+          <div class="conf">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 82%;"></div></div>
+            <span class="conf__val">82%</span>
+          </div>
+        </div>
+        <div class="att__history">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <strong>07:21</strong> e-mail verstuurd · <strong>07:35</strong> rappel · <strong>nu</strong> T-1u escalatie actief
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Bel nu <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Andere contactpersoon</button>
+        <button class="att-btn att-btn--ghost">Uitstel 15 min</button>
+        <button class="att-btn att-btn--subtle">Annuleer order</button>
+      </div>
+    </article>
+
+    <!-- Item 2 — Resource-conflict -->
+    <article class="att" data-urg="now">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--res">Resource-conflict</span>
+          <span class="att__order-ref">ORD-2026-04-0850</span>
+          <span class="att__client">Royal Frozen Foods · <strong>Zaandam → Rotterdam Havens</strong></span>
+          <span class="att__deadline">pickup over 0:28</span>
+        </div>
+        <div class="att__question">
+          Geen koel-voertuig beschikbaar vóór 09:00. Alternatief nodig.
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Verschuif pickup naar <strong>09:45</strong> met Koel groot (beschikbaar om 09:30, chauffeur Ahmed). Levering blijft binnen venster. Alternatief: Koel klein van partner Oostlandse (+€85 subcontract).
+          </div>
+          <div class="conf">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 71%;"></div></div>
+            <span class="conf__val">71%</span>
+          </div>
+        </div>
+        <div class="att__history">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <strong>07:40</strong> VRP-solver detecteerde conflict · 2 alternatieven berekend
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Verschuif naar 09:45 <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Subcontract partner (+€85)</button>
+        <button class="att-btn att-btn--ghost">Klant bellen eerst</button>
+      </div>
+    </article>
+
+    <!-- Item 3 — PMT-urgentie -->
+    <article class="att" data-urg="now">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--pmt">PMT · luchtvracht</span>
+          <span class="att__order-ref">ORD-2026-04-0843</span>
+          <span class="att__client">FlowerLink International · <strong>Aalsmeer → Heathrow</strong></span>
+          <span class="att__deadline">cutoff over 0:52</span>
+        </div>
+        <div class="att__question">
+          Geen EDD-slot beschikbaar vóór luchtvracht-cutoff. Switch naar X-RAY of andere vlucht?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Switch naar <strong>X-RAY</strong> bij Schiphol Cargo Security (slot beschikbaar 08:15, capaciteit 4 pallets — matcht). BA1442 cutoff gehaald. Meerprijs €47,50.
+          </div>
+          <div class="conf">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 91%;"></div></div>
+            <span class="conf__val">91%</span>
+          </div>
+        </div>
+        <div class="att__history">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <strong>06:50</strong> EDD-boeking gefaald · <strong>07:12</strong> alternatieven berekend · klant heeft X-RAY goedgekeurd in contract
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Boek X-RAY slot <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Volgende vlucht KL1011</button>
+        <button class="att-btn att-btn--ghost">Klant bellen</button>
+      </div>
+    </article>
+  </div>
+
+  <!-- ═══ BINNEN 1 UUR ═══ -->
+  <div class="space-y-3" style="margin-top: 2rem;">
+    <div class="hairline"></div>
+    <div class="section-hd" data-urg="1h">
+      <div class="section-hd__title">
+        <span class="section-hd__dot"></span>
+        Binnen 1 uur <em>5</em>
+      </div>
+      <span style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">2 toon ik, 3 ingeklapt — toon alle</span>
+    </div>
+
+    <!-- Item 4 — Planning lage confidence -->
+    <article class="att" data-urg="1h">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--plan">Planning · lage zekerheid</span>
+          <span class="att__order-ref">ORD-2026-04-0851</span>
+          <span class="att__client">Kramer Transport · <strong>Amsterdam → Praag</strong></span>
+          <span class="att__deadline">in 0:47</span>
+        </div>
+        <div class="att__question">
+          Route onzeker door ADR-beperkingen DE/CZ corridor. Autoriseer je de voorgestelde planning?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Route via <strong>Düsseldorf → Dresden → Praag</strong> (ADR-corridor bevestigd), chauffeur Kees Jong met ADR-certificaat, DAF Truck incl. diesel <strong>€2.592,45</strong>. Tweede optie A8/A5 is 40 min sneller maar A8 heeft ADR-beperking tussen 22-06u.
+          </div>
+          <div class="conf conf--low">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 63%;"></div></div>
+            <span class="conf__val">63%</span>
+          </div>
+        </div>
+        <div class="att__history">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <strong>Soortgelijke orders gepland 3×</strong>, 2× door jou gecorrigeerd naar andere route — leer-signaal actief
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Goedkeuren plan <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Wijzig route</button>
+        <button class="att-btn att-btn--ghost">Andere chauffeur</button>
+      </div>
+    </article>
+
+    <!-- Item 5 — Tarief-afwijking -->
+    <article class="att" data-urg="1h">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--price">Tarief · Schiphol-regio</span>
+          <span class="att__order-ref">ORD-2026-04-0852</span>
+          <span class="att__client">MedSupply Nederland · <strong>Hoofddorp → Schiphol cargo</strong></span>
+          <span class="att__deadline">in 0:55</span>
+        </div>
+        <div class="att__question">
+          Schiphol-regio valt buiten standaard matrix. Handmatig tarief bevestigen?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Tarief <strong>€385,00</strong> op basis van vorige 4 MedSupply-Schiphol ritten (gemiddeld €378, range €365–€401). Reden: maatwerk-afspraak raamcontract §7.2.
+          </div>
+          <div class="conf">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 87%;"></div></div>
+            <span class="conf__val">87%</span>
+          </div>
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Bevestig €385,00 <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Pas tarief aan</button>
+      </div>
+    </article>
+
+    <!-- Collapsed hint -->
+    <button style="width: 100%; padding: 0.75rem 1rem; background: transparent; border: 1px dashed hsl(var(--border)); border-radius: 0.625rem; font-size: 0.8125rem; color: hsl(var(--muted-foreground)); cursor: pointer; font-family: var(--font-display); font-weight: 500;">
+      + 3 minder urgente items — toon alle binnen dit uur
+    </button>
+  </div>
+
+  <!-- ═══ VANDAAG ═══ -->
+  <div class="space-y-3" style="margin-top: 2rem;">
+    <div class="hairline"></div>
+    <div class="section-hd" data-urg="day">
+      <div class="section-hd__title">
+        <span class="section-hd__dot"></span>
+        Vandaag <em>4</em>
+      </div>
+    </div>
+
+    <!-- Item 6 — Klantbevestiging -->
+    <article class="att" data-urg="day">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--cust">Klant-bevestiging</span>
+          <span class="att__order-ref">ORD-2026-04-0838</span>
+          <span class="att__client">AutoParts Europa · <strong>Eindhoven → Milaan</strong></span>
+          <span class="att__deadline">pickup morgen 07:00</span>
+        </div>
+        <div class="att__question">
+          Klant vraagt om opsplitsing in 2 rit-dagen i.p.v. 1. Akkoord met meerprijs?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Bevestig opsplitsing met <strong>+€320 meerprijs</strong> (overnight chauffeur + hotel). Alternatief: enkele rit 14u met 2 chauffeurs in ploegendienst (+€580). Klant heeft in contract optie A geaccepteerd bij vorige 7 ritten.
+          </div>
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Bevestig +€320 <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">2 chauffeurs (+€580)</button>
+        <button class="att-btn att-btn--subtle">Offerte maken</button>
+      </div>
+    </article>
+  </div>
+
+  <!-- ═══ Footer: wat deed het systeem ═══ -->
+  <div class="space-y-3" style="margin-top: 3rem;">
+    <div class="hairline"></div>
+    <div class="section-hd">
+      <div class="section-hd__title">
+        <span class="section-hd__dot" style="background: hsl(var(--gold)); box-shadow: 0 0 0 3px hsl(var(--card)), 0 0 0 5px hsl(var(--gold) / 0.2);"></span>
+        Wat heeft het systeem vannacht gedaan
+      </div>
+      <button class="att-btn att-btn--subtle">Toon volledig audit-log</button>
+    </div>
+    <div class="empty">
+      <div class="empty__title">203 orders autonoom afgehandeld · 47 planningsbeslissingen</div>
+      <div class="empty__sub">
+        Routes berekend voor 156 ritten · 31 tarieven uit matrix · 12 info-rappels verstuurd · 4 EDD-slots geboekt · 2 CMR-verklaringen gegenereerd.
+        Gemiddelde confidence: <strong style="color: hsl(var(--gold-deep)); font-style: normal; font-weight: 600;">94%</strong>.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Urgency-tab filter
+  document.querySelectorAll('.urg-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.urg-tab').forEach(x => x.classList.remove('urg-tab--active'));
+      t.classList.add('urg-tab--active');
+    });
+  });
+  // Dismiss animation demo — klik primary button
+  document.querySelectorAll('.att-btn--primary').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const art = e.target.closest('article.att');
+      if (!art) return;
+      art.style.transition = 'opacity .3s, transform .4s cubic-bezier(0.4, 0, 0.2, 1), margin .3s';
+      art.style.opacity = '0';
+      art.style.transform = 'translateX(12px) scale(0.98)';
+      setTimeout(() => { art.style.marginTop = '-' + art.offsetHeight + 'px'; }, 10);
+      setTimeout(() => art.remove(), 400);
+    });
+  });
+</script>
+</body>
+</html>

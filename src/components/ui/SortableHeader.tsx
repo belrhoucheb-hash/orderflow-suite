@@ -23,13 +23,22 @@ export function SortableHeader({ label, field, currentSort, onSort, className }:
       type="button"
       onClick={() => onSort(field)}
       className={cn(
-        "inline-flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors",
+        "relative inline-flex items-center gap-1 cursor-pointer transition-colors pb-0.5",
         "text-[11px] font-semibold uppercase tracking-wide",
-        isActive ? "text-foreground" : "text-muted-foreground/60",
+        isActive ? "text-foreground" : "text-muted-foreground/60 hover:text-foreground",
         className,
       )}
     >
-      {label}
+      <span className="relative">
+        {label}
+        {isActive && (
+          <span
+            aria-hidden
+            className="absolute left-0 right-0 -bottom-1 h-[1.5px] rounded-full animate-[sort-underline-in_.25s_cubic-bezier(0.4,0,0.2,1)]"
+            style={{ background: "linear-gradient(90deg, hsl(var(--gold)), hsl(var(--gold-deep)))" }}
+          />
+        )}
+      </span>
       {direction === "asc" ? (
         <ArrowUp className="h-3 w-3" />
       ) : direction === "desc" ? (

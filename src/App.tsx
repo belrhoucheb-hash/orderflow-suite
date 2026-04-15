@@ -44,11 +44,14 @@ const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const Clients = lazy(() => import("@/pages/Clients"));
 const Fleet = lazy(() => import("@/pages/Fleet"));
 const VehicleDetail = lazy(() => import("@/pages/VehicleDetail"));
+const VoertuigcheckHistorie = lazy(() => import("@/pages/VoertuigcheckHistorie"));
+const VoertuigcheckPerVoertuig = lazy(() => import("@/pages/VoertuigcheckPerVoertuig"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Rapportage = lazy(() => import("@/pages/Rapportage"));
 const Facturatie = lazy(() => import("@/pages/Facturatie"));
 const FacturatieDetail = lazy(() => import("@/pages/FacturatieDetail"));
 const ChauffeurApp = lazy(() => import("@/pages/ChauffeurApp"));
+const PreviewPreDepartureModal = lazy(() => import("@/pages/PreviewPreDepartureModal"));
 const TrackTrace = lazy(() => import("@/pages/TrackTrace"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const Exceptions = lazy(() => import("@/pages/Exceptions"));
@@ -62,7 +65,21 @@ const Dispatch = lazy(() => import("@/pages/Dispatch"));
 const LiveTracking = lazy(() => import("@/pages/LiveTracking"));
 const Autonomie = lazy(() => import("@/pages/Autonomie"));
 
-const queryClient = new QueryClient();
+// Performance: saner React Query defaults.
+//   * staleTime 60s — avoids instant re-fetch op elk mount.
+//   * refetchOnWindowFocus off — voorkomt full reload bij tab-switch.
+//   * retry 1 — laat fouten snel terugzien ipv 3x wachten.
+// Per-query overrides blijven mogelijk via queryOptions.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function PageLoader() {
   return (
@@ -102,6 +119,8 @@ const App = () => (
               <Route path="/chauffeurs" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Chauffeurs /></Suspense></ErrorBoundary>} />
               <Route path="/vloot" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Fleet /></Suspense></ErrorBoundary>} />
               <Route path="/vloot/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><VehicleDetail /></Suspense></ErrorBoundary>} />
+              <Route path="/voertuigcheck" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><VoertuigcheckHistorie /></Suspense></ErrorBoundary>} />
+              <Route path="/voertuigcheck/voertuig/:vehicleId" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><VoertuigcheckPerVoertuig /></Suspense></ErrorBoundary>} />
               <Route path="/users" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><UsersPage /></Suspense></ErrorBoundary></RoleGuard>} />
               <Route path="/rapportage" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Rapportage /></Suspense></ErrorBoundary>} />
               <Route path="/facturatie" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Facturatie /></Suspense></ErrorBoundary>} />
@@ -115,6 +134,7 @@ const App = () => (
             </Route>
 
             <Route path="/chauffeur" element={<ProtectedRoute><ErrorBoundary><Suspense fallback={<PageLoader />}><ChauffeurApp /></Suspense></ErrorBoundary></ProtectedRoute>} />
+            <Route path="/chauffeur/preview-modal" element={<Suspense fallback={<PageLoader />}><PreviewPreDepartureModal /></Suspense>} />
             <Route path="/track" element={<Suspense fallback={<PageLoader />}><TrackTrace /></Suspense>} />
             <Route path="/portal" element={<Suspense fallback={<PageLoader />}><ClientPortal /></Suspense>}>
               <Route index element={<Suspense fallback={<PageLoader />}><PortalOrders /></Suspense>} />

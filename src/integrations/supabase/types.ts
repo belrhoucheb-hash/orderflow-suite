@@ -970,6 +970,7 @@ export type Database = {
           weight_kg: number | null
           order_type: string
           return_reason: string | null
+          info_status: string
         }
         Insert: {
           anomalies?: Json | null
@@ -1035,6 +1036,7 @@ export type Database = {
           weight_kg?: number | null
           order_type?: string
           return_reason?: string | null
+          info_status?: string
         }
         Update: {
           anomalies?: Json | null
@@ -1100,6 +1102,7 @@ export type Database = {
           weight_kg?: number | null
           order_type?: string
           return_reason?: string | null
+          info_status?: string
         }
         Relationships: [
           {
@@ -1135,6 +1138,90 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_info_requests: {
+        Row: {
+          id: string
+          tenant_id: string
+          order_id: string
+          field_name: string
+          field_label: string | null
+          status: string
+          promised_by_contact_id: string | null
+          promised_by_name: string | null
+          promised_by_email: string | null
+          promised_at: string
+          expected_by: string | null
+          fulfilled_at: string | null
+          fulfilled_value: string | null
+          fulfilled_source: string | null
+          reminder_sent_at: string[]
+          escalated_at: string | null
+          cancelled_at: string | null
+          cancelled_reason: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          order_id: string
+          field_name: string
+          field_label?: string | null
+          status?: string
+          promised_by_contact_id?: string | null
+          promised_by_name?: string | null
+          promised_by_email?: string | null
+          promised_at?: string
+          expected_by?: string | null
+          fulfilled_at?: string | null
+          fulfilled_value?: string | null
+          fulfilled_source?: string | null
+          reminder_sent_at?: string[]
+          escalated_at?: string | null
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          order_id?: string
+          field_name?: string
+          field_label?: string | null
+          status?: string
+          promised_by_contact_id?: string | null
+          promised_by_name?: string | null
+          promised_by_email?: string | null
+          promised_at?: string
+          expected_by?: string | null
+          fulfilled_at?: string | null
+          fulfilled_value?: string | null
+          fulfilled_source?: string | null
+          reminder_sent_at?: string[]
+          escalated_at?: string | null
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_info_requests_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_info_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]

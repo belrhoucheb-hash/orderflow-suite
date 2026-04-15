@@ -25,6 +25,14 @@ export interface Order {
   /** F5: order type — ZENDING (default) / RETOUR / EMBALLAGE_RUIL */
   orderType?: string;
   parentOrderId?: string | null;
+  /** Prio 1: departments + shipment legs */
+  departmentId?: string | null;
+  departmentCode?: string | null;
+  shipmentId?: string | null;
+  legNumber?: number | null;
+  legRole?: string | null;
+  /** §22 info-tracking: parallelle dimensie naast status */
+  infoStatus?: "COMPLETE" | "AWAITING_INFO" | "OVERDUE" | null;
 }
 
 export interface Vehicle {
