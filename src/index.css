@@ -401,11 +401,13 @@
   /* ─── Luxe status badge variant — matcht NewOrder gold-accent stijl ─── */
   .badge-status--luxe {
     font-family: var(--font-display);
-    padding: 0.25rem 0.75rem;
-    height: 1.75rem;
+    padding: 0.375rem 0.875rem;
+    height: 1.875rem;
     border-radius: 0.5rem;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
     font-weight: 500;
+    font-size: 0.75rem;
+    white-space: nowrap;
     background: linear-gradient(180deg,
       hsl(var(--card)) 0%,
       hsl(var(--gold-soft) / 0.25) 100%);
@@ -432,13 +434,107 @@
     width: 0.4375rem;
     box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 3px hsl(var(--gold) / 0.2);
   }
-  /* Status-specifieke tekstkleuren op de luxe-bodem — subtiel, gedempt */
-  .badge-status--luxe.badge-status--draft       { color: hsl(220 15% 35%); }
-  .badge-status--luxe.badge-status--pending     { color: hsl(32 60% 35%); }
-  .badge-status--luxe.badge-status--planned     { color: hsl(258 45% 42%); }
-  .badge-status--luxe.badge-status--in-transit  { color: hsl(var(--primary)); }
-  .badge-status--luxe.badge-status--delivered   { color: hsl(142 50% 32%); }
-  .badge-status--luxe.badge-status--cancelled   { color: hsl(0 60% 45%); }
+  /* Status — alle tekst in foreground/luxe palette, geen kleurkakofonie.
+     Onderscheid komt enkel via de status-dot (kleur indicator). */
+  .badge-status--luxe { color: hsl(var(--foreground) / 0.85); }
+  .badge-status--luxe.badge-status--cancelled { color: hsl(var(--muted-foreground) / 0.7); }
+  /* Subtle gradient bg variatie voor levensloop: nieuw → afgeleverd subtieler goud */
+  .badge-status--luxe.badge-status--in-transit {
+    background: linear-gradient(180deg, hsl(var(--gold-soft)/0.5) 0%, hsl(var(--gold-soft)/0.85) 100%);
+    border-color: hsl(var(--gold)/0.4);
+  }
+  .badge-status--luxe.badge-status--delivered {
+    background: linear-gradient(180deg, hsl(var(--gold-soft)/0.85) 0%, hsl(var(--gold-soft)/0.5) 100%);
+    border-color: hsl(var(--gold)/0.35);
+    color: hsl(var(--gold-deep));
+  }
+  .badge-status--luxe.badge-status--cancelled {
+    background: hsl(var(--muted) / 0.4);
+    border-color: hsl(var(--border) / 0.6);
+  }
+  /* Status-dots in luxe palette — gold-staged lifecycle */
+  .badge-status--luxe.badge-status--draft      .badge-status__dot { background: hsl(var(--muted-foreground) / 0.5); box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 3px hsl(var(--muted-foreground) / 0.15); }
+  .badge-status--luxe.badge-status--pending    .badge-status__dot { background: hsl(var(--gold-light)); box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 3px hsl(var(--gold) / 0.2); }
+  .badge-status--luxe.badge-status--planned    .badge-status__dot { background: hsl(var(--gold)); box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 3px hsl(var(--gold) / 0.25); }
+  .badge-status--luxe.badge-status--in-transit .badge-status__dot { background: hsl(var(--gold-deep)); box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 3px hsl(var(--gold-deep) / 0.25); }
+  .badge-status--luxe.badge-status--delivered  .badge-status__dot { background: hsl(var(--gold-deep)); box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 3px hsl(var(--gold-deep) / 0.3); }
+  .badge-status--luxe.badge-status--cancelled  .badge-status__dot { background: hsl(var(--muted-foreground) / 0.4); box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 3px hsl(var(--muted-foreground) / 0.1); }
+
+  /* IN_TRANSIT: subtiele halo + pulse. Alleen op deze status, andere blijven rustig.
+     Luxe-variant krijgt een gouden halo zodat de puls niet botst met de gold-accent. */
+  .badge-status--in-transit {
+    --dot-halo: color-mix(in srgb, var(--status-in-transit-dot) 22%, transparent);
+  }
+  .badge-status--in-transit.badge-status--luxe {
+    --dot-halo: color-mix(in srgb, hsl(var(--gold-deep)) 25%, transparent);
+  }
+  .badge-status--in-transit .badge-status__dot {
+    animation: badge-status-pulse 2s infinite;
+  }
+  @keyframes badge-status-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 3px var(--dot-halo); }
+    50%      { box-shadow: 0 0 0 2px hsl(var(--card)), 0 0 0 7px transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .badge-status--in-transit .badge-status__dot { animation: none; }
+  }
+
+  /* Chiplets: compacte monochrome labels voor operationele signalen.
+     chiplet = neutraal, chiplet--warn = destructieve waarschuwing (KM-afwijking, ADR),
+     chiplet--attn = aandacht vereist (niet-destructief), info-chip = info openstaand. */
+  .chiplet {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    padding: 0.1875rem 0.5rem;
+    border-radius: 0.3125rem;
+    white-space: nowrap;
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
+  }
+  .chiplet svg {
+    width: 11px;
+    height: 11px;
+    stroke-width: 1.75;
+    color: hsl(var(--muted-foreground));
+    flex-shrink: 0;
+  }
+  .chiplet--warn {
+    color: hsl(0 60% 38%);
+    border-color: hsl(0 70% 88%);
+  }
+  .chiplet--warn svg { color: hsl(0 60% 45%); }
+  .chiplet--attn {
+    color: hsl(32 55% 35%);
+    border-color: hsl(32 70% 85%);
+  }
+  .chiplet--attn svg { color: hsl(32 60% 42%); }
+  .info-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    padding: 0.1875rem 0.5rem;
+    border-radius: 0.3125rem;
+    background: transparent;
+    color: hsl(32 55% 35%);
+    border: 1px solid hsl(32 70% 85%);
+  }
+  .info-chip::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: hsl(32 60% 50%);
+  }
 
   /* ─── Buttons ─── */
   .btn-primary {
@@ -477,6 +573,33 @@
            disabled:opacity-50 disabled:pointer-events-none;
   }
 
+  /* ─── Resizable table columns (luxe) ─── */
+  /* Pas toe op een <thead> via class .th-resize: alle <th>'s worden sleepbaar
+     vanaf de rechterrand. Standaard onzichtbaar; gold edge bij hover. */
+  .th-resize > tr > th {
+    position: relative;
+    resize: horizontal;
+    overflow: hidden;
+    min-width: 90px;
+  }
+  /* Hide the native bottom-right corner grip */
+  .th-resize > tr > th::-webkit-resizer { display: none; }
+  /* Custom subtle hint right edge — gold accent on hover */
+  .th-resize > tr > th::after {
+    content: '';
+    position: absolute;
+    top: 18%;
+    right: 0;
+    bottom: 18%;
+    width: 2px;
+    background: hsl(var(--gold) / 0);
+    transition: background .15s;
+    pointer-events: none;
+  }
+  .th-resize > tr > th:hover::after {
+    background: hsl(var(--gold) / 0.5);
+  }
+
   /* ─── Tables ─── */
   .data-table {
     @apply w-full;
@@ -488,7 +611,11 @@
   }
 
   .table-row {
-    @apply hover:bg-muted/20 transition-colors duration-100;
+    @apply transition-colors duration-150 relative;
+  }
+  .table-row:hover {
+    background: hsl(var(--gold-soft) / 0.35);
+    box-shadow: inset 2px 0 0 0 hsl(var(--gold) / 0.5);
   }
 
   .table-cell {
@@ -594,6 +721,35 @@
     border-radius: 0.375rem;
     color: hsl(var(--gold-deep));
     font-weight: 500;
+  }
+
+  /* Luxe shimmer skeleton — gouden gradient die van links naar rechts loopt */
+  .skeleton-luxe {
+    position: relative;
+    overflow: hidden;
+    height: 1rem;
+    border-radius: 0.375rem;
+    background-color: hsl(var(--card));
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--gold-soft) / 0.5) 0%,
+      hsl(var(--gold) / 0.25) 50%,
+      hsl(var(--gold-soft) / 0.5) 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: skeleton-luxe-shimmer 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    border: 1px solid hsl(var(--border) / 0.4);
+  }
+
+  @keyframes sort-underline-in {
+    from { transform: scaleX(0); opacity: 0; }
+    to   { transform: scaleX(1); opacity: 1; }
+  }
+
+  @keyframes skeleton-luxe-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 
   /* Thin gold glow divider */
@@ -852,6 +1008,148 @@
     background: linear-gradient(180deg, hsl(var(--primary) / 1), hsl(var(--primary) / 0.88));
     color: hsl(var(--primary-foreground));
     box-shadow: 0 1px 2px hsl(var(--primary) / 0.3), inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  }
+
+  /* Luxe buttons — gold-accent in plaats van primary-red */
+  .btn-luxe {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    padding: 0 1.125rem;
+    border-radius: 0.625rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: var(--font-ui);
+    letter-spacing: -0.005em;
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border) / 0.7);
+  }
+  .btn-luxe:hover {
+    background: hsl(var(--gold-soft) / 0.5);
+    border-color: hsl(var(--gold) / 0.4);
+    color: hsl(var(--gold-deep));
+  }
+  .btn-luxe:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .btn-luxe:focus {
+    outline: none;
+  }
+  .btn-luxe:focus-visible {
+    outline: 2px solid hsl(var(--gold) / 0.5);
+    outline-offset: 2px;
+  }
+  /* Open-state dropdown trigger krijgt ook gold tint, geen rood */
+  .btn-luxe[data-state="open"] {
+    background: hsl(var(--gold-soft) / 0.5);
+    border-color: hsl(var(--gold) / 0.4);
+    color: hsl(var(--gold-deep));
+  }
+
+  .btn-luxe--primary {
+    background: linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%);
+    color: hsl(0 0% 100%);
+    border-color: hsl(var(--gold-deep));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.15);
+  }
+  .btn-luxe--primary:hover {
+    background: linear-gradient(180deg, hsl(var(--gold-deep)) 0%, hsl(var(--gold-deep)) 100%);
+    color: hsl(0 0% 100%);
+    border-color: hsl(var(--gold-deep));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.15);
+  }
+
+  .btn-luxe--ghost {
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    border-color: transparent;
+  }
+  .btn-luxe--ghost:hover {
+    background: hsl(var(--gold-soft) / 0.4);
+    color: hsl(var(--gold-deep));
+    border-color: transparent;
+  }
+
+  .btn-luxe--danger {
+    background: hsl(var(--card));
+    color: hsl(var(--destructive));
+    border-color: hsl(var(--destructive) / 0.25);
+  }
+  .btn-luxe--danger:hover {
+    background: hsl(var(--destructive) / 0.08);
+    border-color: hsl(var(--destructive) / 0.4);
+    color: hsl(var(--destructive));
+  }
+
+  /* Time-range — twee pickers met gouden pijl ertussen (uit new-order-redesign) */
+  .time-range {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .time-range .picker {
+    padding: 0 0.75rem;
+    gap: 0.5rem;
+  }
+  .time-range__arrow {
+    color: hsl(var(--gold));
+    font-size: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  /* Form labels — premium, subtiel (matcht .label uit new-order-redesign) */
+  .label-luxe {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: hsl(var(--foreground) / 0.7);
+    letter-spacing: 0.01em;
+    display: block;
+    margin-bottom: 0.5rem;
+    text-transform: none;
+  }
+
+  /* Required marker bij verplichte velden */
+  .req {
+    color: hsl(var(--primary));
+    margin-left: 2px;
+    font-weight: 500;
+  }
+
+  /* Premium field — h-2.625rem text-input/textarea/select (matcht .field uit mockup) */
+  .field-luxe {
+    height: 2.625rem;
+    padding: 0 0.875rem;
+    border: 1px solid hsl(var(--input) / 0.8);
+    border-radius: 0.625rem;
+    background: hsl(var(--card));
+    font-family: var(--font-ui);
+    font-size: 0.9375rem;
+    color: hsl(var(--foreground));
+    width: 100%;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+  }
+  .field-luxe::placeholder { color: hsl(var(--muted-foreground) / 0.5); }
+  .field-luxe:hover { border-color: hsl(var(--border)); }
+  .field-luxe:focus {
+    outline: none;
+    border-color: hsl(var(--gold) / 0.6);
+    box-shadow: 0 0 0 3px hsl(var(--gold) / 0.15);
+  }
+  textarea.field-luxe { height: auto; padding: 0.5rem 0.75rem; line-height: 1.5; resize: vertical; }
+  select.field-luxe {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23737373' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    padding-right: 1.75rem;
   }
 
   /* Toggle switch (rode gradient when on) */
