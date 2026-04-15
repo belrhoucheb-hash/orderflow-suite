@@ -1,0 +1,1235 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>Inbox — AI-extractie review</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --primary: 0 78% 42%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 30 8% 93%;
+    --muted-foreground: 0 0% 40%;
+    --border: 30 8% 88%;
+    --input: 30 8% 85%;
+    --gold: 38 35% 55%;
+    --gold-deep: 32 42% 42%;
+    --gold-soft: 38 45% 92%;
+    --ink: 0 0% 10%;
+    --page-bg: 30 10% 96%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 85%;
+    --status-draft-bg: #eff6ff; --status-draft-text: #1d4ed8; --status-draft-border: #bfdbfe; --status-draft-dot: #3b82f6;
+    --status-pending-bg: #fffbeb; --status-pending-text: #b45309; --status-pending-border: #fde68a; --status-pending-dot: #f59e0b;
+    --status-planned-dot: #8b5cf6;
+    --status-delivered-dot: #10b981;
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  }
+  body {
+    font-family: var(--font-ui);
+    font-size: 0.9375rem;
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(ellipse 900px 400px at 50% -180px, hsl(var(--gold-soft) / 0.5), transparent 60%),
+      hsl(var(--page-bg));
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+  }
+  .ribbon {
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.375rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .ribbon .tag { color: hsl(var(--gold)); font-weight: 600; }
+
+  /* ─── Hero ─── */
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: hsl(var(--gold-deep));
+    text-transform: uppercase;
+    margin-bottom: 0.625rem;
+  }
+  .eyebrow::before {
+    content: '';
+    width: 20px; height: 1px;
+    background: hsl(var(--gold));
+  }
+  .title {
+    font-family: var(--font-display);
+    font-size: 1.875rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+  .sub {
+    margin-top: 0.75rem;
+    font-size: 0.9375rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.5;
+    max-width: 620px;
+  }
+  .sub strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--gold) / 0.35) 50%, transparent 100%);
+  }
+
+  /* ─── Autonomy-meter widget (rechts in hero-row) ─── */
+  .auto-meter {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+    min-width: 280px;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 1px 2px hsl(var(--ink) / 0.04), 0 8px 24px -12px hsl(var(--ink) / 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .auto-meter::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .auto-meter__eyebrow {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .auto-meter__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-top: 0.375rem;
+  }
+  .auto-meter__val {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: hsl(var(--gold-deep));
+  }
+  .auto-meter__spark {
+    width: 90px;
+    height: 28px;
+    opacity: 0.75;
+  }
+  .auto-meter__context {
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.5rem;
+  }
+  .auto-meter__context strong {
+    color: hsl(var(--gold-deep));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .live-pulse {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(158 64% 40%);
+    font-weight: 600;
+    margin-top: 0.375rem;
+  }
+  .live-pulse::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: hsl(158 64% 45%);
+    box-shadow: 0 0 0 3px hsl(158 64% 45% / 0.2);
+    animation: pulse 1.8s infinite;
+  }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px hsl(158 64% 45% / 0); } }
+
+  /* ─── Filter tabs ─── */
+  .tabs {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+    padding: 0 0.25rem;
+  }
+  .tab {
+    padding: 0.75rem 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1.5px solid transparent;
+    margin-bottom: -1px;
+    position: relative;
+    transition: color .15s;
+  }
+  .tab:hover { color: hsl(var(--foreground)); }
+  .tab__count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: hsl(var(--muted) / 0.7);
+    color: hsl(var(--muted-foreground));
+    min-width: 22px;
+    text-align: center;
+  }
+  .tab--active {
+    color: hsl(var(--foreground));
+    border-bottom-color: hsl(var(--foreground));
+  }
+  .tab--active::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 50%;
+    transform: translateX(-50%);
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+  }
+  .tab--actie .tab__count  { background: hsl(0 78% 96%); color: hsl(0 78% 40%); }
+  .tab--wacht .tab__count  { background: var(--status-pending-bg); color: var(--status-pending-text); }
+  .tab--klaar .tab__count  { background: hsl(158 50% 94%); color: hsl(158 50% 30%); }
+
+  /* ─── 3-pane layout ─── */
+  .panes {
+    display: grid;
+    grid-template-columns: 340px 1fr 400px;
+    gap: 1.25rem;
+    min-height: 680px;
+  }
+  @media (max-width: 1200px) {
+    .panes { grid-template-columns: 320px 1fr; }
+    .pane--right { display: none; }
+  }
+  .pane {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 1rem;
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.03),
+      0 8px 24px -12px hsl(var(--ink) / 0.1);
+  }
+  .pane::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.3), transparent);
+  }
+  .pane-hd {
+    padding: 0.875rem 1.125rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(180deg, transparent, hsl(var(--muted) / 0.2));
+  }
+  .pane-hd__title {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .pane-body { overflow-y: auto; }
+
+  /* ─── LEFT: inbox list items ─── */
+  .inbox-search {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.25);
+    position: relative;
+  }
+  .inbox-search input {
+    width: 100%;
+    height: 2rem;
+    padding: 0 0.75rem 0 2rem;
+    font-size: 0.8125rem;
+    background: hsl(var(--muted) / 0.4);
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    transition: all .15s;
+  }
+  .inbox-search input:focus {
+    outline: none;
+    background: hsl(var(--card));
+    border-color: hsl(var(--gold) / 0.4);
+    box-shadow: 0 0 0 3px hsl(var(--gold) / 0.1);
+  }
+  .inbox-search svg {
+    position: absolute;
+    left: 1.5rem; top: 50%;
+    transform: translateY(-50%);
+    color: hsl(var(--muted-foreground));
+  }
+
+  .item {
+    padding: 0.875rem 1.125rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.2);
+    cursor: pointer;
+    transition: all .15s;
+    position: relative;
+  }
+  .item:hover { background: hsl(var(--gold-soft) / 0.35); }
+  .item--active {
+    background: linear-gradient(90deg, hsl(var(--gold-soft) / 0.6) 0%, hsl(var(--gold-soft) / 0.2) 100%);
+  }
+  .item--active::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+  }
+  .item__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .item__from {
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.005em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item__type {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.1875rem 0.4375rem;
+    border-radius: 0.25rem;
+    border: 1px solid;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .item__type--new     { background: var(--status-draft-bg); color: var(--status-draft-text); border-color: var(--status-draft-border); }
+  .item__type--update  { background: hsl(var(--gold-soft) / 0.6); color: hsl(var(--gold-deep)); border-color: hsl(var(--gold) / 0.3); }
+  .item__type--cancel  { background: hsl(0 78% 96%); color: hsl(0 78% 40%); border-color: hsl(0 78% 85%); }
+  .item__type--q       { background: var(--status-pending-bg); color: var(--status-pending-text); border-color: var(--status-pending-border); }
+  .item__subject {
+    font-size: 0.8125rem;
+    color: hsl(var(--foreground));
+    margin-bottom: 0.1875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item__preview {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item__preview strong {
+    font-family: var(--font-display);
+    color: hsl(var(--foreground));
+    font-weight: 500;
+  }
+  .item__arrow {
+    color: hsl(var(--gold));
+    font-weight: 500;
+    margin: 0 0.25rem;
+  }
+  .item__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.625rem;
+    gap: 0.5rem;
+  }
+  .item__time {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.02em;
+  }
+  .item__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+  }
+  .item__status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+  .item__conf-bar {
+    width: 100%;
+    height: 3px;
+    background: hsl(var(--muted) / 0.6);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+  }
+  .item__conf-fill {
+    height: 100%;
+    background: linear-gradient(90deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+  }
+  .item__conf-fill--low { background: linear-gradient(90deg, hsl(32 90% 60%), hsl(32 70% 40%)); }
+  .item__conf-fill--bad { background: linear-gradient(90deg, hsl(0 80% 60%), hsl(0 78% 42%)); }
+
+  /* ─── MIDDEN: source viewer ─── */
+  .src {
+    padding: 1.25rem 1.5rem 1.5rem;
+  }
+  .src-head {
+    border-bottom: 1px solid hsl(var(--border) / 0.35);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+  }
+  .src-subject {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin-bottom: 0.625rem;
+  }
+  .src-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, hsl(var(--gold-soft)), hsl(var(--gold) / 0.3));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: hsl(var(--gold-deep));
+    border: 1px solid hsl(var(--gold) / 0.25);
+    flex-shrink: 0;
+  }
+  .src-from strong { color: hsl(var(--foreground)); font-weight: 500; }
+  .src-time {
+    margin-left: auto;
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+  }
+
+  .client-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin-top: 0.875rem;
+    padding: 0.625rem 0.875rem;
+    background: hsl(var(--muted) / 0.3);
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 0.625rem;
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .client-strip strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .client-strip .dot {
+    width: 3px; height: 3px; border-radius: 50%; background: hsl(var(--gold));
+  }
+
+  .attachments {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+  .att {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4375rem 0.75rem;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 0.5rem;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    color: hsl(var(--foreground));
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .att:hover { border-color: hsl(var(--gold) / 0.4); background: hsl(var(--gold-soft) / 0.3); }
+  .att svg { color: hsl(var(--gold-deep)); flex-shrink: 0; }
+  .att__size {
+    font-size: 0.625rem;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+  }
+
+  .body-text {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    color: hsl(var(--foreground));
+    white-space: pre-wrap;
+  }
+  .body-text .hl {
+    background: linear-gradient(180deg, transparent 60%, hsl(var(--gold) / 0.35) 60%, hsl(var(--gold) / 0.35) 90%, transparent 90%);
+    cursor: help;
+    border-bottom: 1px dashed hsl(var(--gold-deep));
+    font-weight: 500;
+  }
+
+  .reply-quick {
+    margin-top: 1.5rem;
+    padding: 1rem 1.125rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.25) 100%);
+    border: 1px solid hsl(var(--gold) / 0.2);
+    border-radius: 0.875rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+  }
+  .reply-quick::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .reply-quick__lbl {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--gold-deep));
+    margin-bottom: 0.375rem;
+  }
+  .reply-quick__body {
+    font-size: 0.8125rem;
+    color: hsl(var(--foreground));
+    margin-bottom: 0.625rem;
+    line-height: 1.5;
+  }
+  .reply-quick__row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  /* ─── RIGHT: decision panel ─── */
+  .conf-block {
+    padding: 1.25rem 1.375rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.3) 100%);
+    border-bottom: 1px solid hsl(var(--border) / 0.35);
+    position: relative;
+    overflow: hidden;
+  }
+  .conf-block::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent);
+  }
+  .conf-ring {
+    width: 72px; height: 72px;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .conf-ring svg { transform: rotate(-90deg); }
+  .conf-ring__val {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: hsl(var(--gold-deep));
+  }
+  .conf-body {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .conf-body__text { flex: 1; }
+  .conf-lbl {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .conf-title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-top: 0.25rem;
+  }
+  .conf-explain {
+    font-size: 0.75rem;
+    color: hsl(var(--gold-deep));
+    cursor: pointer;
+    margin-top: 0.375rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: hsl(var(--gold) / 0.4);
+    text-underline-offset: 3px;
+  }
+  .conf-explain:hover { color: hsl(var(--gold-deep)); text-decoration-color: hsl(var(--gold-deep)); }
+
+  /* Blockers */
+  .blockers {
+    padding: 0.875rem 1.125rem;
+    background: hsl(0 78% 97%);
+    border-bottom: 1px solid hsl(0 78% 88%);
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+  .blockers__icon {
+    color: hsl(0 78% 42%);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .blockers__title {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: hsl(0 78% 38%);
+    letter-spacing: 0.02em;
+    margin-bottom: 0.25rem;
+  }
+  .blockers__list {
+    font-size: 0.75rem;
+    color: hsl(0 78% 32%);
+    line-height: 1.5;
+  }
+  .blockers__list li {
+    padding-left: 0.5rem;
+    position: relative;
+  }
+  .blockers__list li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    font-weight: 600;
+  }
+
+  /* Order preview */
+  .preview {
+    padding: 1.25rem 1.375rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .preview-sec {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+  .preview-lbl {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .preview-val {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+  }
+  .preview-val--missing {
+    color: hsl(0 78% 45%);
+    font-style: italic;
+  }
+  .ai-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.125rem 0.4375rem;
+    background: hsl(var(--gold-soft) / 0.6);
+    color: hsl(var(--gold-deep));
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 0.3125rem;
+    margin-left: 0.375rem;
+    vertical-align: middle;
+  }
+  .ai-chip svg { width: 10px; height: 10px; }
+  .route-box {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.25) 100%);
+    border: 1px solid hsl(var(--gold) / 0.2);
+    border-radius: 0.625rem;
+  }
+  .route-box__city {
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+  .route-box__sub {
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+    margin-top: 0.125rem;
+  }
+  .route-box__arr {
+    color: hsl(var(--gold));
+    font-size: 1rem;
+  }
+  .cargo-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+  .cargo-row .preview-val { font-variant-numeric: tabular-nums; }
+
+  .anomaly {
+    padding: 0.625rem 0.875rem;
+    background: var(--status-pending-bg);
+    border: 1px solid var(--status-pending-border);
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--status-pending-text);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .anomaly svg { flex-shrink: 0; margin-top: 1px; }
+  .anomaly strong { font-weight: 600; }
+
+  .rule-hint {
+    padding: 0.75rem 0.875rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.4) 100%);
+    border: 1px dashed hsl(var(--gold) / 0.4);
+    border-radius: 0.625rem;
+    font-size: 0.75rem;
+    color: hsl(var(--foreground));
+    line-height: 1.5;
+  }
+  .rule-hint__title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: hsl(var(--gold-deep));
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .rule-hint__actions {
+    display: flex;
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+  }
+  .rule-btn {
+    font-family: var(--font-ui);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    padding: 0.3125rem 0.625rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .rule-btn--primary {
+    background: hsl(var(--gold-deep));
+    color: white;
+  }
+  .rule-btn--ghost {
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    border-color: hsl(var(--border));
+  }
+
+  /* CTA stack */
+  .cta-stack {
+    padding: 1.125rem 1.375rem;
+    border-top: 1px solid hsl(var(--border) / 0.35);
+    background: linear-gradient(180deg, transparent, hsl(var(--muted) / 0.2));
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    padding: 0 1rem;
+    border-radius: 0.625rem;
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .15s;
+  }
+  .btn--primary {
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    color: white;
+    box-shadow: 0 1px 2px hsl(var(--primary) / 0.3), 0 4px 10px -2px hsl(var(--primary) / 0.25), inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  }
+  .btn--primary:hover { transform: translateY(-1px); }
+  .btn--primary:disabled {
+    background: hsl(var(--muted) / 0.8);
+    color: hsl(var(--muted-foreground));
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .btn--ghost {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border) / 0.7);
+    color: hsl(var(--foreground));
+  }
+  .btn--ghost:hover { background: hsl(var(--gold-soft) / 0.4); border-color: hsl(var(--gold) / 0.3); }
+  .btn--subtle {
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    height: 2rem;
+  }
+  .btn--subtle:hover { color: hsl(var(--foreground)); background: hsl(var(--muted) / 0.4); }
+
+  .audit-foot {
+    padding: 0.75rem 1.375rem;
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+    border-top: 1px solid hsl(var(--border) / 0.3);
+    background: hsl(var(--muted) / 0.2);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+  }
+
+  .hero-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+  @media (max-width: 900px) { .hero-row { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<div class="ribbon">
+  <span><span class="tag">Mockup</span> &nbsp; Inbox — AI-extractie review</span>
+  <span style="opacity:0.4; letter-spacing:0;">docs/mockups/inbox-redesign.html</span>
+</div>
+
+<div class="max-w-[1600px] mx-auto px-8 pt-8 pb-8 space-y-6">
+
+  <!-- ═══ Hero ═══ -->
+  <div class="hero-row">
+    <div>
+      <div class="eyebrow">Inbox · e-mail orders</div>
+      <h1 class="title">AI-extractie review</h1>
+      <p class="sub">
+        Vannacht <strong>47 e-mails</strong> binnengekomen — <strong>44</strong> autonoom omgezet in orders.
+        <strong>3</strong> vragen jouw aandacht. Gemiddelde extractie-zekerheid: <strong>94%</strong>.
+      </p>
+    </div>
+
+    <div class="auto-meter">
+      <div class="auto-meter__eyebrow">Extractie-autonomie</div>
+      <div class="auto-meter__row">
+        <span class="auto-meter__val">94%</span>
+        <svg class="auto-meter__spark" viewBox="0 0 90 28" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="sp-gr" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="hsl(32 42% 42%)"/>
+              <stop offset="1" stop-color="hsl(38 35% 55%)"/>
+            </linearGradient>
+          </defs>
+          <polyline points="0,20 15,18 30,15 45,14 60,11 75,7 90,5" fill="none" stroke="url(#sp-gr)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="90" cy="5" r="2.5" fill="hsl(var(--gold-deep))"/>
+        </svg>
+      </div>
+      <div class="auto-meter__context">
+        Week-trend: <strong>+6%</strong> · doel: <strong>98%</strong> in week 15
+      </div>
+      <div class="live-pulse">Live · laatste extractie 8s geleden</div>
+    </div>
+  </div>
+
+  <!-- ═══ Tabs ═══ -->
+  <div class="tabs">
+    <button class="tab tab--active tab--actie">Actie nodig <span class="tab__count">3</span></button>
+    <button class="tab tab--wacht">Wacht op klant <span class="tab__count">5</span></button>
+    <button class="tab tab--klaar">Klaar <span class="tab__count">12</span></button>
+    <button class="tab" style="margin-left:auto;">Alles <span class="tab__count">47</span></button>
+  </div>
+
+  <!-- ═══ 3-pane layout ═══ -->
+  <div class="panes">
+
+    <!-- ◀ LEFT — inbox list -->
+    <div class="pane">
+      <div class="pane-hd">
+        <span class="pane-hd__title">Inbox · Actie nodig</span>
+        <span style="font-size: 0.6875rem; color: hsl(var(--muted-foreground));">3 items</span>
+      </div>
+      <div class="inbox-search">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input placeholder="Zoek…" />
+      </div>
+
+      <div class="pane-body" style="max-height: 720px;">
+
+        <div class="item item--active">
+          <div class="item__top">
+            <span class="item__from">Jan de Vries · Van der Berg</span>
+            <span class="item__type item__type--new">Nieuw</span>
+          </div>
+          <div class="item__subject">Spoedorder 15 april — Rotterdam naar Düsseldorf</div>
+          <div class="item__preview">
+            → <strong>Rotterdam</strong> <span class="item__arrow">→</span> <strong>Düsseldorf</strong> · 24 pal · 4.800 kg
+          </div>
+          <div class="item__footer">
+            <span class="item__time">07:32</span>
+            <span class="item__status">
+              <span class="item__status-dot" style="background: var(--status-pending-dot);"></span>
+              review nodig
+            </span>
+          </div>
+          <div class="item__conf-bar"><div class="item__conf-fill item__conf-fill--low" style="width: 78%;"></div></div>
+        </div>
+
+        <div class="item">
+          <div class="item__top">
+            <span class="item__from">dispatch@flowerlink.nl</span>
+            <span class="item__type item__type--update">Update</span>
+          </div>
+          <div class="item__subject">RE: FL-APR-0019 — tijd aangepast</div>
+          <div class="item__preview">
+            Pickup verplaatst naar <strong>02:00–04:00</strong> · rest ongewijzigd
+          </div>
+          <div class="item__footer">
+            <span class="item__time">07:48</span>
+            <span class="item__status">
+              <span class="item__status-dot" style="background: var(--status-draft-dot);"></span>
+              bevestigen
+            </span>
+          </div>
+          <div class="item__conf-bar"><div class="item__conf-fill" style="width: 92%;"></div></div>
+        </div>
+
+        <div class="item">
+          <div class="item__top">
+            <span class="item__from">MedSupply NL</span>
+            <span class="item__type item__type--q">Vraag</span>
+          </div>
+          <div class="item__subject">Kunnen jullie morgen een Schiphol-rit?</div>
+          <div class="item__preview">
+            Geen standaard order — <strong>Hoofddorp</strong> <span class="item__arrow">→</span> <strong>Schiphol cargo</strong>
+          </div>
+          <div class="item__footer">
+            <span class="item__time">08:03</span>
+            <span class="item__status">
+              <span class="item__status-dot" style="background: var(--status-pending-dot);"></span>
+              reply nodig
+            </span>
+          </div>
+          <div class="item__conf-bar"><div class="item__conf-fill item__conf-fill--bad" style="width: 45%;"></div></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ◼ MIDDLE — source viewer -->
+    <div class="pane">
+      <div class="pane-hd">
+        <span class="pane-hd__title">Bron</span>
+        <div style="display: flex; gap: 0.375rem;">
+          <button class="btn btn--subtle" style="padding: 0 0.5rem; height: 1.75rem;">Beantwoorden</button>
+          <button class="btn btn--subtle" style="padding: 0 0.5rem; height: 1.75rem;">Doorsturen</button>
+          <button class="btn btn--subtle" style="padding: 0 0.5rem; height: 1.75rem;">⋯</button>
+        </div>
+      </div>
+      <div class="pane-body src">
+        <div class="src-head">
+          <h2 class="src-subject">Spoedorder 15 april — Rotterdam naar Düsseldorf</h2>
+          <div class="src-meta">
+            <span class="avatar">JV</span>
+            <div class="src-from">
+              <strong>Jan de Vries</strong><br/>
+              <span style="font-size: 0.75rem;">jan@vanderberg-logistics.nl → orders@royalty.nl</span>
+            </div>
+            <span class="src-time">15 apr · 07:32</span>
+          </div>
+
+          <div class="client-strip">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M3 12l2-2 4 4 8-8 4 4"/></svg>
+            <span><strong>Van der Berg Logistics</strong> · vaste klant sinds 2021</span>
+            <span class="dot"></span>
+            <span>12 orders deze maand</span>
+            <span class="dot"></span>
+            <span>gem. responstijd <strong>14 min</strong></span>
+            <span class="dot"></span>
+            <span>contract <strong>VDB-2025-Q4</strong></span>
+          </div>
+        </div>
+
+        <div class="attachments">
+          <div class="att">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+            Orderbevestiging.pdf
+            <span class="att__size">142 kB</span>
+          </div>
+          <div class="att">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            Pakbon-foto.jpg
+            <span class="att__size">2.1 MB</span>
+          </div>
+        </div>
+
+        <div class="body-text">Beste,
+
+Graag een spoedorder inplannen voor <span class="hl" title="Datum · confidence 95%">morgen 15 april</span>. Pickup bij ons distributiepunt <span class="hl" title="Ophaaladres · confidence 98%">Wolgaweg 12, 3198 LR Rotterdam</span> tussen <span class="hl" title="Tijdvenster · confidence 92%">08:00 en 10:00</span>.
+
+Lading: <span class="hl" title="Aantal · confidence 88%">24 pallets industriële componenten</span>, totaalgewicht rond de <span class="hl" title="Gewicht · confidence 76%">4.800 kg</span>. PO-nummer <span class="hl" title="Referentie · confidence 99%">99812</span>.
+
+Aflevering bij onze Duitse partner op <span class="hl" title="Afleveradres · confidence 97%">Königsallee 44, 40212 Düsseldorf</span> — graag aanmelden bij de receptie. Tijd is flexibel, liefst dezelfde middag.
+
+Het MRN-nummer volgt later — onze douane is nog bezig met de papieren.
+
+Groet,
+Jan</div>
+
+        <div class="reply-quick">
+          <div class="reply-quick__lbl">Systeem-voorstel · reply</div>
+          <div class="reply-quick__body">
+            "Beste Jan, dank voor de spoedorder. Bevestigd voor 15 april, pickup 08:00–10:00. Wacht nog op MRN-nummer — kun je een indicatie geven wanneer dat binnen is? Groet, Royalty Cargo."
+          </div>
+          <div class="reply-quick__row">
+            <button class="btn btn--ghost" style="height: 2rem; font-size: 0.75rem;">Verzend zoals is</button>
+            <button class="btn btn--ghost" style="height: 2rem; font-size: 0.75rem;">Pas aan</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ▶ RIGHT — decision panel -->
+    <div class="pane pane--right">
+      <div class="pane-hd">
+        <span class="pane-hd__title">Beslissing</span>
+      </div>
+      <div class="pane-body">
+
+        <!-- Confidence-block -->
+        <div class="conf-block">
+          <div class="conf-body">
+            <div class="conf-ring">
+              <svg width="72" height="72" viewBox="0 0 72 72">
+                <circle cx="36" cy="36" r="30" fill="none" stroke="hsl(var(--muted))" stroke-width="5"/>
+                <circle cx="36" cy="36" r="30" fill="none" stroke="hsl(var(--gold-deep))" stroke-width="5"
+                  stroke-dasharray="188.5" stroke-dashoffset="41.5" stroke-linecap="round"/>
+              </svg>
+              <span class="conf-ring__val">78%</span>
+            </div>
+            <div class="conf-body__text">
+              <div class="conf-lbl">AI-extractie</div>
+              <div class="conf-title">Review nodig</div>
+              <a class="conf-explain">
+                Waarom 78%?
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blockers -->
+        <div class="blockers">
+          <svg class="blockers__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+          <div style="flex: 1;">
+            <div class="blockers__title">2 blockers — order kan niet aangemaakt worden</div>
+            <ul class="blockers__list">
+              <li>MRN-nummer ontbreekt (klant geeft aan: volgt later)</li>
+              <li>Gewicht 4.800 kg · confidence onder 80% · contract-max 4.500 kg</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Order preview -->
+        <div class="preview">
+
+          <div class="preview-sec">
+            <div class="preview-lbl">Klant</div>
+            <div class="preview-val">
+              Van der Berg Logistics BV
+              <span class="ai-chip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                KM-ref
+              </span>
+            </div>
+          </div>
+
+          <div class="preview-sec">
+            <div class="preview-lbl">Route</div>
+            <div class="route-box">
+              <div>
+                <div class="route-box__city">Rotterdam</div>
+                <div class="route-box__sub">Wolgaweg 12 · 3198 LR</div>
+              </div>
+              <span class="route-box__arr">→</span>
+              <div style="flex: 1;">
+                <div class="route-box__city">Düsseldorf</div>
+                <div class="route-box__sub">Königsallee 44 · 40212</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-sec">
+            <div class="preview-lbl">Datum · tijdvenster pickup</div>
+            <div class="preview-val">15 apr · <span style="font-variant-numeric: tabular-nums;">08:00 – 10:00</span></div>
+          </div>
+
+          <div class="cargo-row">
+            <div class="preview-sec">
+              <div class="preview-lbl">Aantal</div>
+              <div class="preview-val">24 pal</div>
+            </div>
+            <div class="preview-sec">
+              <div class="preview-lbl">Gewicht</div>
+              <div class="preview-val" style="color: hsl(0 78% 45%);">4.800 kg ⚠</div>
+            </div>
+            <div class="preview-sec">
+              <div class="preview-lbl">Referentie</div>
+              <div class="preview-val">PO-99812</div>
+            </div>
+          </div>
+
+          <div class="preview-sec">
+            <div class="preview-lbl">MRN-nummer</div>
+            <div class="preview-val preview-val--missing">nog niet geleverd — volgt</div>
+          </div>
+
+          <!-- Anomaly -->
+          <div class="anomaly">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+            <span>
+              <strong>Gewicht +7%</strong> boven contract-max van 4.500 kg. Mogelijk foutieve extractie — bel klant ter controle.
+            </span>
+          </div>
+
+          <!-- Rule hint -->
+          <div class="rule-hint">
+            <div class="rule-hint__title">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              Patroon gedetecteerd
+            </div>
+            <div>Van der Berg levert MRN-nummer vaak 2–4u na order. Wil je een auto-regel maken die MRN-wacht tijdelijk accepteert?</div>
+            <div class="rule-hint__actions">
+              <button class="rule-btn rule-btn--primary">Ja, maak regel</button>
+              <button class="rule-btn rule-btn--ghost">Niet nu</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA stack -->
+        <div class="cta-stack">
+          <button class="btn btn--primary" disabled>Maak order aan (blockers eerst oplossen)</button>
+          <button class="btn btn--ghost">Vraag MRN &amp; gewicht na bij klant</button>
+          <button class="btn btn--subtle">Niet een order · archiveer</button>
+        </div>
+
+        <div class="audit-foot">
+          Ontvangen <strong>07:32:17</strong> · AI-extractie <strong>07:32:23</strong> (6s) · model <strong>v2.4.1</strong> · laatste handmatige correctie deze afzender: 3 dagen geleden (gewicht −12%)
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="font-size: 10px; color: hsl(var(--muted-foreground) / 0.5); font-variant-numeric: tabular-nums; text-align: center; padding-top: 1rem;">
+    Inbox redesign · v0.1
+  </div>
+</div>
+
+<script>
+  // Tab switch
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('tab--active'));
+      t.classList.add('tab--active');
+    });
+  });
+  // Item switch
+  document.querySelectorAll('.item').forEach(i => {
+    i.addEventListener('click', () => {
+      document.querySelectorAll('.item').forEach(x => x.classList.remove('item--active'));
+      i.classList.add('item--active');
+    });
+  });
+</script>
+</body>
+</html>

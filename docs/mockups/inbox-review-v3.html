@@ -1,0 +1,2282 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>Inbox review-panel · v3 premium</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --primary: 0 78% 42%;
+    --muted: 30 8% 93%;
+    --muted-foreground: 0 0% 40%;
+    --border: 30 8% 88%;
+    --gold: 38 35% 55%;
+    --gold-deep: 32 42% 42%;
+    --gold-soft: 38 45% 92%;
+    --ink: 0 0% 10%;
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  }
+  html, body {
+    font-family: var(--font-ui);
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(ellipse 700px 350px at 50% -150px, hsl(var(--gold-soft) / 0.45), transparent 60%),
+      hsl(30 10% 96%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+    font-size: 15px;
+  }
+  body.embed { background: transparent; }
+  body.embed #dev-ribbon { display: none; }
+  body.embed .page {
+    max-width: 100%;
+    margin: 0;
+    height: 100vh;
+    overflow-y: auto;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  body.embed .page::before { display: none; }
+  /* GLOBAAL goud scrollbar */
+  html, body, *, .page { scrollbar-width: thin !important; scrollbar-color: hsl(var(--gold) / 0.3) transparent !important; }
+  ::-webkit-scrollbar { width: 6px !important; height: 6px !important; }
+  ::-webkit-scrollbar-track { background: transparent !important; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--gold) / 0.25) !important;
+    border-radius: 3px !important;
+    transition: background .2s !important;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--gold) / 0.5) !important; }
+  ::-webkit-scrollbar-thumb:active { background: hsl(var(--gold-deep) / 0.75) !important; }
+
+  /* Linkage highlight — velden gekoppeld met een mail-highlight */
+  [data-field].is-linked {
+    outline: 2px solid hsl(var(--gold-deep)) !important;
+    outline-offset: 3px !important;
+    background: hsl(var(--gold-soft) / 0.8) !important;
+    border-radius: 5px;
+    transition: outline .15s, background .15s;
+    position: relative;
+    z-index: 5;
+  }
+  span[data-field].is-linked { display: inline-block; padding: 2px 6px; }
+  .page {
+    max-width: 420px;
+    margin: 40px auto;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 16px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.04),
+      0 12px 32px -14px hsl(var(--ink) / 0.18);
+    overflow: hidden;
+    position: relative;
+  }
+  .page::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .ribbon {
+    max-width: 480px;
+    margin: 16px auto 0;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    text-align: center;
+  }
+
+  /* ── Header — OrderDetail luxe patroon ── */
+  .hd {
+    position: relative;
+    padding: 24px 22px 20px;
+    border-bottom: 1px solid hsl(var(--gold) / 0.18);
+    background:
+      radial-gradient(ellipse 320px 180px at 50% -60px, hsl(var(--gold-soft) / 0.6), transparent 70%);
+  }
+  .hd__meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .hd__ordernr {
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: hsl(var(--gold-deep));
+    padding: 3px 9px;
+    border-radius: 5px;
+    background: hsl(var(--gold-soft) / 0.7);
+    border: 1px solid hsl(var(--gold) / 0.3);
+  }
+  .hd__time {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+  }
+  .hd__time svg { width: 10px; height: 10px; stroke-width: 1.75; }
+  .hd__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: hsl(var(--gold-deep));
+    margin-bottom: 12px;
+  }
+  .hd__eyebrow::before,
+  .hd__eyebrow::after {
+    content: '';
+    width: 14px; height: 1px;
+    background: hsl(var(--gold));
+  }
+  .hd__main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+  }
+  .hd__title-block { min-width: 0; }
+  .hd__title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: hsl(var(--foreground));
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .hd__tagline {
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+  .dept-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+  .dept-pill--ops {
+    color: hsl(var(--foreground));
+    background: hsl(var(--muted) / 0.6);
+    border-color: hsl(var(--border));
+  }
+  .dept-pill--export {
+    color: hsl(var(--gold-deep));
+    background: hsl(var(--gold-soft) / 0.8);
+    border-color: hsl(var(--gold) / 0.4);
+  }
+  .dept-pill__dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.7;
+  }
+  .hd__sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.01em;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+    margin-top: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hd__sub .dot {
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+    flex-shrink: 0;
+  }
+  .hd__right {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .conf-why {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: var(--font-display);
+    font-size: 10px;
+    color: hsl(var(--muted-foreground));
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    padding: 2px 4px;
+  }
+  .conf-why:hover { color: hsl(var(--gold-deep)); }
+  .conf-ring {
+    width: 68px; height: 68px;
+    position: relative;
+    cursor: help;
+    flex-shrink: 0;
+  }
+  .conf-ring svg { transform: rotate(-90deg); }
+  .conf-ring__track { fill: none; stroke: hsl(var(--muted)); }
+  .conf-ring__arc {
+    fill: none;
+    stroke: hsl(var(--gold-deep));
+    stroke-linecap: round;
+  }
+  .conf-ring__val {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+  .conf-ring__num {
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+    color: hsl(var(--foreground));
+    line-height: 1;
+  }
+  .conf-why {
+    display: inline-block;
+    margin-top: 10px;
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: hsl(var(--gold-deep));
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+  }
+  .conf-why:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: hsl(var(--gold) / 0.5); }
+
+  /* ── Stepper ── */
+  .stepper {
+    padding: 14px 18px;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    position: relative;
+  }
+  .stepper::before {
+    content: '';
+    position: absolute;
+    top: 27px;
+    left: 20%;
+    right: 20%;
+    height: 1px;
+    background: hsl(var(--border));
+    z-index: 0;
+  }
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    position: relative;
+    z-index: 1;
+  }
+  .step__dot {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: hsl(var(--card));
+    border: 1.5px solid hsl(var(--border));
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+  }
+  .step__dot svg { width: 10px; height: 10px; stroke-width: 2.5; }
+  .step__lbl {
+    font-family: var(--font-display);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+  }
+  .step--done .step__dot {
+    background: hsl(var(--card));
+    border-color: hsl(var(--gold) / 0.5);
+    color: hsl(var(--gold-deep));
+  }
+  .step--done .step__lbl { color: hsl(var(--foreground)); }
+  .step--active .step__dot {
+    background: hsl(var(--foreground));
+    border-color: hsl(var(--foreground));
+    color: hsl(var(--card));
+  }
+  .step--active .step__lbl {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  /* ── Body ── */
+  .body { padding: 18px 20px 22px; }
+
+  /* ─── OrderDetail section-header: chapter badge + label + title ─── */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent);
+    margin: 22px 0;
+  }
+  .section {
+    margin: 0;
+  }
+  .section + .section { margin-top: 22px; }
+  .section-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .section-chapter {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    border-radius: 5px;
+    background: transparent;
+    border: 1px solid hsl(var(--gold) / 0.4);
+    color: hsl(var(--gold-deep));
+    display: grid;
+    place-items: center;
+    font-family: var(--font-display);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+  .section-meta {
+    flex: 1;
+    min-width: 0;
+  }
+  .section-label {
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: hsl(var(--gold-deep));
+    display: block;
+  }
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: hsl(var(--foreground));
+    line-height: 1.25;
+    margin-top: 2px;
+  }
+
+  /* AI-extractie card — plat, geen gradient-vlakken */
+  .ai-card {
+    border: 1px solid hsl(var(--border));
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
+    background: hsl(var(--card));
+  }
+  .ai-card__hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .ai-card__ttl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    letter-spacing: 0.02em;
+  }
+  .ai-card__ttl svg {
+    width: 12px; height: 12px;
+    stroke-width: 1.75;
+    color: hsl(var(--gold-deep));
+  }
+  .ai-card__score {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--gold-deep));
+  }
+  .ai-bar {
+    width: 100%;
+    height: 3px;
+    background: hsl(var(--muted));
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .ai-bar__fill {
+    height: 100%;
+    background: linear-gradient(90deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+    border-radius: 999px;
+  }
+  .ai-card__src {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: hsl(var(--muted-foreground));
+  }
+  .ai-card__src-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+  }
+  .ai-card__src-item svg {
+    width: 12px; height: 12px;
+    stroke-width: 1.75;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Route — dashed vertical line links, markers bovenop */
+  .route {
+    position: relative;
+    padding-left: 22px;
+  }
+  .route::before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 10px;
+    bottom: 10px;
+    border-left: 1px dashed hsl(var(--border));
+  }
+  .route-pt {
+    position: relative;
+    padding-bottom: 16px;
+  }
+  .route-pt:last-child { padding-bottom: 0; }
+  .route-pt::before {
+    content: '';
+    position: absolute;
+    left: -18px;
+    top: 2px;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: hsl(var(--card));
+    border: 1.5px solid hsl(var(--gold) / 0.6);
+  }
+  .route-pt--end::before {
+    background: hsl(var(--foreground));
+    border-color: hsl(var(--foreground));
+  }
+  .route-pt--mid::before {
+    background: hsl(var(--muted-foreground));
+    border-color: hsl(var(--muted-foreground));
+    width: 7px; height: 7px;
+    left: -17px;
+  }
+  .route-pt__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .route-pt__remove {
+    background: transparent;
+    border: 0;
+    padding: 2px;
+    cursor: pointer;
+    color: hsl(var(--muted-foreground));
+    opacity: 0.5;
+    transition: opacity .12s, color .12s;
+    display: inline-flex;
+  }
+  .route-pt__remove:hover { opacity: 1; color: hsl(0 55% 45%); }
+  .route-pt__remove svg { width: 12px; height: 12px; stroke-width: 1.75; }
+  .route-addstop {
+    margin-top: 10px;
+    margin-left: 22px;
+    background: transparent;
+    border: 1px dashed hsl(var(--gold) / 0.45);
+    color: hsl(var(--gold-deep));
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 7px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all .15s;
+  }
+  .route-addstop:hover {
+    background: hsl(var(--gold-soft) / 0.4);
+    border-color: hsl(var(--gold) / 0.7);
+    border-style: solid;
+  }
+  .route-addstop svg { width: 11px; height: 11px; stroke-width: 2; }
+  .route-pt__lbl {
+    font-size: 12px;
+    font-weight: 500;
+    color: hsl(var(--foreground) / 0.7);
+    margin-bottom: 6px;
+    letter-spacing: 0.01em;
+  }
+  .route-pt .field + .field { margin-top: 6px; }
+  .route-pt .field-time {
+    font-family: var(--font-display);
+  }
+
+  /* NewOrder-style input velden (editable) */
+  .cargo {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px 12px;
+  }
+  .fld--full { grid-column: span 2; }
+
+  /* ═ Multi-line cargo lijst ═ */
+  .cargo-list {
+    border: 1px solid hsl(var(--border));
+    border-radius: 10px;
+    background: hsl(var(--card));
+  }
+  .cargo-row:first-child { border-top-left-radius: 10px; border-top-right-radius: 10px; }
+  .cargo-row:last-of-type { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+  .cargo-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto 18px;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .cargo-row:last-of-type { border-bottom: 0; }
+  .cargo-row:hover { background: hsl(var(--gold-soft) / 0.2); }
+  .cargo-row__qty {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: hsl(var(--foreground));
+    text-align: right;
+  }
+  .cargo-row__body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .cargo-row__type {
+    font-size: 14px;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.005em;
+  }
+  .cargo-row__meta {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: 0.01em;
+  }
+  .cargo-row__wt {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--foreground));
+    white-space: nowrap;
+    text-align: right;
+  }
+  .cargo-row__edit {
+    color: hsl(var(--muted-foreground));
+    display: inline-flex;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    opacity: 0;
+    transition: opacity .12s, color .12s;
+  }
+  .cargo-row:hover .cargo-row__edit { opacity: 1; color: hsl(var(--gold-deep)); }
+  .cargo-row__edit svg { width: 14px; height: 14px; stroke-width: 1.75; }
+
+  /* Editable state — rij expandeert met compacte inputs */
+  .cargo-row--edit {
+    display: block;
+    padding: 12px 14px 10px;
+    background: hsl(var(--gold-soft) / 0.18);
+    cursor: default;
+    border-left: 2px solid hsl(var(--gold) / 0.5);
+  }
+  .cargo-row--edit:hover { background: hsl(var(--gold-soft) / 0.22); }
+  .cargo-edit-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .cargo-edit-grid .fld--full { grid-column: span 2; }
+  .cargo-edit-grid .fld { gap: 4px; min-width: 0; }
+  .cargo-edit-grid .toggle-row { height: 34px; padding: 0; }
+  .cargo-edit-grid .fld__lbl {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+  }
+  .cargo-edit-grid .field {
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 7px;
+    font-size: 13px;
+    gap: 5px;
+    overflow: hidden;
+    min-width: 0;
+  }
+  .cargo-edit-grid .field input {
+    min-width: 0;
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .cargo-edit-grid .field__suffix {
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .cargo-row--edit .cargo-row__actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 12px;
+    font-size: 12px;
+    flex-wrap: nowrap;
+  }
+  .cargo-row--edit .cargo-row__actions .danger { margin-right: auto; }
+  .cargo-row--edit .cargo-row__actions button {
+    background: transparent;
+    border: 0;
+    padding: 4px 0;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    font-family: var(--font-display);
+  }
+  .cargo-row--edit .cargo-row__actions button:hover { color: hsl(var(--foreground)); }
+  .cargo-row--edit .cargo-row__actions .primary { color: hsl(var(--gold-deep)); font-weight: 600; }
+  .cargo-row--edit .cargo-row__actions .danger { color: hsl(0 55% 45%); }
+
+  .cargo-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding: 0 4px;
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: hsl(var(--muted-foreground));
+  }
+  .cargo-foot__add {
+    background: transparent;
+    border: 0;
+    padding: 4px 0;
+    color: hsl(var(--gold-deep));
+    font: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .cargo-foot__add svg { width: 11px; height: 11px; stroke-width: 2; }
+  .cargo-foot__total {
+    font-variant-numeric: tabular-nums;
+  }
+  .cargo-foot__total strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  /* ─── Section status chip ─── */
+  .section-status {
+    margin-left: auto;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid;
+    flex-shrink: 0;
+  }
+  .section-status svg { width: 11px; height: 11px; stroke-width: 2; }
+  .section-status--ok {
+    color: hsl(158 55% 30%);
+    background: hsl(158 45% 96%);
+    border-color: hsl(158 45% 82%);
+  }
+  .section-status--warn {
+    color: hsl(32 55% 35%);
+    background: var(--status-pending-bg);
+    border-color: hsl(32 70% 78%);
+  }
+
+  /* ─── Duplicate warning banner ─── */
+  .dup-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 10px 12px;
+    background: var(--status-pending-bg);
+    border: 1px solid hsl(32 70% 78%);
+    border-left: 3px solid hsl(32 60% 50%);
+    border-radius: 8px;
+    font-size: 12px;
+    color: hsl(var(--foreground));
+    line-height: 1.45;
+  }
+  .dup-warn__icon {
+    color: hsl(32 60% 42%);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .dup-warn__icon svg { width: 14px; height: 14px; stroke-width: 1.75; }
+  .dup-warn__body { flex: 1; min-width: 0; }
+  .dup-warn__ttl {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: hsl(32 55% 32%);
+    margin-bottom: 2px;
+  }
+  .dup-warn__link {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: hsl(var(--gold-deep));
+    cursor: pointer;
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: hsl(var(--gold) / 0.5);
+  }
+  .dup-warn__close {
+    background: transparent;
+    border: 0;
+    padding: 2px;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    flex-shrink: 0;
+    display: inline-flex;
+    opacity: 0.6;
+  }
+  .dup-warn__close:hover { opacity: 1; }
+  .dup-warn__close svg { width: 12px; height: 12px; stroke-width: 1.75; }
+
+  /* ─── Bijlagen chips ─── */
+  .attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .att-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px 7px 8px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 8px;
+    background: hsl(var(--card));
+    cursor: pointer;
+    transition: all .15s;
+    max-width: 100%;
+  }
+  .att-chip:hover {
+    border-color: hsl(var(--gold) / 0.4);
+    background: hsl(var(--gold-soft) / 0.3);
+  }
+  .att-chip__icon {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    background: hsl(var(--gold-soft) / 0.8);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    color: hsl(var(--gold-deep));
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .att-chip__icon svg { width: 13px; height: 13px; stroke-width: 1.75; }
+  .att-chip__body { min-width: 0; flex: 1; }
+  .att-chip__name {
+    font-size: 12px;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .att-chip__meta {
+    font-family: var(--font-display);
+    font-size: 10px;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+  }
+  .att-chip__action {
+    color: hsl(var(--muted-foreground));
+    flex-shrink: 0;
+    display: inline-flex;
+  }
+  .att-chip__action svg { width: 12px; height: 12px; stroke-width: 1.75; }
+
+  /* ─── Undo-toast ─── */
+  .toast-stack {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .toast {
+    pointer-events: auto;
+    min-width: 300px;
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.05),
+      0 4px 12px -2px hsl(var(--ink) / 0.4),
+      0 12px 32px -8px hsl(var(--ink) / 0.5);
+    animation: toast-in .2s ease-out;
+    position: relative;
+    overflow: hidden;
+  }
+  .toast::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.6), transparent);
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .toast__icon {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: hsl(var(--gold) / 0.2);
+    color: hsl(var(--gold-light));
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .toast__icon svg { width: 13px; height: 13px; stroke-width: 2; }
+  .toast__msg {
+    flex: 1;
+    font-family: var(--font-display);
+    font-size: 12.5px;
+    font-weight: 500;
+    min-width: 0;
+  }
+  .toast__undo {
+    background: transparent;
+    border: 0;
+    color: hsl(var(--gold-light));
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 5px;
+  }
+  .toast__undo:hover { background: hsl(var(--gold) / 0.15); }
+  .toast__countdown {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 2px;
+    background: hsl(var(--gold));
+    width: 100%;
+    transform-origin: left;
+    animation: countdown 5s linear forwards;
+  }
+  @keyframes countdown { to { transform: scaleX(0); } }
+
+  /* Warning strip — onder de hele cargo-sectie */
+  .cargo-warn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 9px 12px;
+    border: 1px solid hsl(32 55% 78%);
+    border-left: 2px solid hsl(32 55% 50%);
+    border-radius: 8px;
+    font-size: 12px;
+    color: hsl(var(--foreground));
+  }
+  .cargo-warn svg {
+    width: 13px; height: 13px;
+    stroke-width: 1.75;
+    color: hsl(32 55% 42%);
+    flex-shrink: 0;
+  }
+  .cargo-warn button {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: hsl(var(--gold-deep));
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: hsl(var(--gold) / 0.5);
+    white-space: nowrap;
+  }
+  .fld { display: flex; flex-direction: column; gap: 6px; }
+  .fld__lbl {
+    font-size: 12px;
+    font-weight: 500;
+    color: hsl(var(--foreground) / 0.7);
+    letter-spacing: 0.01em;
+  }
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 42px;
+    padding: 0 14px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 10px;
+    background: hsl(var(--card));
+    font-family: var(--font-ui);
+    font-size: 15px;
+    color: hsl(var(--foreground));
+    font-variant-numeric: tabular-nums;
+    cursor: text;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .field:hover { border-color: hsl(var(--muted-foreground) / 0.35); }
+  .field:focus-within {
+    outline: none;
+    border-color: hsl(var(--gold) / 0.5);
+    box-shadow: 0 0 0 3px hsl(var(--gold) / 0.12);
+  }
+  .field input,
+  .field select {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    color: inherit;
+    padding: 0;
+  }
+  .field select {
+    appearance: none;
+    background: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238a6f3c' stroke-width='1.75' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0 center;
+    padding-right: 20px;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+  }
+
+  /* Luxe custom dropdown — button + popover (geen native <select>) */
+  .luxe-dd {
+    box-sizing: border-box;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: visible;
+    background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.8) 100%);
+    border: 1px solid hsl(var(--gold) / 0.45);
+    border-radius: 7px;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 1px 2px hsl(var(--ink) / 0.03);
+    transition: all .15s;
+  }
+  .luxe-dd::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 8px; right: 8px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.6), transparent);
+    pointer-events: none;
+  }
+  .luxe-dd:hover {
+    border-color: hsl(var(--gold) / 0.65);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 3px 10px -2px hsl(var(--gold) / 0.25);
+  }
+  .luxe-dd--open {
+    border-color: hsl(var(--gold) / 0.75);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 0 0 3px hsl(var(--gold) / 0.18);
+  }
+  .luxe-dd__val {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .luxe-dd__chev {
+    width: 12px; height: 7px;
+    color: hsl(var(--gold-deep));
+    flex-shrink: 0;
+    transition: transform .18s;
+  }
+  .luxe-dd--open .luxe-dd__chev { transform: rotate(180deg); }
+
+  /* Popover menu */
+  .luxe-dd__menu {
+    position: absolute;
+    z-index: 60;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 10px;
+    padding: 5px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 4px 12px -2px hsl(var(--ink) / 0.08),
+      0 18px 40px -12px hsl(var(--ink) / 0.2),
+      0 0 0 1px hsl(var(--gold) / 0.08);
+    display: none;
+    animation: pop-in .15s ease-out;
+  }
+  .luxe-dd__menu::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 12px; right: 12px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(-3px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .luxe-dd--open .luxe-dd__menu { display: block; }
+
+  .luxe-dd__opt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background .1s;
+  }
+  .luxe-dd__opt:hover {
+    background: hsl(var(--gold-soft) / 0.7);
+  }
+  .luxe-dd__opt--sel {
+    background: hsl(var(--gold-soft));
+    color: hsl(var(--gold-deep));
+  }
+  .luxe-dd__opt--sel::after {
+    content: '';
+    width: 14px; height: 14px;
+    margin-left: auto;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238a6f3c' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6L9 17l-5-5'/%3E%3C/svg%3E") no-repeat center;
+    flex-shrink: 0;
+  }
+
+  /* L × B × H — goud × separators (NewOrder pattern) */
+  .dim-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+  .dim-group input {
+    width: 3.2ch;
+    min-width: 0;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-display);
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font: inherit;
+    padding: 0;
+  }
+  .dim-group__sep {
+    color: hsl(var(--gold));
+    font-weight: 500;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  /* Toggle switch (stapelbaar) — rode gradient on */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 34px;
+    padding: 0 2px;
+    font-size: 12px;
+    color: hsl(var(--foreground) / 0.8);
+  }
+  .toggle {
+    display: inline-block;
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .toggle span {
+    display: block;
+    width: 32px;
+    height: 18px;
+    border-radius: 999px;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    position: relative;
+    transition: all .2s;
+  }
+  .toggle span::after {
+    content: '';
+    position: absolute;
+    left: 2px; top: 1px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: hsl(var(--card));
+    box-shadow: 0 1px 2px hsl(var(--ink) / 0.2);
+    transition: all .2s;
+  }
+  .toggle input:checked + span {
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    border-color: hsl(var(--primary));
+  }
+  .toggle input:checked + span::after { left: 16px; }
+  .field__suffix {
+    font-size: 12px;
+    color: hsl(var(--muted-foreground));
+    font-weight: 400;
+    white-space: nowrap;
+  }
+  .field__prefix {
+    flex-shrink: 0;
+    color: hsl(var(--gold-deep));
+    display: inline-flex;
+  }
+  .field__prefix svg {
+    width: 14px; height: 14px;
+    stroke-width: 1.75;
+  }
+
+  /* ═ NewOrder luxe picker (datum + tijd) ═ */
+  .picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 42px;
+    padding: 0 14px;
+    width: 100%;
+    background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.2) 100%);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .2s;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+    text-align: left;
+    font-family: var(--font-display);
+    color: hsl(var(--foreground));
+  }
+  .picker:hover {
+    border-color: hsl(var(--gold) / 0.5);
+  }
+  .picker__icon {
+    width: 16px; height: 16px;
+    color: hsl(var(--gold-deep));
+    flex-shrink: 0;
+    stroke-width: 1.75;
+  }
+  .picker__main {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+  .picker__day {
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .picker__month {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: hsl(var(--muted-foreground));
+  }
+  .picker__year {
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground));
+    margin-left: auto;
+    padding-left: 10px;
+    border-left: 1px solid hsl(var(--border) / 0.6);
+  }
+  .picker__time {
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .time-range {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .time-range .picker {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .time-range__arrow {
+    color: hsl(var(--gold));
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .field__warn {
+    display: inline-flex;
+    width: 14px; height: 14px;
+    flex-shrink: 0;
+    color: hsl(32 55% 42%);
+  }
+  .field__warn svg { width: 14px; height: 14px; stroke-width: 1.75; }
+  .field--warn {
+    border-color: hsl(32 55% 60%);
+  }
+  .field--warn:focus-within {
+    border-color: hsl(32 60% 50%);
+    box-shadow: 0 0 0 3px hsl(32 60% 50% / 0.12);
+  }
+  .fld__hint {
+    font-size: 11px;
+    color: hsl(32 55% 40%);
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .fld__hint button {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: hsl(var(--gold-deep));
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: hsl(var(--gold) / 0.5);
+  }
+
+  /* Requirements chips */
+  .reqs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .req {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 999px;
+    background: transparent;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    letter-spacing: -0.005em;
+  }
+  .req--on {
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--gold) / 0.5);
+  }
+  .req--on::before {
+    content: '';
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+  }
+
+  /* Capacity match — rustige lijst */
+  .cap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .cap-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 12px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 8px;
+    background: hsl(var(--card));
+  }
+  .cap-row__plate {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    padding: 3px 6px;
+    background: hsl(var(--muted) / 0.6);
+    border-radius: 4px;
+    color: hsl(var(--foreground));
+  }
+  .cap-row__body { min-width: 0; }
+  .cap-row__name {
+    font-size: 12px;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cap-row__sub {
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    color: hsl(var(--muted-foreground));
+    margin-top: 1px;
+    font-variant-numeric: tabular-nums;
+  }
+  .cap-row__score {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: hsl(var(--gold-deep));
+  }
+
+  /* ── Sticky CTA — rustig, gecentreerd ── */
+  .cta {
+    padding: 18px 20px 20px;
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+  }
+  .cta__primary {
+    display: block;
+    width: 100%;
+    height: 46px;
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    color: white;
+    border: 0;
+    border-radius: 10px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: -0.005em;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.2),
+      0 1px 2px hsl(var(--primary) / 0.3),
+      0 4px 14px -3px hsl(var(--primary) / 0.3);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .cta__primary:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.2),
+      0 2px 4px hsl(var(--primary) / 0.35),
+      0 8px 20px -3px hsl(var(--primary) / 0.4);
+  }
+  .cta__meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 12px;
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: hsl(var(--muted-foreground));
+  }
+  .cta__meta > * {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+  }
+  .cta__meta button:hover { color: hsl(var(--foreground)); }
+  .cta__meta > * + *::before {
+    content: '';
+    display: inline-block;
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--border));
+    margin-right: 14px;
+    vertical-align: middle;
+  }
+  .cta__auto {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cta__auto input {
+    width: 13px; height: 13px;
+    accent-color: hsl(var(--foreground));
+    cursor: pointer;
+  }
+
+  /* ── Audit footer ── */
+  .audit {
+    padding: 10px 18px;
+    border-top: 1px solid hsl(var(--border) / 0.5);
+    background: hsl(var(--muted) / 0.2);
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+  .audit strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="ribbon" id="dev-ribbon">docs/mockups/inbox-review-v3.html · review-panel standalone</div>
+
+<div class="page">
+
+  <!-- ── Header · OrderDetail luxe patroon ── -->
+  <div class="hd">
+    <div class="hd__meta-row">
+      <span class="hd__ordernr">RCS-2026-0042</span>
+      <span class="hd__time">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        2u geleden
+      </span>
+    </div>
+    <div class="hd__eyebrow">Order-review</div>
+
+    <div class="hd__main">
+      <div class="hd__title-block">
+        <h1 class="hd__title">Van der Berg Logistics</h1>
+        <div class="hd__tagline">
+          <span class="dept-pill dept-pill--export">
+            <span class="dept-pill__dot"></span>
+            Export
+          </span>
+        </div>
+      </div>
+      <div class="hd__right">
+        <div class="conf-ring" title="AI-confidence 94%">
+          <svg width="68" height="68" viewBox="0 0 68 68">
+            <circle class="conf-ring__track" cx="34" cy="34" r="28" stroke-width="3.5"/>
+            <circle class="conf-ring__arc" cx="34" cy="34" r="28"
+              stroke-dasharray="175.9" stroke-dashoffset="10.6" stroke-width="3.5"/>
+          </svg>
+          <span class="conf-ring__val">
+            <span class="conf-ring__num">94%</span>
+          </span>
+        </div>
+        <button class="conf-why" aria-label="Waarom deze score?">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+          details
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Body · alles stacked, in één oogopslag ── -->
+  <div class="body">
+
+    <!-- Duplicate-warning -->
+    <div class="dup-warn" id="dup-warn">
+      <span class="dup-warn__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+      </span>
+      <div class="dup-warn__body">
+        <div class="dup-warn__ttl">Mogelijk dubbele order</div>
+        <div>Zelfde klant stuurde 23 min geleden een soortgelijke order — <button class="dup-warn__link">bekijk ORD-2026-04-0839</button></div>
+      </div>
+      <button class="dup-warn__close" id="dup-close" aria-label="Sluit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- AI-extractie -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-chapter">I</span>
+        <div class="section-meta">
+          <span class="section-label">AI-extractie</span>
+          <h3 class="section-title">94% zekerheid · 4 van 4 velden</h3>
+        </div>
+        <span class="section-status section-status--ok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          Compleet
+        </span>
+      </div>
+      <div class="ai-bar"><div class="ai-bar__fill" style="width: 94%;"></div></div>
+      <div class="ai-card__src" style="margin-top: 10px;">
+        <span class="ai-card__src-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
+          3 uit e-mail
+        </span>
+        <span class="ai-card__src-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+          1 uit bijlage
+        </span>
+      </div>
+    </section>
+
+    <div class="hairline"></div>
+
+    <!-- Route -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-chapter">II</span>
+        <div class="section-meta">
+          <span class="section-label">Route</span>
+          <h3 class="section-title">Rotterdam → Antwerpen · 148 km</h3>
+        </div>
+        <span class="section-status section-status--ok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          Compleet
+        </span>
+      </div>
+    <div class="route" id="route">
+      <div class="route-pt">
+        <div class="route-pt__head">
+          <div class="route-pt__lbl">Pickup</div>
+        </div>
+        <div class="field" data-field="pickup">
+          <span class="field__prefix">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </span>
+          <input value="Maasvlakteweg 14, Rotterdam" />
+        </div>
+        <div class="pickers" style="display:flex; gap:6px; margin-top:6px;">
+          <label class="picker" data-field="pickup-date" style="flex: 1.2;">
+            <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            <span class="picker__main">
+              <span class="picker__day">16</span>
+              <span class="picker__month">apr</span>
+            </span>
+            <span class="picker__year">2026</span>
+          </label>
+        </div>
+        <div class="time-range" data-field="pickup-time">
+          <label class="picker">
+            <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <span class="picker__time">08:00</span>
+          </label>
+          <span class="time-range__arrow">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </span>
+          <label class="picker">
+            <span class="picker__time" style="margin-left: auto;">11:00</span>
+          </label>
+        </div>
+      </div>
+      <div class="route-pt route-pt--end">
+        <div class="route-pt__head">
+          <div class="route-pt__lbl">Delivery</div>
+        </div>
+        <div class="field" data-field="delivery">
+          <span class="field__prefix">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </span>
+          <input value="Noorderlaan 200, Antwerpen" />
+        </div>
+        <div class="pickers" style="display:flex; gap:6px; margin-top:6px;">
+          <label class="picker" data-field="delivery-date" style="flex: 1.2;">
+            <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            <span class="picker__main">
+              <span class="picker__day">17</span>
+              <span class="picker__month">apr</span>
+            </span>
+            <span class="picker__year">2026</span>
+          </label>
+          <label class="picker" data-field="delivery-time" style="flex: 0.9;">
+            <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <span class="picker__time">vóór 14:00</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <button class="route-addstop" id="add-stop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      Tussenstop toevoegen
+    </button>
+
+    </section>
+
+    <div class="hairline"></div>
+
+    <!-- Lading — multi-line -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-chapter">III</span>
+        <div class="section-meta">
+          <span class="section-label">Lading</span>
+          <h3 class="section-title">14 stuks · 2.250 kg</h3>
+        </div>
+        <span class="section-status section-status--warn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+          Verifieer
+        </span>
+      </div>
+    <div class="cargo-list">
+
+      <!-- Rij 1: read-only -->
+      <div class="cargo-row">
+        <span class="cargo-row__qty" data-field="qty">8</span>
+        <div class="cargo-row__body">
+          <span class="cargo-row__type">Europallets</span>
+          <span class="cargo-row__meta" data-field="dims">120 × 80 × 150 · stapelbaar</span>
+        </div>
+        <span class="cargo-row__wt" data-field="weight">1.500 kg</span>
+        <button class="cargo-row__edit" aria-label="Bewerk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </button>
+      </div>
+
+      <!-- Rij 2: expanded edit-state — NewOrder field-types -->
+      <div class="cargo-row cargo-row--edit">
+        <div class="cargo-edit-grid">
+          <div class="fld">
+            <span class="fld__lbl">Aantal</span>
+            <div class="field">
+              <input type="number" value="4" />
+              <span class="field__suffix">stuks</span>
+            </div>
+          </div>
+          <div class="fld">
+            <span class="fld__lbl">Type</span>
+            <div class="luxe-dd" data-value="Blokpallets">
+              <span class="luxe-dd__val">Blokpallets</span>
+              <svg class="luxe-dd__chev" viewBox="0 0 12 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"><path d="M1 1l5 5 5-5"/></svg>
+              <div class="luxe-dd__menu">
+                <div class="luxe-dd__opt" data-v="Europallets">Europallets</div>
+                <div class="luxe-dd__opt luxe-dd__opt--sel" data-v="Blokpallets">Blokpallets</div>
+                <div class="luxe-dd__opt" data-v="Colli">Colli</div>
+                <div class="luxe-dd__opt" data-v="Box">Box</div>
+                <div class="luxe-dd__opt" data-v="IBC-container">IBC-container</div>
+              </div>
+            </div>
+          </div>
+          <div class="fld fld--full">
+            <span class="fld__lbl">Afmetingen L × B × H</span>
+            <div class="field">
+              <div class="dim-group">
+                <input type="number" value="120" />
+                <span class="dim-group__sep">×</span>
+                <input type="number" value="100" />
+                <span class="dim-group__sep">×</span>
+                <input type="number" value="145" />
+              </div>
+              <span class="field__suffix">cm</span>
+            </div>
+          </div>
+          <div class="fld">
+            <span class="fld__lbl">Gewicht</span>
+            <div class="field">
+              <input type="number" value="600" />
+              <span class="field__suffix">kg</span>
+            </div>
+          </div>
+          <div class="fld">
+            <span class="fld__lbl">Stapelbaar</span>
+            <div class="toggle-row">
+              <label class="toggle"><input type="checkbox" checked><span></span></label>
+              <span id="toggle-lbl">ja</span>
+            </div>
+          </div>
+        </div>
+        <div class="cargo-row__actions">
+          <button class="danger" style="margin-right: auto;">Verwijder</button>
+          <button>Annuleer</button>
+          <button class="primary">Bewaar</button>
+        </div>
+      </div>
+
+      <!-- Rij 3 -->
+      <div class="cargo-row">
+        <span class="cargo-row__qty">2</span>
+        <div class="cargo-row__body">
+          <span class="cargo-row__type">IBC-container</span>
+          <span class="cargo-row__meta">100 × 120 × 116</span>
+        </div>
+        <span class="cargo-row__wt">150 kg</span>
+        <button class="cargo-row__edit" aria-label="Bewerk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </button>
+      </div>
+
+    </div>
+
+    <div class="cargo-foot">
+      <button class="cargo-foot__add" id="cargo-add">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Regel toevoegen
+      </button>
+      <span class="cargo-foot__total">Totaal <strong id="total-qty">14 stuks</strong> · <strong id="total-kg">2.250 kg</strong></span>
+    </div>
+
+    <!-- Warning onder hele cargo-sectie -->
+    <div class="cargo-warn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+      Totaal-gewicht onzeker (62%)
+      <button>verifieer bij klant</button>
+    </div>
+
+    </section>
+
+    <div class="hairline"></div>
+
+    <!-- Vereisten -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-chapter">IV</span>
+        <div class="section-meta">
+          <span class="section-label">Vereisten</span>
+          <h3 class="section-title">Laadklep vereist</h3>
+        </div>
+        <span class="section-status section-status--ok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          Compleet
+        </span>
+      </div>
+    <div class="reqs">
+      <button class="req req--on" data-field="req">Laadklep</button>
+      <button class="req">Koeling</button>
+      <button class="req">ADR</button>
+      <button class="req">Douane</button>
+    </div>
+    </section>
+
+    <div class="hairline"></div>
+
+    <!-- Bijlagen -->
+    <section class="section">
+      <div class="section-head">
+        <span class="section-chapter">V</span>
+        <div class="section-meta">
+          <span class="section-label">Bijlagen</span>
+          <h3 class="section-title">2 documenten</h3>
+        </div>
+        <span class="section-status section-status--ok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          Bijgevoegd
+        </span>
+      </div>
+      <div class="attachments">
+        <div class="att-chip">
+          <span class="att-chip__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          </span>
+          <div class="att-chip__body">
+            <div class="att-chip__name">Orderbevestiging.pdf</div>
+            <div class="att-chip__meta">PDF · 142 kB</div>
+          </div>
+          <span class="att-chip__action">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </span>
+        </div>
+        <div class="att-chip">
+          <span class="att-chip__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </span>
+          <div class="att-chip__body">
+            <div class="att-chip__name">Pakbon-foto.jpg</div>
+            <div class="att-chip__meta">Afbeelding · 2.1 MB</div>
+          </div>
+          <span class="att-chip__action">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Toast stack (undo) -->
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <!-- ── CTA ── -->
+  <div class="cta">
+    <button class="cta__primary">Maak order aan</button>
+    <div class="cta__meta">
+      <button>Afwijzen</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  if (new URLSearchParams(location.search).has('embed')) document.body.classList.add('embed');
+
+  // Linkage ← ontvang highlight-field van middle-pane via parent
+  const rightFields = document.querySelectorAll('[data-field]');
+  console.log('[right] linkage init ·', rightFields.length, 'fields', [...rightFields].map(f => f.dataset.field));
+  window.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'highlight-field') return;
+    console.log('[right] ontvangen:', e.data.field, 'on=' + e.data.on);
+    const matches = document.querySelectorAll('[data-field="' + e.data.field + '"]');
+    console.log('[right] matches gevonden:', matches.length);
+    matches.forEach(el => {
+      el.classList.toggle('is-linked', !!e.data.on);
+      if (e.data.on) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+  // Linkage → stuur highlight-source naar middle bij hover
+  document.querySelectorAll('[data-field]').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      el.classList.add('is-linked');
+      window.parent.postMessage({ type: 'highlight-source', field: el.dataset.field, on: true }, '*');
+    });
+    el.addEventListener('mouseleave', () => {
+      el.classList.remove('is-linked');
+      window.parent.postMessage({ type: 'highlight-source', field: el.dataset.field, on: false }, '*');
+    });
+  });
+
+  const list = document.querySelector('.cargo-list');
+  const fmt = n => n.toLocaleString('nl-NL');
+
+  function recalcTotals() {
+    let qty = 0, kg = 0;
+    list.querySelectorAll('.cargo-row:not(.cargo-row--edit)').forEach(r => {
+      qty += parseFloat(r.querySelector('.cargo-row__qty').textContent) || 0;
+      const wt = r.querySelector('.cargo-row__wt').textContent.replace(/\./g, '').replace(/\s*kg/, '');
+      kg += parseFloat(wt) || 0;
+    });
+    list.querySelectorAll('.cargo-row--edit').forEach(r => {
+      const inputs = r.querySelectorAll('input[type=number]');
+      if (inputs.length >= 5) {
+        qty += parseFloat(inputs[0].value) || 0;
+        kg += parseFloat(inputs[4].value) || 0;
+      }
+    });
+    document.getElementById('total-qty').textContent = `${fmt(qty)} stuks`;
+    document.getElementById('total-kg').textContent  = `${fmt(kg)} kg`;
+  }
+
+  function makeReadonlyRow(qty, type, L, B, H, weight, stapelbaar, dataBackup) {
+    const meta = `${L} × ${B} × ${H}` + (stapelbaar ? ' · stapelbaar' : '');
+    const row = document.createElement('div');
+    row.className = 'cargo-row';
+    if (dataBackup) row.dataset.backup = dataBackup;
+    row.innerHTML = `
+      <span class="cargo-row__qty">${qty}</span>
+      <div class="cargo-row__body">
+        <span class="cargo-row__type">${type}</span>
+        <span class="cargo-row__meta">${meta}</span>
+      </div>
+      <span class="cargo-row__wt">${fmt(weight)} kg</span>
+      <button class="cargo-row__edit" aria-label="Bewerk">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      </button>`;
+    return row;
+  }
+
+  function makeEditRow(qty = '', type = 'Europallets', L = '', B = '', H = '', weight = '', stapelbaar = true) {
+    const row = document.createElement('div');
+    row.className = 'cargo-row cargo-row--edit';
+    row.innerHTML = `
+      <div class="cargo-edit-grid">
+        <div class="fld">
+          <span class="fld__lbl">Aantal</span>
+          <div class="field"><input type="number" value="${qty}" /><span class="field__suffix">stuks</span></div>
+        </div>
+        <div class="fld">
+          <span class="fld__lbl">Type</span>
+          <div class="luxe-dd" data-value="${type}">
+            <span class="luxe-dd__val">${type}</span>
+            <svg class="luxe-dd__chev" viewBox="0 0 12 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"><path d="M1 1l5 5 5-5"/></svg>
+            <div class="luxe-dd__menu">
+              ${['Europallets','Blokpallets','Colli','Box','IBC-container']
+                .map(o => `<div class="luxe-dd__opt${o === type ? ' luxe-dd__opt--sel' : ''}" data-v="${o}">${o}</div>`).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="fld fld--full">
+          <span class="fld__lbl">Afmetingen L × B × H</span>
+          <div class="field">
+            <div class="dim-group">
+              <input type="number" value="${L}" placeholder="L" />
+              <span class="dim-group__sep">×</span>
+              <input type="number" value="${B}" placeholder="B" />
+              <span class="dim-group__sep">×</span>
+              <input type="number" value="${H}" placeholder="H" />
+            </div>
+            <span class="field__suffix">cm</span>
+          </div>
+        </div>
+        <div class="fld">
+          <span class="fld__lbl">Gewicht</span>
+          <div class="field"><input type="number" value="${weight}" /><span class="field__suffix">kg</span></div>
+        </div>
+        <div class="fld">
+          <span class="fld__lbl">Stapelbaar</span>
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox"${stapelbaar ? ' checked' : ''}><span></span></label>
+            <span>${stapelbaar ? 'ja' : 'nee'}</span>
+          </div>
+        </div>
+      </div>
+      <div class="cargo-row__actions">
+        <button class="danger js-delete">Verwijder</button>
+        <button class="js-cancel">Annuleer</button>
+        <button class="primary js-save">Bewaar</button>
+      </div>`;
+    return row;
+  }
+
+  function saveEditRow(editRow) {
+    const inputs = editRow.querySelectorAll('input[type=number]');
+    const qty = inputs[0].value || '0';
+    const type = editRow.querySelector('.luxe-dd').dataset.value || 'Europallets';
+    const L = inputs[1].value || '—', B = inputs[2].value || '—', H = inputs[3].value || '—';
+    const weight = parseFloat(inputs[4].value) || 0;
+    const stapelbaar = editRow.querySelector('input[type=checkbox]').checked;
+    const ro = makeReadonlyRow(qty, type, L, B, H, weight, stapelbaar);
+    editRow.replaceWith(ro);
+    recalcTotals();
+  }
+
+  function openEditFor(row) {
+    const qty = row.querySelector('.cargo-row__qty').textContent.trim();
+    const type = row.querySelector('.cargo-row__type').textContent.trim();
+    const meta = row.querySelector('.cargo-row__meta').textContent.trim();
+    const dimMatch = meta.match(/(\d+)\s*×\s*(\d+)\s*×\s*(\d+)/);
+    const [L, B, H] = dimMatch ? [dimMatch[1], dimMatch[2], dimMatch[3]] : ['','',''];
+    const stapelbaar = /stapelbaar/.test(meta);
+    const wt = parseFloat(row.querySelector('.cargo-row__wt').textContent.replace(/\./g,'').replace(/\s*kg/,'')) || 0;
+    const edit = makeEditRow(qty, type, L, B, H, wt, stapelbaar);
+    // backup originele row op dataset zodat Annuleer hem kan herstellen
+    edit.__original = row.cloneNode(true);
+    row.replaceWith(edit);
+  }
+
+  function cancelEditRow(editRow) {
+    if (editRow.__original) {
+      editRow.replaceWith(editRow.__original);
+    } else {
+      editRow.remove();
+    }
+    recalcTotals();
+  }
+
+  function animateRemove(row, then) {
+    row.style.transition = 'opacity .2s, transform .25s, margin .25s, max-height .3s';
+    row.style.overflow = 'hidden';
+    row.style.maxHeight = row.offsetHeight + 'px';
+    // force reflow
+    row.offsetHeight;
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(8px)';
+    requestAnimationFrame(() => { row.style.maxHeight = '0px'; row.style.marginTop = '0'; });
+    setTimeout(() => { row.remove(); then && then(); }, 310);
+  }
+
+  // Delegated click handler
+  list.addEventListener('click', (e) => {
+    const row = e.target.closest('.cargo-row');
+    if (!row) return;
+
+    if (e.target.closest('.js-save')) {
+      saveEditRow(row);
+      return;
+    }
+    if (e.target.closest('.js-cancel')) {
+      cancelEditRow(row);
+      return;
+    }
+    if (e.target.closest('.js-delete')) {
+      if (!confirm('Deze regel verwijderen?')) return;
+      animateRemove(row, recalcTotals);
+      return;
+    }
+    if (e.target.closest('.cargo-row__edit') && !row.classList.contains('cargo-row--edit')) {
+      openEditFor(row);
+      return;
+    }
+  });
+
+  // Toggle stapelbaar label
+  list.addEventListener('change', (e) => {
+    if (e.target.matches('.toggle input[type=checkbox]')) {
+      const lbl = e.target.closest('.toggle-row').querySelector('span:last-child');
+      if (lbl) lbl.textContent = e.target.checked ? 'ja' : 'nee';
+    }
+  });
+
+  // Luxe dropdown toggle + option select
+  document.addEventListener('click', (e) => {
+    const dd = e.target.closest('.luxe-dd');
+    const opt = e.target.closest('.luxe-dd__opt');
+
+    if (opt && dd) {
+      const v = opt.dataset.v;
+      dd.dataset.value = v;
+      dd.querySelector('.luxe-dd__val').textContent = v;
+      dd.querySelectorAll('.luxe-dd__opt').forEach(o => o.classList.toggle('luxe-dd__opt--sel', o === opt));
+      dd.classList.remove('luxe-dd--open');
+      return;
+    }
+
+    // Close alle open dropdowns die niet aangeklikt zijn
+    document.querySelectorAll('.luxe-dd.luxe-dd--open').forEach(open => {
+      if (open !== dd) open.classList.remove('luxe-dd--open');
+    });
+
+    // Toggle aangeklikte dropdown
+    if (dd && !opt) {
+      dd.classList.toggle('luxe-dd--open');
+    }
+  });
+
+  // Nieuwe regel toevoegen
+  document.getElementById('cargo-add').addEventListener('click', () => {
+    const edit = makeEditRow('', 'Europallets', '', '', '', '', false);
+    list.appendChild(edit);
+    const first = edit.querySelector('input[type=number]');
+    if (first) first.focus();
+    edit.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    recalcTotals();
+  });
+
+  recalcTotals();
+
+  /* ─── Dept-pill toggle (Operations ↔ Export) ─── */
+  document.querySelectorAll('.dept-pill').forEach(pill => {
+    pill.style.cursor = 'pointer';
+    pill.setAttribute('title', 'Klik om te wisselen');
+    pill.addEventListener('click', () => {
+      const isExport = pill.classList.contains('dept-pill--export');
+      pill.classList.toggle('dept-pill--export', !isExport);
+      pill.classList.toggle('dept-pill--ops', isExport);
+      const textNode = Array.from(pill.childNodes).find(n => n.nodeType === 3 && n.textContent.trim());
+      if (textNode) textNode.textContent = isExport ? ' Operations' : ' Export';
+    });
+  });
+
+  /* ─── Duplicate-warning close ─── */
+  document.getElementById('dup-close')?.addEventListener('click', () => {
+    const el = document.getElementById('dup-warn');
+    el.style.transition = 'opacity .2s, max-height .25s, margin .25s, padding .25s';
+    el.style.overflow = 'hidden';
+    el.style.maxHeight = el.offsetHeight + 'px';
+    el.offsetHeight;
+    el.style.opacity = '0';
+    requestAnimationFrame(() => { el.style.maxHeight = '0'; el.style.marginBottom = '0'; el.style.padding = '0 12px'; });
+    setTimeout(() => el.remove(), 260);
+  });
+
+  /* ─── Undo-toast bij "Maak order aan" ─── */
+  const toastStack = document.getElementById('toast-stack');
+  function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = `
+      <span class="toast__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      </span>
+      <div class="toast__msg">${msg}</div>
+      <button class="toast__undo">Ongedaan maken</button>
+      <span class="toast__countdown"></span>`;
+    toastStack.appendChild(t);
+    const timer = setTimeout(() => dismissToast(t), 5000);
+    t.querySelector('.toast__undo').addEventListener('click', () => {
+      clearTimeout(timer);
+      dismissToast(t, true);
+    });
+  }
+  function dismissToast(t, undone) {
+    t.style.transition = 'opacity .2s, transform .25s, margin .25s, max-height .25s';
+    t.style.overflow = 'hidden';
+    t.style.maxHeight = t.offsetHeight + 'px';
+    t.offsetHeight;
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(20px)';
+    requestAnimationFrame(() => { t.style.maxHeight = '0'; t.style.marginTop = '0'; });
+    setTimeout(() => t.remove(), 260);
+  }
+  document.querySelector('.cta__primary')?.addEventListener('click', () => {
+    showToast('Order aangemaakt · <strong>RCS-2026-0042</strong>');
+  });
+
+  /* ─── Tussenstop: add / remove ─── */
+  const routeEl = document.getElementById('route');
+  function makeMidStop() {
+    const el = document.createElement('div');
+    el.className = 'route-pt route-pt--mid';
+    el.innerHTML = `
+      <div class="route-pt__head">
+        <div class="route-pt__lbl">Tussenstop</div>
+        <button class="route-pt__remove" aria-label="Verwijder tussenstop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="field">
+        <span class="field__prefix">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </span>
+        <input placeholder="Adres tussenstop" />
+      </div>
+      <div class="pickers" style="display:flex; gap:6px; margin-top:6px;">
+        <label class="picker" style="flex: 1.2;">
+          <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span class="picker__main">
+            <span class="picker__day">—</span>
+            <span class="picker__month">kies</span>
+          </span>
+          <span class="picker__year">datum</span>
+        </label>
+        <label class="picker" style="flex: 0.9;">
+          <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span class="picker__time">—</span>
+        </label>
+      </div>`;
+    return el;
+  }
+
+  document.getElementById('add-stop').addEventListener('click', () => {
+    const delivery = routeEl.querySelector('.route-pt--end');
+    const stop = makeMidStop();
+    routeEl.insertBefore(stop, delivery);
+    const firstInput = stop.querySelector('input');
+    if (firstInput) firstInput.focus();
+  });
+
+  routeEl.addEventListener('click', (e) => {
+    const rm = e.target.closest('.route-pt__remove');
+    if (rm) {
+      const pt = rm.closest('.route-pt');
+      pt.style.transition = 'opacity .2s, max-height .25s, margin .25s';
+      pt.style.overflow = 'hidden';
+      pt.style.maxHeight = pt.offsetHeight + 'px';
+      pt.offsetHeight;
+      pt.style.opacity = '0';
+      requestAnimationFrame(() => {
+        pt.style.maxHeight = '0px';
+        pt.style.paddingBottom = '0';
+      });
+      setTimeout(() => pt.remove(), 260);
+    }
+  });
+</script>
+
+</body>
+</html>
