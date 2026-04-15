@@ -1,27 +1,43 @@
-import { useState } from "react";
-import { Truck, CheckCircle2, Loader2, Package, Scale, Plus, X, AlertTriangle, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import {
+  Loader2,
+  Plus,
+  AlertTriangle,
+  Check,
+  HelpCircle,
+  MapPin,
+  Package,
+  ClipboardCheck,
+  Paperclip,
+  Sparkles,
+  Pencil,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import type { OrderDraft, FormState } from "./types";
 import { requirementOptions } from "./types";
-
-/** Renders a small colored confidence indicator per field with native tooltip */
-function FieldConfidenceIndicator({ score }: { score: number | undefined }) {
-  if (score === undefined || score === null) return null;
-  if (score >= 90) {
-    return <span title={`AI confidence: ${score}%`} className="inline-flex items-center cursor-help"><CheckCircle2 className="h-3.5 w-3.5 text-green-500" /></span>;
-  }
-  if (score >= 60) {
-    return <span title={`AI confidence: ${score}%`} className="inline-flex items-center cursor-help"><AlertTriangle className="h-3.5 w-3.5 text-yellow-500" /></span>;
-  }
-  return <span title={`AI confidence: ${score}%`} className="inline-flex items-center cursor-help"><AlertTriangle className="h-3.5 w-3.5 text-red-500" /></span>;
-}
-import { getFilledCount, getTotalFields, getRequiredFilledCount, getFormErrors, formatDate, isAddressIncomplete, computeFieldConfidence } from "./utils";
+import {
+  getFilledCount,
+  getTotalFields,
+  getRequiredFilledCount,
+  getFormErrors,
+  isAddressIncomplete,
+  computeFieldConfidence,
+} from "./utils";
 
 interface Props {
   selected: OrderDraft;
@@ -35,306 +51,761 @@ interface Props {
   onDelete: () => void;
 }
 
-export function InboxReviewPanel({ selected, form, isCreatePending, addressSuggestions, onUpdateField, onToggleRequirement, onAutoSave, onCreateOrder, onDelete }: Props) {
+function useFieldHoverLinkage(field: string) {
+  return {
+    onMouseEnter: () => {
+      document
+        .querySelectorAll(`.inbox-hl[data-field="${field}"]`)
+        .forEach((el) => el.classList.add("inbox-field-linked"));
+    },
+    onMouseLeave: () => {
+      document
+        .querySelectorAll(`.inbox-hl[data-field="${field}"]`)
+        .forEach((el) => el.classList.remove("inbox-field-linked"));
+    },
+    "data-inbox-field": field,
+  } as const;
+}
+
+function ChapterHead({
+  badge,
+  title,
+  sub,
+}: {
+  badge: string;
+  title: string;
+  sub?: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-3 mb-3">
+      <span
+        className="shrink-0 grid place-items-center w-6 h-6 rounded-full text-[10px] font-semibold"
+        style={{
+          fontFamily: "'Space Grotesk', sans-serif",
+          color: "hsl(var(--gold-deep))",
+          background: "hsl(var(--gold-soft) / 0.7)",
+          border: "1px solid hsl(var(--gold) / 0.3)",
+        }}
+      >
+        {badge}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+          style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+        >
+          {title}
+        </p>
+        {sub && <p className="text-[12px] text-foreground mt-[2px]">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+export function InboxReviewPanel({
+  selected,
+  form,
+  isCreatePending,
+  onUpdateField,
+  onToggleRequirement,
+  onAutoSave,
+  onCreateOrder,
+  onDelete,
+}: Props) {
   const formErrors = getFormErrors(form);
   const filledCount = getFilledCount(form);
   const totalFields = getTotalFields();
-  // Confidence badge = weighted field recognition percentage (required fields count double)
   const conf = computeFieldConfidence(form);
   const requiredFilled = getRequiredFilledCount(form);
   const totalRequired = 4;
-  const [autoAdvance, setAutoAdvance] = useState(true);
-  const [showConfidence, setShowConfidence] = useState(false);
+
+  const [dept, setDept] = useState<"export" | "operations">("operations");
+  const [cargoEdit, setCargoEdit] = useState(false);
+  const [showConfDetail, setShowConfDetail] = useState(false);
+
+  useEffect(() => {
+    setCargoEdit(false);
+  }, [selected.id]);
 
   const receivedAgo = selected.received_at
     ? Math.floor((Date.now() - new Date(selected.received_at).getTime()) / 3600000)
     : 0;
-  const timeClass = receivedAgo > 6 ? "bg-red-100 text-red-600" : receivedAgo > 3 ? "bg-amber-100 text-amber-600" : "bg-gray-100 text-gray-500";
+
+  const pickupLinkage = useFieldHoverLinkage("pickup");
+  const deliveryLinkage = useFieldHoverLinkage("delivery");
+  const qtyLinkage = useFieldHoverLinkage("qty");
+  const weightLinkage = useFieldHoverLinkage("weight");
+  const dimsLinkage = useFieldHoverLinkage("dims");
+  const pickupTimeLinkage = useFieldHoverLinkage("pickup-time");
+  const deliveryTimeLinkage = useFieldHoverLinkage("delivery-time");
+  const reqLinkage = useFieldHoverLinkage("req");
+
+  const confColor = conf >= 80 ? "hsl(var(--gold-deep))" : conf >= 60 ? "hsl(32 70% 45%)" : "hsl(0 60% 50%)";
+
+  const possibleDuplicate = (selected as any).possible_duplicate as boolean | undefined;
+  const anomalies = selected.anomalies || [];
+  const weightAnomaly = anomalies.find((a) => a.field === "weight_kg");
+
+  const totalKg = form.weight
+    ? form.perUnit
+      ? Number(form.weight) * form.quantity
+      : Number(form.weight)
+    : 0;
 
   return (
-    <div className="relative flex flex-col h-full bg-gray-50" style={{ minWidth: 0, overflow: "hidden" }}>
-      {/* Scroll progress */}
-      <div className="h-0.5 bg-green-500 sticky top-0 z-10 transition-all" style={{ width: "0%" }} id="review-progress" />
-
-      {/* Header */}
-      <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200 bg-white shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Review Order</h3>
-          <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-1", timeClass)}>
-            ⏱ {receivedAgo}u geleden
-          </span>
-        </div>
-        {/* Confidence ring with hover dropdown */}
-        {conf > 0 && (
-          <div className="relative cursor-help" onMouseEnter={() => setShowConfidence(true)} onMouseLeave={() => setShowConfidence(false)}>
-            <div className="relative h-8 w-8">
-              <svg className="h-8 w-8 -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="14" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
-                <circle cx="18" cy="18" r="14" fill="none"
-                  stroke={conf >= 80 ? "#16a34a" : conf >= 60 ? "#d97706" : "#dc2626"}
-                  strokeWidth="2.5" strokeDasharray={`${conf * 0.88}, 88`} strokeLinecap="round" />
-              </svg>
-              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black tabular-nums">{conf}%</span>
-            </div>
-            {showConfidence && (
-              <div className="absolute top-full right-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-50">
-                <p className="text-[10px] font-bold text-gray-500 mb-2 border-b pb-1">Per-veld Confidence</p>
-                {[
-                  { label: "Klantnaam", key: "client_name" },
-                  { label: "Ophaaladres", key: "pickup_address" },
-                  { label: "Afleveradres", key: "delivery_address" },
-                  { label: "Aantal", key: "quantity" },
-                  { label: "Gewicht", key: "weight_kg" },
-                  { label: "Eenheid", key: "unit" },
-                  { label: "Type", key: "transport_type" },
-                  { label: "Afmetingen", key: "dimensions" },
-                ].map(f => {
-                  const fc = form.fieldConfidence || {};
-                  const val = fc[f.key] ?? null;
-                  return (
-                    <div key={f.key} className="flex justify-between text-[10px] py-0.5">
-                      <span>{f.label}</span>
-                      {val !== null ? (
-                        <span className={cn("font-bold", val >= 90 ? "text-green-600" : val >= 60 ? "text-amber-600" : "text-red-600")}>
-                          {val}% {val >= 90 ? "✓" : val >= 60 ? "⚠" : "✗"}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Progress stepper */}
-      <div className="bg-card border-b border-border px-6 py-3">
-        <div className="flex items-center justify-between relative">
-          <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-border -translate-y-1/2 z-0" />
-          <div className="absolute top-1/2 left-0 w-1/2 h-0.5 bg-green-500 -translate-y-1/2 z-0" />
-          {[
-            { label: "Ontvangen", done: true, active: false },
-            { label: "Review", done: false, active: true },
-            { label: "Goedgekeurd", done: false, active: false },
-          ].map((step, i) => (
-            <div key={i} className="relative z-10 flex flex-col items-center gap-1">
-              <div className={cn("w-4 h-4 rounded-full flex items-center justify-center",
-                step.done ? "bg-green-500" : step.active ? "bg-green-500 ring-2 ring-green-500 ring-offset-2 dark:ring-offset-card" : "bg-muted"
-              )}>
-                {step.done && <Check className="h-2.5 w-2.5 text-white" />}
-              </div>
-              <span className={cn("text-[9px] font-bold uppercase", step.done || step.active ? "text-green-600 dark:text-green-400" : "text-muted-foreground")}>
-                {step.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
+    <div
+      className="relative flex flex-col h-full"
+      style={{ minWidth: 0, overflow: "hidden", background: "hsl(var(--background))" }}
+    >
       <ScrollArea className="flex-1" style={{ minWidth: 0 }}>
-        <div className="p-4 space-y-6 pb-56">
+        <div className="px-5 pt-5 pb-40">
+          {/* Header block */}
+          <div className="flex items-start justify-between mb-3 gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span
+                  className="text-[10px] font-semibold tabular-nums px-[8px] py-[2px] rounded-full"
+                  style={{
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    color: "hsl(var(--gold-deep))",
+                    background: "hsl(var(--gold-soft))",
+                  }}
+                >
+                  ORD-{selected.order_number}
+                </span>
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+                  style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                >
+                  Order-review
+                </span>
+              </div>
+              <h2
+                className="text-[22px] font-semibold leading-tight truncate"
+                style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
+              >
+                {selected.client_name || "Onbekende klant"}
+              </h2>
+              <button
+                onClick={() => setDept((d) => (d === "export" ? "operations" : "export"))}
+                className={cn(
+                  "inline-flex items-center gap-1.5 mt-2 px-2.5 py-[3px] rounded-full text-[11px] font-medium border transition-colors",
+                )}
+                style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  background: dept === "export" ? "hsl(var(--gold-soft) / 0.6)" : "hsl(var(--muted) / 0.5)",
+                  borderColor: dept === "export" ? "hsl(var(--gold) / 0.4)" : "hsl(var(--border))",
+                  color: dept === "export" ? "hsl(var(--gold-deep))" : "hsl(var(--muted-foreground))",
+                }}
+                title="Klik om afdeling te wisselen"
+              >
+                <span
+                  className="w-[5px] h-[5px] rounded-full"
+                  style={{
+                    background: dept === "export" ? "hsl(var(--gold))" : "hsl(var(--muted-foreground))",
+                  }}
+                />
+                {dept === "export" ? "Export" : "Operations"}
+              </button>
+            </div>
+            <div className="flex flex-col items-center shrink-0">
+              <span
+                className="text-[10px] tabular-nums text-muted-foreground mb-2 px-2 py-[2px] rounded-full"
+                style={{ background: "hsl(var(--muted) / 0.5)" }}
+              >
+                {receivedAgo > 0 ? `${receivedAgo}u geleden` : "zojuist"}
+              </span>
+              {/* Confidence ring */}
+              <div
+                className="relative cursor-help"
+                style={{ width: 68, height: 68 }}
+                onMouseEnter={() => setShowConfDetail(true)}
+                onMouseLeave={() => setShowConfDetail(false)}
+              >
+                <svg className="w-[68px] h-[68px] -rotate-90" viewBox="0 0 68 68">
+                  <circle cx="34" cy="34" r="28" fill="none" stroke="hsl(var(--border))" strokeWidth="3" />
+                  <circle
+                    cx="34"
+                    cy="34"
+                    r="28"
+                    fill="none"
+                    stroke={confColor}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 28}
+                    strokeDashoffset={2 * Math.PI * 28 * (1 - conf / 100)}
+                    className="transition-all duration-500"
+                  />
+                </svg>
+                <span
+                  className="absolute inset-0 flex items-center justify-center text-[14px] font-semibold tabular-nums"
+                  style={{ fontFamily: "'Space Grotesk', sans-serif", color: confColor }}
+                >
+                  {conf}%
+                </span>
+                {showConfDetail && (
+                  <div
+                    className="absolute top-full right-0 mt-1 w-52 rounded-lg py-2 px-2 z-30 shadow-lg"
+                    style={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--gold) / 0.25)",
+                    }}
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-1 px-1">
+                      Zekerheid per veld
+                    </p>
+                    {[
+                      { label: "Ophaaladres", key: "pickup_address" },
+                      { label: "Afleveradres", key: "delivery_address" },
+                      { label: "Aantal", key: "quantity" },
+                      { label: "Gewicht", key: "weight_kg" },
+                      { label: "Afmetingen", key: "dimensions" },
+                    ].map((f) => {
+                      const raw = (form.fieldConfidence || {})[f.key];
+                      const v = raw == null ? null : raw <= 1 ? Math.round(raw * 100) : Math.round(raw);
+                      return (
+                        <div key={f.key} className="flex justify-between text-[11px] py-[2px] px-1">
+                          <span>{f.label}</span>
+                          <span
+                            className="tabular-nums font-semibold"
+                            style={{
+                              color:
+                                v == null
+                                  ? "hsl(var(--muted-foreground))"
+                                  : v >= 80
+                                    ? "hsl(var(--gold-deep))"
+                                    : v >= 60
+                                      ? "hsl(32 70% 45%)"
+                                      : "hsl(0 60% 50%)",
+                            }}
+                          >
+                            {v == null ? "—" : `${v}%`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <button
+                className="mt-1 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground"
+                style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+              >
+                <HelpCircle className="h-3 w-3" strokeWidth={1.75} />
+                Waarom?
+              </button>
+            </div>
+          </div>
 
-          {/* AI Card */}
-          {conf > 0 && (
-            <div className="bg-gradient-to-br from-white to-green-50 border border-green-100 border-l-[3px] border-l-green-500 p-3 rounded-lg shadow-sm">
-              <div className="flex items-start gap-3 mb-3">
-                <span className="text-green-500 text-lg">✨</span>
-                <div className="flex-1">
-                  <div className="flex justify-between items-center mb-1">
-                    <p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">{filledCount} van {totalFields} velden herkend</p>
-                    <span className="text-[10px] font-bold text-green-600 dark:text-green-400">{conf}%</span>
-                  </div>
-                  <div className="w-full bg-green-100 dark:bg-green-900/30 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-green-500 h-full rounded-full transition-all" style={{ width: `${conf}%` }} />
-                  </div>
-                  <p className="text-[9px] text-green-600/70 dark:text-green-400/70 mt-1 font-medium">
-                    📧 {selected.attachments?.length ? `${filledCount > 1 ? filledCount - 1 : filledCount} uit e-mail · 📄 1 uit bijlage` : `${filledCount} uit e-mail`}
-                  </p>
-                </div>
+          {/* Duplicate warning */}
+          {possibleDuplicate && (
+            <div
+              className="callout--luxe mb-4"
+              style={{
+                background: "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(32 85% 92% / 0.5) 100%)",
+                borderColor: "hsl(32 70% 55% / 0.4)",
+              }}
+            >
+              <AlertTriangle className="callout--luxe__icon h-4 w-4" style={{ color: "hsl(32 70% 45%)" }} />
+              <div>
+                <p className="callout--luxe__title">Mogelijke duplicaat</p>
+                <p className="callout--luxe__body">Deze aanvraag lijkt op een recente order van dezelfde klant.</p>
               </div>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {form.pickupAddress && form.deliveryAddress && <span className="bg-white border border-green-200 text-green-600 text-[9px] px-2 py-0.5 rounded-full font-medium">📍 2 locaties</span>}
-                {form.quantity > 0 && <span className="bg-white border border-green-200 text-green-600 text-[9px] px-2 py-0.5 rounded-full font-medium">📦 Lading{form.weight ? " + gewicht" : ""}</span>}
-              </div>
-              {!form.dimensions && (
-                <div className="flex items-center gap-1.5 text-[10px] text-amber-600 font-bold bg-amber-50 p-1.5 rounded border border-amber-100">
-                  <AlertTriangle className="h-3.5 w-3.5" /> Afmetingen ontbreekt
-                </div>
-              )}
             </div>
           )}
 
-          {/* Route Details */}
-          <div>
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center after:content-[''] after:flex-1 after:h-px after:bg-gradient-to-r after:from-gray-200 after:to-transparent after:ml-3">
-              Route Details
-            </p>
-            <div className="relative pl-6 space-y-4">
-              <div className="absolute left-[9px] top-2 bottom-2 border-l-2 border-dashed border-gray-200" />
-              {/* Distance indicator */}
-              <div className="absolute left-0 top-[40%] bg-white p-1 rounded-full border border-gray-200 shadow-sm z-10">
-                <Truck className="h-3 w-3 text-gray-400 animate-bounce" style={{ animationDuration: "2s" }} />
-              </div>
+          <div className="hairline my-4" />
 
-              {/* Ophalen */}
-              <div className="relative">
-                <div className="absolute -left-[15px] top-1 h-2.5 w-2.5 rounded-full bg-primary border-2 border-white shadow-sm" />
-                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm group hover:border-primary/40 transition-colors">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Ophalen <FieldConfidenceIndicator score={form.fieldConfidence?.pickup_address} /></span>
-                  </div>
-                  <AddressAutocomplete value={form.pickupAddress} onChange={(v) => onUpdateField("pickupAddress", v)} onBlur={onAutoSave}
-                    placeholder="Ophaaladres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text", !form.pickupAddress && "text-red-400 italic font-normal")} />
-                  {form.pickupAddress && isAddressIncomplete(form.pickupAddress) && (
-                    <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-bold">
-                      <AlertTriangle className="h-3 w-3 shrink-0" /> Onvolledig adres — straat + huisnummer nodig
+          {/* I · AI-extractie */}
+          <section className="mb-5">
+            <ChapterHead
+              badge="I"
+              title="AI-extractie"
+              sub={`${conf}% zekerheid, ${filledCount}/${totalFields} velden herkend`}
+            />
+            <div className="card--luxe p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
+                <span
+                  className="text-[11px] font-medium"
+                  style={{ fontFamily: "'Space Grotesk', sans-serif", color: "hsl(var(--gold-deep))" }}
+                >
+                  Automatisch geëxtraheerd
+                </span>
+                <span className="ml-auto text-[11px] tabular-nums font-semibold" style={{ color: confColor }}>
+                  {conf}%
+                </span>
+              </div>
+              <div
+                className="w-full h-[6px] rounded-full overflow-hidden"
+                style={{ background: "hsl(var(--gold-soft) / 0.5)" }}
+              >
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${conf}%`,
+                    background: "linear-gradient(90deg, hsl(var(--gold)), hsl(var(--gold-deep)))",
+                  }}
+                />
+              </div>
+              <p className="text-[10.5px] text-muted-foreground mt-2">
+                {selected.attachments?.length
+                  ? `Uit e-mail plus ${selected.attachments.length} bijlage${selected.attachments.length > 1 ? "n" : ""}`
+                  : "Uit e-mailtekst"}
+              </p>
+            </div>
+          </section>
+
+          {/* II · Route */}
+          <section className="mb-5">
+            <ChapterHead badge="II" title="Route" sub="Ophalen en afleveren" />
+            <div className="card--luxe p-4">
+              <div className="relative pl-6 space-y-4">
+                <div
+                  className="absolute top-2 bottom-2"
+                  style={{
+                    left: "9px",
+                    borderLeft: "1px dashed hsl(var(--gold) / 0.4)",
+                  }}
+                />
+                {/* Pickup */}
+                <div className="relative" {...pickupLinkage}>
+                  <div
+                    className="absolute rounded-full"
+                    style={{
+                      left: "-15px",
+                      top: 5,
+                      width: 10,
+                      height: 10,
+                      background: "hsl(var(--gold))",
+                      border: "2px solid hsl(var(--card))",
+                      boxShadow: "0 0 0 1px hsl(var(--gold) / 0.3)",
+                    }}
+                  />
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-[2px]">
+                      <MapPin className="h-3 w-3" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+                        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                      >
+                        Ophalen
+                      </span>
                     </div>
-                  )}
-                  {selected.pickup_time_from && selected.pickup_time_to && (
-                    <p className="text-xs text-gray-400 mt-1">{selected.pickup_time_from} - {selected.pickup_time_to}</p>
-                  )}
+                    <AddressAutocomplete
+                      value={form.pickupAddress}
+                      onChange={(v) => onUpdateField("pickupAddress", v)}
+                      onBlur={onAutoSave}
+                      placeholder="Ophaaladres..."
+                      className={cn(
+                        "h-auto border-0 shadow-none p-0 text-[13px] font-medium bg-transparent focus-visible:ring-1 focus-visible:ring-[hsl(var(--gold)/0.4)] focus-visible:bg-white focus-visible:rounded focus-visible:px-1",
+                        !form.pickupAddress && "text-destructive italic font-normal",
+                      )}
+                    />
+                    {form.pickupAddress && isAddressIncomplete(form.pickupAddress) && (
+                      <p className="text-[10.5px] text-[hsl(32_70%_40%)] mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" strokeWidth={1.75} /> Adres onvolledig, straat en nummer nodig
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 mt-2" {...pickupTimeLinkage}>
+                      <input
+                        type="date"
+                        className="picker text-[11.5px] px-2 py-1 rounded-md"
+                        style={{ minWidth: 0 }}
+                      />
+                      <input
+                        type="time"
+                        value={selected.pickup_time_from || ""}
+                        readOnly
+                        className="picker text-[11.5px] px-2 py-1 rounded-md"
+                        style={{ width: 75 }}
+                      />
+                      <span className="text-[11px] text-muted-foreground">tot</span>
+                      <input
+                        type="time"
+                        value={selected.pickup_time_to || ""}
+                        readOnly
+                        className="picker text-[11.5px] px-2 py-1 rounded-md"
+                        style={{ width: 75 }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Delivery */}
+                <div className="relative" {...deliveryLinkage}>
+                  <div
+                    className="absolute rounded-full"
+                    style={{
+                      left: "-15px",
+                      top: 5,
+                      width: 10,
+                      height: 10,
+                      background: "hsl(var(--gold-deep))",
+                      border: "2px solid hsl(var(--card))",
+                      boxShadow: "0 0 0 1px hsl(var(--gold-deep) / 0.3)",
+                    }}
+                  />
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-[2px]">
+                      <MapPin className="h-3 w-3" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+                        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                      >
+                        Afleveren
+                      </span>
+                    </div>
+                    <AddressAutocomplete
+                      value={form.deliveryAddress}
+                      onChange={(v) => onUpdateField("deliveryAddress", v)}
+                      onBlur={onAutoSave}
+                      placeholder="Afleveradres..."
+                      className={cn(
+                        "h-auto border-0 shadow-none p-0 text-[13px] font-medium bg-transparent focus-visible:ring-1 focus-visible:ring-[hsl(var(--gold)/0.4)] focus-visible:bg-white focus-visible:rounded focus-visible:px-1",
+                        !form.deliveryAddress && "text-destructive italic font-normal",
+                      )}
+                    />
+                    {form.deliveryAddress && isAddressIncomplete(form.deliveryAddress) && (
+                      <p className="text-[10.5px] text-[hsl(32_70%_40%)] mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" strokeWidth={1.75} /> Adres onvolledig, straat en nummer nodig
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 mt-2" {...deliveryTimeLinkage}>
+                      <input
+                        type="date"
+                        className="picker text-[11.5px] px-2 py-1 rounded-md"
+                        style={{ minWidth: 0 }}
+                      />
+                      <input
+                        type="time"
+                        value={selected.delivery_time_from || ""}
+                        readOnly
+                        className="picker text-[11.5px] px-2 py-1 rounded-md"
+                        style={{ width: 75 }}
+                      />
+                      <span className="text-[11px] text-muted-foreground">tot</span>
+                      <input
+                        type="time"
+                        value={selected.delivery_time_to || ""}
+                        readOnly
+                        className="picker text-[11.5px] px-2 py-1 rounded-md"
+                        style={{ width: 75 }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Lossen */}
-              <div className="relative">
-                <div className="absolute -left-[15px] top-1 h-2.5 w-2.5 rounded-full bg-primary/70 border-2 border-white shadow-sm" />
-                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm group hover:border-primary/40 transition-colors">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">Lossen <FieldConfidenceIndicator score={form.fieldConfidence?.delivery_address} /></span>
-                  </div>
-                  <AddressAutocomplete value={form.deliveryAddress} onChange={(v) => onUpdateField("deliveryAddress", v)} onBlur={onAutoSave}
-                    placeholder="Afleveradres..." className={cn("h-auto border-0 shadow-none p-0 text-sm font-bold bg-transparent focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text", !form.deliveryAddress && "text-red-400 italic font-normal")} />
-                  {form.deliveryAddress && isAddressIncomplete(form.deliveryAddress) && (
-                    <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-bold">
-                      <AlertTriangle className="h-3 w-3 shrink-0" /> Onvolledig adres — straat + huisnummer nodig
+              <button
+                className="mt-4 inline-flex items-center gap-1 text-[11.5px] font-medium hover:underline"
+                style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  color: "hsl(var(--gold-deep))",
+                }}
+              >
+                <Plus className="h-3 w-3" strokeWidth={1.75} />
+                Tussenstop toevoegen
+              </button>
+            </div>
+          </section>
+
+          {/* III · Lading */}
+          <section className="mb-5">
+            <ChapterHead
+              badge="III"
+              title="Lading"
+              sub={`${form.quantity || 0} ${form.unit || "stuks"}, ${totalKg > 0 ? `${totalKg.toLocaleString("nl-NL")} kg` : "gewicht onbekend"}`}
+            />
+            <div className="card--luxe p-0 overflow-hidden">
+              {/* Read-only row */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Package className="h-4 w-4 shrink-0" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
+                  <div className="min-w-0" {...qtyLinkage}>
+                    <div className="flex items-baseline gap-2">
+                      <span
+                        className="text-[14px] font-semibold tabular-nums"
+                        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                      >
+                        {form.quantity || 0}
+                      </span>
+                      <span className="text-[12.5px] text-muted-foreground">{form.unit || "Pallets"}</span>
                     </div>
-                  )}
-                  {selected.delivery_time_from && selected.delivery_time_to && (
-                    <p className="text-xs text-gray-400 mt-1">{selected.delivery_time_from} - {selected.delivery_time_to}</p>
-                  )}
+                    {form.dimensions && (
+                      <span className="text-[11px] text-muted-foreground tabular-nums" {...dimsLinkage}>
+                        {form.dimensions} cm
+                      </span>
+                    )}
+                  </div>
                 </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[12.5px] tabular-nums" {...weightLinkage}>
+                    {totalKg > 0 ? `${totalKg.toLocaleString("nl-NL")} kg` : "— kg"}
+                  </span>
+                  <button
+                    onClick={() => setCargoEdit((v) => !v)}
+                    className="h-7 w-7 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    aria-label={cargoEdit ? "Sluit bewerken" : "Bewerk"}
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  </button>
+                </div>
+              </div>
+
+              {cargoEdit && (
+                <div className="border-t px-4 py-3 space-y-3" style={{ borderColor: "hsl(var(--border) / 0.5)" }}>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">Aantal</span>
+                      <Input
+                        type="number"
+                        value={form.quantity}
+                        onChange={(e) => onUpdateField("quantity", Number(e.target.value))}
+                        onBlur={onAutoSave}
+                        className="h-8 mt-1"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">Eenheid</span>
+                      <Select
+                        value={form.unit}
+                        onValueChange={(v) => {
+                          onUpdateField("unit", v);
+                          setTimeout(onAutoSave, 0);
+                        }}
+                      >
+                        <SelectTrigger className="h-8 mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Pallets">Pallets</SelectItem>
+                          <SelectItem value="Europallets">Europallets</SelectItem>
+                          <SelectItem value="Colli">Colli</SelectItem>
+                          <SelectItem value="Box">Box</SelectItem>
+                          <SelectItem value="Container">Container</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </label>
+                  </div>
+
+                  <label className="block">
+                    <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
+                      Afmetingen, L × B × H (cm)
+                    </span>
+                    <Input
+                      value={form.dimensions}
+                      onChange={(e) => onUpdateField("dimensions", e.target.value)}
+                      onBlur={onAutoSave}
+                      placeholder="120x80x145"
+                      className="h-8 mt-1"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
+                      Gewicht {form.perUnit ? "(per eenheid)" : "(totaal)"}
+                    </span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        value={form.weight}
+                        onChange={(e) => onUpdateField("weight", e.target.value)}
+                        onBlur={onAutoSave}
+                        placeholder="—"
+                        className="h-8"
+                      />
+                      <span className="text-[12px] text-muted-foreground">kg</span>
+                    </div>
+                  </label>
+
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.perUnit}
+                      onChange={(e) => {
+                        onUpdateField("perUnit", e.target.checked);
+                        setTimeout(onAutoSave, 0);
+                      }}
+                    />
+                    <span className="text-[12px]">Gewicht per eenheid</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Totals footer */}
+              <div
+                className="px-4 py-2 flex items-center justify-between text-[11.5px] border-t"
+                style={{
+                  borderColor: "hsl(var(--border) / 0.5)",
+                  background: "hsl(var(--gold-soft) / 0.2)",
+                }}
+              >
+                <span className="text-muted-foreground">Totaal</span>
+                <span
+                  className="font-semibold tabular-nums"
+                  style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                >
+                  {form.quantity || 0} × {totalKg > 0 ? `${totalKg.toLocaleString("nl-NL")} kg` : "— kg"}
+                </span>
               </div>
             </div>
-          </div>
 
-          {/* Lading & Goederen */}
-          <div>
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center after:content-[''] after:flex-1 after:h-px after:bg-gradient-to-r after:from-gray-200 after:to-transparent after:ml-3">
-              Lading & Goederen
-            </p>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              {/* Aantal */}
-              <div className="flex justify-between items-center p-3 hover:bg-gray-50 transition-colors">
-                <span className="text-xs text-gray-500 font-medium flex items-center gap-1">Aantal <FieldConfidenceIndicator score={form.fieldConfidence?.quantity} /></span>
-                <div className="flex items-center gap-1.5">
-                  <Input type="number" value={form.quantity} onChange={(e) => onUpdateField("quantity", Number(e.target.value))} onBlur={onAutoSave}
-                    className="h-7 w-14 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text" />
-                  <Select value={form.unit} onValueChange={(v) => { onUpdateField("unit", v); setTimeout(onAutoSave, 0); }}>
-                    <SelectTrigger className="h-7 w-auto border-0 shadow-none bg-transparent p-0 text-xs font-bold gap-1 focus:ring-0"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="Pallets">Pallets</SelectItem><SelectItem value="Colli">Colli</SelectItem><SelectItem value="Box">Box</SelectItem></SelectContent>
-                  </Select>
-                </div>
+            {weightAnomaly && (
+              <div
+                className="mt-2 rounded-lg px-3 py-2 flex items-start gap-2"
+                style={{
+                  background: "hsl(32 85% 95%)",
+                  border: "1px solid hsl(32 70% 55% / 0.35)",
+                }}
+              >
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-[2px]" style={{ color: "hsl(32 70% 42%)" }} strokeWidth={1.75} />
+                <p className="text-[11.5px]" style={{ color: "hsl(32 55% 30%)" }}>
+                  {weightAnomaly.message}
+                </p>
               </div>
-              {/* Gewicht */}
-              <div className="flex justify-between items-start p-3 bg-gray-50 hover:bg-gray-100 transition-colors border-y border-gray-200">
-                <span className="text-xs text-gray-500 font-medium mt-0.5 flex items-center gap-1">Gewicht <FieldConfidenceIndicator score={form.fieldConfidence?.weight_kg} /></span>
-                <div className="text-right">
-                  <div className="flex items-center gap-1">
-                    <Input value={form.weight} onChange={(e) => onUpdateField("weight", e.target.value)} onBlur={onAutoSave} placeholder="—"
-                      className={cn("h-7 w-20 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text tabular-nums", !form.weight && "text-red-400")} />
-                    <span className="text-xs font-bold">kg</span>
-                  </div>
-                  {form.perUnit && form.weight && form.quantity > 0 && (
-                    <p className="text-[10px] text-gray-400 tabular-nums">≈ {Math.round(Number(form.weight) / form.quantity)} kg/eenheid × {form.quantity}</p>
-                  )}
-                </div>
-              </div>
-              {/* Type */}
-              <div className="flex justify-between items-center p-3 hover:bg-gray-50 transition-colors border-b border-gray-200">
-                <span className="text-xs text-gray-500 font-medium">Type</span>
-                <Select value={form.transportType} onValueChange={(v) => { onUpdateField("transportType", v); setTimeout(onAutoSave, 0); }}>
-                  <SelectTrigger className="h-7 w-auto border-0 shadow-none bg-transparent p-0 text-xs font-bold gap-1 focus:ring-0"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="direct">Direct</SelectItem><SelectItem value="warehouse-air">Warehouse → Air</SelectItem></SelectContent>
-                </Select>
-              </div>
-              {/* Afmetingen */}
-              <div className={cn("flex justify-between items-center p-3 transition-colors", !form.dimensions ? "bg-amber-50 hover:bg-amber-100" : "hover:bg-gray-50")}>
-                <span className={cn("text-xs font-medium", !form.dimensions ? "text-amber-600" : "text-gray-500")}>Afmetingen</span>
-                <Input value={form.dimensions} onChange={(e) => onUpdateField("dimensions", e.target.value)} onBlur={onAutoSave}
-                  placeholder={!form.dimensions ? "Niet opgegeven" : "LxBxH"}
-                  className={cn("h-7 w-28 text-xs font-bold text-right border-0 shadow-none bg-transparent p-0 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:bg-white focus-visible:rounded focus-visible:px-1 cursor-text", !form.dimensions && "text-amber-600 italic")} />
-              </div>
-            </div>
-          </div>
+            )}
+          </section>
 
-          {/* Extra Vereisten */}
-          <div>
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center after:content-[''] after:flex-1 after:h-px after:bg-gradient-to-r after:from-gray-200 after:to-transparent after:ml-3">
-              Extra Vereisten
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {requirementOptions.map(req => {
+          {/* IV · Vereisten */}
+          <section className="mb-5">
+            <ChapterHead
+              badge="IV"
+              title="Vereisten"
+              sub={form.requirements.length > 0 ? form.requirements.join(", ") : "Geen speciale vereisten"}
+            />
+            <div className="flex flex-wrap gap-2" {...reqLinkage}>
+              {requirementOptions.map((req) => {
                 const active = form.requirements.includes(req.id);
                 return (
-                  <button key={req.id} onClick={() => onToggleRequirement(req.id)}
-                    className={cn("text-[10px] px-2.5 py-1.5 rounded-full font-bold flex items-center gap-1 transition-all",
-                      active ? "bg-primary text-white shadow-sm" : "bg-white text-gray-500 border border-gray-200 hover:border-primary/40"
-                    )}>
-                    {active && <Check className="h-3 w-3" />}
-                    {!active && <Plus className="h-3 w-3" />}
+                  <button
+                    key={req.id}
+                    onClick={() => onToggleRequirement(req.id)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-3 py-[5px] rounded-full text-[11.5px] font-medium border transition-colors",
+                    )}
+                    style={{
+                      fontFamily: "'Space Grotesk', sans-serif",
+                      background: active ? "hsl(var(--gold-soft) / 0.6)" : "hsl(var(--card))",
+                      borderColor: active ? "hsl(var(--gold) / 0.5)" : "hsl(var(--border))",
+                      color: active ? "hsl(var(--gold-deep))" : "hsl(var(--muted-foreground))",
+                    }}
+                  >
+                    <span
+                      className="w-[5px] h-[5px] rounded-full"
+                      style={{
+                        background: active ? "hsl(var(--gold))" : "hsl(var(--border))",
+                      }}
+                    />
                     {req.label}
                   </button>
                 );
               })}
             </div>
-          </div>
+          </section>
+
+          {/* V · Bijlagen */}
+          {selected.attachments && selected.attachments.length > 0 && (
+            <section className="mb-5">
+              <ChapterHead badge="V" title="Bijlagen" sub={`${selected.attachments.length} bestand${selected.attachments.length > 1 ? "en" : ""}`} />
+              <div className="flex flex-wrap gap-2">
+                {selected.attachments.map((att: any, i: number) => (
+                  <a
+                    key={i}
+                    href={att.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-3 py-[5px] rounded-full text-[11.5px] border hover:border-[hsl(var(--gold)/0.5)] transition-colors"
+                    style={{
+                      fontFamily: "'Space Grotesk', sans-serif",
+                      borderColor: "hsl(var(--border))",
+                      color: "hsl(var(--foreground))",
+                    }}
+                  >
+                    <Paperclip className="h-3 w-3" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
+                    <span className="truncate max-w-[180px]">{att.name}</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </ScrollArea>
 
-      {/* Sticky CTA */}
-      <div className="absolute bottom-0 left-0 right-0 p-5 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-[0_-8px_30px_rgb(0,0,0,0.06)] z-50">
-        <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-3">
-          <CheckCircle2 className={cn("h-4 w-4", formErrors ? "text-amber-500" : "text-green-500")} />
-          <p className="text-[11px] font-medium text-gray-500">
-            {formErrors ? `${requiredFilled} van ${totalRequired} verplichte velden ingevuld` : "Alle verplichte velden gecontroleerd ✓"}
+      {/* Sticky CTA footer */}
+      <div
+        className="absolute bottom-0 left-0 right-0 p-4 z-20"
+        style={{
+          background: "hsl(var(--card) / 0.95)",
+          backdropFilter: "blur(8px)",
+          borderTop: "1px solid hsl(var(--gold) / 0.25)",
+          boxShadow: "0 -8px 30px rgb(0 0 0 / 0.06)",
+        }}
+      >
+        <div
+          className="hairline"
+          style={{ marginBottom: 10 }}
+        />
+        <div className="flex items-center gap-2 mb-2">
+          <ClipboardCheck
+            className="h-3.5 w-3.5"
+            strokeWidth={1.75}
+            style={{ color: formErrors ? "hsl(32 70% 45%)" : "hsl(var(--gold-deep))" }}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            {formErrors
+              ? `${requiredFilled} van ${totalRequired} verplichte velden ingevuld`
+              : "Alle verplichte velden gecontroleerd"}
           </p>
         </div>
-        <label className="flex items-center gap-2 mb-3 cursor-pointer">
-          <input type="checkbox" checked={autoAdvance} onChange={() => setAutoAdvance(!autoAdvance)}
-            className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary/20" />
-          <span className="text-[11px] text-gray-500 font-medium">Spring naar volgende ongelezen na goedkeuring</span>
-        </label>
-        <Button
-          className={cn("w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-all",
-            formErrors ? "bg-gray-200 text-gray-400" : "bg-primary hover:bg-red-700 text-white hover:scale-[1.01] hover:shadow-lg active:scale-95"
+        <button
+          onClick={onCreateOrder}
+          disabled={isCreatePending || formErrors}
+          className={cn(
+            "w-full h-11 rounded-xl font-semibold text-[13px] transition-all inline-flex items-center justify-center gap-2",
           )}
-          onClick={onCreateOrder} disabled={isCreatePending || formErrors}
-          style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          style={{
+            fontFamily: "'Space Grotesk', sans-serif",
+            letterSpacing: "0.02em",
+            background: formErrors
+              ? "hsl(var(--muted))"
+              : "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+            color: formErrors ? "hsl(var(--muted-foreground))" : "white",
+            boxShadow: formErrors ? undefined : "0 4px 12px -2px hsl(var(--gold) / 0.4)",
+            cursor: formErrors ? "not-allowed" : "pointer",
+          }}
         >
-          {isCreatePending ? <Loader2 className="h-4 w-4 animate-spin" /> : "MAAK DE ORDER AAN"}
-        </Button>
-        <div className="mt-3 text-center">
+          {isCreatePending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <>
+              <Check className="h-4 w-4" strokeWidth={2} />
+              Maak order aan
+            </>
+          )}
+        </button>
+        <div className="mt-2 text-center">
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <button className="text-[11px] font-bold text-gray-400 hover:text-primary transition-colors hover:underline underline-offset-4">
-                Afwijzen & archiveren
+              <button
+                className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+                style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+              >
+                Afwijzen en archiveren
               </button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>E-mail verwijderen?</AlertDialogTitle>
+                <AlertDialogTitle>E-mail afwijzen?</AlertDialogTitle>
                 <AlertDialogDescription>
                   Weet je zeker dat je deze e-mail wilt afwijzen en archiveren? Deze actie kan niet ongedaan worden gemaakt.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Annuleren</AlertDialogCancel>
-                <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                <AlertDialogAction
+                  onClick={onDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
                   Verwijderen
                 </AlertDialogAction>
               </AlertDialogFooter>

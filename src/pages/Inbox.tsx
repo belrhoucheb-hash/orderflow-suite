@@ -148,16 +148,24 @@ export default function Inbox() {
         {/* Mail List */}
         <ResizablePanel defaultSize={22} minSize={15} maxSize={35}>
           <div className="flex flex-col h-full bg-white" style={{ minWidth: 0, overflow: "hidden" }}>
-            <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200 bg-white shrink-0">
-              <div>
-                <h3
-                  className="text-lg font-bold tracking-tight"
-                  style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-                >
-                  AI Inbox
-                </h3>
-                <p className="text-[10px] text-gray-400">Automatische orderverwerking uit e-mails</p>
-              </div>
+            <div
+              className="h-11 px-4 flex items-baseline justify-between gap-2 border-b shrink-0"
+              style={{ borderColor: "hsl(var(--border) / 0.5)", background: "hsl(var(--card))" }}
+            >
+              <h3
+                className="text-[15px] font-semibold"
+                style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
+              >
+                Inbox
+              </h3>
+              <p
+                className="text-[11px] tabular-nums text-muted-foreground"
+                style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "0.01em" }}
+              >
+                <strong className="text-foreground font-semibold">{drafts.length}</strong>
+                <span className="mx-1.5">·</span>
+                <span>{needsAction.length} te reviewen</span>
+              </p>
             </div>
             <div className="p-3 space-y-2">
               <div className="relative">
@@ -246,6 +254,7 @@ export default function Inbox() {
                     key={draft.id}
                     draft={draft}
                     isSelected={selectedId === draft.id}
+                    bulkMode={bulkSelected.size > 0}
                     isBulkChecked={bulkSelected.has(draft.id)}
                     onBulkToggle={(id) =>
                       setBulkSelected((prev) => {
