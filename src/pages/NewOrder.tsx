@@ -16,7 +16,7 @@ import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
 
-type MainTab = "algemeen" | "financieel" | "facturen" | "callbacks" | "vrachtdossier";
+type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
 
 interface FreightLine {
@@ -365,11 +365,9 @@ const NewOrder = () => {
   }, [freightLines, clientName, afdeling, tenant?.id]);
 
   const mainTabs: { key: MainTab; label: string }[] = [
-    { key: "algemeen", label: "ALGEMEEN" },
-    { key: "financieel", label: "FINANCIEEL" },
-    { key: "facturen", label: "FACTUREN" },
-    { key: "callbacks", label: "CALLBACKS" },
-    { key: "vrachtdossier", label: "VRACHTDOSSIER" },
+    { key: "algemeen", label: "Algemeen" },
+    { key: "financieel", label: "Financieel" },
+    { key: "vrachtdossier", label: "Vrachtdossier" },
   ];
 
   const bottomTabs: { key: BottomTab; label: string }[] = [
@@ -380,75 +378,71 @@ const NewOrder = () => {
 
   return (
     <div className="-m-6 min-h-[calc(100vh-3rem)] flex flex-col bg-muted/30">
-      {/* ── Header bar ── */}
-      <div className="bg-sidebar-background text-sidebar-foreground h-10 px-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold tracking-wide">Nieuwe Order</span>
+      {/* ── Luxe hero header ── */}
+      <div className="relative bg-card border-b border-border/50 shrink-0">
+        <span
+          className="absolute top-0 left-0 right-0 h-px pointer-events-none"
+          style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent)" }}
+        />
+        <div className="px-6 py-5 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="inline-flex items-center gap-2 mb-2">
+              <span className="w-4 h-px bg-[hsl(var(--gold))]" />
+              <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]">
+                Orders · nieuw
+              </span>
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground leading-tight" style={{ fontFamily: "var(--font-display)" }}>
+              Nieuwe order
+            </h1>
+            <p className="text-xs text-muted-foreground mt-1.5">{todayFormatted}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="ghost" onClick={() => navigate("/orders")} className="h-9 px-3 text-xs gap-1.5">
+              <X className="h-3.5 w-3.5" /> Annuleren
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => window.print()} className="h-9 px-3 text-xs gap-1.5">
+              <Printer className="h-3.5 w-3.5" /> Afdrukken
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleSave(false)} disabled={saving} className="h-9 px-3 text-xs gap-1.5">
+              <Save className="h-3.5 w-3.5" /> Opslaan
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => handleSave(true)}
+              disabled={saving}
+              className="h-9 px-4 text-xs gap-1.5 font-medium"
+              style={{
+                background: "linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%))",
+                boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.2), 0 1px 2px hsl(var(--primary) / 0.35), 0 4px 12px -2px hsl(var(--primary) / 0.3)",
+              }}
+            >
+              <Save className="h-3.5 w-3.5" /> Opslaan &amp; sluiten
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Button
-            size="sm"
-            onClick={() => handleSave(true)}
-            disabled={saving}
-            className="h-7 px-3 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
-          >
-            <Save className="h-3 w-3" /> <span className="hidden sm:inline">Opslaan &</span> Sluiten
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleSave(false)}
-            disabled={saving}
-            className="h-7 px-3 text-xs gap-1.5 font-medium border-sidebar-border text-sidebar-foreground bg-sidebar-accent hover:bg-sidebar-accent/80"
-          >
-            <Save className="h-3 w-3" /> Opslaan
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => navigate("/orders")}
-            className="h-7 px-3 text-xs gap-1.5 font-medium border-sidebar-border text-sidebar-foreground bg-sidebar-accent hover:bg-sidebar-accent/80"
-          >
-            <X className="h-3 w-3" /> Annuleren
-          </Button>
-        </div>
-      </div>
 
-      {/* ── Secondary toolbar ── */}
-      <div className="bg-card border-b border-border px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
-        <span className="text-xs text-muted-foreground">{todayFormatted}</span>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Button size="sm" variant="outline" onClick={() => handleSave(true)} className="h-7 px-2.5 text-xs gap-1 font-medium">
-            <Check className="h-3 w-3" /> Goedkeuren
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => window.print()} className="h-7 px-2.5 text-xs gap-1 font-medium">
-            <Printer className="h-3 w-3" /> Afdrukken
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => toast("PDF download wordt voorbereid...")} className="h-7 px-2.5 text-xs gap-1 font-medium">
-            <Download className="h-3 w-3" /> Downloaden
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => toast("E-mail functie wordt voorbereid...")} className="h-7 px-2.5 text-xs gap-1 font-medium">
-            <Mail className="h-3 w-3" /> E-mail
-          </Button>
+        {/* ── Main tabs ── */}
+        <div className="px-6 flex shrink-0 overflow-x-auto whitespace-nowrap border-t border-border/40">
+          {mainTabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setMainTab(tab.key)}
+              className={cn(
+                "relative px-4 py-3 text-xs font-medium tracking-wide transition-colors border-b-2 -mb-px shrink-0",
+                mainTab === tab.key
+                  ? "text-foreground border-foreground"
+                  : "text-muted-foreground border-transparent hover:text-foreground"
+              )}
+              style={mainTab === tab.key ? { fontFamily: "var(--font-display)" } : undefined}
+            >
+              {tab.label}
+              {mainTab === tab.key && (
+                <span className="absolute left-1/2 -translate-x-1/2 -bottom-[5px] w-[3px] h-[3px] rounded-full bg-[hsl(var(--gold))]" />
+              )}
+            </button>
+          ))}
         </div>
-      </div>
-
-      {/* ── Main tabs ── */}
-      <div className="bg-card border-b border-border px-4 flex shrink-0 overflow-x-auto whitespace-nowrap">
-        {mainTabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setMainTab(tab.key)}
-            className={cn(
-              "px-4 py-2 text-xs font-bold tracking-wider transition-colors border-b-2 -mb-px shrink-0",
-              mainTab === tab.key
-                ? "text-foreground border-primary"
-                : "text-muted-foreground border-transparent hover:text-foreground"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
       </div>
 
       {/* ── Traject-preview banner ── */}
@@ -992,17 +986,6 @@ const NewOrder = () => {
           </div>
         )}
 
-        {mainTab === "facturen" && (
-          <p className="py-16 text-center text-xs text-muted-foreground">
-            Facturen worden beschikbaar nadat de order is opgeslagen en goedgekeurd.
-          </p>
-        )}
-
-        {mainTab === "callbacks" && (
-          <p className="py-16 text-center text-xs text-muted-foreground">
-            Callbacks kunnen worden ingesteld nadat de order is opgeslagen.
-          </p>
-        )}
 
         {mainTab === "vrachtdossier" && (
           <div className="p-4 space-y-4">
