@@ -4,7 +4,7 @@ import {
   ArrowLeft, MapPin, Package, Truck, User, Clock, FileText,
   MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2,
   Undo2, Send, Loader2, Printer, Warehouse, ScrollText, Image,
-  Save, X, Bell, Route, ArrowRight
+  Save, X, Bell, Route, ArrowRight, Barcode
 } from "lucide-react";
 import { useShipment } from "@/hooks/useShipments";
 import { ClickableAddress } from "@/components/ClickableAddress";
@@ -33,13 +33,27 @@ import { ReturnOrdersList } from "@/components/orders/ReturnOrdersList";
 import { NotificationLogPanel } from "@/components/orders/NotificationLogPanel";
 import OrderTimeline from "@/components/orders/OrderTimeline";
 import { OrderInfoRequestsCard } from "@/components/orders/OrderInfoRequestsCard";
+import { OrderPricePreview } from "@/components/orders/OrderPricePreview";
 import { InfoStatusBadge } from "@/components/orders/InfoStatusBadge";
+import { FollowFromClientPopover } from "@/components/orders/FollowFromClientPopover";
+import { useTenantOptional } from "@/contexts/TenantContext";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
+import { useDepartments } from "@/hooks/useDepartments";
 import { useOrderNotesRead } from "@/hooks/useOrderNotesRead";
+import { LuxeDatePicker, LuxeTimeRange } from "@/components/ui/LuxePicker";
+import { LuxeSelect } from "@/components/ui/LuxeSelect";
 import { Receipt } from "lucide-react";
 import { ReturnOrderDialog } from "@/components/orders/ReturnOrderDialog";
 import { CreateReturnDialog } from "@/components/orders/CreateReturnDialog";
+import { MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "Nieuw", color: "bg-muted text-muted-foreground" },
@@ -55,6 +69,7 @@ const OrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { tenant } = useTenantOptional();
 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -77,6 +92,7 @@ const OrderDetail = () => {
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [showEditWarning, setShowEditWarning] = useState(false);
   const updateOrderMutation = useUpdateOrder();
+  const { data: departments = [] } = useDepartments();
 
   const startEditing = () => {
     if (!order) return;
@@ -101,6 +117,15 @@ const OrderDetail = () => {
       dimensions: order.dimensions || "",
       requirements: (order.requirements || []).join(", "),
       transport_type: order.transport_type || "",
+      reference: order.reference || "",
+      notes: order.notes || "",
+      internal_note: order.internal_note || "",
+      priority: order.priority || "normaal",
+      time_window_start: order.time_window_start || "",
+      time_window_end: order.time_window_end || "",
+      pickup_date: (order as any).pickup_date || "",
+      delivery_date: (order as any).delivery_date || "",
+      department_id: (order as any).department_id || "",
     });
     setIsEditing(true);
     setShowEditWarning(false);
@@ -128,6 +153,15 @@ const OrderDetail = () => {
       dimensions: editForm.dimensions || null,
       requirements: reqArray,
       transport_type: editForm.transport_type || null,
+      reference: editForm.reference || null,
+      notes: editForm.notes || null,
+      internal_note: editForm.internal_note || null,
+      priority: editForm.priority || "normaal",
+      time_window_start: editForm.time_window_start || null,
+      time_window_end: editForm.time_window_end || null,
+      pickup_date: editForm.pickup_date || null,
+      delivery_date: editForm.delivery_date || null,
+      department_id: editForm.department_id || null,
     };
 
     try {
@@ -170,6 +204,10 @@ const OrderDetail = () => {
     },
     enabled: !!id,
   });
+
+  // Shipment voor notes-fallback (zie amber banner onderin) — tanstack-query
+  // dedupeert de call van ShipmentBanner hieronder.
+  const { data: shipmentForBanner } = useShipment(order?.shipment_id ?? null);
 
   // Cancel mutation
   const cancelMutation = useMutation({
@@ -418,72 +456,262 @@ const OrderDetail = () => {
   if (order.created_at) auditTrail.push({ time: new Date(order.created_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: order.confidence_score ? `AI extractie (${order.confidence_score}% zekerheid)` : "Order aangemaakt", icon: Package });
   if (order.follow_up_sent_at) auditTrail.push({ time: new Date(order.follow_up_sent_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Follow-up verstuurd", icon: Send });
   if (order.status === "PENDING" || order.status === "OPEN") auditTrail.push({ time: new Date(order.updated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Goedgekeurd door planner", icon: CheckCircle2 });
-  if (order.warehouse_received_at) auditTrail.push({ time: new Date(order.warehouse_received_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Zending ontvangen (Magazijn)", icon: Warehouse, color: "text-emerald-600" });
-  if (order.cmr_generated_at) auditTrail.push({ time: new Date(order.cmr_generated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: `CMR vrachtbrief: ${order.cmr_number}`, icon: ScrollText, color: "text-blue-600" });
+  if (order.warehouse_received_at) auditTrail.push({ time: new Date(order.warehouse_received_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Zending ontvangen (Magazijn)", icon: Warehouse });
+  if (order.cmr_generated_at) auditTrail.push({ time: new Date(order.cmr_generated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: `CMR vrachtbrief: ${order.cmr_number}`, icon: ScrollText });
   if (order.vehicle_id) auditTrail.push({ time: new Date(order.updated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: `Voertuig toegewezen`, icon: Truck });
-  if (order.pod_signed_at) auditTrail.push({ time: new Date(order.pod_signed_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: `PoD ontvangen${order.pod_signed_by ? ` (${order.pod_signed_by})` : ""}`, icon: Image, color: "text-emerald-600" });
+  if (order.pod_signed_at) auditTrail.push({ time: new Date(order.pod_signed_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: `PoD ontvangen${order.pod_signed_by ? ` (${order.pod_signed_by})` : ""}`, icon: Image });
   if (isCancelled) auditTrail.push({ time: new Date(order.updated_at).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }), label: "Geannuleerd", icon: XCircle, color: "text-destructive" });
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <PageHeader
-          title={`Order #${order.order_number}`}
-          subtitle={order.client_name || "Onbekende klant"}
-          actions={
-            <div className="flex items-center gap-2">
-              <StatusBadge status={order.status as OrderStatus} variant="luxe" />
-              <InfoStatusBadge status={order.info_status} />
-            </div>
-          }
-          className="flex-1"
+      {/* Luxe order-header — premium 2026 editorial stijl */}
+      <div className="relative pb-3 pt-2">
+        {/* Radial gold glow top-left — subtiele atmosferische gloed */}
+        <div
+          aria-hidden
+          className="absolute -top-6 -left-8 w-64 h-32 pointer-events-none"
+          style={{
+            background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)",
+          }}
         />
+
+        <div className="relative flex items-start gap-5">
+          {/* Back arrow — luxe pill */}
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Terug"
+            className="shrink-0 mt-1 h-9 w-9 rounded-full border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.3)] text-[hsl(var(--gold-deep))] hover:border-[hsl(var(--gold)/0.5)] hover:bg-[hsl(var(--gold-soft)/0.6)] transition-all flex items-center justify-center"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+
+          {/* Titelblok */}
+          <div className="flex-1 min-w-0">
+            {/* Eyebrow: label + formele order-code */}
+            <div className="flex items-center gap-2 mb-2" style={{ fontFamily: "var(--font-display)" }}>
+              <span
+                aria-hidden
+                className="inline-block h-[1px] w-6"
+                style={{ background: "hsl(var(--gold) / 0.5)" }}
+              />
+              <span className="text-[10px] uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))] font-semibold">
+                Orderdossier
+              </span>
+              <span
+                aria-hidden
+                className="inline-block h-[3px] w-[3px] rounded-full"
+                style={{ background: "hsl(var(--gold) / 0.5)" }}
+              />
+              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums font-medium">
+                {`RCS-${new Date(order.created_at).getFullYear()}-${String(order.order_number).padStart(4, "0")}`}
+              </span>
+            </div>
+
+            {/* Klantnaam — editorial hoofdtitel */}
+            <h1
+              className="text-[2.25rem] leading-[1.05] font-semibold tracking-tight text-foreground truncate"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {order.client_name || "Onbekende klant"}
+            </h1>
+
+            {/* Subtle under-line: nr + datum */}
+            <div
+              className="mt-2 flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              <span className="tabular-nums">
+                Nr. <span className="text-foreground/80 font-medium">{String(order.order_number).padStart(4, "0")}</span>
+              </span>
+              <span aria-hidden className="h-3 w-px" style={{ background: "hsl(var(--gold) / 0.25)" }} />
+              <span className="tabular-nums">
+                {new Date(order.created_at).toLocaleDateString("nl-NL", { day: "2-digit", month: "short", year: "numeric" })}
+              </span>
+            </div>
+          </div>
+
+          {/* Status-badges + acties-menu */}
+          <div className="flex items-center gap-2 shrink-0 mt-2">
+            <StatusBadge status={order.status as OrderStatus} variant="luxe" />
+            <InfoStatusBadge status={order.info_status} />
+
+            {/* Acties icon-button → opent alle acties */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  aria-label="Acties"
+                  className="btn-luxe h-9 w-9 p-0 justify-center ml-1"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={6}
+                className="min-w-[240px] py-1.5 border-[hsl(var(--gold)/0.3)] shadow-[0_4px_12px_-2px_hsl(var(--ink)/0.08),0_24px_48px_-12px_hsl(var(--ink)/0.2),0_0_0_1px_hsl(var(--gold)/0.08)] [&_[role=menuitem]]:font-display [&_[role=menuitem]]:text-[13px] [&_[role=menuitem]]:px-3 [&_[role=menuitem]]:py-2 [&_[role=menuitem]]:gap-3 [&_[role=menuitem]_svg]:h-4 [&_[role=menuitem]_svg]:w-4 [&_[role=menuitem]_svg]:shrink-0 [&_[role=menuitem]_svg]:text-[hsl(var(--gold-deep))] [&_[role=menuitem]:hover]:bg-[hsl(var(--gold-soft)/0.6)] [&_[role=menuitem]:hover]:text-[hsl(var(--gold-deep))] [&_[role=menuitem]:focus]:bg-[hsl(var(--gold-soft)/0.6)] [&_[role=menuitem]:focus]:text-[hsl(var(--gold-deep))]"
+              >
+                {!isCancelled && !isEditing && (
+                  <DropdownMenuItem onClick={startEditing}>
+                    <Edit />
+                    <span>Bewerken</span>
+                  </DropdownMenuItem>
+                )}
+                {isEditing && (
+                  <>
+                    <DropdownMenuItem onClick={handleSaveEdit} disabled={updateOrderMutation.isPending}>
+                      {updateOrderMutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
+                      <span>Opslaan</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={cancelEditing}>
+                      <X />
+                      <span>Bewerken annuleren</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {isActive && !isEditing && (
+                  <DropdownMenuItem onClick={handleSendConfirmation} disabled={isSendingConfirmation}>
+                    {isSendingConfirmation ? <Loader2 className="animate-spin" /> : <Send />}
+                    <span>Bevestiging versturen</span>
+                  </DropdownMenuItem>
+                )}
+                {!isEditing && isPrintable && (
+                  <DropdownMenuItem onClick={handleGenerateCmr} disabled={isGeneratingCmr}>
+                    {isGeneratingCmr ? <Loader2 className="animate-spin" /> : <ScrollText />}
+                    <span>{order.cmr_number ? `CMR bekijken (${order.cmr_number})` : "CMR genereren"}</span>
+                  </DropdownMenuItem>
+                )}
+                {!isEditing && order.cmr_number && (
+                  <DropdownMenuItem onClick={handlePrintCmr}>
+                    <Printer />
+                    <span>Print CMR</span>
+                  </DropdownMenuItem>
+                )}
+                {!isEditing && (order.status === "DELIVERED" || order.status === "PENDING" || order.status === "IN_TRANSIT") && !order.invoice_id && (
+                  <DropdownMenuItem onClick={handleCreateInvoice} disabled={isCreatingInvoice}>
+                    {isCreatingInvoice ? <Loader2 className="animate-spin" /> : <Receipt />}
+                    <span>Factuur aanmaken</span>
+                  </DropdownMenuItem>
+                )}
+                {!isEditing && order.invoice_id && (
+                  <DropdownMenuItem asChild>
+                    <Link to={`/facturatie`} className="flex items-center gap-3 w-full">
+                      <Receipt />
+                      <span>Factuur bekijken</span>
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {!isEditing && !isCancelled && (order as any).order_type !== "RETOUR" && (
+                  <DropdownMenuItem onClick={() => setShowReturnDialog(true)}>
+                    <Undo2 />
+                    <span>Retour aanmaken</span>
+                  </DropdownMenuItem>
+                )}
+                {/* Label workshop — opent eigen Dialog, gestyled als DropdownMenuItem */}
+                {!isEditing && isPrintable && (
+                  <LabelWorkshop
+                    order={order}
+                    triggerClassName="font-display text-[13px] px-3 py-2 gap-3 w-full flex items-center rounded-sm cursor-pointer outline-none transition-colors hover:bg-[hsl(var(--gold-soft)/0.6)] hover:text-[hsl(var(--gold-deep))] focus:bg-[hsl(var(--gold-soft)/0.6)] focus:text-[hsl(var(--gold-deep))]"
+                    triggerChildren={
+                      <>
+                        <Barcode className="h-4 w-4 shrink-0 text-[hsl(var(--gold-deep))]" />
+                        <span>Label workshop</span>
+                      </>
+                    }
+                  />
+                )}
+                {!isEditing && isCancelled && (
+                  <DropdownMenuItem onClick={() => reopenMutation.mutate(order.id)} disabled={reopenMutation.isPending}>
+                    {reopenMutation.isPending ? <Loader2 className="animate-spin" /> : <Undo2 />}
+                    <span>Order heropenen</span>
+                  </DropdownMenuItem>
+                )}
+                {isActive && !isEditing && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setShowCancelDialog(true)}
+                      className="!text-destructive hover:!bg-destructive/10 hover:!text-destructive focus:!bg-destructive/10 focus:!text-destructive [&>svg]:!text-destructive"
+                    >
+                      <XCircle />
+                      <span>Order annuleren</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
       </div>
 
       {/* Shipment context banner (toont andere legs uit dezelfde shipment) */}
       <ShipmentBanner shipmentId={order.shipment_id ?? null} currentOrderId={order.id} />
 
-      {/* Cancellation banner */}
+      {/* Cancellation banner — luxe gold-soft */}
       {isCancelled && (
-        <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 flex items-center gap-3">
-          <XCircle className="h-5 w-5 text-destructive shrink-0" />
+        <div className="rounded-xl border border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--gold-soft)/0.4)] p-4 flex items-center gap-3">
+          <XCircle className="h-5 w-5 text-[hsl(var(--gold-deep))] shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-destructive">Deze order is geannuleerd</p>
+            <p className="text-sm font-semibold text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+              Deze order is geannuleerd
+            </p>
             {order.internal_note?.includes("[GEANNULEERD]") && (
-              <p className="text-xs text-destructive/70 mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {order.internal_note.replace("[GEANNULEERD] ", "").replace("[GEANNULEERD]", "")}
               </p>
             )}
           </div>
-          <Button variant="outline" size="sm" className="shrink-0 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10"
+          <button
+            className="btn-luxe shrink-0"
             onClick={() => reopenMutation.mutate(order.id)}
             disabled={reopenMutation.isPending}
           >
             {reopenMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
-            Heropen Order
-          </Button>
+            Heropen
+          </button>
         </div>
       )}
 
-      {/* Referentie & Opmerkingen — subtiele banner, zichtbaar maar niet schreeuwerig */}
-      {(order.notes?.trim() || order.reference?.trim()) && (
-        <div className="rounded-lg border border-amber-200/70 bg-amber-50/50 px-4 py-3 flex items-start gap-3">
-          <MessageSquare className="h-4 w-4 text-amber-700/80 shrink-0 mt-0.5" />
-          <div className="flex-1 space-y-1">
-            <p className="text-[11px] font-semibold tracking-wide text-amber-900/80 uppercase">
-              Referentie & Opmerkingen
-            </p>
+      {/* Referentie & Opmerkingen — subtiele banner, zichtbaar maar niet schreeuwerig.
+          Toont order-specifieke notitie en (separaat) de shipment-breed notitie als die er is. */}
+      {(order.notes?.trim() || order.reference?.trim() || shipmentForBanner?.notes?.trim()) && (
+        <div className="rounded-lg border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.4)] px-4 py-3 flex items-start gap-3">
+          <MessageSquare className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold tracking-wide text-[hsl(var(--gold-deep))] uppercase" style={{ fontFamily: "var(--font-display)" }}>
+                Referentie & Opmerkingen
+              </p>
+              {tenant?.id && (
+                <FollowFromClientPopover
+                  orderId={order.id}
+                  tenantId={tenant.id}
+                  pickupAtIso={order.time_window_start ?? null}
+                />
+              )}
+            </div>
             {order.reference?.trim() && (
               <p className="text-sm text-foreground/90">
                 <span className="text-muted-foreground">Ref: </span>{order.reference}
               </p>
             )}
+            {shipmentForBanner?.notes?.trim() && (
+              <div className="text-sm text-foreground/90">
+                <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase block mb-0.5">
+                  Notitie shipment
+                </span>
+                <p className="whitespace-pre-wrap">{shipmentForBanner.notes}</p>
+              </div>
+            )}
             {order.notes?.trim() && (
-              <p className="text-sm text-foreground/90 whitespace-pre-wrap">{order.notes}</p>
+              <div className="text-sm text-foreground/90">
+                {shipmentForBanner?.notes?.trim() && (
+                  <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase block mb-0.5">
+                    Notitie deze leg
+                  </span>
+                )}
+                <p className="whitespace-pre-wrap">{order.notes}</p>
+              </div>
             )}
           </div>
         </div>
@@ -498,77 +726,79 @@ const OrderDetail = () => {
             pickupAtIso={order.time_window_start ?? null}
           />
 
-          {/* Route */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-display flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary" />
-                Route & Lading
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          {/* Route & Lading — luxe card, matches new-order-redesign */}
+          <section className="card--luxe relative p-6 sm:p-7">
+            <span className="card-chapter">I</span>
+            <div className="mb-5">
+              <div className="section-label flex items-center gap-2">
+                <MapPin className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+                Vrachtdossier
+              </div>
+              <h3 className="section-title">Route & Lading</h3>
+            </div>
+            <div className="space-y-4">
               {/* Client name — editable */}
               {isEditing && (
-                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-1">
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Klantnaam</p>
-                  <Input
+                <div>
+                  <label className="label-luxe">Klantnaam</label>
+                  <input
+                    className="field-luxe"
                     value={editForm.client_name ?? ""}
                     onChange={(e) => updateEditField("client_name", e.target.value)}
-                    className="h-8 text-sm"
                     placeholder="Klantnaam"
                   />
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Ophaaladres</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4 text-sm">
+                <div>
+                  <label className="label-luxe">Ophaaladres</label>
                   {isEditing ? (
-                    <Input
+                    <input
+                      className="field-luxe"
                       value={editForm.pickup_address ?? ""}
                       onChange={(e) => updateEditField("pickup_address", e.target.value)}
-                      className="h-8 text-sm"
                       placeholder="Ophaaladres"
                     />
                   ) : (
                     <p className="font-medium">
-                      <ClickableAddress address={order.pickup_address} iconClassName="text-primary" />
+                      <ClickableAddress address={order.pickup_address} iconClassName="text-[hsl(var(--gold-deep))]" />
                     </p>
                   )}
                 </div>
-                <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Afleveradres</p>
+                <div>
+                  <label className="label-luxe">Afleveradres</label>
                   {isEditing ? (
-                    <Input
+                    <input
+                      className="field-luxe"
                       value={editForm.delivery_address ?? ""}
                       onChange={(e) => updateEditField("delivery_address", e.target.value)}
-                      className="h-8 text-sm"
                       placeholder="Afleveradres"
                     />
                   ) : (
                     <p className="font-medium">
-                      <ClickableAddress address={order.delivery_address} iconClassName="text-emerald-600" />
+                      <ClickableAddress address={order.delivery_address} iconClassName="text-[hsl(var(--gold))]" />
                     </p>
                   )}
                 </div>
               </div>
-              <Separator />
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div className="hairline" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground text-xs mb-1">Aantal</p>
+                  <label className="label-luxe">Aantal</label>
                   {isEditing ? (
-                    <div className="flex gap-1">
-                      <Input
+                    <div className="flex gap-2">
+                      <input
                         type="number"
+                        className="field-luxe"
                         value={editForm.quantity ?? ""}
                         onChange={(e) => updateEditField("quantity", e.target.value)}
-                        className="h-8 text-sm w-20"
                         placeholder="0"
                       />
-                      <Input
+                      <input
+                        className="field-luxe"
                         value={editForm.unit ?? ""}
                         onChange={(e) => updateEditField("unit", e.target.value)}
-                        className="h-8 text-sm w-20"
                         placeholder="pallets"
                       />
                     </div>
@@ -577,13 +807,13 @@ const OrderDetail = () => {
                   )}
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs mb-1">Gewicht</p>
+                  <label className="label-luxe">Gewicht</label>
                   {isEditing ? (
-                    <Input
+                    <input
                       type="number"
+                      className="field-luxe"
                       value={editForm.weight_kg ?? ""}
                       onChange={(e) => updateEditField("weight_kg", e.target.value)}
-                      className="h-8 text-sm"
                       placeholder="kg"
                     />
                   ) : (
@@ -593,12 +823,12 @@ const OrderDetail = () => {
                   )}
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs mb-1">Afmetingen</p>
+                  <label className="label-luxe">Afmetingen</label>
                   {isEditing ? (
-                    <Input
+                    <input
+                      className="field-luxe"
                       value={editForm.dimensions ?? ""}
                       onChange={(e) => updateEditField("dimensions", e.target.value)}
-                      className="h-8 text-sm"
                       placeholder="120x80x150"
                     />
                   ) : (
@@ -606,19 +836,21 @@ const OrderDetail = () => {
                   )}
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs mb-1">Type</p>
+                  <label className="label-luxe">Type</label>
                   {isEditing ? (
-                    <Select value={editForm.transport_type || ""} onValueChange={(v) => updateEditField("transport_type", v)}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecteer..." /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="FTL">FTL</SelectItem>
-                        <SelectItem value="LTL">LTL</SelectItem>
-                        <SelectItem value="koel">Koel</SelectItem>
-                        <SelectItem value="retour">Retour</SelectItem>
-                        <SelectItem value="express">Express</SelectItem>
-                        <SelectItem value="WAREHOUSE_AIR">Warehouse → Air</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <LuxeSelect
+                      value={editForm.transport_type || ""}
+                      onChange={(v) => updateEditField("transport_type", v)}
+                      placeholder="Selecteer..."
+                      options={[
+                        { value: "FTL", label: "FTL" },
+                        { value: "LTL", label: "LTL" },
+                        { value: "koel", label: "Koel" },
+                        { value: "retour", label: "Retour" },
+                        { value: "express", label: "Express" },
+                        { value: "WAREHOUSE_AIR", label: "Warehouse → Air" },
+                      ]}
+                    />
                   ) : (
                     <p className="font-semibold">
                       {order.transport_type === "WAREHOUSE_AIR" || order.transport_type === "warehouse-air"
@@ -630,13 +862,13 @@ const OrderDetail = () => {
               {/* Requirements */}
               {isEditing ? (
                 <>
-                  <Separator />
+                  <div className="hairline" />
                   <div>
-                    <p className="text-muted-foreground text-xs mb-2">Vereisten (komma-gescheiden)</p>
-                    <Input
+                    <label className="label-luxe">Vereisten <span className="text-muted-foreground/60 font-normal">(komma-gescheiden)</span></label>
+                    <input
+                      className="field-luxe"
                       value={editForm.requirements ?? ""}
                       onChange={(e) => updateEditField("requirements", e.target.value)}
-                      className="h-8 text-sm"
                       placeholder="ADR, koelwagen, laadklep"
                     />
                   </div>
@@ -645,7 +877,7 @@ const OrderDetail = () => {
                 <>
                   <Separator />
                   <div>
-                    <p className="text-muted-foreground text-xs mb-2">Vereisten</p>
+                    <label className="label-luxe">Vereisten</label>
                     <div className="flex gap-2">
                       {requirements.map((req) => (
                         <Badge key={req} variant="outline" className="text-xs">
@@ -657,76 +889,168 @@ const OrderDetail = () => {
                   </div>
                 </>
               ) : null}
-            </CardContent>
-          </Card>
 
-          {/* Source email */}
+              {/* Uitgebreide edit-velden — luxe styling, identiek aan new-order-redesign */}
+              {isEditing && (
+                <>
+                  <div className="hairline" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+                    <div>
+                      <label className="label-luxe">Referentie</label>
+                      <input
+                        className="field-luxe"
+                        value={editForm.reference ?? ""}
+                        onChange={(e) => updateEditField("reference", e.target.value)}
+                        placeholder="Bestelreferentie"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-luxe">Prioriteit</label>
+                      <LuxeSelect
+                        value={editForm.priority || "normaal"}
+                        onChange={(v) => updateEditField("priority", v)}
+                        options={[
+                          { value: "laag", label: "Laag" },
+                          { value: "normaal", label: "Normaal" },
+                          { value: "hoog", label: "Hoog" },
+                          { value: "spoed", label: "Spoed" },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className="label-luxe">Ophaaldatum</label>
+                      <LuxeDatePicker
+                        value={editForm.pickup_date ?? ""}
+                        onChange={(v) => updateEditField("pickup_date", v)}
+                        ariaLabel="Kies ophaaldatum"
+                      />
+                    </div>
+                    <div>
+                      <label className="label-luxe">Afleverdatum</label>
+                      <LuxeDatePicker
+                        value={editForm.delivery_date ?? ""}
+                        onChange={(v) => updateEditField("delivery_date", v)}
+                        ariaLabel="Kies afleverdatum"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="label-luxe">Tijdvenster (van — tot)</label>
+                      <LuxeTimeRange
+                        from={editForm.time_window_start ?? ""}
+                        to={editForm.time_window_end ?? ""}
+                        onFromChange={(v) => updateEditField("time_window_start", v)}
+                        onToChange={(v) => updateEditField("time_window_end", v)}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="label-luxe">Afdeling</label>
+                      <LuxeSelect
+                        value={editForm.department_id || ""}
+                        onChange={(v) => updateEditField("department_id", v)}
+                        placeholder="Selecteer afdeling"
+                        options={departments.map((d) => ({
+                          value: d.id,
+                          label: `${d.name} (${d.code})`,
+                        }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="hairline" />
+                  <div>
+                    <label className="label-luxe">Opmerkingen <span className="text-muted-foreground/60 font-normal">(zichtbaar voor klant)</span></label>
+                    <textarea
+                      className="field-luxe"
+                      rows={3}
+                      value={editForm.notes ?? ""}
+                      onChange={(e) => updateEditField("notes", e.target.value)}
+                      placeholder="Optioneel — deze opmerking kan met de klant gedeeld worden"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-luxe">Interne notitie <span className="text-muted-foreground/60 font-normal">(alleen planning)</span></label>
+                    <textarea
+                      className="field-luxe"
+                      rows={3}
+                      value={editForm.internal_note ?? ""}
+                      onChange={(e) => updateEditField("internal_note", e.target.value)}
+                      placeholder="Alleen intern zichtbaar"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* Source email — luxe */}
           {order.source_email_body && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-display flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Bron E-mail
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm space-y-2">
+            <section className="card--luxe relative p-6 sm:p-7">
+              <span className="card-chapter">II</span>
+              <div className="mb-5">
+                <div className="section-label flex items-center gap-2">
+                  <MessageSquare className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+                  Bron
+                </div>
+                <h3 className="section-title">E-mail origineel</h3>
+              </div>
+              <div className="text-sm space-y-2">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <User className="h-3.5 w-3.5" />
                   <span>{order.source_email_from || "Onbekend"}</span>
                 </div>
                 <p className="font-medium">{order.source_email_subject}</p>
-                <div className="mt-2 rounded-lg bg-muted/30 border border-border/20 p-3">
+                <div className="mt-2 rounded-lg bg-[hsl(var(--gold-soft)/0.25)] border border-[hsl(var(--gold)/0.2)] p-3">
                   <p className="text-xs text-foreground/80 whitespace-pre-wrap leading-relaxed">{order.source_email_body}</p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
 
-          {/* Internal note */}
+          {/* Internal note — luxe */}
           {order.internal_note && !order.internal_note.startsWith("[") && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-display flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />Notities
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{order.internal_note}</p>
-              </CardContent>
-            </Card>
+            <section className="card--luxe relative p-6 sm:p-7">
+              <span className="card-chapter">III</span>
+              <div className="mb-5">
+                <div className="section-label flex items-center gap-2">
+                  <MessageSquare className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+                  Notities
+                </div>
+                <h3 className="section-title">Interne aantekeningen</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">{order.internal_note}</p>
+            </section>
           )}
 
-          {/* Recipient & Notifications */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-display flex items-center gap-2">
-                <Bell className="h-4 w-4 text-gray-400" />
-                Ontvanger &amp; Notificaties
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isEditing ? (
-                <RecipientFields
-                  recipientName={editForm.recipient_name ?? order.recipient_name ?? null}
-                  recipientEmail={editForm.recipient_email ?? order.recipient_email ?? null}
-                  recipientPhone={editForm.recipient_phone ?? order.recipient_phone ?? null}
-                  notificationPreferences={
-                    editForm.notification_preferences ?? order.notification_preferences ?? { email: true, sms: false }
-                  }
-                  onChange={updateEditField}
-                />
-              ) : (
-                <RecipientFields
-                  recipientName={order.recipient_name ?? null}
-                  recipientEmail={order.recipient_email ?? null}
-                  recipientPhone={order.recipient_phone ?? null}
-                  notificationPreferences={order.notification_preferences ?? { email: true, sms: false }}
-                  onChange={updateEditField}
-                  readOnly
-                />
-              )}
-            </CardContent>
-          </Card>
+          {/* Recipient & Notifications — luxe */}
+          <section className="card--luxe relative p-6 sm:p-7">
+            <span className="card-chapter">IV</span>
+            <div className="mb-5">
+              <div className="section-label flex items-center gap-2">
+                <Bell className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+                Ontvanger
+              </div>
+              <h3 className="section-title">Contact &amp; notificaties</h3>
+            </div>
+            {isEditing ? (
+              <RecipientFields
+                recipientName={editForm.recipient_name ?? order.recipient_name ?? null}
+                recipientEmail={editForm.recipient_email ?? order.recipient_email ?? null}
+                recipientPhone={editForm.recipient_phone ?? order.recipient_phone ?? null}
+                notificationPreferences={
+                  editForm.notification_preferences ?? order.notification_preferences ?? { email: true, sms: false }
+                }
+                onChange={updateEditField}
+              />
+            ) : (
+              <RecipientFields
+                recipientName={order.recipient_name ?? null}
+                recipientEmail={order.recipient_email ?? null}
+                recipientPhone={order.recipient_phone ?? null}
+                notificationPreferences={order.notification_preferences ?? { email: true, sms: false }}
+                onChange={updateEditField}
+                readOnly
+              />
+            )}
+          </section>
 
           {/* Proof of Delivery */}
           {order.status === "DELIVERED" && (order.pod_signature_url || order.pod_signed_by) && (
@@ -736,161 +1060,164 @@ const OrderDetail = () => {
 
         {/* Right column */}
         <div className="space-y-4">
-          {/* Audit Trail */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-display">Tijdlijn</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {auditTrail.map((event, i) => (
-                  <div key={i} className="flex gap-3 text-sm">
-                    <div className="flex flex-col items-center">
-                      <div className={cn(
-                        "h-7 w-7 rounded-full flex items-center justify-center",
-                        event.color ? "bg-destructive/10" : "bg-primary/10"
-                      )}>
-                        <event.icon className={cn("h-3.5 w-3.5", event.color || "text-primary")} />
-                      </div>
-                      {i < auditTrail.length - 1 && <div className="w-px h-full bg-border flex-1 mt-1" />}
-                    </div>
-                    <div className="pb-4">
-                      <p className={cn("font-medium", event.color)}>{event.label}</p>
-                      <p className="text-xs text-muted-foreground">{event.time}</p>
-                    </div>
+          {/* Tariefberekening, toont per-order pricing uit rate-card + toeslagen */}
+          <OrderPricePreview
+            clientId={order.client_id ?? null}
+            order={{
+              id: order.id,
+              order_number: order.order_number,
+              client_name: order.client_name,
+              pickup_address: order.pickup_address,
+              delivery_address: order.delivery_address,
+              transport_type: order.transport_type,
+              weight_kg: order.weight_kg,
+              quantity: order.quantity,
+              requirements: order.requirements ?? [],
+            }}
+          />
+
+          {/* Facturatie & documenten, statusoverzicht van CMR, factuur en PoD */}
+          <section className="card--luxe relative p-6 sm:p-7">
+            <div className="mb-5">
+              <div className="section-label flex items-center gap-2">
+                <ScrollText className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+                Dossier
+              </div>
+              <h3 className="section-title">Facturatie &amp; documenten</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-3 rounded-md border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.15)] px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="font-display text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] font-semibold">
+                    CMR Vrachtbrief
                   </div>
-                ))}
+                  <div className="text-[13px] text-foreground/80 tabular-nums truncate">
+                    {order.cmr_number
+                      ? `Nummer ${order.cmr_number}`
+                      : "Nog niet gegenereerd"}
+                  </div>
+                </div>
+                {order.cmr_number ? (
+                  <button
+                    type="button"
+                    onClick={handlePrintCmr}
+                    className="shrink-0 inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] hover:underline"
+                  >
+                    <Printer className="h-3 w-3" /> Print
+                  </button>
+                ) : (
+                  isPrintable && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateCmr}
+                      disabled={isGeneratingCmr}
+                      className="shrink-0 inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] hover:underline disabled:opacity-50"
+                    >
+                      {isGeneratingCmr ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScrollText className="h-3 w-3" />}
+                      Genereer
+                    </button>
+                  )
+                )}
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Event Pipeline Timeline */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-display">Event Pipeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <OrderTimeline orderId={order.id} />
-            </CardContent>
-          </Card>
-
-          {/* Notification Log */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-display flex items-center gap-2">
-                <Bell className="h-4 w-4 text-gray-400" />
-                Notificatielogboek
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <NotificationLogPanel orderId={order.id} />
-            </CardContent>
-          </Card>
-
-          {/* Actions */}
-          <div className="flex flex-col gap-2">
-            {/* Edit button — shown when order is not cancelled and not already in edit mode */}
-            {!isCancelled && !isEditing && (
-              <Button variant="outline" className="w-full gap-2 border-primary/30 text-primary hover:bg-primary/5"
-                onClick={startEditing}>
-                <Edit className="h-4 w-4" />
-                Bewerken
-              </Button>
-            )}
-            {/* Retour aanmaken — only for ZENDING orders that are not cancelled */}
-            {order.status !== "CANCELLED" && order.order_type !== "RETOUR" && !isEditing && (
-              <div className="w-full">
-                <CreateReturnDialog
-                  parentOrderId={order.id}
-                  parentOrderNumber={`RCS-${new Date(order.created_at).getFullYear()}-${String(order.order_number).padStart(4, "0")}`}
-                  defaultQuantity={order.quantity}
-                  defaultWeightKg={order.weight_kg}
-                  pickupAddress={order.pickup_address}
-                  deliveryAddress={order.delivery_address}
-                />
+              <div className="flex items-start justify-between gap-3 rounded-md border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.15)] px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="font-display text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] font-semibold">
+                    Factuur
+                  </div>
+                  <div className="text-[13px] text-foreground/80 truncate">
+                    {order.invoice_id ? "Gefactureerd" : "Nog niet gefactureerd"}
+                  </div>
+                </div>
+                {order.invoice_id ? (
+                  <Link
+                    to="/facturatie"
+                    className="shrink-0 inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] hover:underline"
+                  >
+                    <Receipt className="h-3 w-3" /> Bekijk
+                  </Link>
+                ) : (
+                  (order.status === "DELIVERED" || order.status === "PENDING" || order.status === "IN_TRANSIT") && (
+                    <button
+                      type="button"
+                      onClick={handleCreateInvoice}
+                      disabled={isCreatingInvoice}
+                      className="shrink-0 inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] hover:underline disabled:opacity-50"
+                    >
+                      {isCreatingInvoice ? <Loader2 className="h-3 w-3 animate-spin" /> : <Receipt className="h-3 w-3" />}
+                      Aanmaken
+                    </button>
+                  )
+                )}
               </div>
-            )}
-            {/* Save / Cancel buttons in edit mode */}
-            {isEditing && (
-              <>
-                <Button className="w-full gap-2" onClick={handleSaveEdit} disabled={updateOrderMutation.isPending}>
-                  {updateOrderMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Opslaan
-                </Button>
-                <Button variant="outline" className="w-full gap-2" onClick={cancelEditing}>
-                  <X className="h-4 w-4" />
-                  Annuleren
-                </Button>
-              </>
-            )}
-            {isActive && !isEditing && (
-              <>
-                <Button className="w-full gap-2" onClick={handleSendConfirmation} disabled={isSendingConfirmation}>
-                  {isSendingConfirmation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Bevestiging versturen
-                </Button>
-                <Button variant="outline" className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/5"
-                  onClick={() => setShowCancelDialog(true)}>
-                  <XCircle className="h-4 w-4" />
-                  Order annuleren
-                </Button>
-              </>
-            )}
-            {isPrintable && (
-              <LabelWorkshop order={order} />
-            )}
-            {isPrintable && (
-              <Button
-                variant="outline"
-                className="w-full gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors"
-                onClick={handleGenerateCmr}
-                disabled={isGeneratingCmr}
-              >
-                {isGeneratingCmr ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScrollText className="h-4 w-4" />}
-                {order.cmr_number ? `CMR ${order.cmr_number}` : "Genereer CMR Vrachtbrief"}
-              </Button>
-            )}
-            {order.cmr_number && (
-              <Button variant="outline" className="w-full gap-2" onClick={handlePrintCmr}>
-                <Printer className="h-4 w-4 text-blue-500" />
-                Print CMR
-              </Button>
-            )}
-            {isCancelled && (
-              <Button variant="outline" className="w-full gap-2"
-                onClick={() => reopenMutation.mutate(order.id)}
-                disabled={reopenMutation.isPending}>
-                {reopenMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
-                Heropen Order
-              </Button>
-            )}
-            {/* Invoice creation — show for delivered or active orders */}
-            {(order.status === "DELIVERED" || order.status === "PENDING" || order.status === "IN_TRANSIT") && !order.invoice_id && (
-              <Button variant="outline" className="w-full gap-2 border-green-200 text-green-700 hover:bg-green-50"
-                onClick={handleCreateInvoice} disabled={isCreatingInvoice}>
-                {isCreatingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Receipt className="h-4 w-4" />}
-                Factuur aanmaken
-              </Button>
-            )}
-            {order.invoice_id && (
-              <Link to={`/facturatie`}>
-                <Button variant="outline" className="w-full gap-2 border-green-200 text-green-700">
-                  <Receipt className="h-4 w-4" /> Factuur bekijken
-                </Button>
-              </Link>
-            )}
-            {/* Retour aanmaken — only for non-retour, non-cancelled orders */}
-            {!isCancelled && (order as any).order_type !== "RETOUR" && (
-              <Button
-                variant="outline"
-                className="w-full gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
-                onClick={() => setShowReturnDialog(true)}
-              >
-                <Undo2 className="h-4 w-4" />
-                Retour aanmaken
-              </Button>
-            )}
-          </div>
+
+              <div className="flex items-start justify-between gap-3 rounded-md border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.15)] px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="font-display text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] font-semibold">
+                    Proof of Delivery
+                  </div>
+                  <div className="text-[13px] text-foreground/80 truncate">
+                    {order.pod_signed_at
+                      ? `Ontvangen${order.pod_signed_by ? `, ${order.pod_signed_by}` : ""}`
+                      : "Nog niet ontvangen"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Audit Trail — luxe */}
+          <section className="card--luxe relative p-6 sm:p-7">
+            <span className="card-chapter">V</span>
+            <div className="mb-5">
+              <div className="section-label">Historie</div>
+              <h3 className="section-title">Tijdlijn</h3>
+            </div>
+            <div className="space-y-4">
+              {auditTrail.map((event, i) => (
+                <div key={i} className="flex gap-3 text-sm">
+                  <div className="flex flex-col items-center">
+                    <div className={cn(
+                      "h-7 w-7 rounded-full flex items-center justify-center",
+                      event.color ? "bg-destructive/10" : "bg-[hsl(var(--gold-soft)/0.6)]"
+                    )}>
+                      <event.icon className={cn("h-3.5 w-3.5", event.color || "text-[hsl(var(--gold-deep))]")} />
+                    </div>
+                    {i < auditTrail.length - 1 && <div className="w-px h-full bg-[hsl(var(--gold)/0.2)] flex-1 mt-1" />}
+                  </div>
+                  <div className="pb-4">
+                    <p className={cn("font-medium", event.color)}>{event.label}</p>
+                    <p className="text-xs text-muted-foreground">{event.time}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Event Pipeline Timeline — luxe */}
+          <section className="card--luxe relative p-6 sm:p-7">
+            <span className="card-chapter">VI</span>
+            <div className="mb-5">
+              <div className="section-label">Automatisering</div>
+              <h3 className="section-title">Event pipeline</h3>
+            </div>
+            <OrderTimeline orderId={order.id} />
+          </section>
+
+          {/* Notification Log — luxe */}
+          <section className="card--luxe relative p-6 sm:p-7">
+            <span className="card-chapter">VII</span>
+            <div className="mb-5">
+              <div className="section-label flex items-center gap-2">
+                <Bell className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+                Communicatie
+              </div>
+              <h3 className="section-title">Notificatielogboek</h3>
+            </div>
+            <NotificationLogPanel orderId={order.id} />
+          </section>
+
+          {/* Actions moved to luxe toolbar bovenaan de pagina */}
         </div>
       </div>
 
