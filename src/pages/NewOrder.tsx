@@ -829,7 +829,7 @@ const NewOrder = () => {
                   <p className="text-xs text-muted-foreground mt-1">Voeg meerdere regels toe voor verschillende soorten lading.</p>
                 </div>
                 <Button size="sm" variant="ghost" onClick={addCargoRow} className="h-8 px-3 text-xs gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> Regel toevoegen
+                  <Plus className="h-3.5 w-3.5" /> Lading-regel
                 </Button>
               </div>
 
@@ -837,7 +837,7 @@ const NewOrder = () => {
                 <table className="w-full text-xs min-w-[900px]">
                   <thead>
                     <tr className="border-b border-border/60 text-muted-foreground">
-                      <th className="text-left font-semibold py-2 pr-2 w-[80px]">Aantal <span className="text-red-600">*</span></th>
+                      <th className="text-left font-semibold py-2 pr-2 w-[80px]">Aantal eenheden <span className="text-red-600">*</span></th>
                       <th className="text-left font-semibold py-2 pr-2 w-[120px]">Eenheid <span className="text-red-600">*</span></th>
                       <th className="text-left font-semibold py-2 pr-2 w-[100px]">Gewicht (kg) <span className="text-red-600">*</span></th>
                       <th className="text-left font-semibold py-2 pr-2 w-[180px]">L × B × H (cm)</th>
