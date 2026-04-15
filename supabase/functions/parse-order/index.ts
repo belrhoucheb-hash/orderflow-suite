@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { REQUIRED_FIELDS, buildExtractionSystemPrompt, extractionSchema } from "./_prompt.ts";
 
 // TODO: replace with tenant_settings lookup when multi-tenant is wired up
 const COMPANY_NAME = "Royalty Cargo";
@@ -55,17 +56,6 @@ function buildGeminiBody(systemPrompt: string, userText: string, jsonSchema?: Re
 function parseGeminiResponse(json: any): string | null {
   return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
 }
-
-const REQUIRED_FIELDS: { key: string; label: string }[] = [
-  { key: "client_name", label: "Klantnaam" },
-  { key: "pickup_address", label: "Ophaaladres" },
-  { key: "delivery_address", label: "Afleveradres" },
-  { key: "pickup_date", label: "Ophaaldatum" },
-  { key: "delivery_date", label: "Leverdatum" },
-  { key: "quantity", label: "Aantal" },
-  { key: "weight_kg", label: "Gewicht" },
-  { key: "dimensions", label: "Afmetingen (LxBxH)" },
-];
 
 function detectMissingFields(extracted: Record<string, any>): string[] {
   const missing: string[] = [];
@@ -145,27 +135,45 @@ serve(async (req) => {
   try {
     const { emailBody, pdfUrls, threadContext, tenantId, fewShotExamples } = await req.json();
 
-    let tenantIdStr = tenantId;
-    if (!tenantIdStr) {
-      const authHeader = req.headers.get("Authorization");
-      if (authHeader) {
-        const token = authHeader.replace("Bearer ", "");
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          try {
-            const payload = JSON.parse(atob(parts[1]));
-            tenantIdStr = payload.app_metadata?.tenant_id;
-          } catch (e) {}
-        }
-      }
-    }
-
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    let tenantIdStr: string | undefined;
+    const authHeader = req.headers.get("Authorization");
+    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.replace("Bearer ", "") : "";
+    const isServiceRoleCall = !!bearerToken && bearerToken === supabaseKey;
+
+    if (isServiceRoleCall) {
+      tenantIdStr = tenantId;
+    } else {
+      if (!bearerToken) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(bearerToken);
+      if (authError || !authUser) {
+        return new Response(JSON.stringify({ error: "Ongeldige of verlopen sessie" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      const jwtTenantId = authUser.app_metadata?.tenant_id;
+      if (!jwtTenantId) {
+        return new Response(JSON.stringify({ error: "Missing tenant_id in token" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      if (tenantId && tenantId !== jwtTenantId) {
+        return new Response(JSON.stringify({ error: "tenant_id komt niet overeen met gebruiker" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      tenantIdStr = jwtTenantId;
+    }
 
     const hasPdfs = pdfUrls && Array.isArray(pdfUrls) && pdfUrls.length > 0;
     const hasEmail = !!emailBody;
@@ -426,116 +434,11 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
       aiContextBlock += "\n\n" + fewShotExamples;
     }
 
-    const extractionSystemPrompt = `Je bent een logistiek data-extractie assistent voor een Transport Management Systeem (TMS) in Nederland.
-Je analyseert e-mails en PDF-bijlagen en extraheert gestructureerde ordergegevens.
-Vandaag is het ${new Date().toISOString().split("T")[0]}.
-
-${sourceInstructions}
-
-Regels:
-- Gebruik altijd Nederlandse plaatsnamen waar mogelijk
-- Gewicht altijd in kg (als gewicht per stuk/pallet vermeld wordt, bereken het totaal OF zet is_weight_per_unit op true)
-- Afmetingen in cm formaat: LxBxH
-- STANDAARD AFMETINGEN (gebruik deze als er geen specifieke afmetingen worden vermeld):
-  - Europallet / pallet / EUR-pallet: 120x80x150 cm (LxBxH)
-  - Blokpallet / industriepallet: 120x100x150 cm (LxBxH)
-  - Rolcontainer / rollcontainer: 80x67x170 cm (LxBxH)
-  Als de unit "Pallets" of "europallets" is en er geen afmetingen zijn vermeld, vul dan automatisch "120x80x150" in.
-  Als de unit "Box" is en het gaat om een rolcontainer zonder afmetingen, vul dan automatisch "80x67x170" in.
-- Transport type: "direct" of "warehouse-air"
-- Unit: map naar een van deze waarden:
-  - "Pallets" (ook: europallets, blokpallets, pallets, pallet, plt)
-  - "Colli" (ook: dozen, pakken, stuks, stuks, collo, kartons, kratten)
-  - "Box" (ook: container, rolcontainer, kist, bak)
-  BELANGRIJK: Kies ALTIJD de best passende unit. Laat dit NOOIT leeg.
-- Requirements: kies uit ["Koeling", "ADR", "Laadklep", "Douane"]
-  - "Koeling" als er gekoeld/koel/temperatuur/graden wordt genoemd
-  - "ADR" als er gevaarlijke stoffen/chemisch/ADR wordt genoemd
-  - "Laadklep" als er laadklep/klep/heftruck nodig/geen dock wordt genoemd
-  - "Douane" als er douane/customs/invoer/uitvoer wordt genoemd
-- Datums: probeer altijd een datum te extraheren. Als er "morgen", "overmorgen", "donderdag", etc. staat, bereken de juiste ISO 8601 datum op basis van vandaag. Als er geen datum gevonden kan worden, geef een lege string.
-- Tijdvenster: als er "voor 12:00", "tussen 8 en 10", "uiterlijk 14:00", etc. staat, extraheer start- en eindtijd in HH:mm formaat. "Voor 14:00" = start leeg, end "14:00". "Tussen 8 en 10" = start "08:00", end "10:00". Als geen tijdvenster gevonden, lege strings.
-- Referentienummer: zoek naar ordernummers, PO-nummers, referenties, bestelnummers van de klant. Als niet gevonden, lege string.
-- Contactpersoon: naam van contactpersoon bij ophaal of aflevering. Als niet gevonden, lege string.
-- Als een veld ECHT niet gevonden kan worden, geef een lege string of 0 terug
-- confidence_score: 0-100, hoe zeker je bent over de extractie
-- field_confidence: geef naast de totale confidence_score ook een "field_confidence" object mee met PER VELD een score 0-100 die aangeeft hoe zeker je bent over dat specifieke veld. Voorbeeld: "field_confidence": { "client_name": 95, "pickup_address": 80, "delivery_address": 45, "weight_kg": 90, "quantity": 70, "unit": 85, "pickup_date": 60, "delivery_date": 60 }
-  - Score 90-100: veld is duidelijk en expliciet vermeld
-  - Score 60-89: veld is afgeleid of enigszins onduidelijk
-  - Score 0-59: veld is een gok of grotendeels ontbrekend
-- ADRESVALIDATIE: Een geldig adres MOET minimaal een straatnaam + huisnummer + stad bevatten. Alleen een stad (bijv. "Groningen", "Amsterdam", "Rotterdam") is GEEN geldig adres. Als alleen een stad wordt gevonden zonder straatnaam en huisnummer, geef het adresveld dan een field_confidence score van maximaal 40. Probeer altijd het volledige adres te extraheren uit de context van de e-mail.
-- BELANGRIJK: Extraheer ALLES wat je kunt vinden. Laat liever geen veld leeg als er informatie beschikbaar is.
-${aiContextBlock}
-
-VOORBEELD 1:
-Input: "Beste, graag 2 pallets (totaal 800kg, 120x80x150cm) ophalen bij Janssen BV, Industrieweg 5 Eindhoven en leveren bij AH DC, Transportweg 10 Zaandam. Graag morgen voor 14:00. Ref: PO-2024-445. Contactpersoon: Piet de Vries."
-Output: {"client_name":"Janssen BV","transport_type":"direct","pickup_address":"Industrieweg 5, Eindhoven","delivery_address":"Transportweg 10, Zaandam","pickup_date":"2026-04-03","delivery_date":"2026-04-03","time_window_start":"","time_window_end":"14:00","reference_number":"PO-2024-445","contact_name":"Piet de Vries","quantity":2,"unit":"Pallets","weight_kg":800,"is_weight_per_unit":false,"dimensions":"120x80x150","requirements":[],"confidence_score":95,"field_confidence":{"client_name":98,"pickup_address":95,"delivery_address":95,"quantity":99,"weight_kg":99,"unit":95,"pickup_date":85,"delivery_date":85},"field_sources":{"client_name":"email","pickup_address":"email","delivery_address":"email","pickup_date":"email","delivery_date":"email","time_window_start":"email","time_window_end":"email","reference_number":"email","contact_name":"email","quantity":"email","unit":"email","weight_kg":"email","dimensions":"email"}}
-
-VOORBEELD 2:
-Input: "Hallo, wij moeten 5 vaten chemisch afval (ADR klasse 3, totaal 1200kg) laten ophalen bij ons depot in Roosendaal. Afleveradres is ergens in de buurt van Antwerpen, exacte adres volgt nog. Moet gekoeld blijven onder 8 graden. Liefst donderdag tussen 8 en 10 uur 's ochtends. Geen laadperron aanwezig."
-Output: {"client_name":"","transport_type":"direct","pickup_address":"Roosendaal","delivery_address":"Antwerpen (exact adres volgt)","pickup_date":"2026-04-03","delivery_date":"2026-04-03","time_window_start":"08:00","time_window_end":"10:00","reference_number":"","contact_name":"","quantity":5,"unit":"Colli","weight_kg":1200,"is_weight_per_unit":false,"dimensions":"","requirements":["Koeling","ADR","Laadklep"],"confidence_score":62,"field_confidence":{"client_name":0,"pickup_address":55,"delivery_address":30,"quantity":95,"weight_kg":90,"unit":70,"pickup_date":75,"delivery_date":75},"field_sources":{"client_name":"email","pickup_address":"email","delivery_address":"email","pickup_date":"email","delivery_date":"email","time_window_start":"email","time_window_end":"email","reference_number":"email","contact_name":"email","quantity":"email","unit":"email","weight_kg":"email","dimensions":"email"}}
-
-Antwoord als JSON met deze velden:
-{
-  "client_name": "string",
-  "transport_type": "direct|warehouse-air",
-  "pickup_address": "string",
-  "delivery_address": "string",
-  "pickup_date": "string (ISO 8601 datum, bijv. 2026-04-03)",
-  "delivery_date": "string (ISO 8601 datum, bijv. 2026-04-04)",
-  "time_window_start": "string (HH:mm formaat, bijv. 08:00)",
-  "time_window_end": "string (HH:mm formaat, bijv. 17:00)",
-  "reference_number": "string (klantreferentie indien vermeld)",
-  "contact_name": "string (contactpersoon bij ophaal/aflevering)",
-  "quantity": number,
-  "unit": "Pallets|Colli|Box",
-  "weight_kg": number,
-  "is_weight_per_unit": boolean,
-  "dimensions": "string (LxBxH in cm)",
-  "requirements": ["Koeling"|"ADR"|"Laadklep"|"Douane"],
-  "confidence_score": number (0-100),
-  "field_confidence": { "client_name": number, "pickup_address": number, "delivery_address": number, "quantity": number, "weight_kg": number, "unit": number, "pickup_date": number, "delivery_date": number },
-  "field_sources": { "client_name": "email|pdf|both", "pickup_address": "email|pdf|both", "delivery_address": "email|pdf|both", "pickup_date": "email|pdf|both", "delivery_date": "email|pdf|both", "time_window_start": "email|pdf|both", "time_window_end": "email|pdf|both", "reference_number": "email|pdf|both", "contact_name": "email|pdf|both", "quantity": "email|pdf|both", "unit": "email|pdf|both", "weight_kg": "email|pdf|both", "dimensions": "email|pdf|both" }
-}`;
-
-    const extractionSchema = {
-      type: "OBJECT",
-      properties: {
-        client_name: { type: "STRING" },
-        transport_type: { type: "STRING", enum: ["direct", "warehouse-air"] },
-        pickup_address: { type: "STRING" },
-        delivery_address: { type: "STRING" },
-        pickup_date: { type: "STRING" },
-        delivery_date: { type: "STRING" },
-        time_window_start: { type: "STRING" },
-        time_window_end: { type: "STRING" },
-        reference_number: { type: "STRING" },
-        contact_name: { type: "STRING" },
-        quantity: { type: "NUMBER" },
-        unit: { type: "STRING", enum: ["Pallets", "Colli", "Box"] },
-        weight_kg: { type: "NUMBER" },
-        is_weight_per_unit: { type: "BOOLEAN" },
-        dimensions: { type: "STRING" },
-        requirements: { type: "ARRAY", items: { type: "STRING", enum: ["Koeling", "ADR", "Laadklep", "Douane"] } },
-        confidence_score: { type: "NUMBER" },
-        field_confidence: {
-          type: "OBJECT",
-          properties: {
-            client_name: { type: "NUMBER" },
-            pickup_address: { type: "NUMBER" },
-            delivery_address: { type: "NUMBER" },
-            quantity: { type: "NUMBER" },
-            weight_kg: { type: "NUMBER" },
-            unit: { type: "NUMBER" },
-            pickup_date: { type: "NUMBER" },
-            delivery_date: { type: "NUMBER" },
-          },
-        },
-        field_sources: { type: "OBJECT", properties: {} },
-      },
-      required: ["client_name", "confidence_score"],
-    };
-
+    const extractionSystemPrompt = buildExtractionSystemPrompt({
+      today: new Date().toISOString().split("T")[0],
+      sourceInstructions,
+      aiContextBlock,
+    });
     // Build the user content as a single text string for Gemini
     const userTextParts: string[] = [];
     for (const part of userContent) {
