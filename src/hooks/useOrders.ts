@@ -5,6 +5,8 @@ import type { Order } from "@/data/mockData";
 import { logAudit } from "@/lib/auditLog";
 import { emitEventDirect } from "@/hooks/useEventPipeline";
 import type { EventType } from "@/types/events";
+import { useTenantOptional } from "@/contexts/TenantContext";
+import { fetchDepartmentsCached } from "@/hooks/useDepartments";
 
 // ─── 8.11 Order Status State Machine ─────────────────────────────────
 // Extracted to @/lib/statusTransitions as a pure function (no Supabase dep).
@@ -32,13 +34,24 @@ export interface UseOrdersOptions {
   statusFilter?: string;
   orderTypeFilter?: string;
   search?: string;
+  /**
+   * Prio 1: filter orders by department.
+   * Accepts a department UUID. Non-uuid values are ignored (use
+   * `useDepartments()` to resolve a code → uuid upstream).
+   */
+  departmentFilter?: string;
 }
 
+// RFC4122 v1-v5 UUID validator (simple shape check)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function useOrders(options: UseOrdersOptions = {}) {
-  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search } = options;
+  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter } = options;
+  const queryClient = useQueryClient();
+  const { tenant } = useTenantOptional();
 
   return useQuery({
-    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search }],
+    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, tenantId: tenant?.id }],
     staleTime: 5_000,
     queryFn: async () => {
       let query = (supabase as any)
@@ -60,6 +73,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
         query = query.eq("order_type", orderTypeFilter);
       }
 
+      if (departmentFilter && UUID_RE.test(departmentFilter)) {
+        query = query.eq("department_id", departmentFilter);
+      }
+
       if (search) {
         const parts = [
           `client_name.ilike.%${search}%`,
@@ -76,9 +93,27 @@ export function useOrders(options: UseOrdersOptions = {}) {
         query = query.or(parts.join(","));
       }
 
-      const { data, error, count } = await query;
+      // Perf: departments via gedeelde cache (1x per tenant per 60s).
+      // Fault-tolerant: faalt de departments-fetch, dan nog steeds orders tonen
+      // (met lege departmentCode). Zo blokkeert een RLS/seed-probleem niet de
+      // hele dashboard.
+      const [ordersResult, departments] = await Promise.all([
+        query,
+        tenant?.id
+          ? fetchDepartmentsCached(queryClient, tenant.id).catch((e) => {
+              console.warn("[useOrders] departments fetch failed, continuing without codes:", e);
+              return [] as Awaited<ReturnType<typeof fetchDepartmentsCached>>;
+            })
+          : Promise.resolve([]),
+      ]);
 
+      const { data, error, count } = ordersResult;
       if (error) throw error;
+
+      const deptCodeById: Record<string, string> = {};
+      departments.forEach((d) => {
+        deptCodeById[d.id] = d.code;
+      });
 
       const orders = (data ?? []).map((o): Order => {
         // Compute estimatedDelivery from available data
@@ -92,6 +127,9 @@ export function useOrders(options: UseOrdersOptions = {}) {
           const hoursOffset = (priority === "spoed" || priority === "hoog") ? 4 : 24;
           estimatedDelivery = new Date(created.getTime() + hoursOffset * 60 * 60 * 1000).toISOString();
         }
+
+        const departmentId = (o as any).department_id ?? null;
+        const departmentCode = departmentId ? deptCodeById[departmentId] ?? null : null;
 
         return {
           id: o.id,
@@ -108,9 +146,15 @@ export function useOrders(options: UseOrdersOptions = {}) {
           vehicle: o.vehicle_id ?? undefined,
           createdAt: o.created_at,
           estimatedDelivery,
-          notes: o.internal_note || "",
+          notes: (o.notes || o.internal_note || "").toString(),
           orderType: (o as any).order_type ?? "ZENDING",
           parentOrderId: o.parent_order_id ?? null,
+          departmentId,
+          departmentCode,
+          shipmentId: (o as any).shipment_id ?? null,
+          legNumber: (o as any).leg_number ?? null,
+          legRole: (o as any).leg_role ?? null,
+          infoStatus: ((o as any).info_status ?? null) as any,
         };
       });
 
@@ -141,6 +185,8 @@ export function useOrdersSubscription() {
 }
 
 export function useOrder(id: string) {
+  const queryClient = useQueryClient();
+  const { tenant } = useTenantOptional();
   return useQuery({
     queryKey: ["orders", id],
     staleTime: 5_000,
@@ -150,7 +196,7 @@ export function useOrder(id: string) {
         .select("*")
         .eq("id", id)
         .single();
-        
+
       if (error) throw error;
       if (!data) return null;
 
@@ -163,6 +209,18 @@ export function useOrder(id: string) {
         const priority = (data.priority || "normaal").toLowerCase();
         const hoursOffset = (priority === "spoed" || priority === "hoog") ? 4 : 24;
         estimatedDelivery = new Date(created.getTime() + hoursOffset * 60 * 60 * 1000).toISOString();
+      }
+
+      // Resolve department code via gedeelde cache. Fault-tolerant.
+      const departmentId = (data as any).department_id ?? null;
+      let departmentCode: string | null = null;
+      if (departmentId && tenant?.id) {
+        try {
+          const departments = await fetchDepartmentsCached(queryClient, tenant.id);
+          departmentCode = departments.find((d) => d.id === departmentId)?.code ?? null;
+        } catch (e) {
+          console.warn("[useOrder] departments fetch failed:", e);
+        }
       }
 
       return {
@@ -181,6 +239,12 @@ export function useOrder(id: string) {
         createdAt: data.created_at,
         estimatedDelivery,
         notes: data.internal_note || "",
+        departmentId,
+        departmentCode,
+        shipmentId: (data as any).shipment_id ?? null,
+        legNumber: (data as any).leg_number ?? null,
+        legRole: (data as any).leg_role ?? null,
+        infoStatus: ((data as any).info_status ?? null) as any,
       } as Order;
     },
     enabled: !!id,

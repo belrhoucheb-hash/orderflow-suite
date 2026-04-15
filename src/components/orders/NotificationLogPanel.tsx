@@ -28,7 +28,9 @@ export function NotificationLogPanel({ orderId }: { orderId: string }) {
     return (
       <div className="text-center py-6">
         <Bell className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-        <p className="text-sm text-gray-400">Nog geen notificaties verzonden voor deze order.</p>
+        <p className="font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70">
+          Nog geen notificaties verzonden voor deze order.
+        </p>
       </div>
     );
   }
@@ -53,7 +55,7 @@ export function NotificationLogPanel({ orderId }: { orderId: string }) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-sm font-medium text-gray-900">
+                <span className="font-display text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] font-semibold">
                   {TRIGGER_EVENT_LABELS[log.trigger_event as keyof typeof TRIGGER_EVENT_LABELS] ?? log.trigger_event}
                 </span>
                 <Badge className={cn("text-[10px] px-1.5 py-0 border-0 rounded-full", config.color)}>
@@ -61,7 +63,7 @@ export function NotificationLogPanel({ orderId }: { orderId: string }) {
                   {config.label}
                 </Badge>
               </div>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-muted-foreground truncate">
                 {log.channel === "EMAIL"
                   ? `Naar: ${log.recipient_email ?? "—"}`
                   : `Naar: ${log.recipient_phone ?? "—"}`}
@@ -69,7 +71,7 @@ export function NotificationLogPanel({ orderId }: { orderId: string }) {
               {log.error_message && (
                 <p className="text-xs text-red-500 mt-0.5">{log.error_message}</p>
               )}
-              <p className="text-[11px] text-gray-400 mt-0.5">
+              <p className="text-[11px] tabular-nums text-muted-foreground/70 mt-0.5">
                 {log.sent_at
                   ? new Date(log.sent_at).toLocaleString("nl-NL", {
                       day: "2-digit", month: "2-digit", year: "numeric",

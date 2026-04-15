@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTriangle, Plus, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTriangle, Plus, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useVehicleById, useVehicleDocuments, useVehicleMaintenance, useVehicleAvailability, useCompleteMaintenance } from "@/hooks/useFleet";
+import { useBaselineInfo } from "@/hooks/useVehicleCheck";
+import { useAuth } from "@/contexts/AuthContext";
+import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
 import { MaintenanceDialog } from "@/components/fleet/MaintenanceDialog";
 import { DocumentDialog } from "@/components/fleet/DocumentDialog";
 import { format, differenceInDays, startOfWeek, addDays } from "date-fns";
@@ -58,6 +61,10 @@ export default function VehicleDetail() {
   const completeMaintenance = useCompleteMaintenance();
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
   const [showDocumentDialog, setShowDocumentDialog] = useState(false);
+  const [baselineSeedActive, setBaselineSeedActive] = useState(false);
+  const { effectiveRole } = useAuth();
+  const { data: baselineInfo } = useBaselineInfo(id ?? null);
+  const isAdmin = effectiveRole === "admin";
 
   const availMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -70,6 +77,23 @@ export default function VehicleDetail() {
 
   const statusCfg = STATUS_CONFIG[vehicle.status] || STATUS_CONFIG.beschikbaar;
 
+  if (baselineSeedActive && id && baselineInfo?.vehicleTenantId) {
+    return (
+      <VehicleCheckScreen
+        tenantId={baselineInfo.vehicleTenantId}
+        driverId={null}
+        vehicleId={id}
+        asBaselineSeed
+        onCompleted={() => setBaselineSeedActive(false)}
+        onCancel={() => setBaselineSeedActive(false)}
+      />
+    );
+  }
+
+  const baselineDateLabel = baselineInfo?.completedAt
+    ? format(new Date(baselineInfo.completedAt), "d MMM yyyy", { locale: nl })
+    : null;
+
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-auto">
       {/* Header */}
@@ -80,7 +104,31 @@ export default function VehicleDetail() {
         <PageHeader
           title={vehicle.name}
           subtitle={`${vehicle.plate} \u00B7 ${vehicle.code}`}
-          actions={<Badge variant="outline" className={statusCfg.className}>{statusCfg.label}</Badge>}
+          actions={
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {baselineDateLabel && (
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 bg-[hsl(var(--gold-soft))/0.5] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold))/0.4]"
+                >
+                  <ShieldCheck className="h-3 w-3" strokeWidth={1.75} />
+                  Baseline gezet op {baselineDateLabel}
+                </Badge>
+              )}
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBaselineSeedActive(true)}
+                  className="gap-1.5"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  Baseline instellen
+                </Button>
+              )}
+              <Badge variant="outline" className={statusCfg.className}>{statusCfg.label}</Badge>
+            </div>
+          }
           className="flex-1"
         />
       </div>

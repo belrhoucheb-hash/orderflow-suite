@@ -1,0 +1,1565 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>Aandacht — Planner-queue · items v2</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --primary: 0 78% 42%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 30 8% 93%;
+    --muted-foreground: 0 0% 40%;
+    --border: 30 8% 88%;
+    --input: 30 8% 85%;
+    --gold: 38 35% 55%;
+    --gold-deep: 32 42% 42%;
+    --gold-light: 42 55% 72%;
+    --gold-soft: 38 45% 92%;
+    --ink: 0 0% 10%;
+    --page-bg: 30 10% 96%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 85%;
+
+    --urg-now-bg:    hsl(0 78% 97%);
+    --urg-now-text:  hsl(0 78% 38%);
+    --urg-now-border: hsl(0 78% 85%);
+    --urg-now-dot:   hsl(0 78% 55%);
+
+    --urg-1h-bg:    hsl(32 90% 97%);
+    --urg-1h-text:  hsl(32 70% 35%);
+    --urg-1h-border: hsl(32 80% 85%);
+    --urg-1h-dot:   hsl(32 90% 55%);
+
+    --urg-day-bg:   hsl(210 70% 97%);
+    --urg-day-text: hsl(210 70% 35%);
+    --urg-day-border: hsl(210 70% 85%);
+    --urg-day-dot:  hsl(210 80% 55%);
+
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  body {
+    font-family: var(--font-ui);
+    font-size: 0.9375rem;
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(ellipse 900px 400px at 50% -180px, hsl(var(--gold-soft) / 0.5), transparent 60%),
+      hsl(var(--page-bg));
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+  }
+
+  .ribbon {
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.375rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .ribbon .tag { color: hsl(var(--gold)); font-weight: 600; }
+
+  /* ─── Hero header ─── */
+  .greeting-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: hsl(var(--gold-deep));
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+  .greeting-eyebrow::before {
+    content: '';
+    width: 20px; height: 1px;
+    background: hsl(var(--gold));
+  }
+  .greeting-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: hsl(var(--foreground));
+    line-height: 1.1;
+  }
+  .greeting-title em {
+    font-style: normal;
+    color: hsl(var(--gold-deep));
+    font-variant-numeric: tabular-nums;
+  }
+  .greeting-sub {
+    margin-top: 0.75rem;
+    font-size: 0.9375rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.5;
+    max-width: 580px;
+  }
+  .greeting-sub strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Urgency filter-tabs (vervanger van KPI strip) ─── */
+  .urg-tabs {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    padding: 0 0.25rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+  }
+  .urg-tab {
+    position: relative;
+    padding: 0.75rem 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: -0.005em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: color .15s;
+    border-bottom: 1.5px solid transparent;
+    margin-bottom: -1px;
+  }
+  .urg-tab:hover { color: hsl(var(--foreground)); }
+  .urg-tab__count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: hsl(var(--muted) / 0.7);
+    color: hsl(var(--muted-foreground));
+    min-width: 22px;
+    text-align: center;
+  }
+  .urg-tab--active {
+    color: hsl(var(--foreground));
+    border-bottom-color: var(--tab-accent, hsl(var(--foreground)));
+  }
+  .urg-tab--active::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 50%;
+    transform: translateX(-50%);
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+  }
+  .urg-tab--active .urg-tab__count {
+    background: var(--tab-accent-bg, hsl(var(--foreground)));
+    color: var(--tab-accent-fg, hsl(var(--card)));
+  }
+  .urg-tab[data-urg="now"]  .urg-tab__count { color: var(--urg-now-text); background: var(--urg-now-bg); }
+  .urg-tab[data-urg="now"].urg-tab--active  { --tab-accent: var(--urg-now-dot); --tab-accent-bg: var(--urg-now-dot); --tab-accent-fg: white; }
+  .urg-tab[data-urg="1h"]   .urg-tab__count { color: var(--urg-1h-text);  background: var(--urg-1h-bg); }
+  .urg-tab[data-urg="1h"].urg-tab--active   { --tab-accent: var(--urg-1h-dot); --tab-accent-bg: var(--urg-1h-dot); --tab-accent-fg: white; }
+  .urg-tab[data-urg="day"]  .urg-tab__count { color: var(--urg-day-text); background: var(--urg-day-bg); }
+  .urg-tab[data-urg="day"].urg-tab--active  { --tab-accent: var(--urg-day-dot); --tab-accent-bg: var(--urg-day-dot); --tab-accent-fg: white; }
+  .urg-tab[data-urg="week"] .urg-tab__count { color: hsl(var(--gold-deep)); background: hsl(var(--gold-soft)); }
+  .urg-tab[data-urg="week"].urg-tab--active { --tab-accent: hsl(var(--gold)); --tab-accent-bg: hsl(var(--gold)); --tab-accent-fg: white; }
+  .urg-tab[data-urg="all"]  .urg-tab__count { background: transparent; border: 1px solid hsl(var(--border)); }
+
+  /* ─── Hairline ─── */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--gold) / 0.35) 50%, transparent 100%);
+  }
+
+  /* ─── Section header ─── */
+  .section-hd {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .section-hd__title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .section-hd__title em {
+    font-style: normal;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+  .section-hd__dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--section-dot, hsl(var(--gold)));
+    box-shadow: 0 0 0 3px hsl(var(--card)), 0 0 0 5px var(--section-halo, transparent);
+  }
+  .section-hd[data-urg="now"] { --section-dot: var(--urg-now-dot); --section-halo: hsl(0 78% 55% / 0.18); }
+  .section-hd[data-urg="1h"]  { --section-dot: var(--urg-1h-dot);  --section-halo: hsl(32 90% 55% / 0.2); }
+  .section-hd[data-urg="day"] { --section-dot: var(--urg-day-dot); --section-halo: hsl(210 80% 55% / 0.18); }
+
+  /* ─── Attention card (core unit) ─── */
+  .att {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 1rem;
+    padding: 1.25rem 1.5rem;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.04),
+      0 4px 12px -6px hsl(var(--ink) / 0.08);
+    position: relative;
+    overflow: hidden;
+    transition: all .18s;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  .att:hover {
+    border-color: hsl(var(--gold) / 0.35);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 2px 4px hsl(var(--ink) / 0.05),
+      0 12px 28px -12px hsl(var(--ink) / 0.15);
+  }
+  .att::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+    background: var(--att-accent, hsl(var(--gold)));
+  }
+  .att[data-urg="now"] { --att-accent: linear-gradient(180deg, var(--urg-now-dot), hsl(0 78% 38%)); }
+  .att[data-urg="1h"]  { --att-accent: linear-gradient(180deg, var(--urg-1h-dot), hsl(32 70% 42%)); }
+  .att[data-urg="day"] { --att-accent: linear-gradient(180deg, var(--urg-day-dot), hsl(210 70% 42%)); }
+
+  /* Left side: question + context */
+  .att__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.625rem;
+  }
+  .att__type {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 0.1875rem 0.5rem;
+    border-radius: 0.3125rem;
+    background: hsl(var(--muted) / 0.6);
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
+  }
+  .att__type--info   { background: hsl(32 80% 94%); color: hsl(32 70% 35%); border-color: hsl(32 80% 82%); }
+  .att__type--plan   { background: hsl(258 55% 94%); color: hsl(258 55% 40%); border-color: hsl(258 55% 82%); }
+  .att__type--res    { background: hsl(0 78% 96%);  color: hsl(0 78% 40%);  border-color: hsl(0 78% 85%); }
+  .att__type--pmt    { background: hsl(var(--gold-soft) / 0.6); color: hsl(var(--gold-deep)); border-color: hsl(var(--gold) / 0.3); }
+  .att__type--price  { background: hsl(210 70% 96%); color: hsl(210 70% 35%); border-color: hsl(210 70% 82%); }
+  .att__type--cust   { background: hsl(158 50% 94%); color: hsl(158 55% 30%); border-color: hsl(158 45% 78%); }
+
+  .att__order-ref {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding: 0.1875rem 0.5rem;
+    background: hsl(var(--gold-soft) / 0.6);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 0.3125rem;
+  }
+  .att__client {
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .att__client strong { color: hsl(var(--foreground)); font-weight: 500; }
+  .att__deadline {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--att-deadline-color, hsl(var(--muted-foreground)));
+    padding: 0.1875rem 0.5rem;
+    border-radius: 999px;
+    background: var(--att-deadline-bg, hsl(var(--muted) / 0.5));
+    letter-spacing: 0.02em;
+  }
+  .att[data-urg="now"] .att__deadline { --att-deadline-color: var(--urg-now-text); --att-deadline-bg: var(--urg-now-bg); }
+  .att[data-urg="1h"]  .att__deadline { --att-deadline-color: var(--urg-1h-text);  --att-deadline-bg: var(--urg-1h-bg); }
+  .att[data-urg="day"] .att__deadline { --att-deadline-color: var(--urg-day-text); --att-deadline-bg: var(--urg-day-bg); }
+
+  .att__question {
+    font-family: var(--font-display);
+    font-size: 1.0625rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.015em;
+    margin-bottom: 0.75rem;
+  }
+
+  /* System proposal block */
+  .att__proposal {
+    margin-bottom: 0.875rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.3) 100%);
+    border: 1px solid hsl(var(--gold) / 0.2);
+    border-radius: 0.625rem;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .att__proposal::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent);
+  }
+  .att__proposal-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .att__proposal-label {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--gold-deep));
+  }
+  .att__proposal-text {
+    font-size: 0.875rem;
+    color: hsl(var(--foreground));
+    line-height: 1.45;
+  }
+
+  /* Confidence bar */
+  .conf {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .conf__label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.04em;
+  }
+  .conf__bar {
+    width: 100px;
+    height: 4px;
+    background: hsl(var(--muted) / 0.8);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+  .conf__bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+    border-radius: 999px;
+  }
+  .conf__val {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--gold-deep));
+  }
+  .conf--low .conf__bar-fill { background: linear-gradient(90deg, hsl(32 90% 60%), hsl(32 70% 40%)); }
+  .conf--low .conf__val { color: hsl(32 70% 40%); }
+
+  /* History trail */
+  .att__history {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.875rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed hsl(var(--border) / 0.7);
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+  }
+  .att__history svg {
+    flex-shrink: 0;
+    color: hsl(var(--muted-foreground));
+  }
+  .att__history strong {
+    color: hsl(var(--foreground));
+    font-weight: 500;
+  }
+
+  /* Right side: actions */
+  .att__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 200px;
+  }
+  .att-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    padding: 0 1rem;
+    border-radius: 0.625rem;
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .att-btn--primary {
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    color: white;
+    box-shadow:
+      0 1px 2px hsl(var(--primary) / 0.3),
+      0 4px 10px -2px hsl(var(--primary) / 0.25),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  }
+  .att-btn--primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px hsl(var(--primary) / 0.35), 0 8px 18px -2px hsl(var(--primary) / 0.35), inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  }
+  .att-btn--ghost {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border) / 0.7);
+    color: hsl(var(--foreground));
+  }
+  .att-btn--ghost:hover {
+    background: hsl(var(--gold-soft) / 0.4);
+    border-color: hsl(var(--gold) / 0.3);
+  }
+  .att-btn--subtle {
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    height: 2rem;
+  }
+  .att-btn--subtle:hover {
+    color: hsl(var(--foreground));
+    background: hsl(var(--muted) / 0.4);
+  }
+
+  /* Keyboard hint */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px; height: 18px;
+    padding: 0 4px;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--muted) / 0.6);
+    border: 1px solid hsl(var(--border));
+    border-radius: 4px;
+    letter-spacing: 0;
+    margin-left: 0.375rem;
+  }
+
+  /* Morning action bar */
+  .morning-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, hsl(var(--sidebar-background)) 0%, hsl(var(--sidebar-background)) 60%, hsl(32 42% 25%) 100%);
+    color: hsl(var(--sidebar-foreground));
+    border-radius: 0.875rem;
+    font-size: 0.8125rem;
+    border: 1px solid hsl(var(--gold) / 0.2);
+    box-shadow: 0 4px 12px -4px hsl(var(--ink) / 0.3);
+  }
+  .morning-bar__kbd-hint {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: hsl(var(--sidebar-foreground) / 0.6);
+  }
+  .morning-bar__kbd-hint .kbd {
+    background: hsl(var(--sidebar-foreground) / 0.08);
+    border-color: hsl(var(--sidebar-foreground) / 0.15);
+    color: hsl(var(--sidebar-foreground) / 0.9);
+  }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.3) 100%);
+    border: 1px solid hsl(var(--gold) / 0.2);
+    border-radius: 1rem;
+  }
+  .empty__title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-bottom: 0.25rem;
+  }
+  .empty__sub {
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+  }
+
+  /* ─── v2 · Confidence-popover ─── */
+  .conf { position: relative; }
+  .conf__val { cursor: help; border-bottom: 1px dotted hsl(var(--gold-deep) / 0.5); }
+  .conf__val:hover { color: hsl(var(--gold-deep)); filter: brightness(1.1); }
+  .conf-popover {
+    position: absolute;
+    left: calc(100% + 12px);
+    top: -8px;
+    width: 340px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.35);
+    border-radius: 0.75rem;
+    padding: 0.9rem 1rem;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 2px 6px hsl(var(--ink) / 0.06),
+      0 20px 40px -12px hsl(var(--ink) / 0.22);
+    z-index: 50;
+    display: none;
+  }
+  .conf-popover--open { display: block; animation: conf-pop .14s ease-out; }
+  @keyframes conf-pop {
+    from { opacity: 0; transform: translateX(-4px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .conf-popover::before {
+    content: '';
+    position: absolute;
+    left: -6px; top: 14px;
+    width: 10px; height: 10px;
+    background: hsl(var(--card));
+    border-left: 1px solid hsl(var(--gold) / 0.35);
+    border-bottom: 1px solid hsl(var(--gold) / 0.35);
+    transform: rotate(45deg);
+  }
+  .conf-popover__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.625rem;
+  }
+  .conf-popover__title {
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.01em;
+  }
+  .conf-popover__close {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: hsl(var(--muted-foreground));
+    font-size: 1rem;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .conf-popover__close:hover { background: hsl(var(--muted) / 0.6); color: hsl(var(--foreground)); }
+  .conf-popover__factors { display: flex; flex-direction: column; gap: 0.375rem; }
+  .conf-factor {
+    display: grid;
+    grid-template-columns: 1fr 80px 42px;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+  }
+  .conf-factor__label { color: hsl(var(--foreground)); line-height: 1.25; }
+  .conf-factor__bar {
+    position: relative;
+    height: 4px;
+    background: hsl(var(--muted) / 0.7);
+    border-radius: 999px;
+  }
+  .conf-factor__bar::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: hsl(var(--border));
+  }
+  .conf-factor__bar-fill {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: linear-gradient(90deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+    border-radius: 999px;
+  }
+  .conf-factor--neg .conf-factor__bar-fill {
+    background: linear-gradient(90deg, hsl(0 70% 50%), hsl(0 70% 40%));
+  }
+  .conf-factor__val {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: hsl(var(--gold-deep));
+  }
+  .conf-factor--neg .conf-factor__val { color: hsl(0 70% 42%); }
+  .conf-popover__precedents {
+    margin-top: 0.75rem;
+    padding-top: 0.625rem;
+    border-top: 1px dashed hsl(var(--border) / 0.8);
+  }
+  .conf-popover__precedents-title {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 0.375rem;
+  }
+  .conf-popover__precedents table {
+    width: 100%;
+    font-size: 0.7rem;
+    border-collapse: collapse;
+  }
+  .conf-popover__precedents td {
+    padding: 0.25rem 0.375rem 0.25rem 0;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+  }
+  .conf-popover__precedents td:first-child { color: hsl(var(--muted-foreground)); width: 58px; }
+  .conf-popover__precedents td:nth-child(2) { color: hsl(var(--foreground)); font-weight: 500; }
+  .conf-popover__precedents td:last-child { text-align: right; }
+  .conf-popover__precedents td .outcome-ok { color: hsl(158 55% 32%); font-weight: 600; }
+  .conf-popover__precedents td .outcome-fail { color: hsl(0 70% 42%); font-weight: 600; }
+
+  /* ─── v2 · Rule-detector banner ─── */
+  .rule-detect {
+    margin-top: 0.625rem;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem 0.875rem;
+    background: linear-gradient(135deg, hsl(var(--gold-soft) / 0.85) 0%, hsl(var(--gold-soft) / 0.4) 100%);
+    border: 1px dashed hsl(var(--gold) / 0.45);
+    border-radius: 0.625rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .rule-detect__icon {
+    flex-shrink: 0;
+    color: hsl(var(--gold-deep));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.4);
+    border-radius: 8px;
+    box-shadow: 0 0 0 3px hsl(var(--gold-soft) / 0.4);
+  }
+  .rule-detect__text {
+    flex: 1;
+    font-size: 0.8125rem;
+    color: hsl(var(--foreground));
+    line-height: 1.35;
+  }
+  .rule-detect__text strong {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: hsl(var(--gold-deep));
+  }
+  .rule-detect__actions { display: flex; gap: 0.375rem; flex-shrink: 0; }
+  .rule-detect__btn {
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.375rem 0.625rem;
+    border-radius: 0.4375rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+  }
+  .rule-detect__btn--primary {
+    background: linear-gradient(180deg, hsl(var(--gold)), hsl(var(--gold-deep)));
+    color: white;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  }
+  .rule-detect__btn--primary:hover { filter: brightness(1.05); }
+  .rule-detect__btn--ghost {
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+  }
+  .rule-detect__btn--ghost:hover { color: hsl(var(--foreground)); background: hsl(var(--card) / 0.6); }
+  .rule-detect--done {
+    background: hsl(158 45% 94%);
+    border-color: hsl(158 45% 70%);
+    border-style: solid;
+  }
+  .rule-detect--done .rule-detect__text strong { color: hsl(158 55% 28%); }
+
+  /* ─── v2 · Feedback thumbs ─── */
+  .feedback-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.5rem;
+  }
+  .feedback-bar__label {
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.02em;
+    margin-right: 0.125rem;
+  }
+  .feedback-btn {
+    width: 26px; height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.8);
+    border-radius: 6px;
+    cursor: pointer;
+    color: hsl(var(--muted-foreground));
+    transition: all .15s;
+    position: relative;
+  }
+  .feedback-btn:hover {
+    border-color: hsl(var(--gold) / 0.5);
+    color: hsl(var(--gold-deep));
+    background: hsl(var(--gold-soft) / 0.5);
+  }
+  .feedback-btn--active {
+    border-color: hsl(var(--gold));
+    color: hsl(var(--gold-deep));
+    background: hsl(var(--gold-soft));
+    box-shadow: 0 0 0 3px hsl(var(--gold) / 0.25);
+  }
+  .feedback-btn--glow { animation: fb-glow .9s ease-out; }
+  @keyframes fb-glow {
+    0%   { box-shadow: 0 0 0 0 hsl(var(--gold) / 0.6); }
+    60%  { box-shadow: 0 0 0 8px hsl(var(--gold) / 0); }
+    100% { box-shadow: 0 0 0 3px hsl(var(--gold) / 0.25); }
+  }
+
+  /* ─── v2 · Timeline ─── */
+  .timeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin-top: 0.875rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed hsl(var(--border) / 0.7);
+  }
+  .timeline__step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    padding-right: 0.625rem;
+    position: relative;
+    min-width: 0;
+  }
+  .timeline__step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 16px;
+    right: 0;
+    border-top: 1.5px dashed hsl(var(--border));
+  }
+  .timeline__dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: hsl(var(--muted));
+    border: 2px solid hsl(var(--card));
+    box-shadow: 0 0 0 1.5px hsl(var(--border));
+    position: relative;
+    z-index: 1;
+  }
+  .timeline__step--done .timeline__dot {
+    background: hsl(158 45% 55%);
+    box-shadow: 0 0 0 1.5px hsl(158 45% 45%);
+  }
+  .timeline__step--active .timeline__dot {
+    background: hsl(32 90% 55%);
+    box-shadow: 0 0 0 1.5px hsl(32 90% 45%), 0 0 0 5px hsl(32 90% 55% / 0.22);
+    animation: tl-pulse 1.6s ease-in-out infinite;
+  }
+  .timeline__step--fail .timeline__dot {
+    background: hsl(0 70% 55%);
+    box-shadow: 0 0 0 1.5px hsl(0 70% 45%);
+  }
+  @keyframes tl-pulse {
+    0%, 100% { box-shadow: 0 0 0 1.5px hsl(32 90% 45%), 0 0 0 5px hsl(32 90% 55% / 0.22); }
+    50%      { box-shadow: 0 0 0 1.5px hsl(32 90% 45%), 0 0 0 8px hsl(32 90% 55% / 0); }
+  }
+  .timeline__step:not(:last-child) .timeline__dot::after {
+    display: none;
+  }
+  .timeline__time {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.02em;
+  }
+  .timeline__step--active .timeline__time { color: hsl(32 70% 35%); }
+  .timeline__step--fail .timeline__time { color: hsl(0 70% 42%); }
+  .timeline__label {
+    font-size: 0.7rem;
+    color: hsl(var(--foreground));
+    line-height: 1.25;
+  }
+  .timeline__step--done .timeline__label { color: hsl(var(--muted-foreground)); }
+  .timeline__step--active .timeline__label { font-weight: 500; }
+
+  /* ─── v2 · Undo-toast stack ─── */
+  .toast-stack {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.625rem;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .undo-toast {
+    pointer-events: auto;
+    min-width: 320px;
+    max-width: 380px;
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 0.75rem;
+    padding: 0.75rem 0.875rem 0.875rem;
+    box-shadow:
+      0 10px 30px -6px hsl(var(--ink) / 0.45),
+      inset 0 1px 0 hsl(0 0% 100% / 0.06);
+    position: relative;
+    overflow: hidden;
+    animation: toast-in .26s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .undo-toast--out { animation: toast-out .22s ease-in forwards; }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(16px) scale(0.98); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  @keyframes toast-out {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(20px); }
+  }
+  .undo-toast__row {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+  }
+  .undo-toast__check {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: hsl(158 45% 48%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+  }
+  .undo-toast__body { flex: 1; min-width: 0; }
+  .undo-toast__title {
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: white;
+  }
+  .undo-toast__meta {
+    font-size: 0.7rem;
+    color: hsl(var(--sidebar-foreground) / 0.7);
+    font-variant-numeric: tabular-nums;
+    margin-top: 0.125rem;
+  }
+  .undo-toast__btn {
+    background: transparent;
+    border: 1px solid hsl(var(--gold) / 0.5);
+    color: hsl(var(--gold-light));
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.375rem 0.625rem;
+    border-radius: 0.4375rem;
+    cursor: pointer;
+    transition: all .15s;
+    flex-shrink: 0;
+  }
+  .undo-toast__btn:hover {
+    background: hsl(var(--gold) / 0.15);
+    color: white;
+  }
+  .undo-toast__progress {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 2px;
+    background: hsl(var(--gold));
+    transform-origin: left center;
+    animation: toast-progress 5s linear forwards;
+  }
+  @keyframes toast-progress {
+    from { transform: scaleX(1); }
+    to   { transform: scaleX(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="ribbon">
+  <span><span class="tag">Mockup</span> &nbsp; Aandacht — planner queue</span>
+  <span style="opacity:0.4; letter-spacing:0;">docs/mockups/attention-queue-items-v2.html</span>
+</div>
+
+<div class="max-w-[1200px] mx-auto px-8 pt-8 pb-12 space-y-6">
+
+  <!-- ═══ Hero: goedemorgen ═══ -->
+  <div>
+    <div class="greeting-eyebrow">Planner · aandachtsveld</div>
+    <h1 class="greeting-title">Goedemorgen Badr — <em>12</em> items voor jou</h1>
+    <p class="greeting-sub">
+      Het systeem heeft vannacht <strong>203 orders</strong> autonoom afgehandeld.
+      <strong>12</strong> hebben jouw beslissing nodig, waarvan <strong>3</strong> op dit moment kritiek zijn.
+      Verwachte doorlooptijd: <strong>~45 minuten</strong>.
+    </p>
+  </div>
+
+  <!-- ═══ Morning bar — quick status ═══ -->
+  <div class="morning-bar">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold));"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+    <span>15 apr · woensdag · <strong style="color: white; font-weight: 600;">07:48</strong> — systeem is sinds 00:00 actief en heeft <strong style="color: white;">47 planningsbeslissingen</strong> genomen</span>
+    <div class="morning-bar__kbd-hint">
+      <span>Sneltoetsen:</span>
+      <span class="kbd">J</span> <span class="kbd">K</span> navigeer
+      <span class="kbd">1</span> akkoord
+      <span class="kbd">2</span> wijzig
+    </div>
+  </div>
+
+  <!-- ═══ Urgency filter-tabs ═══ -->
+  <div class="urg-tabs">
+    <button class="urg-tab urg-tab--active" data-urg="now">Nu kritiek <span class="urg-tab__count">3</span></button>
+    <button class="urg-tab" data-urg="1h">Binnen 1 uur <span class="urg-tab__count">5</span></button>
+    <button class="urg-tab" data-urg="day">Vandaag <span class="urg-tab__count">4</span></button>
+    <button class="urg-tab" data-urg="week">Deze week <span class="urg-tab__count">7</span></button>
+    <button class="urg-tab" data-urg="all" style="margin-left: auto;">Alles <span class="urg-tab__count">19</span></button>
+  </div>
+
+  <!-- ═══ NU · kritiek ═══ -->
+  <div class="space-y-3">
+    <div class="hairline"></div>
+    <div class="section-hd" data-urg="now">
+      <div class="section-hd__title">
+        <span class="section-hd__dot"></span>
+        Nu · kritiek <em>3</em>
+      </div>
+      <span style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Zonder ingreep binnen 30 min: order loopt vast</span>
+    </div>
+
+    <!-- Item 1 — Info-tracking T-1u escalatie -->
+    <article class="att" data-urg="now">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--info">Info-tracking · escalatie</span>
+          <span class="att__order-ref">ORD-2026-04-0847</span>
+          <span class="att__client">Van der Berg Logistics · <strong>Rotterdam → Düsseldorf</strong></span>
+          <span class="att__deadline">pickup over 0:12</span>
+        </div>
+        <div class="att__question">
+          Klant reageert niet op MRN-verzoek sinds 07:21. Bellen of wachten tot T-0?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Bel direct Jan de Vries (<strong>06 12 34 56 78</strong>) — hoofdcontact VDB voor export-documentatie. Laatste e-mail geopend om 07:19 (delivery bevestigd).
+          </div>
+          <div class="conf" data-conf-popover="ord-0847">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 82%;"></div></div>
+            <span class="conf__val" role="button" tabindex="0" aria-label="Waarom 82%?">82%</span>
+            <div class="conf-popover" role="dialog" aria-label="Uitleg zekerheid">
+              <div class="conf-popover__head">
+                <span class="conf-popover__title">Waarom 82%?</span>
+                <button class="conf-popover__close" aria-label="Sluit">&times;</button>
+              </div>
+              <div class="conf-popover__factors">
+                <div class="conf-factor">
+                  <span class="conf-factor__label">Historie klant VDB</span>
+                  <div class="conf-factor__bar"><div class="conf-factor__bar-fill" style="left:50%; width:36%;"></div></div>
+                  <span class="conf-factor__val">+18%</span>
+                </div>
+                <div class="conf-factor conf-factor--neg">
+                  <span class="conf-factor__label">Recent ADR-incident</span>
+                  <div class="conf-factor__bar"><div class="conf-factor__bar-fill" style="left:34%; width:16%;"></div></div>
+                  <span class="conf-factor__val">-8%</span>
+                </div>
+                <div class="conf-factor">
+                  <span class="conf-factor__label">Weersvoorspelling OK</span>
+                  <div class="conf-factor__bar"><div class="conf-factor__bar-fill" style="left:50%; width:12%;"></div></div>
+                  <span class="conf-factor__val">+6%</span>
+                </div>
+                <div class="conf-factor">
+                  <span class="conf-factor__label">Jan de Vries reageert meestal binnen 20 min</span>
+                  <div class="conf-factor__bar"><div class="conf-factor__bar-fill" style="left:50%; width:22%;"></div></div>
+                  <span class="conf-factor__val">+11%</span>
+                </div>
+              </div>
+              <div class="conf-popover__precedents">
+                <div class="conf-popover__precedents-title">3 soortgelijke precedenten</div>
+                <table>
+                  <tr><td>12-04</td><td>ORD-0712</td><td><span class="outcome-ok">opgepakt T-0:45</span></td></tr>
+                  <tr><td>08-04</td><td>ORD-0655</td><td><span class="outcome-ok">telefonisch bevestigd</span></td></tr>
+                  <tr><td>02-04</td><td>ORD-0571</td><td><span class="outcome-fail">te laat — boete</span></td></tr>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="feedback-bar" data-feedback>
+            <span class="feedback-bar__label">Voorstel:</span>
+            <button class="feedback-btn" data-fb="up" title="Goed voorstel" aria-label="Goed voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l4.59-8a1 1 0 0 1 1.91.7z"/></svg>
+            </button>
+            <button class="feedback-btn" data-fb="down" title="Slecht voorstel" aria-label="Slecht voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-4.59 8a1 1 0 0 1-1.91-.7z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="timeline">
+          <div class="timeline__step timeline__step--done">
+            <span class="timeline__dot"></span>
+            <span class="timeline__time">07:21</span>
+            <span class="timeline__label">e-mail verstuurd</span>
+          </div>
+          <div class="timeline__step timeline__step--done">
+            <span class="timeline__dot"></span>
+            <span class="timeline__time">07:35</span>
+            <span class="timeline__label">rappel verstuurd</span>
+          </div>
+          <div class="timeline__step timeline__step--active">
+            <span class="timeline__dot"></span>
+            <span class="timeline__time">08:00 · nu</span>
+            <span class="timeline__label">T-1u escalatie</span>
+          </div>
+          <div class="timeline__step">
+            <span class="timeline__dot"></span>
+            <span class="timeline__time">08:12</span>
+            <span class="timeline__label">T-0 cutoff pickup</span>
+          </div>
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Bel nu <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Andere contactpersoon</button>
+        <button class="att-btn att-btn--ghost">Uitstel 15 min</button>
+        <button class="att-btn att-btn--subtle">Annuleer order</button>
+      </div>
+    </article>
+
+    <!-- Item 2 — Resource-conflict -->
+    <article class="att" data-urg="now">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--res">Resource-conflict</span>
+          <span class="att__order-ref">ORD-2026-04-0850</span>
+          <span class="att__client">Royal Frozen Foods · <strong>Zaandam → Rotterdam Havens</strong></span>
+          <span class="att__deadline">pickup over 0:28</span>
+        </div>
+        <div class="att__question">
+          Geen koel-voertuig beschikbaar vóór 09:00. Alternatief nodig.
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Verschuif pickup naar <strong>09:45</strong> met Koel groot (beschikbaar om 09:30, chauffeur Ahmed). Levering blijft binnen venster. Alternatief: Koel klein van partner Oostlandse (+€85 subcontract).
+          </div>
+          <div class="conf">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 71%;"></div></div>
+            <span class="conf__val">71%</span>
+          </div>
+          <div class="feedback-bar" data-feedback>
+            <span class="feedback-bar__label">Voorstel:</span>
+            <button class="feedback-btn" data-fb="up" title="Goed voorstel" aria-label="Goed voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l4.59-8a1 1 0 0 1 1.91.7z"/></svg>
+            </button>
+            <button class="feedback-btn" data-fb="down" title="Slecht voorstel" aria-label="Slecht voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-4.59 8a1 1 0 0 1-1.91-.7z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="timeline">
+          <div class="timeline__step timeline__step--done">
+            <span class="timeline__dot"></span>
+            <span class="timeline__time">07:40</span>
+            <span class="timeline__label">VRP-conflict gedetecteerd</span>
+          </div>
+          <div class="timeline__step timeline__step--done">
+            <span class="timeline__dot"></span>
+            <span class="timeline__time">07:42</span>
+            <span class="timeline__label">2 alternatieven berekend</span>
+          </div>
+          <div class="timeline__step timeline__step--active">
+            <span class="timeline__dot"></span>
+            <span class="timeline__time">nu</span>
+            <span class="timeline__label">wacht op jouw keuze</span>
+          </div>
+          <div class="timeline__step">
+            <span class="timeline__dot"></span>
+            <span class="timeline__time">08:30</span>
+            <span class="timeline__label">cutoff auto-subcontract</span>
+          </div>
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Verschuif naar 09:45 <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Subcontract partner (+€85)</button>
+        <button class="att-btn att-btn--ghost">Klant bellen eerst</button>
+      </div>
+    </article>
+
+    <!-- Item 3 — PMT-urgentie -->
+    <article class="att" data-urg="now">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--pmt">PMT · luchtvracht</span>
+          <span class="att__order-ref">ORD-2026-04-0843</span>
+          <span class="att__client">FlowerLink International · <strong>Aalsmeer → Heathrow</strong></span>
+          <span class="att__deadline">cutoff over 0:52</span>
+        </div>
+        <div class="att__question">
+          Geen EDD-slot beschikbaar vóór luchtvracht-cutoff. Switch naar X-RAY of andere vlucht?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Switch naar <strong>X-RAY</strong> bij Schiphol Cargo Security (slot beschikbaar 08:15, capaciteit 4 pallets — matcht). BA1442 cutoff gehaald. Meerprijs €47,50.
+          </div>
+          <div class="conf">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 91%;"></div></div>
+            <span class="conf__val">91%</span>
+          </div>
+          <div class="feedback-bar" data-feedback>
+            <span class="feedback-bar__label">Voorstel:</span>
+            <button class="feedback-btn" data-fb="up" title="Goed voorstel" aria-label="Goed voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l4.59-8a1 1 0 0 1 1.91.7z"/></svg>
+            </button>
+            <button class="feedback-btn" data-fb="down" title="Slecht voorstel" aria-label="Slecht voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-4.59 8a1 1 0 0 1-1.91-.7z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="att__history">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <strong>06:50</strong> EDD-boeking gefaald · <strong>07:12</strong> alternatieven berekend · klant heeft X-RAY goedgekeurd in contract
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Boek X-RAY slot <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Volgende vlucht KL1011</button>
+        <button class="att-btn att-btn--ghost">Klant bellen</button>
+      </div>
+    </article>
+  </div>
+
+  <!-- ═══ BINNEN 1 UUR ═══ -->
+  <div class="space-y-3" style="margin-top: 2rem;">
+    <div class="hairline"></div>
+    <div class="section-hd" data-urg="1h">
+      <div class="section-hd__title">
+        <span class="section-hd__dot"></span>
+        Binnen 1 uur <em>5</em>
+      </div>
+      <span style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">2 toon ik, 3 ingeklapt — toon alle</span>
+    </div>
+
+    <!-- Item 4 — Planning lage confidence -->
+    <article class="att" data-urg="1h">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--plan">Planning · lage zekerheid</span>
+          <span class="att__order-ref">ORD-2026-04-0851</span>
+          <span class="att__client">Kramer Transport · <strong>Amsterdam → Praag</strong></span>
+          <span class="att__deadline">in 0:47</span>
+        </div>
+        <div class="att__question">
+          Route onzeker door ADR-beperkingen DE/CZ corridor. Autoriseer je de voorgestelde planning?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Route via <strong>Düsseldorf → Dresden → Praag</strong> (ADR-corridor bevestigd), chauffeur Kees Jong met ADR-certificaat, DAF Truck incl. diesel <strong>€2.592,45</strong>. Tweede optie A8/A5 is 40 min sneller maar A8 heeft ADR-beperking tussen 22-06u.
+          </div>
+          <div class="conf conf--low" data-conf-popover="ord-0851">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 63%;"></div></div>
+            <span class="conf__val" role="button" tabindex="0" aria-label="Waarom 63%?">63%</span>
+            <div class="conf-popover" role="dialog" aria-label="Uitleg zekerheid">
+              <div class="conf-popover__head">
+                <span class="conf-popover__title">Waarom 63%?</span>
+                <button class="conf-popover__close" aria-label="Sluit">&times;</button>
+              </div>
+              <div class="conf-popover__factors">
+                <div class="conf-factor">
+                  <span class="conf-factor__label">Chauffeur bekend met route</span>
+                  <div class="conf-factor__bar"><div class="conf-factor__bar-fill" style="left:50%; width:8%;"></div></div>
+                  <span class="conf-factor__val">+4%</span>
+                </div>
+                <div class="conf-factor conf-factor--neg">
+                  <span class="conf-factor__label">2/3 soortgelijke ritten door jou gecorrigeerd</span>
+                  <div class="conf-factor__bar"><div class="conf-factor__bar-fill" style="left:26%; width:24%;"></div></div>
+                  <span class="conf-factor__val">-14%</span>
+                </div>
+                <div class="conf-factor conf-factor--neg">
+                  <span class="conf-factor__label">ADR-corridor CZ regelwijziging &lt; 7 dagen</span>
+                  <div class="conf-factor__bar"><div class="conf-factor__bar-fill" style="left:32%; width:18%;"></div></div>
+                  <span class="conf-factor__val">-9%</span>
+                </div>
+                <div class="conf-factor">
+                  <span class="conf-factor__label">VRP-solver heeft unieke oplossing</span>
+                  <div class="conf-factor__bar"><div class="conf-factor__bar-fill" style="left:50%; width:18%;"></div></div>
+                  <span class="conf-factor__val">+9%</span>
+                </div>
+              </div>
+              <div class="conf-popover__precedents">
+                <div class="conf-popover__precedents-title">3 soortgelijke precedenten</div>
+                <table>
+                  <tr><td>09-04</td><td>ORD-0668</td><td><span class="outcome-fail">gecorrigeerd naar A8</span></td></tr>
+                  <tr><td>27-03</td><td>ORD-0502</td><td><span class="outcome-fail">gecorrigeerd naar A8</span></td></tr>
+                  <tr><td>14-03</td><td>ORD-0387</td><td><span class="outcome-ok">route gevolgd</span></td></tr>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="feedback-bar" data-feedback>
+            <span class="feedback-bar__label">Voorstel:</span>
+            <button class="feedback-btn" data-fb="up" title="Goed voorstel" aria-label="Goed voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l4.59-8a1 1 0 0 1 1.91.7z"/></svg>
+            </button>
+            <button class="feedback-btn" data-fb="down" title="Slecht voorstel" aria-label="Slecht voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-4.59 8a1 1 0 0 1-1.91-.7z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="att__history">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <strong>Soortgelijke orders gepland 3×</strong>, 2× door jou gecorrigeerd naar andere route — leer-signaal actief
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Goedkeuren plan <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Wijzig route</button>
+        <button class="att-btn att-btn--ghost">Andere chauffeur</button>
+      </div>
+    </article>
+
+    <!-- Item 5 — Tarief-afwijking -->
+    <article class="att" data-urg="1h">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--price">Tarief · Schiphol-regio</span>
+          <span class="att__order-ref">ORD-2026-04-0852</span>
+          <span class="att__client">MedSupply Nederland · <strong>Hoofddorp → Schiphol cargo</strong></span>
+          <span class="att__deadline">in 0:55</span>
+        </div>
+        <div class="att__question">
+          Schiphol-regio valt buiten standaard matrix. Handmatig tarief bevestigen?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Tarief <strong>€385,00</strong> op basis van vorige 4 MedSupply-Schiphol ritten (gemiddeld €378, range €365–€401). Reden: maatwerk-afspraak raamcontract §7.2.
+          </div>
+          <div class="conf">
+            <span class="conf__label">Zekerheid</span>
+            <div class="conf__bar"><div class="conf__bar-fill" style="width: 87%;"></div></div>
+            <span class="conf__val">87%</span>
+          </div>
+          <div class="feedback-bar" data-feedback>
+            <span class="feedback-bar__label">Voorstel:</span>
+            <button class="feedback-btn" data-fb="up" title="Goed voorstel" aria-label="Goed voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l4.59-8a1 1 0 0 1 1.91.7z"/></svg>
+            </button>
+            <button class="feedback-btn" data-fb="down" title="Slecht voorstel" aria-label="Slecht voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-4.59 8a1 1 0 0 1-1.91-.7z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="rule-detect" data-rule-detect>
+          <span class="rule-detect__icon" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.94 14.34 4 20.5l.01.01L9.95 14.35"/><path d="m14 10 1.5-1.5"/><path d="M20 2v4"/><path d="M22 4h-4"/><path d="M4 16v2"/><path d="M5 17H3"/><path d="M12 2l1.88 4.12L18 8l-4.12 1.88L12 14l-1.88-4.12L6 8l4.12-1.88z"/></svg>
+          </span>
+          <span class="rule-detect__text">
+            <strong>Patroon gedetecteerd</strong> — je hebt MedSupply-Schiphol 4× handmatig op €385 gezet. Wil ik dit als regel vastleggen?
+          </span>
+          <span class="rule-detect__actions">
+            <button class="rule-detect__btn rule-detect__btn--primary" data-rule-accept>Ja, maak regel</button>
+            <button class="rule-detect__btn rule-detect__btn--ghost" data-rule-dismiss>Niet nu</button>
+          </span>
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Bevestig €385,00 <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">Pas tarief aan</button>
+      </div>
+    </article>
+
+    <!-- Collapsed hint -->
+    <button style="width: 100%; padding: 0.75rem 1rem; background: transparent; border: 1px dashed hsl(var(--border)); border-radius: 0.625rem; font-size: 0.8125rem; color: hsl(var(--muted-foreground)); cursor: pointer; font-family: var(--font-display); font-weight: 500;">
+      + 3 minder urgente items — toon alle binnen dit uur
+    </button>
+  </div>
+
+  <!-- ═══ VANDAAG ═══ -->
+  <div class="space-y-3" style="margin-top: 2rem;">
+    <div class="hairline"></div>
+    <div class="section-hd" data-urg="day">
+      <div class="section-hd__title">
+        <span class="section-hd__dot"></span>
+        Vandaag <em>4</em>
+      </div>
+    </div>
+
+    <!-- Item 6 — Klantbevestiging -->
+    <article class="att" data-urg="day">
+      <div>
+        <div class="att__meta">
+          <span class="att__type att__type--cust">Klant-bevestiging</span>
+          <span class="att__order-ref">ORD-2026-04-0838</span>
+          <span class="att__client">AutoParts Europa · <strong>Eindhoven → Milaan</strong></span>
+          <span class="att__deadline">pickup morgen 07:00</span>
+        </div>
+        <div class="att__question">
+          Klant vraagt om opsplitsing in 2 rit-dagen i.p.v. 1. Akkoord met meerprijs?
+        </div>
+        <div class="att__proposal">
+          <div class="att__proposal-head">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep));"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span class="att__proposal-label">Systeem-voorstel</span>
+          </div>
+          <div class="att__proposal-text">
+            Bevestig opsplitsing met <strong>+€320 meerprijs</strong> (overnight chauffeur + hotel). Alternatief: enkele rit 14u met 2 chauffeurs in ploegendienst (+€580). Klant heeft in contract optie A geaccepteerd bij vorige 7 ritten.
+          </div>
+          <div class="feedback-bar" data-feedback>
+            <span class="feedback-bar__label">Voorstel:</span>
+            <button class="feedback-btn" data-fb="up" title="Goed voorstel" aria-label="Goed voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l4.59-8a1 1 0 0 1 1.91.7z"/></svg>
+            </button>
+            <button class="feedback-btn" data-fb="down" title="Slecht voorstel" aria-label="Slecht voorstel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-4.59 8a1 1 0 0 1-1.91-.7z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="att__actions">
+        <button class="att-btn att-btn--primary">Bevestig +€320 <span class="kbd" style="background:hsl(0 0% 100% / 0.15); color: white; border-color: hsl(0 0% 100% / 0.2);">1</span></button>
+        <button class="att-btn att-btn--ghost">2 chauffeurs (+€580)</button>
+        <button class="att-btn att-btn--subtle">Offerte maken</button>
+      </div>
+    </article>
+  </div>
+
+  <!-- ═══ Footer: wat deed het systeem ═══ -->
+  <div class="space-y-3" style="margin-top: 3rem;">
+    <div class="hairline"></div>
+    <div class="section-hd">
+      <div class="section-hd__title">
+        <span class="section-hd__dot" style="background: hsl(var(--gold)); box-shadow: 0 0 0 3px hsl(var(--card)), 0 0 0 5px hsl(var(--gold) / 0.2);"></span>
+        Wat heeft het systeem vannacht gedaan
+      </div>
+      <button class="att-btn att-btn--subtle">Toon volledig audit-log</button>
+    </div>
+    <div class="empty">
+      <div class="empty__title">203 orders autonoom afgehandeld · 47 planningsbeslissingen</div>
+      <div class="empty__sub">
+        Routes berekend voor 156 ritten · 31 tarieven uit matrix · 12 info-rappels verstuurd · 4 EDD-slots geboekt · 2 CMR-verklaringen gegenereerd.
+        Gemiddelde confidence: <strong style="color: hsl(var(--gold-deep)); font-style: normal; font-weight: 600;">94%</strong>.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false"></div>
+
+<script>
+  // Urgency-tab filter
+  document.querySelectorAll('.urg-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.urg-tab').forEach(x => x.classList.remove('urg-tab--active'));
+      t.classList.add('urg-tab--active');
+    });
+  });
+
+  // ── v2 · Confidence-popover (klik op .conf__val opent uitleg, één tegelijk)
+  function closeAllPopovers() {
+    document.querySelectorAll('.conf-popover--open').forEach(p => p.classList.remove('conf-popover--open'));
+  }
+  document.querySelectorAll('[data-conf-popover] .conf__val').forEach(val => {
+    val.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pop = val.parentElement.querySelector('.conf-popover');
+      if (!pop) return;
+      const wasOpen = pop.classList.contains('conf-popover--open');
+      closeAllPopovers();
+      if (!wasOpen) pop.classList.add('conf-popover--open');
+    });
+    val.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); val.click(); }
+    });
+  });
+  document.querySelectorAll('.conf-popover__close').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); closeAllPopovers(); });
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.conf-popover') && !e.target.closest('[data-conf-popover]')) closeAllPopovers();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllPopovers(); });
+
+  // ── v2 · Feedback thumbs (up/down, toggle + glow)
+  document.querySelectorAll('[data-feedback] .feedback-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const bar = btn.closest('[data-feedback]');
+      const wasActive = btn.classList.contains('feedback-btn--active');
+      bar.querySelectorAll('.feedback-btn').forEach(x => x.classList.remove('feedback-btn--active'));
+      if (!wasActive) {
+        btn.classList.add('feedback-btn--active', 'feedback-btn--glow');
+        setTimeout(() => btn.classList.remove('feedback-btn--glow'), 900);
+      }
+    });
+  });
+
+  // ── v2 · Rule-detector (accept/dismiss)
+  document.querySelectorAll('[data-rule-detect]').forEach(box => {
+    const accept = box.querySelector('[data-rule-accept]');
+    const dismiss = box.querySelector('[data-rule-dismiss]');
+    if (accept) accept.addEventListener('click', (e) => {
+      e.stopPropagation();
+      box.classList.add('rule-detect--done');
+      box.querySelector('.rule-detect__text').innerHTML = '<strong>Regel vastgelegd</strong> — MedSupply-Schiphol &rarr; standaard €385. Je ziet dit niet meer terug.';
+      box.querySelector('.rule-detect__actions').remove();
+    });
+    if (dismiss) dismiss.addEventListener('click', (e) => {
+      e.stopPropagation();
+      box.style.transition = 'opacity .2s, margin .2s, padding .2s, height .2s';
+      box.style.opacity = '0';
+      box.style.marginTop = '0';
+      setTimeout(() => box.remove(), 220);
+    });
+  });
+
+  // ── v2 · Undo-toast stack (verschijnt na primary-actie, 5s countdown)
+  const toastStack = document.getElementById('toastStack');
+  function spawnToast({ title, meta, onUndo }) {
+    const t = document.createElement('div');
+    t.className = 'undo-toast';
+    t.innerHTML = `
+      <div class="undo-toast__row">
+        <span class="undo-toast__check" aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <div class="undo-toast__body">
+          <div class="undo-toast__title">${title}</div>
+          <div class="undo-toast__meta">${meta}</div>
+        </div>
+        <button class="undo-toast__btn" type="button">Ongedaan maken</button>
+      </div>
+      <div class="undo-toast__progress"></div>
+    `;
+    toastStack.appendChild(t);
+    const dismiss = () => {
+      if (!t.isConnected) return;
+      t.classList.add('undo-toast--out');
+      setTimeout(() => t.remove(), 220);
+    };
+    const timer = setTimeout(dismiss, 5000);
+    t.querySelector('.undo-toast__btn').addEventListener('click', () => {
+      clearTimeout(timer);
+      dismiss();
+      if (onUndo) onUndo();
+    });
+  }
+
+  // Primary-actie: slide-out item + spawn toast (undo simuleert terughalen)
+  document.querySelectorAll('.att-btn--primary').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const art = e.target.closest('article.att');
+      if (!art) return;
+      const orderRef = art.querySelector('.att__order-ref')?.textContent?.trim() || 'order';
+      const shortRef = orderRef.replace(/^ORD-\d{4}-\d{2}-/, 'ORD-');
+      art.style.transition = 'opacity .3s, transform .4s cubic-bezier(0.4, 0, 0.2, 1), margin .3s';
+      art.style.opacity = '0';
+      art.style.transform = 'translateX(12px) scale(0.98)';
+      setTimeout(() => { art.style.marginTop = '-' + art.offsetHeight + 'px'; }, 10);
+      setTimeout(() => art.remove(), 400);
+      spawnToast({
+        title: 'Goedgekeurd · ' + shortRef,
+        meta: 'ongedaan maken in 5 sec',
+        onUndo: () => alert('Item zou teruggehaald worden: ' + shortRef),
+      });
+    });
+  });
+</script>
+</body>
+</html>

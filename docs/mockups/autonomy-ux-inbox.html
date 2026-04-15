@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OrderFlow Suite — Autonomy UX Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwindcss.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+    }
+  }
+}
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+body { font-family: 'Inter', system-ui, sans-serif; }
+.confidence-bar { transition: width 0.6s ease; }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+<!-- TAB NAVIGATION -->
+<div class="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex gap-4">
+  <button onclick="showPage('inbox')" id="tab-inbox" class="px-4 py-2 text-sm font-semibold rounded-lg bg-gray-900 text-white">Inbox</button>
+  <button onclick="showPage('dashboard')" id="tab-dashboard" class="px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Dashboard</button>
+  <button onclick="showPage('planning')" id="tab-planning" class="px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Planning</button>
+  <button onclick="showPage('dispatch')" id="tab-dispatch" class="px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Dispatch</button>
+  <button onclick="showPage('facturatie')" id="tab-facturatie" class="px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Facturatie</button>
+  <span class="ml-auto text-xs text-gray-400 self-center">UX Mockup — Release 2 Autonomy</span>
+</div>
+
+<!-- ============================================================ -->
+<!-- INBOX PAGE -->
+<!-- ============================================================ -->
+<div id="page-inbox" class="flex h-[calc(100vh-57px)]">
+
+  <!-- Sidebar -->
+  <div class="w-56 bg-white border-r border-gray-200 flex flex-col p-4 gap-1 shrink-0">
+    <div class="mb-4 px-2">
+      <p class="text-blue-600 font-black tracking-tighter text-sm uppercase">AI Inbox</p>
+      <p class="text-[11px] text-gray-400">TransBadr B.V.</p>
+    </div>
+    <nav class="flex flex-col gap-0.5 flex-1">
+      <button class="rounded-lg flex items-center gap-2.5 px-3 py-2 text-sm font-medium bg-gray-100 text-gray-900 w-full">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+        <span class="flex-1 text-left">Alle</span>
+        <span class="text-[10px] text-gray-400">12</span>
+      </button>
+      <button class="rounded-lg flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 w-full">
+        <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="flex-1 text-left">Actie nodig</span>
+        <span class="bg-blue-600 text-white px-1.5 py-0.5 rounded-full text-[10px] font-bold">3</span>
+      </button>
+      <button class="rounded-lg flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 w-full">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="flex-1 text-left">Klaar</span>
+        <span class="text-[10px] text-gray-400">4</span>
+      </button>
+
+      <!-- NEW: Auto-bevestigd filter -->
+      <button class="rounded-lg flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 w-full relative group">
+        <svg class="h-4 w-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <span class="flex-1 text-left">Auto-bevestigd</span>
+        <span class="text-[10px] text-violet-500 font-semibold">5</span>
+        <span class="absolute -top-1 -right-1 w-2 h-2 bg-violet-400 rounded-full animate-pulse"></span>
+      </button>
+
+      <button class="rounded-lg flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 w-full">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        <span class="flex-1 text-left">Verzonden</span>
+        <span class="text-[10px] text-gray-400">0</span>
+      </button>
+      <button class="rounded-lg flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 w-full">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        <span class="flex-1 text-left">Concepten</span>
+        <span class="text-[10px] text-gray-400">0</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- VALIDATION BANNER + Inbox List -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- VALIDATION BANNER (NEW) -->
+    <div class="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex items-center gap-3">
+      <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+      <span class="text-sm text-blue-800 font-medium">5 items wachten op goedkeuring</span>
+      <span class="text-xs text-blue-500">3 orders &middot; 1 rit &middot; 1 factuur</span>
+      <button onclick="togglePanel()" class="ml-auto text-sm text-blue-700 font-semibold hover:text-blue-900 flex items-center gap-1">
+        Bekijk <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+
+    <!-- Search bar -->
+    <div class="px-4 py-3 border-b border-gray-100">
+      <div class="relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input class="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-300 focus:outline-none" placeholder="Zoeken in inbox...">
+      </div>
+    </div>
+
+    <!-- Inbox items -->
+    <div class="flex-1 overflow-y-auto">
+
+      <!-- Item 1: Auto-bevestigd (high confidence) -->
+      <div class="flex border-b border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+        <div class="w-[3px] bg-emerald-400 shrink-0 rounded-r"></div>
+        <div class="flex-1 px-4 py-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm text-gray-900">Van der Berg Logistics</span>
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">Auto &#10003;</span>
+            <span class="text-xs text-gray-400 ml-auto">09:14</span>
+          </div>
+          <p class="text-sm text-gray-500 truncate">RE: Transport Maasvlakte → Venlo, 12 pallets</p>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 font-medium">96%</span>
+            <span class="text-[10px] text-gray-400">Klant herkend &middot; Adres uit klantboek</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 2: Auto-bevestigd (high confidence) -->
+      <div class="flex border-b border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+        <div class="w-[3px] bg-emerald-400 shrink-0 rounded-r"></div>
+        <div class="flex-1 px-4 py-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm text-gray-900">Fresh Express B.V.</span>
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">Auto &#10003;</span>
+            <span class="text-xs text-gray-400 ml-auto">09:02</span>
+          </div>
+          <p class="text-sm text-gray-500 truncate">Koeltransport De Veiling → Albert Heijn DC Zaandam</p>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 font-medium">94%</span>
+            <span class="text-[10px] text-gray-400">47 eerdere orders &middot; Standaard route</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 3: Needs validation (medium confidence) -->
+      <div class="flex border-b border-gray-100 hover:bg-blue-50/30 cursor-pointer bg-white">
+        <div class="w-[3px] bg-amber-400 shrink-0 rounded-r"></div>
+        <div class="flex-1 px-4 py-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm text-gray-900">Koopman Transport</span>
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">Validatie</span>
+            <span class="text-xs text-gray-400 ml-auto">08:47</span>
+          </div>
+          <p class="text-sm text-gray-500 truncate">ADR transport Rotterdam → Antwerpen, 2 IBC containers</p>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">82%</span>
+            <span class="text-[10px] text-gray-400">ADR vereist menselijke review</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 4: Needs action (low confidence) -->
+      <div class="flex border-b border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+        <div class="w-[3px] bg-red-400 shrink-0 rounded-r"></div>
+        <div class="flex-1 px-4 py-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm text-gray-900">Onbekende afzender</span>
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">Actie nodig</span>
+            <span class="text-xs text-gray-400 ml-auto">08:31</span>
+          </div>
+          <p class="text-sm text-gray-500 truncate">Fwd: Ophalen Breda donderdag — geen gewicht/afmetingen</p>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-medium">34%</span>
+            <span class="text-[10px] text-gray-400">Klant niet herkend &middot; 3 velden ontbreken</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 5: Medium confidence, validation needed -->
+      <div class="flex border-b border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+        <div class="w-[3px] bg-amber-400 shrink-0 rounded-r"></div>
+        <div class="flex-1 px-4 py-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm text-gray-900">Bakker Logistiek</span>
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">Validatie</span>
+            <span class="text-xs text-gray-400 ml-auto">08:15</span>
+          </div>
+          <p class="text-sm text-gray-500 truncate">Groupage Randstad — 6 adressen, tijdvensters onduidelijk</p>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">71%</span>
+            <span class="text-[10px] text-gray-400">Tijdvensters niet geparsed</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item 6: Auto confirmed -->
+      <div class="flex border-b border-gray-100 hover:bg-gray-50/50 cursor-pointer">
+        <div class="w-[3px] bg-emerald-400 shrink-0 rounded-r"></div>
+        <div class="flex-1 px-4 py-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm text-gray-900">Van der Berg Logistics</span>
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">Auto &#10003;</span>
+            <span class="text-xs text-gray-400 ml-auto">07:55</span>
+          </div>
+          <p class="text-sm text-gray-500 truncate">Transport Schiphol Cargo → Eindhoven, 4 pallets</p>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 font-medium">98%</span>
+            <span class="text-[10px] text-gray-400">Vaste klant &middot; Standaard route</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Review Panel (right) -->
+  <div class="w-[400px] border-l border-gray-200 bg-white flex flex-col shrink-0">
+    <div class="px-4 py-3 border-b border-gray-100">
+      <h3 class="font-semibold text-sm">Koopman Transport</h3>
+      <p class="text-xs text-gray-400">ADR transport Rotterdam → Antwerpen</p>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+      <!-- AI Confidence block (NEW) -->
+      <div class="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-amber-800">AI Confidence</span>
+          <span class="text-lg font-bold text-amber-700">82%</span>
+        </div>
+        <div class="w-full bg-amber-200/50 rounded-full h-1.5 mb-2">
+          <div class="bg-amber-500 h-1.5 rounded-full confidence-bar" style="width: 82%"></div>
+        </div>
+        <div class="space-y-1">
+          <p class="text-[11px] text-amber-700 flex items-center gap-1">
+            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"/></svg>
+            ADR-transport vereist menselijke review
+          </p>
+          <p class="text-[11px] text-amber-700 flex items-center gap-1">
+            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/></svg>
+            Klant herkend: 12 eerdere orders
+          </p>
+          <p class="text-[11px] text-amber-700 flex items-center gap-1">
+            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/></svg>
+            Adressen geocoded via Google Places
+          </p>
+        </div>
+      </div>
+
+      <!-- Extracted fields -->
+      <div class="space-y-3">
+        <div>
+          <label class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Klant</label>
+          <input class="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-lg" value="Koopman Transport B.V.">
+        </div>
+        <div>
+          <label class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Ophaaladres</label>
+          <input class="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-lg" value="Botlekweg 32, 3197 KA Rotterdam">
+        </div>
+        <div>
+          <label class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Afleveradres</label>
+          <input class="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-lg" value="Scheldelaan 460, 2030 Antwerpen">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Gewicht</label>
+            <input class="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-lg" value="2.400 kg">
+          </div>
+          <div>
+            <label class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Aantal</label>
+            <input class="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-lg" value="2 IBC">
+          </div>
+        </div>
+        <div>
+          <label class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Vereisten</label>
+          <div class="flex gap-2 mt-1">
+            <span class="px-2 py-1 text-xs font-medium rounded bg-red-100 text-red-700 border border-red-200">ADR</span>
+            <span class="px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-500 border border-gray-200">+ Toevoegen</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="border-t border-gray-200 p-4 space-y-2">
+      <button class="w-full py-2.5 px-4 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/></svg>
+        Goedkeuren &amp; Order aanmaken
+      </button>
+      <div class="flex gap-2">
+        <button class="flex-1 py-2 px-3 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Follow-up sturen</button>
+        <button class="py-2 px-3 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50">Verwijderen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VALIDATION PANEL (slide-over, initially hidden) -->
+  <div id="validation-panel" class="fixed right-0 top-[57px] bottom-0 w-[420px] bg-white border-l border-gray-200 shadow-2xl transform translate-x-full transition-transform duration-300 z-40 flex flex-col">
+    <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+      <div>
+        <h3 class="font-semibold text-sm">Wachtrij</h3>
+        <p class="text-xs text-gray-400">5 items wachten op goedkeuring</p>
+      </div>
+      <button onclick="togglePanel()" class="p-1.5 rounded-lg hover:bg-gray-100">
+        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto">
+      <!-- Section: Orders -->
+      <div class="px-4 py-2 bg-gray-50 border-b border-gray-100">
+        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Orders (3)</span>
+      </div>
+
+      <div class="border-b border-gray-100 p-4 hover:bg-gray-50/50">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+            <svg class="h-4 w-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-900">Order #1842 bevestigen</p>
+            <p class="text-xs text-gray-500 truncate">Koopman Transport &middot; ADR Rotterdam → Antwerpen</p>
+            <span class="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium border border-amber-200">82%</span>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3 ml-11">
+          <button class="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700">Goedkeuren</button>
+          <button class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50">Bekijk</button>
+        </div>
+      </div>
+
+      <div class="border-b border-gray-100 p-4 hover:bg-gray-50/50">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+            <svg class="h-4 w-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-900">Order #1845 bevestigen</p>
+            <p class="text-xs text-gray-500 truncate">Bakker Logistiek &middot; Groupage Randstad 6 stops</p>
+            <span class="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium border border-amber-200">71%</span>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3 ml-11">
+          <button class="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700">Goedkeuren</button>
+          <button class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50">Bekijk</button>
+        </div>
+      </div>
+
+      <div class="border-b border-gray-100 p-4 hover:bg-gray-50/50">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+            <svg class="h-4 w-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-2.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-900">Order #1847 bevestigen</p>
+            <p class="text-xs text-gray-500 truncate">Onbekende afzender &middot; Ophalen Breda</p>
+            <span class="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-medium border border-red-200">34%</span>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3 ml-11">
+          <button class="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700">Goedkeuren</button>
+          <button class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50">Bekijk</button>
+        </div>
+      </div>
+
+      <!-- Section: Ritten -->
+      <div class="px-4 py-2 bg-gray-50 border-b border-gray-100">
+        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Ritten (1)</span>
+      </div>
+
+      <div class="border-b border-gray-100 p-4 hover:bg-gray-50/50">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+            <svg class="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-900">Rit R-2026-0891 dispatchen</p>
+            <p class="text-xs text-gray-500 truncate">3 stops &middot; MAN TGX (BR-456-NL) &middot; Jan de Vries</p>
+            <span class="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium border border-amber-200">85%</span>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3 ml-11">
+          <button class="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700">Goedkeuren</button>
+          <button class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50">Bekijk</button>
+        </div>
+      </div>
+
+      <!-- Section: Facturen -->
+      <div class="px-4 py-2 bg-gray-50 border-b border-gray-100">
+        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Facturen (1)</span>
+      </div>
+
+      <div class="border-b border-gray-100 p-4 hover:bg-gray-50/50">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+            <svg class="h-4 w-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-900">Factuur INV-2026-0891 verzenden</p>
+            <p class="text-xs text-gray-500 truncate">Van der Berg &middot; &euro;1.247,50 &middot; 3 orders</p>
+            <span class="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 font-medium border border-emerald-200">97%</span>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3 ml-11">
+          <button class="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700">Goedkeuren</button>
+          <button class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50">Bekijk</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DASHBOARD PAGE -->
+<!-- ============================================================ -->
+<div id="page-dashboard" class="hidden p-6 max-w-7xl mx-auto space-y-4">
+  <!-- Header -->
+  <div>
+    <h1 class="text-xl font-bold">Operationeel Dashboard</h1>
+    <p class="text-sm text-gray-500">zaterdag 5 april 2026</p>
+  </div>
+
+  <!-- Validation Banner -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+    <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+    <span class="text-sm text-blue-800 font-medium">5 items wachten op goedkeuring</span>
+    <span class="text-xs text-blue-500">3 orders &middot; 1 rit &middot; 1 factuur</span>
+    <button class="ml-auto text-sm text-blue-700 font-semibold hover:text-blue-900">Bekijk &rarr;</button>
+  </div>
+
+  <!-- KPI Strip (7 items now) -->
+  <div class="grid grid-cols-7 gap-3">
+    <div class="bg-white rounded-xl border border-gray-200 p-3 text-center">
+      <p class="text-2xl font-bold">142</p>
+      <p class="text-[10px] text-gray-500 mt-1">Totaal orders</p>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-3 text-center">
+      <p class="text-2xl font-bold">18</p>
+      <p class="text-[10px] text-gray-500 mt-1">Voertuigen</p>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-3 text-center">
+      <p class="text-2xl font-bold text-sky-600">7</p>
+      <p class="text-[10px] text-gray-500 mt-1">Nieuw</p>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-3 text-center">
+      <p class="text-2xl font-bold text-blue-600">12</p>
+      <p class="text-[10px] text-gray-500 mt-1">Onderweg</p>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-3 text-center">
+      <p class="text-2xl font-bold text-emerald-600">89</p>
+      <p class="text-[10px] text-gray-500 mt-1">Afgeleverd</p>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-3 text-center">
+      <p class="text-2xl font-bold text-red-600">2</p>
+      <p class="text-[10px] text-gray-500 mt-1">Achterstallig</p>
+    </div>
+    <!-- NEW: Autonoom KPI -->
+    <div class="bg-white rounded-xl border border-violet-200 p-3 text-center bg-violet-50/30">
+      <p class="text-2xl font-bold text-violet-600">34</p>
+      <p class="text-[10px] text-violet-600 mt-1 font-medium">Autonoom vandaag</p>
+    </div>
+  </div>
+
+  <!-- Recent orders with source badges -->
+  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-sm font-semibold">Recente orders</h2>
+      <a href="#" class="text-xs text-blue-600 hover:underline">Bekijk alles &rarr;</a>
+    </div>
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-100 bg-gray-50/50">
+          <th class="text-left text-[11px] font-medium text-gray-500 px-4 py-2">Order</th>
+          <th class="text-left text-[11px] font-medium text-gray-500 px-4 py-2">Klant</th>
+          <th class="text-left text-[11px] font-medium text-gray-500 px-4 py-2">Bezorging</th>
+          <th class="text-right text-[11px] font-medium text-gray-500 px-4 py-2">Gewicht</th>
+          <th class="text-left text-[11px] font-medium text-gray-500 px-4 py-2">Status</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        <tr class="hover:bg-gray-50/50">
+          <td class="px-4 py-2.5 text-sm font-mono font-medium">#1842</td>
+          <td class="px-4 py-2.5 text-sm text-gray-600">Koopman Transport</td>
+          <td class="px-4 py-2.5 text-sm text-gray-500">Antwerpen</td>
+          <td class="px-4 py-2.5 text-sm text-gray-600 text-right tabular-nums">2.400 kg</td>
+          <td class="px-4 py-2.5">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-100 text-amber-700">PENDING</span>
+            </div>
+          </td>
+        </tr>
+        <tr class="hover:bg-gray-50/50">
+          <td class="px-4 py-2.5 text-sm font-mono font-medium">#1841</td>
+          <td class="px-4 py-2.5 text-sm text-gray-600">Van der Berg Logistics</td>
+          <td class="px-4 py-2.5 text-sm text-gray-500">Venlo</td>
+          <td class="px-4 py-2.5 text-sm text-gray-600 text-right tabular-nums">3.200 kg</td>
+          <td class="px-4 py-2.5">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-100 text-emerald-700">CONFIRMED</span>
+              <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">Auto</span>
+            </div>
+          </td>
+        </tr>
+        <tr class="hover:bg-gray-50/50">
+          <td class="px-4 py-2.5 text-sm font-mono font-medium">#1840</td>
+          <td class="px-4 py-2.5 text-sm text-gray-600">Fresh Express B.V.</td>
+          <td class="px-4 py-2.5 text-sm text-gray-500">Zaandam</td>
+          <td class="px-4 py-2.5 text-sm text-gray-600 text-right tabular-nums">1.800 kg</td>
+          <td class="px-4 py-2.5">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700">PLANNED</span>
+              <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">Auto</span>
+            </div>
+          </td>
+        </tr>
+        <tr class="hover:bg-gray-50/50">
+          <td class="px-4 py-2.5 text-sm font-mono font-medium">#1839</td>
+          <td class="px-4 py-2.5 text-sm text-gray-600">Bakker Logistiek</td>
+          <td class="px-4 py-2.5 text-sm text-gray-500">Utrecht</td>
+          <td class="px-4 py-2.5 text-sm text-gray-600 text-right tabular-nums">950 kg</td>
+          <td class="px-4 py-2.5">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-100 text-emerald-700">DELIVERED</span>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PLANNING PAGE -->
+<!-- ============================================================ -->
+<div id="page-planning" class="hidden p-6 max-w-7xl mx-auto space-y-4">
+  <div>
+    <h1 class="text-xl font-bold">Planning</h1>
+    <p class="text-sm text-gray-500">zaterdag 5 april 2026</p>
+  </div>
+
+  <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+    <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+    <span class="text-sm text-blue-800 font-medium">5 items wachten op goedkeuring</span>
+    <button class="ml-auto text-sm text-blue-700 font-semibold">Bekijk &rarr;</button>
+  </div>
+
+  <!-- System notification -->
+  <div class="bg-violet-50 border border-violet-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+    <svg class="h-4 w-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    <span class="text-sm text-violet-800">Systeem heeft 3 orders automatisch ingepland op basis van regio-clustering</span>
+    <button class="ml-auto text-xs text-violet-600 font-medium underline">Toon wijzigingen</button>
+    <button class="text-xs text-violet-400">Sluiten</button>
+  </div>
+
+  <!-- Vehicle cards with auto-assigned indicator -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+            <svg class="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"/></svg>
+          </div>
+          <div>
+            <p class="text-sm font-semibold">MAN TGX · BR-456-NL</p>
+            <p class="text-xs text-gray-400">Jan de Vries · 4/5 stops</p>
+          </div>
+        </div>
+        <span class="text-xs text-gray-400">2.800 / 4.000 kg</span>
+      </div>
+      <div class="space-y-1.5">
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded bg-gray-50 text-sm">
+          <span class="w-5 text-center text-xs text-gray-400">1</span>
+          <span class="flex-1 truncate">Rotterdam → Venlo</span>
+          <span class="text-xs text-gray-400">12 plt</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded bg-gray-50 text-sm">
+          <span class="w-5 text-center text-xs text-gray-400">2</span>
+          <span class="flex-1 truncate">Venlo → Eindhoven</span>
+          <span class="text-xs text-gray-400">4 plt</span>
+        </div>
+        <!-- Auto-assigned order -->
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded bg-violet-50 border border-violet-100 text-sm">
+          <span class="w-5 text-center text-xs text-violet-400">3</span>
+          <span class="flex-1 truncate text-violet-900">Eindhoven → Tilburg</span>
+          <span class="px-1 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-600">Auto</span>
+          <span class="text-xs text-gray-400">6 plt</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded bg-gray-50 text-sm">
+          <span class="w-5 text-center text-xs text-gray-400">4</span>
+          <span class="flex-1 truncate">Tilburg → Breda</span>
+          <span class="text-xs text-gray-400">8 plt</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <svg class="h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"/></svg>
+          </div>
+          <div>
+            <p class="text-sm font-semibold">DAF XF · HK-789-NL</p>
+            <p class="text-xs text-gray-400">Piet Jansen · 3/3 stops</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">Auto &#10003;</span>
+          <span class="text-xs text-gray-400">1.200 / 3.500 kg</span>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded bg-violet-50 border border-violet-100 text-sm">
+          <span class="w-5 text-center text-xs text-violet-400">1</span>
+          <span class="flex-1 truncate text-violet-900">Amsterdam → Utrecht</span>
+          <span class="px-1 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-600">Auto</span>
+          <span class="text-xs text-gray-400">8 plt</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded bg-violet-50 border border-violet-100 text-sm">
+          <span class="w-5 text-center text-xs text-violet-400">2</span>
+          <span class="flex-1 truncate text-violet-900">Utrecht → Amersfoort</span>
+          <span class="px-1 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-600">Auto</span>
+          <span class="text-xs text-gray-400">4 plt</span>
+        </div>
+        <div class="flex items-center gap-2 px-2 py-1.5 rounded bg-violet-50 border border-violet-100 text-sm">
+          <span class="w-5 text-center text-xs text-violet-400">3</span>
+          <span class="flex-1 truncate text-violet-900">Amersfoort → Apeldoorn</span>
+          <span class="px-1 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-600">Auto</span>
+          <span class="text-xs text-gray-400">6 plt</span>
+        </div>
+      </div>
+      <p class="text-[10px] text-violet-500 mt-2 pl-2">Volledige rit automatisch ingepland (confidence 93%)</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DISPATCH PAGE -->
+<!-- ============================================================ -->
+<div id="page-dispatch" class="hidden p-6 max-w-7xl mx-auto space-y-4">
+  <div>
+    <h1 class="text-xl font-bold">Dispatch</h1>
+    <p class="text-sm text-gray-500">zaterdag 5 april 2026</p>
+  </div>
+
+  <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+    <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+    <span class="text-sm text-blue-800 font-medium">1 rit wacht op goedkeuring voor dispatch</span>
+    <button class="ml-auto text-sm text-blue-700 font-semibold">Bekijk &rarr;</button>
+  </div>
+
+  <!-- Trip cards with auto-dispatch indicator -->
+  <div class="space-y-3">
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <svg class="h-5 w-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/></svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <p class="text-sm font-semibold">R-2026-0889</p>
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-100 text-emerald-700">VERZONDEN</span>
+              <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">Auto</span>
+            </div>
+            <p class="text-xs text-gray-500">DAF XF · Piet Jansen · 3 stops · Auto-dispatched om 06:00</p>
+          </div>
+        </div>
+        <span class="text-sm font-medium text-emerald-600">3/3 on-time</span>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-amber-200 p-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+            <svg class="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <p class="text-sm font-semibold">R-2026-0890</p>
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700">ACTIEF</span>
+            </div>
+            <p class="text-xs text-gray-500">MAN TGX · Jan de Vries · 4 stops</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <span class="text-sm font-medium text-amber-600">1/4 vertraagd</span>
+        </div>
+      </div>
+      <!-- Anomaly alert (NEW) -->
+      <div class="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
+        <svg class="h-4 w-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="text-xs text-amber-800">Chauffeur staat 22 min stil op A15 (km 34). ETA stop 3 overschrijdt tijdvenster met 18 min.</span>
+        <button class="ml-auto text-xs text-amber-700 font-semibold whitespace-nowrap">Herplannen</button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+            <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <p class="text-sm font-semibold">R-2026-0891</p>
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-gray-100 text-gray-600">VERZENDKLAAR</span>
+              <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-50 text-blue-600 border border-blue-200">Validatie</span>
+            </div>
+            <p class="text-xs text-gray-500">MAN TGX · Jan de Vries · 3 stops &middot; ADR</p>
+            <p class="text-[10px] text-blue-500 mt-0.5">Wacht op goedkeuring (ADR vereist menselijke review)</p>
+          </div>
+        </div>
+        <button class="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700">Goedkeuren</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- FACTURATIE PAGE -->
+<!-- ============================================================ -->
+<div id="page-facturatie" class="hidden p-6 max-w-7xl mx-auto space-y-4">
+  <div>
+    <h1 class="text-xl font-bold">Facturatie</h1>
+    <p class="text-sm text-gray-500">zaterdag 5 april 2026</p>
+  </div>
+
+  <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+    <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+    <span class="text-sm text-blue-800 font-medium">1 factuur wacht op goedkeuring</span>
+    <button class="ml-auto text-sm text-blue-700 font-semibold">Bekijk &rarr;</button>
+  </div>
+
+  <!-- Invoice table with auto badges and margin alerts -->
+  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <table class="w-full">
+      <thead>
+        <tr class="border-b border-gray-200 bg-gray-50/50">
+          <th class="text-left text-[11px] font-medium text-gray-500 px-4 py-2.5">Factuur</th>
+          <th class="text-left text-[11px] font-medium text-gray-500 px-4 py-2.5">Klant</th>
+          <th class="text-left text-[11px] font-medium text-gray-500 px-4 py-2.5">Datum</th>
+          <th class="text-right text-[11px] font-medium text-gray-500 px-4 py-2.5">Bedrag</th>
+          <th class="text-left text-[11px] font-medium text-gray-500 px-4 py-2.5">Status</th>
+          <th class="text-right text-[11px] font-medium text-gray-500 px-4 py-2.5">Marge</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <tr class="hover:bg-gray-50/50">
+          <td class="px-4 py-3 text-sm font-mono font-medium">INV-2026-0891</td>
+          <td class="px-4 py-3 text-sm text-gray-600">Van der Berg</td>
+          <td class="px-4 py-3 text-sm text-gray-500">05-04-2026</td>
+          <td class="px-4 py-3 text-sm text-gray-900 text-right tabular-nums font-medium">&euro;1.247,50</td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700">Verzonden</span>
+              <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">Auto</span>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-sm text-emerald-600 text-right font-medium">23%</td>
+        </tr>
+        <tr class="hover:bg-gray-50/50">
+          <td class="px-4 py-3 text-sm font-mono font-medium">INV-2026-0890</td>
+          <td class="px-4 py-3 text-sm text-gray-600">Fresh Express</td>
+          <td class="px-4 py-3 text-sm text-gray-500">04-04-2026</td>
+          <td class="px-4 py-3 text-sm text-gray-900 text-right tabular-nums font-medium">&euro;892,00</td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-100 text-emerald-700">Betaald</span>
+              <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">Auto</span>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-sm text-emerald-600 text-right font-medium">19%</td>
+        </tr>
+        <!-- Margin alert row -->
+        <tr class="hover:bg-red-50/30 bg-red-50/20">
+          <td class="px-4 py-3 text-sm font-mono font-medium">INV-2026-0889</td>
+          <td class="px-4 py-3 text-sm text-gray-600">Bakker Logistiek</td>
+          <td class="px-4 py-3 text-sm text-gray-500">03-04-2026</td>
+          <td class="px-4 py-3 text-sm text-gray-900 text-right tabular-nums font-medium">&euro;456,20</td>
+          <td class="px-4 py-3">
+            <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700">Verzonden</span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex items-center justify-end gap-1.5">
+              <svg class="h-3 w-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span class="text-sm text-red-600 font-medium">8%</span>
+            </div>
+          </td>
+        </tr>
+        <tr class="hover:bg-gray-50/50">
+          <td class="px-4 py-3 text-sm font-mono font-medium">INV-2026-0888</td>
+          <td class="px-4 py-3 text-sm text-gray-600">Koopman Transport</td>
+          <td class="px-4 py-3 text-sm text-gray-500">02-04-2026</td>
+          <td class="px-4 py-3 text-sm text-gray-900 text-right tabular-nums font-medium">&euro;2.180,00</td>
+          <td class="px-4 py-3">
+            <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-100 text-emerald-700">Betaald</span>
+          </td>
+          <td class="px-4 py-3 text-sm text-emerald-600 text-right font-medium">21%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function showPage(page) {
+  document.querySelectorAll('[id^="page-"]').forEach(el => el.classList.add('hidden'));
+  document.getElementById('page-' + page).classList.remove('hidden');
+  document.querySelectorAll('[id^="tab-"]').forEach(el => {
+    el.className = 'px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 rounded-lg';
+  });
+  document.getElementById('tab-' + page).className = 'px-4 py-2 text-sm font-semibold rounded-lg bg-gray-900 text-white';
+}
+
+function togglePanel() {
+  const panel = document.getElementById('validation-panel');
+  panel.classList.toggle('translate-x-full');
+  panel.classList.toggle('translate-x-0');
+}
+</script>
+
+</body>
+</html>

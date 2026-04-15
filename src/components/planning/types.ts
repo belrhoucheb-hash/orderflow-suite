@@ -23,6 +23,7 @@ export interface PlanOrder {
   geocoded_delivery_lng: number | null;
   delivery_date: string | null;
   pickup_date: string | null;
+  info_status?: string | null;
 }
 
 export type Assignments = Record<string, PlanOrder[]>;
