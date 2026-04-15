@@ -26,6 +26,7 @@ export interface Shipment {
   destination_address: string | null;
   status: string;
   traject_rule_id: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
   legs: Order[];
@@ -162,6 +163,7 @@ export function useShipments(options: UseShipmentsOptions = {}) {
         destination_address: s.destination_address ?? null,
         status: s.status,
         traject_rule_id: s.traject_rule_id ?? null,
+        notes: s.notes ?? null,
         created_at: s.created_at,
         updated_at: s.updated_at,
         legs: legsByShipment[s.id] ?? [],
@@ -224,6 +226,7 @@ export function useShipment(id: string | null | undefined) {
         destination_address: shipment.destination_address ?? null,
         status: shipment.status,
         traject_rule_id: shipment.traject_rule_id ?? null,
+        notes: shipment.notes ?? null,
         created_at: shipment.created_at,
         updated_at: shipment.updated_at,
         legs,

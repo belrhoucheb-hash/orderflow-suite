@@ -118,7 +118,7 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        {isLoading && <div className="text-xs text-muted-foreground">Laden…</div>}
+        {isLoading && <div className="font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70">Laden…</div>}
 
         {adding && (
           <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2">
@@ -155,7 +155,7 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
         )}
 
         {openRequests.length === 0 && !adding && (
-          <p className="text-xs text-muted-foreground py-1">
+          <p className="font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70 py-1">
             Dossier compleet — geen openstaande info van klant.
           </p>
         )}
@@ -169,11 +169,13 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 font-medium text-sm">
+                  <div className="flex items-center gap-2">
                     {isOverdue
                       ? <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
                       : <Clock className="h-4 w-4 text-amber-600 shrink-0" />}
-                    <span>{req.field_label ?? req.field_name}</span>
+                    <span className="font-display text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] font-semibold">
+                      {req.field_label ?? req.field_name}
+                    </span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                     {req.promised_by_name && (
@@ -182,13 +184,13 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
                     {req.expected_by && (
                       <div>
                         Verwacht {isOverdue ? "was" : "binnen"}: {" "}
-                        <span className={isOverdue ? "text-red-700 font-medium" : "text-foreground"}>
+                        <span className={isOverdue ? "text-red-700 font-medium tabular-nums" : "text-foreground tabular-nums"}>
                           {formatDistanceToNow(new Date(req.expected_by), { addSuffix: true, locale: nl })}
                         </span>
                       </div>
                     )}
                     <div>
-                      Reminders verzonden: {req.reminder_sent_at.length}
+                      Reminders verzonden: <span className="tabular-nums">{req.reminder_sent_at.length}</span>
                       {req.escalated_at ? " • planner geëscaleerd" : ""}
                     </div>
                   </div>
@@ -211,8 +213,8 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
 
         {closedRequests.length > 0 && (
           <details className="pt-2">
-            <summary className="text-xs text-muted-foreground cursor-pointer select-none">
-              Historie ({closedRequests.length})
+            <summary className="font-display text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70 cursor-pointer select-none">
+              Historie (<span className="tabular-nums">{closedRequests.length}</span>)
             </summary>
             <div className="space-y-1 mt-2">
               {closedRequests.map(req => (

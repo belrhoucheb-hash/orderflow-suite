@@ -35,6 +35,7 @@ const mainItemsDef = [
   { titleKey: "nav.trips", url: "/ritten", icon: Route },
   { titleKey: "nav.drivers", url: "/chauffeurs", icon: Users },
   { titleKey: "nav.fleet", url: "/vloot", icon: Container },
+  { titleKey: "nav.vehicleCheck", titleFallback: "Voertuigcheck", url: "/voertuigcheck", icon: Shield },
   { titleKey: "nav.reporting", url: "/rapportage", icon: BarChart3 },
   { titleKey: "nav.exceptions", url: "/exceptions", icon: Shield },
   { titleKey: "nav.autonomy", url: "/autonomie", icon: Brain },
@@ -94,7 +95,11 @@ export function AppSidebar() {
   const { data: exceptionCount = 0 } = useExceptionCount();
 
   const toItems = (defs: typeof mainItemsDef) =>
-    defs.map((d) => ({ title: t(d.titleKey), titleKey: d.titleKey, url: d.url, icon: d.icon }));
+    defs.map((d: any) => {
+      const translated = t(d.titleKey);
+      const title = translated === d.titleKey && d.titleFallback ? d.titleFallback : translated;
+      return { title, titleKey: d.titleKey, url: d.url, icon: d.icon };
+    });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const mainItems = useMemo(() => toItems(mainItemsDef), [t, i18n.language]);

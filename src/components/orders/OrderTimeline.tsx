@@ -31,10 +31,7 @@ const EVENT_ICONS: Record<EventType, typeof Mail> = {
 
 const EVENT_COLORS: Partial<Record<EventType, string>> = {
   exception_raised: "text-destructive",
-  order_delivered: "text-emerald-600",
-  planner_approved: "text-emerald-600",
-  pod_uploaded: "text-emerald-600",
-  invoice_paid: "text-emerald-600",
+  // success events behouden de gold-deep default — geen aparte kleur nodig
 };
 
 function formatDuration(ms: number | null): string {
@@ -59,7 +56,7 @@ export default function OrderTimeline({ orderId }: OrderTimelineProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+      <div className="flex items-center gap-2 font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70 py-4">
         <Clock className="h-4 w-4 animate-spin" />
         Laden...
       </div>
@@ -68,7 +65,7 @@ export default function OrderTimeline({ orderId }: OrderTimelineProps) {
 
   if (events.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-2">Geen events gevonden.</p>
+      <p className="font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70 py-2">Geen events gevonden.</p>
     );
   }
 
@@ -92,28 +89,28 @@ export default function OrderTimeline({ orderId }: OrderTimelineProps) {
               <div
                 className={cn(
                   "h-7 w-7 rounded-full flex items-center justify-center",
-                  color ? "bg-destructive/10" : "bg-primary/10",
+                  color ? "bg-destructive/10" : "bg-[hsl(var(--gold-soft)/0.6)]",
                 )}
               >
-                <Icon className={cn("h-3.5 w-3.5", color || "text-primary")} />
+                <Icon className={cn("h-3.5 w-3.5", color || "text-[hsl(var(--gold-deep))]")} />
               </div>
               {i < events.length - 1 && (
-                <div className="w-px h-full bg-border flex-1 mt-1" />
+                <div className="w-px h-full bg-[hsl(var(--gold)/0.2)] flex-1 mt-1" />
               )}
             </div>
             <div className="pb-4">
-              <p className={cn("font-medium", color)}>{label}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className={cn("font-display text-[11px] uppercase tracking-[0.18em] font-semibold", color ?? "text-[hsl(var(--gold-deep))]")}>{label}</p>
+              <p className="text-xs tabular-nums text-muted-foreground/80 mt-0.5">
                 {time}
                 {duration && <span className="ml-2 text-muted-foreground/60">(+{duration})</span>}
               </p>
               {event.confidence_score != null && (
-                <p className="text-xs text-muted-foreground/60">
+                <p className="font-display text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60 tabular-nums mt-0.5">
                   Confidence: {event.confidence_score}%
                 </p>
               )}
               {event.actor_type !== "system" && (
-                <p className="text-xs text-muted-foreground/60 capitalize">
+                <p className="font-display text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60 mt-0.5">
                   Door: {event.actor_type}
                 </p>
               )}

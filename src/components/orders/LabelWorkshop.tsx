@@ -18,9 +18,13 @@ import SmartLabel from "./SmartLabel";
 
 interface LabelWorkshopProps {
   order: any;
+  /** Override de trigger-knop styling. Bv. om als DropdownMenuItem te renderen. */
+  triggerClassName?: string;
+  /** Vervang de trigger-inhoud (bv. icoon + tekst-elementen) met custom JSX. */
+  triggerChildren?: React.ReactNode;
 }
 
-const LabelWorkshop: React.FC<LabelWorkshopProps> = ({ order }) => {
+const LabelWorkshop: React.FC<LabelWorkshopProps> = ({ order, triggerClassName, triggerChildren }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [quantity, setQuantity] = useState(order.quantity || 1);
   const [startSequence, setStartSequence] = useState(1);
@@ -61,10 +65,14 @@ const LabelWorkshop: React.FC<LabelWorkshopProps> = ({ order }) => {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-full gap-2 border-slate-200 text-slate-700 hover:bg-slate-50 transition-all">
-          <Barcode className="h-4 w-4 text-primary" />
-          Label Workshop
-        </Button>
+        <button type="button" className={triggerClassName ?? "btn-luxe"}>
+          {triggerChildren ?? (
+            <>
+              <Barcode className="h-4 w-4" />
+              Label workshop
+            </>
+          )}
+        </button>
       </DialogTrigger>
       
       <DialogContent className="max-w-2xl">
