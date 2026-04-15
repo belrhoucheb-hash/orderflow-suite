@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>Inbox middenscherm · v3 premium</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --primary: 0 78% 42%;
+    --muted: 30 8% 93%;
+    --muted-foreground: 0 0% 40%;
+    --border: 30 8% 88%;
+    --gold: 38 35% 55%;
+    --gold-deep: 32 42% 42%;
+    --gold-soft: 38 45% 92%;
+    --ink: 0 0% 10%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 85%;
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  }
+  html, body {
+    font-family: var(--font-ui);
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(ellipse 800px 380px at 50% -160px, hsl(var(--gold-soft) / 0.45), transparent 60%),
+      hsl(30 10% 96%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+    font-size: 15px;
+  }
+  .ribbon {
+    max-width: 640px;
+    margin: 16px auto 0;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    text-align: center;
+  }
+  .page {
+    max-width: 640px;
+    margin: 28px auto;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 16px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.04),
+      0 12px 32px -14px hsl(var(--ink) / 0.18);
+    position: relative;
+  }
+
+  /* Embed-mode */
+  body.embed { background: transparent; }
+  body.embed #dev-ribbon { display: none; }
+  body.embed .page {
+    max-width: 100%;
+    margin: 0;
+    height: 100vh;
+    overflow-y: auto;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  body.embed .page::before { display: none; }
+  /* GLOBAAL goud scrollbar */
+  html, body, *, .page { scrollbar-width: thin !important; scrollbar-color: hsl(var(--gold) / 0.3) transparent !important; }
+  ::-webkit-scrollbar { width: 6px !important; height: 6px !important; }
+  ::-webkit-scrollbar-track { background: transparent !important; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--gold) / 0.25) !important;
+    border-radius: 3px !important;
+    transition: background .2s !important;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--gold) / 0.5) !important; }
+  ::-webkit-scrollbar-thumb:active { background: hsl(var(--gold-deep) / 0.75) !important; }
+  .page::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+    border-radius: 16px 16px 0 0;
+  }
+
+  /* ── Top action bar ── */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+  }
+  .top-bar__queue {
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    color: hsl(var(--muted-foreground));
+    padding: 3px 9px;
+    background: hsl(var(--muted) / 0.5);
+    border: 1px solid hsl(var(--border));
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .top-bar__queue strong { color: hsl(var(--foreground)); font-weight: 600; }
+  .top-bar__concept {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    color: hsl(var(--gold-deep));
+    padding: 3px 9px;
+    background: hsl(var(--gold-soft) / 0.8);
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+  .top-bar__concept svg { width: 10px; height: 10px; stroke-width: 2; }
+  .nav-btn {
+    position: relative;
+    width: 28px; height: 28px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 1px solid hsl(var(--border));
+    border-radius: 6px;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    transition: all .12s;
+  }
+  .nav-btn:hover { border-color: hsl(var(--gold) / 0.5); color: hsl(var(--foreground)); background: hsl(var(--gold-soft) / 0.4); }
+  .nav-btn svg { width: 13px; height: 13px; stroke-width: 1.75; }
+  .nav-btn__kbd {
+    position: absolute;
+    bottom: -4px; right: -4px;
+    font-family: var(--font-display);
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 3px;
+    padding: 1px 3px;
+  }
+
+  /* Overflow-menu (⋯ → acties popover) */
+  .overflow-menu { position: relative; }
+  .overflow-menu__pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 180px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 10px;
+    padding: 5px;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 4px 12px -2px hsl(var(--ink) / 0.08),
+      0 18px 40px -12px hsl(var(--ink) / 0.2);
+    display: none;
+    z-index: 50;
+  }
+  .overflow-menu__pop::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 12px; right: 12px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .overflow-menu--open .overflow-menu__pop { display: block; animation: pop .15s ease-out; }
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(-3px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .overflow-menu__item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    color: hsl(var(--foreground));
+    cursor: pointer;
+    text-align: left;
+  }
+  .overflow-menu__item:hover { background: hsl(var(--gold-soft) / 0.6); }
+  .overflow-menu__item svg { width: 13px; height: 13px; stroke-width: 1.75; color: hsl(var(--muted-foreground)); }
+  .overflow-menu__item--danger { color: hsl(0 55% 42%); }
+  .overflow-menu__item--danger svg { color: hsl(0 55% 42%); }
+  .overflow-menu__item--danger:hover { background: hsl(0 70% 96%); }
+  .overflow-menu__sep {
+    height: 1px;
+    background: hsl(var(--border));
+    margin: 4px 2px;
+  }
+  .top-bar__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 0;
+    padding: 5px 8px;
+    margin-left: -8px;
+    color: hsl(var(--muted-foreground));
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .top-bar__back:hover { color: hsl(var(--foreground)); background: hsl(var(--muted) / 0.5); }
+  .top-bar__back svg { width: 12px; height: 12px; stroke-width: 1.75; }
+  .top-bar__actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .top-bar__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 0;
+    padding: 6px 10px;
+    color: hsl(var(--muted-foreground));
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .top-bar__btn:hover { color: hsl(var(--foreground)); background: hsl(var(--muted) / 0.5); }
+  .top-bar__btn svg { width: 13px; height: 13px; stroke-width: 1.75; }
+
+  /* ── Header — onderwerp + afzender ── */
+  .hd {
+    padding: 22px 24px 18px;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+  }
+  .hd__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: hsl(var(--gold-deep));
+    margin-bottom: 10px;
+  }
+  .hd__eyebrow::before,
+  .hd__eyebrow::after {
+    content: '';
+    width: 14px; height: 1px;
+    background: hsl(var(--gold));
+  }
+  .hd__subject {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: hsl(var(--foreground));
+    line-height: 1.25;
+    margin-bottom: 14px;
+  }
+  .from-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, hsl(var(--gold-soft)), hsl(var(--gold) / 0.3));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+    color: hsl(var(--gold-deep));
+    flex-shrink: 0;
+  }
+  .from-row__info { flex: 1; min-width: 0; }
+  .from-row__name {
+    font-family: var(--font-display);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .from-row__addr {
+    font-size: 11.5px;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .from-row__time {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground));
+    padding: 4px 10px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+
+  /* ── AI-extractie status banner ── */
+  .ai-status {
+    margin: 14px 24px 0;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.45) 100%);
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ai-status::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.6), transparent);
+  }
+  .ai-status__icon {
+    flex-shrink: 0;
+    color: hsl(var(--gold-deep));
+  }
+  .ai-status__icon svg { width: 14px; height: 14px; stroke-width: 1.75; }
+  .ai-status__body { flex: 1; min-width: 0; }
+  .ai-status__ttl {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    font-size: 12px;
+  }
+  .ai-status__sub {
+    font-size: 11px;
+    color: hsl(var(--muted-foreground));
+    margin-top: 1px;
+  }
+  .ai-status__sub em {
+    font-style: normal;
+    color: hsl(32 55% 35%);
+    font-weight: 500;
+  }
+  .ai-status__actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .ai-status__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 1px solid hsl(var(--gold) / 0.35);
+    color: hsl(var(--gold-deep));
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .12s;
+  }
+  .ai-status__btn:hover { background: hsl(var(--gold-soft) / 0.7); }
+  .ai-status__btn svg { width: 10px; height: 10px; stroke-width: 2; }
+  .ai-status__btn--active {
+    background: hsl(var(--gold) / 0.2);
+    border-color: hsl(var(--gold) / 0.55);
+  }
+
+  /* Tools-row voor body (ongekoppeld · re-extract) */
+  .tools-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin: 14px 24px 0;
+  }
+  .tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: transparent;
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    padding: 4px 9px;
+    border-radius: 5px;
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .12s;
+  }
+  .tool-btn:hover { border-color: hsl(var(--gold) / 0.5); color: hsl(var(--gold-deep)); background: hsl(var(--gold-soft) / 0.4); }
+  .tool-btn svg { width: 10px; height: 10px; stroke-width: 2; }
+  .tool-btn--active {
+    background: hsl(var(--gold-soft));
+    border-color: hsl(var(--gold) / 0.5);
+    color: hsl(var(--gold-deep));
+  }
+
+  /* Unmapped-text highlight (toon ongekoppeld) */
+  body.show-unmapped .unm {
+    background: linear-gradient(180deg, transparent 60%, hsl(32 75% 50% / 0.25) 60%, hsl(32 75% 50% / 0.25) 90%, transparent 90%);
+    border-bottom: 1px dotted hsl(32 65% 42% / 0.7);
+    padding-bottom: 1px;
+  }
+
+  /* ── Thread-indicator ── */
+  .thread-ind {
+    margin: 16px 24px 0;
+    padding: 9px 12px;
+    background: transparent;
+    border: 1px solid hsl(var(--border));
+    border-left: 2px solid hsl(var(--gold) / 0.6);
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 12px;
+    color: hsl(var(--muted-foreground));
+  }
+  .thread-ind svg {
+    width: 13px; height: 13px;
+    stroke-width: 1.75;
+    color: hsl(var(--gold-deep));
+    flex-shrink: 0;
+  }
+  .thread-ind strong { color: hsl(var(--foreground)); font-weight: 600; }
+  .thread-ind__link {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: hsl(var(--gold-deep));
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: hsl(var(--gold) / 0.5);
+    white-space: nowrap;
+  }
+
+  /* ── Body · e-mail inhoud ── */
+  .body-email {
+    padding: 22px 24px 4px;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.65;
+    color: hsl(var(--foreground));
+  }
+  .body-email p { margin: 0 0 14px; }
+  .body-email p:last-child { margin-bottom: 0; }
+
+  /* AI-highlight · drie niveaus van zekerheid */
+  .hl {
+    font-weight: 500;
+    cursor: help;
+    padding: 0 2px 1px;
+    transition: background .15s, box-shadow .15s;
+    position: relative;
+    border-radius: 2px;
+  }
+  /* Niveau 1 · goud solid (>=80% zekerheid, AI-confident) */
+  .hl--ok {
+    background: linear-gradient(180deg, transparent 60%, hsl(var(--gold) / 0.25) 60%, hsl(var(--gold) / 0.25) 90%, transparent 90%);
+    border-bottom: 1px solid hsl(var(--gold-deep) / 0.65);
+  }
+  .hl--ok:hover { background: linear-gradient(180deg, transparent 50%, hsl(var(--gold) / 0.45) 50%, hsl(var(--gold) / 0.45) 92%, transparent 92%); }
+
+  /* Niveau 2 · amber dashed (60–79%, verifieer) */
+  .hl--warn {
+    background: linear-gradient(180deg, transparent 60%, hsl(32 85% 55% / 0.22) 60%, hsl(32 85% 55% / 0.22) 90%, transparent 90%);
+    border-bottom: 1px dashed hsl(32 70% 40%);
+  }
+  .hl--warn:hover { background: linear-gradient(180deg, transparent 50%, hsl(32 85% 55% / 0.4) 50%, hsl(32 85% 55% / 0.4) 92%, transparent 92%); }
+
+  /* Niveau 3 · rood solid (<60% of anomaly gedetecteerd) */
+  .hl--err {
+    background: linear-gradient(180deg, transparent 60%, hsl(0 78% 55% / 0.2) 60%, hsl(0 78% 55% / 0.2) 90%, transparent 90%);
+    border-bottom: 1px solid hsl(0 78% 45%);
+  }
+  .hl--err:hover { background: linear-gradient(180deg, transparent 50%, hsl(0 78% 55% / 0.35) 50%, hsl(0 78% 55% / 0.35) 92%, transparent 92%); }
+
+  /* Gekoppeld via hover met right-pane veld */
+  .hl.is-linked {
+    outline: 2px solid hsl(var(--gold-deep));
+    outline-offset: 2px;
+    background: hsl(var(--gold) / 0.35) !important;
+  }
+
+  /* ── Attachments ── */
+  .att-sec {
+    padding: 18px 24px 0;
+  }
+  .att-lbl {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 10px;
+  }
+  .att-lbl strong { color: hsl(var(--foreground)); }
+  .attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .att-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px 8px 10px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 9px;
+    background: hsl(var(--card));
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .att-chip:hover {
+    border-color: hsl(var(--gold) / 0.4);
+    background: hsl(var(--gold-soft) / 0.3);
+  }
+  .att-chip__icon {
+    width: 30px; height: 30px;
+    border-radius: 7px;
+    background: hsl(var(--gold-soft) / 0.8);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    color: hsl(var(--gold-deep));
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .att-chip__icon svg { width: 14px; height: 14px; stroke-width: 1.75; }
+  .att-chip__body { min-width: 0; }
+  .att-chip__name {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .att-chip__meta {
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+  }
+
+  /* Image-preview thumbnail (als chip in dezelfde rij) */
+  .att-thumb {
+    width: 180px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 9px;
+    overflow: hidden;
+    background: hsl(var(--card));
+    cursor: zoom-in;
+    transition: border-color .15s;
+    display: flex;
+    flex-direction: column;
+  }
+  .att-thumb:hover { border-color: hsl(var(--gold) / 0.45); }
+  .att-thumb__canvas {
+    aspect-ratio: 4 / 3;
+    background: #f1ebdc;
+    position: relative;
+    overflow: hidden;
+  }
+  .att-thumb__canvas svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .att-thumb__caption {
+    padding: 6px 10px;
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: hsl(var(--muted-foreground));
+    border-top: 1px solid hsl(var(--border));
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .att-thumb__name {
+    font-size: 12px;
+    color: hsl(var(--foreground));
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .att-thumb__meta {
+    font-variant-numeric: tabular-nums;
+    font-size: 10px;
+  }
+
+  /* ── AI reply-draft callout · collapsable ── */
+  .reply {
+    margin: 16px 24px 0;
+    background: transparent;
+    border: 1px solid hsl(var(--border));
+    border-radius: 11px;
+    overflow: hidden;
+    transition: background .15s, border-color .15s;
+  }
+  .reply--open {
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.45) 100%);
+    border-color: hsl(var(--gold) / 0.3);
+    position: relative;
+  }
+  .reply--open::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.6), transparent);
+  }
+  .reply__toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    border: 0;
+    padding: 11px 14px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+  .reply__toggle:hover { background: hsl(var(--gold-soft) / 0.3); }
+  .reply--open .reply__toggle:hover { background: transparent; }
+  .reply__toggle-icon {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    background: hsl(var(--gold-soft) / 0.8);
+    border: 1px solid hsl(var(--gold) / 0.3);
+    color: hsl(var(--gold-deep));
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .reply__toggle-icon svg { width: 12px; height: 12px; stroke-width: 1.75; }
+  .reply__toggle-lbl {
+    flex: 1;
+    font-family: var(--font-display);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.005em;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .reply__toggle-chev {
+    width: 11px; height: 7px;
+    color: hsl(var(--muted-foreground));
+    transition: transform .18s;
+  }
+  .reply--open .reply__toggle-chev { transform: rotate(180deg); }
+  .reply__content { display: none; padding: 0 16px 14px; }
+  .reply--open .reply__content { display: block; }
+  .reply__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .reply__lbl {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: hsl(var(--gold-deep));
+  }
+  .reply__lbl svg { width: 12px; height: 12px; stroke-width: 1.75; }
+  .reply__to {
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+  }
+  .reply__body {
+    font-size: 13.5px;
+    color: hsl(var(--foreground));
+    line-height: 1.55;
+    padding: 10px 12px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .reply__row {
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .15s;
+  }
+  .btn--ghost {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+    color: hsl(var(--foreground));
+  }
+  .btn--ghost:hover { border-color: hsl(var(--gold) / 0.5); background: hsl(var(--gold-soft) / 0.3); }
+  .btn--primary {
+    background: linear-gradient(180deg, hsl(var(--gold-deep)), hsl(32 50% 36%));
+    color: white;
+    border-color: hsl(var(--gold-deep));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.15), 0 1px 2px hsl(var(--gold) / 0.3);
+  }
+  .btn--primary:hover { transform: translateY(-1px); }
+  .btn svg { width: 13px; height: 13px; stroke-width: 1.75; }
+
+  /* ── Legenda ── */
+  .legend {
+    padding: 12px 24px 18px;
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    color: hsl(var(--muted-foreground));
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .legend__sample {
+    background: linear-gradient(180deg, transparent 60%, hsl(var(--gold) / 0.25) 60%, hsl(var(--gold) / 0.25) 90%, transparent 90%);
+    border-bottom: 1px dashed hsl(var(--gold-deep) / 0.6);
+    padding: 0 4px 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="ribbon" id="dev-ribbon">docs/mockups/inbox-middle-v3.html · middenscherm standalone</div>
+
+<div class="page">
+
+  <!-- ── Top action bar ── -->
+  <div class="top-bar">
+    <button class="nav-btn" title="Terug naar inbox" aria-label="Terug naar inbox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </button>
+    <span class="top-bar__queue"><strong>1</strong> / <strong>47</strong></span>
+    <span class="top-bar__concept" title="Draft-order al aangemaakt uit deze e-mail">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      ORD-0847
+    </span>
+    <div class="top-bar__actions">
+      <button class="nav-btn" title="Vorige">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+        <span class="nav-btn__kbd">K</span>
+      </button>
+      <button class="nav-btn" title="Volgende">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        <span class="nav-btn__kbd">J</span>
+      </button>
+      <div class="overflow-menu">
+        <button class="nav-btn" id="overflow-trigger" title="Meer acties">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
+        <div class="overflow-menu__pop" id="overflow-pop">
+          <button class="overflow-menu__item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            Doorsturen
+          </button>
+          <button class="overflow-menu__item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+            Archiveer
+          </button>
+          <div class="overflow-menu__sep"></div>
+          <button class="overflow-menu__item overflow-menu__item--danger">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+            Niet-een-order
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Header · onderwerp + afzender ── -->
+  <div class="hd">
+    <h1 class="hd__subject">Spoedorder 16 april — Rotterdam naar Antwerpen</h1>
+    <div class="from-row">
+      <span class="avatar">JV</span>
+      <div class="from-row__info">
+        <div class="from-row__name">Jan de Vries · Van der Berg Logistics</div>
+        <div class="from-row__addr">jan@vanderberg-logistics.nl → orders@royalty.nl</div>
+      </div>
+      <span class="from-row__time">15 apr · 09:42</span>
+    </div>
+  </div>
+
+  <!-- ── Thread-indicator (wanneer vervolg) ── -->
+  <div class="thread-ind">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
+    <span><strong>Vervolg op thread</strong> · eerder 12 en 14 apr</span>
+    <button class="thread-ind__link">Toon eerdere (2)</button>
+  </div>
+
+  <!-- ── Tools-row ── -->
+  <div class="tools-row">
+    <button class="tool-btn" id="toggle-unmapped" title="Markeer tekst die AI niet heeft gemapt">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H1v8h8v-8zM23 11h-8v8h8v-8zM23 1h-8v8h8V1zM9 1H1v8h8V1z"/></svg>
+      Ongekoppeld
+    </button>
+    <button class="tool-btn" title="Laat AI opnieuw lezen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+      Re-extract
+    </button>
+  </div>
+
+  <!-- ── E-mail body met gold-highlights ── -->
+  <div class="body-email">
+    <p>Beste,</p>
+    <p>Graag een spoedorder inplannen voor <span class="hl hl--ok" data-field="pickup-date" title="Datum · 96% zeker">donderdag 16 april</span>. Pickup bij ons distributiepunt <span class="hl hl--ok" data-field="pickup" title="Ophaaladres · 98% zeker">Maasvlakteweg 14, Rotterdam</span> tussen <span class="hl hl--ok" data-field="pickup-time" title="Tijdvenster · 92% zeker">08:00 en 11:00</span>.</p>
+    <p>Lading: <span class="hl hl--ok" data-field="qty" title="Aantal · 88% zeker">12 europallets</span> industriële componenten, totaalgewicht rond de <span class="hl hl--warn" data-field="weight" title="Gewicht · 72% — verifieer">2.250 kg</span>. Afmetingen standaard <span class="hl hl--ok" data-field="dims" title="Afmetingen · 85% zeker">120 × 80 × 150 cm</span>. PO-nummer <span class="hl hl--ok" data-field="ref" title="Referentie · 99% zeker">PO-99812</span>.</p>
+    <p>Aflevering bij onze Belgische partner op <span class="hl hl--ok" data-field="delivery" title="Afleveradres · 97% zeker">Noorderlaan 200, Antwerpen</span>, graag vóór <span class="hl hl--ok" data-field="delivery-time" title="Leveringstijd · 94% zeker">vrijdag 17 april 14:00</span>. Aanmelden bij de receptie.</p>
+    <p><span class="hl hl--ok" data-field="req" title="Vereiste · 91% zeker">Laadklep aan de afleverzijde is vereist.</span> <span class="hl hl--err" data-field="mrn" title="MRN · ontbreekt, klant levert later">MRN-nummer volgt later</span>, onze douane is nog bezig met de papieren.</p>
+    <p>Groet,<br/>
+      <strong>Jan de Vries</strong><br/>
+      <span style="color: hsl(var(--muted-foreground)); font-size: 13px;">Operations Manager · Van der Berg Logistics<br/>
+      +31 6 12 34 56 78 · jan@vanderberg-logistics.nl</span>
+    </p>
+  </div>
+
+  <!-- ── Bijlagen ── -->
+  <div class="att-sec">
+    <div class="att-lbl">Bijlagen <strong style="color: hsl(var(--foreground)); font-weight: 600;">2</strong></div>
+    <div class="attachments">
+
+      <div class="att-thumb" title="Klik om te openen">
+        <div class="att-thumb__canvas">
+          <svg viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="200" height="150" fill="#f5f5f7"/>
+            <rect x="20" y="8" width="160" height="134" fill="#fff" stroke="#d8d8dc" stroke-width="0.5"/>
+            <!-- gekleurde header-band (PDF-achtig) -->
+            <rect x="20" y="8" width="160" height="16" fill="#b91c1c"/>
+            <text x="28" y="19" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#fff" letter-spacing="0.5">ORDERBEVESTIGING</text>
+            <!-- logo placeholder -->
+            <rect x="158" y="12" width="14" height="8" fill="#fff" opacity="0.3"/>
+            <!-- meta -->
+            <text x="28" y="35" font-family="Arial, sans-serif" font-size="5" fill="#888">DATUM</text>
+            <text x="28" y="41" font-family="Arial, sans-serif" font-size="6" fill="#333">15 apr 2026</text>
+            <text x="110" y="35" font-family="Arial, sans-serif" font-size="5" fill="#888">NUMMER</text>
+            <text x="110" y="41" font-family="Arial, sans-serif" font-size="6" fill="#333">PO-99812</text>
+            <!-- tekstregels -->
+            <line x1="28" y1="50" x2="172" y2="50" stroke="#eaeaea" stroke-width="0.5"/>
+            <rect x="28" y="56" width="120" height="3" fill="#e5e5e7"/>
+            <rect x="28" y="62" width="140" height="3" fill="#e5e5e7"/>
+            <rect x="28" y="68" width="100" height="3" fill="#e5e5e7"/>
+            <!-- tabel -->
+            <line x1="28" y1="78" x2="172" y2="78" stroke="#c8c8cc" stroke-width="0.5"/>
+            <g font-family="Arial, sans-serif" font-size="5" fill="#666" font-weight="bold">
+              <text x="28" y="85">PRODUCT</text>
+              <text x="125" y="85">QTY</text>
+              <text x="155" y="85">PRIJS</text>
+            </g>
+            <line x1="28" y1="88" x2="172" y2="88" stroke="#eaeaea" stroke-width="0.3"/>
+            <g font-family="Arial, sans-serif" font-size="5.5" fill="#333">
+              <text x="28" y="96">Componentset A</text>
+              <text x="125" y="96">8</text>
+              <text x="155" y="96">€ 482</text>
+              <text x="28" y="104">Componentset B</text>
+              <text x="125" y="104">4</text>
+              <text x="155" y="104">€ 238</text>
+              <text x="28" y="112">IBC-vulling</text>
+              <text x="125" y="112">2</text>
+              <text x="155" y="112">€ 96</text>
+            </g>
+            <!-- totaal -->
+            <line x1="28" y1="120" x2="172" y2="120" stroke="#bbb" stroke-width="0.5"/>
+            <text x="28" y="130" font-family="Arial, sans-serif" font-size="6" font-weight="bold" fill="#333">TOTAAL</text>
+            <text x="172" y="130" text-anchor="end" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#b91c1c">€ 816,00</text>
+          </svg>
+        </div>
+        <div class="att-thumb__caption">
+          <span class="att-thumb__name">Orderbevestiging.pdf</span>
+          <span class="att-thumb__meta">PDF · 142 kB</span>
+        </div>
+      </div>
+
+      <div class="att-thumb" title="Klik om te vergroten">
+        <div class="att-thumb__canvas">
+          <svg viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">
+            <!-- papier schaduw/rand -->
+            <rect x="0" y="0" width="200" height="150" fill="#faf5e8"/>
+            <rect x="8" y="8" width="184" height="134" fill="#fff" stroke="#d9c89a" stroke-width="0.5"/>
+            <!-- header band -->
+            <rect x="8" y="8" width="184" height="22" fill="#2a2a2a"/>
+            <text x="16" y="23" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#d4b87a" letter-spacing="1.2">PAKBON</text>
+            <text x="184" y="23" text-anchor="end" font-family="Arial, sans-serif" font-size="6.5" fill="#b8a67a">PB-99812</text>
+            <!-- van/naar block -->
+            <text x="16" y="42" font-family="Arial, sans-serif" font-size="5" fill="#999">VAN</text>
+            <text x="16" y="49" font-family="Arial, sans-serif" font-size="6" font-weight="bold" fill="#333">Van der Berg Logistics</text>
+            <text x="16" y="56" font-family="Arial, sans-serif" font-size="5.5" fill="#666">Maasvlakteweg 14, Rotterdam</text>
+            <text x="110" y="42" font-family="Arial, sans-serif" font-size="5" fill="#999">NAAR</text>
+            <text x="110" y="49" font-family="Arial, sans-serif" font-size="6" font-weight="bold" fill="#333">Noorderlaan Antwerpen</text>
+            <text x="110" y="56" font-family="Arial, sans-serif" font-size="5.5" fill="#666">BE-2030</text>
+            <!-- tabel-header -->
+            <line x1="14" y1="65" x2="186" y2="65" stroke="#ddd" stroke-width="0.5"/>
+            <text x="16" y="73" font-family="Arial, sans-serif" font-size="5" font-weight="bold" fill="#888">QTY</text>
+            <text x="42" y="73" font-family="Arial, sans-serif" font-size="5" font-weight="bold" fill="#888">TYPE</text>
+            <text x="120" y="73" font-family="Arial, sans-serif" font-size="5" font-weight="bold" fill="#888">AFM (CM)</text>
+            <text x="180" y="73" text-anchor="end" font-family="Arial, sans-serif" font-size="5" font-weight="bold" fill="#888">KG</text>
+            <line x1="14" y1="76" x2="186" y2="76" stroke="#ccc" stroke-width="0.5"/>
+            <!-- rows -->
+            <g font-family="Arial, sans-serif" font-size="6" fill="#333">
+              <text x="16" y="85">8</text>
+              <text x="42" y="85">Europallets</text>
+              <text x="120" y="85">120×80×150</text>
+              <text x="180" y="85" text-anchor="end">1.500</text>
+              <line x1="14" y1="88" x2="186" y2="88" stroke="#eee" stroke-width="0.3"/>
+
+              <text x="16" y="97">4</text>
+              <text x="42" y="97">Blokpallets</text>
+              <text x="120" y="97">120×100×145</text>
+              <text x="180" y="97" text-anchor="end">600</text>
+              <line x1="14" y1="100" x2="186" y2="100" stroke="#eee" stroke-width="0.3"/>
+
+              <text x="16" y="109">2</text>
+              <text x="42" y="109">IBC-container</text>
+              <text x="120" y="109">100×120×116</text>
+              <text x="180" y="109" text-anchor="end">150</text>
+            </g>
+            <!-- totaal band -->
+            <line x1="14" y1="118" x2="186" y2="118" stroke="#bbb" stroke-width="0.5"/>
+            <text x="16" y="128" font-family="Arial, sans-serif" font-size="6" font-weight="bold" fill="#333">TOTAAL</text>
+            <text x="130" y="128" font-family="Arial, sans-serif" font-size="6" fill="#333">14 stuks</text>
+            <text x="180" y="128" text-anchor="end" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="#333">2.250 kg</text>
+            <!-- stempel -->
+            <circle cx="170" cy="138" r="7" fill="none" stroke="#a03030" stroke-width="0.8" opacity="0.5"/>
+            <text x="170" y="141" text-anchor="middle" font-family="Arial, sans-serif" font-size="4" font-weight="bold" fill="#a03030" opacity="0.6">OK</text>
+          </svg>
+        </div>
+        <div class="att-thumb__caption">
+          <span class="att-thumb__name">Pakbon-foto.jpg</span>
+          <span class="att-thumb__meta">Afbeelding · 2.1 MB</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── AI reply-concept · collapsable ── -->
+  <div class="reply" id="reply">
+    <button class="reply__toggle" id="reply-toggle">
+      <span class="reply__toggle-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.35 5.6L20 9l-4.5 3.9L17 19l-5-3-5 3 1.5-6.1L4 9l5.65-1.4L12 2z"/></svg>
+      </span>
+      <span class="reply__toggle-lbl">Concept: <span style="color: hsl(var(--muted-foreground)); font-weight: 400;">Beste Jan, dank voor de spoedorder. Bevestigd voor 16 april…</span></span>
+      <svg class="reply__toggle-chev" viewBox="0 0 12 7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"><path d="M1 1l5 5 5-5"/></svg>
+    </button>
+    <div class="reply__content">
+      <div class="reply__head">
+        <span class="reply__lbl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.35 5.6L20 9l-4.5 3.9L17 19l-5-3-5 3 1.5-6.1L4 9l5.65-1.4L12 2z"/></svg>
+          Concept
+        </span>
+        <span class="reply__to">aan jan@vanderberg-logistics.nl</span>
+      </div>
+      <div class="reply__body">
+        Beste Jan, dank voor de spoedorder. Bevestigd voor 16 april, pickup <strong>08:00 – 11:00</strong> Rotterdam. Wacht nog op <strong>MRN-nummer</strong> — kun je een indicatie geven wanneer dat binnen is? Groet, Royalty Cargo.
+      </div>
+      <div class="reply__row">
+        <button class="btn btn--primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          Verstuur
+        </button>
+        <button class="btn btn--ghost">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Pas aan
+        </button>
+        <button class="btn btn--ghost">Niet nu</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 22px;"></div>
+
+</div>
+
+<script>
+  if (new URLSearchParams(location.search).has('embed')) document.body.classList.add('embed');
+
+  // Highlight ↔ veld linkage (cross-pane via postMessage naar parent)
+  const hlNodes = document.querySelectorAll('.hl[data-field]');
+  console.log('[middle] linkage init ·', hlNodes.length, 'highlights');
+  hlNodes.forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      console.log('[middle] hover →', el.dataset.field);
+      el.classList.add('is-linked');
+      window.parent.postMessage({ type: 'highlight-field', field: el.dataset.field, on: true }, '*');
+    });
+    el.addEventListener('mouseleave', () => {
+      el.classList.remove('is-linked');
+      window.parent.postMessage({ type: 'highlight-field', field: el.dataset.field, on: false }, '*');
+    });
+  });
+  // Luister naar het omgekeerde: right-pane hovert een veld → middle highlights
+  window.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'highlight-source') return;
+    document.querySelectorAll('.hl[data-field="' + e.data.field + '"]').forEach(el => {
+      el.classList.toggle('is-linked', !!e.data.on);
+      if (e.data.on) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
+  // Reply collapsable
+  document.getElementById('reply-toggle')?.addEventListener('click', () => {
+    document.getElementById('reply').classList.toggle('reply--open');
+  });
+
+  // Toggle "ongekoppelde tekst" highlight
+  document.getElementById('toggle-unmapped')?.addEventListener('click', (e) => {
+    document.body.classList.toggle('show-unmapped');
+    e.currentTarget.classList.toggle('tool-btn--active');
+  });
+
+  // Overflow menu
+  const ovfTrigger = document.getElementById('overflow-trigger');
+  const ovfWrap = ovfTrigger?.closest('.overflow-menu');
+  ovfTrigger?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    ovfWrap.classList.toggle('overflow-menu--open');
+  });
+  document.addEventListener('click', (e) => {
+    if (ovfWrap && !ovfWrap.contains(e.target)) ovfWrap.classList.remove('overflow-menu--open');
+  });
+  // Reply-buttons visueel-only feedback
+  document.querySelectorAll('.reply__row .btn').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      b.style.transform = 'scale(0.97)';
+      setTimeout(() => b.style.transform = '', 120);
+    });
+  });
+</script>
+</body>
+</html>
