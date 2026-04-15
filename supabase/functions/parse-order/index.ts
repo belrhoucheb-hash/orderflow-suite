@@ -182,6 +182,20 @@ serve(async (req) => {
     let aiContextBlock = "";
     const senderHint = emailBody?.match(/(?:van|from|afzender)[:\s]*([^\n<]+)/i)?.[1]?.trim() || "";
 
+    // Prompt-injection bescherming. DB-waarden (correcties, patterns, templates)
+    // worden door gebruikers ingevoerd en komen in de Gemini system-prompt. Een
+    // kwaadwillende correctie met backticks of role-overrides zou de prompt
+    // kunnen kapen. We escapen backticks en backslashes, strippen null-bytes
+    // en kappen op maxLen zodat een lange adversarial string niet de hele
+    // prompt kan overschrijven.
+    function sanitizePromptString(s: string | null | undefined, maxLen = 500): string {
+      if (!s) return "";
+      return s
+        .replace(/[`\\]/g, "\\$&")
+        .replace(/\u0000/g, "")
+        .substring(0, maxLen);
+    }
+
     async function fetchCorrections(clientName: string): Promise<string> {
       if (!clientName) return "";
       try {
@@ -197,7 +211,7 @@ serve(async (req) => {
         const { data } = await query;
         if (!data || data.length === 0) return "";
         const lines = data.map(c =>
-          `- Veld "${c.field_name}": AI zei "${c.ai_value}" → dispatcher corrigeerde naar "${c.corrected_value}"`
+          `- Veld "${sanitizePromptString(c.field_name, 80)}": AI zei "${sanitizePromptString(c.ai_value, 200)}" → dispatcher corrigeerde naar "${sanitizePromptString(c.corrected_value, 200)}"`
         );
         return `\nHISTORISCHE CORRECTIES VOOR DEZE KLANT (pas deze toe!):\n${lines.join("\n")}`;
       } catch { return ""; }
@@ -216,10 +230,10 @@ serve(async (req) => {
         if (!data || data.length < 3) return "";
         const addressMap: Record<string, Set<string>> = {};
         data.forEach(o => {
-          const name = o.client_name || "";
+          const name = sanitizePromptString(o.client_name, 120);
           if (!addressMap[name]) addressMap[name] = new Set();
-          if (o.pickup_address) addressMap[name].add(`ophaal: ${o.pickup_address}`);
-          if (o.delivery_address) addressMap[name].add(`lever: ${o.delivery_address}`);
+          if (o.pickup_address) addressMap[name].add(`ophaal: ${sanitizePromptString(o.pickup_address, 200)}`);
+          if (o.delivery_address) addressMap[name].add(`lever: ${sanitizePromptString(o.delivery_address, 200)}`);
         });
         const patterns = Object.entries(addressMap)
           .filter(([_, addrs]) => addrs.size >= 2)
@@ -246,13 +260,19 @@ serve(async (req) => {
         if (!data || !data.field_mappings) return "";
         const fm = data.field_mappings as Record<string, any>;
         const parts: string[] = [];
-        if (fm.unit) parts.push(fm.unit);
-        if (fm.pickup_address) parts.push(`van ${fm.pickup_address}`);
-        if (fm.delivery_address) parts.push(`naar ${fm.delivery_address}`);
-        if (fm.transport_type) parts.push(`type: ${fm.transport_type}`);
-        if (fm.requirements && fm.requirements.length > 0) parts.push(`met ${fm.requirements.join(", ")}`);
+        if (fm.unit) parts.push(sanitizePromptString(fm.unit, 40));
+        if (fm.pickup_address) parts.push(`van ${sanitizePromptString(fm.pickup_address, 200)}`);
+        if (fm.delivery_address) parts.push(`naar ${sanitizePromptString(fm.delivery_address, 200)}`);
+        if (fm.transport_type) parts.push(`type: ${sanitizePromptString(fm.transport_type, 40)}`);
+        if (fm.requirements && fm.requirements.length > 0) {
+          const reqs = (fm.requirements as unknown[])
+            .map((r) => sanitizePromptString(typeof r === "string" ? r : String(r ?? ""), 40))
+            .filter(Boolean);
+          if (reqs.length > 0) parts.push(`met ${reqs.join(", ")}`);
+        }
         if (parts.length === 0) return "";
-        return `\nKLANT TEMPLATE (gebaseerd op ${data.success_count} eerdere extracties): Deze klant bestelt typisch ${parts.join(", ")}.`;
+        const successCount = Number.isFinite(Number(data.success_count)) ? Number(data.success_count) : 0;
+        return `\nKLANT TEMPLATE (gebaseerd op ${successCount} eerdere extracties): Deze klant bestelt typisch ${parts.join(", ")}.`;
       } catch {
         return "";
       }
