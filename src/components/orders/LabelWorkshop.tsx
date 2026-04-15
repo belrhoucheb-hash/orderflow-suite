@@ -69,7 +69,7 @@ const LabelWorkshop: React.FC<LabelWorkshopProps> = ({ order, triggerClassName, 
           {triggerChildren ?? (
             <>
               <Barcode className="h-4 w-4" />
-              Label workshop
+              Label Workshop
             </>
           )}
         </button>
