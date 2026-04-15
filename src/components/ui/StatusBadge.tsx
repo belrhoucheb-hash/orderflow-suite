@@ -36,6 +36,8 @@ interface StatusBadgeProps {
   hideDot?: boolean;
   /** Render as a smaller variant */
   size?: "sm" | "default";
+  /** "luxe" = gold-accent stijl passend bij NewOrder */
+  variant?: "default" | "luxe";
 }
 
 export function StatusBadge({
@@ -44,6 +46,7 @@ export function StatusBadge({
   className,
   hideDot = false,
   size = "default",
+  variant = "default",
 }: StatusBadgeProps) {
   const displayLabel = label ?? STATUS_LABELS[status] ?? status;
 
@@ -52,6 +55,7 @@ export function StatusBadge({
       className={cn(
         "badge-status",
         STATUS_CSS_CLASS[status],
+        variant === "luxe" && "badge-status--luxe",
         size === "sm" && "text-[11px] px-1.5 py-0",
         className,
       )}
