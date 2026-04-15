@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface BookingInput {
   pickup_address: string | null;
   delivery_address: string | null;
+  final_delivery_address?: string | null;
   client_id?: string | null;
   client_name?: string | null;
   weight_kg?: number | null;
@@ -146,19 +147,23 @@ export function evaluateMatch(
 // ─── Afdeling-inference ───────────────────────────────────────────────────
 
 const EXPORT_DELIVERY_MARKERS = ["rcs export", "rcs_export", "royalty cargo export"];
+const IMPORT_PICKUP_MARKERS = ["rcs import", "rcs_import", "royalty cargo import"];
 
 /**
  * Leidt de afdeling af uit pickup + delivery adressen. Business-rules:
- *   1. Delivery = RCS export → EXPORT (2 legs: OPS pickup + EXPORT placeholder)
- *   2. Anders (incl. RCS import en alle niet-hub adressen) → OPS (1 leg)
+ *   1. Pickup = RCS import → IMPORT (1 leg: IMPORT hub → delivery)
+ *   2. Delivery = RCS export → EXPORT (2 legs: OPS pickup + EXPORT placeholder)
+ *   3. Anders → OPS (1 leg)
  *
  * Dit is puur een UI/preview-hint — de traject_rules blijven autoritatief.
  */
 export function inferAfdeling(
   pickup: string | null | undefined,
   delivery: string | null | undefined,
-): "OPS" | "EXPORT" | null {
+): "OPS" | "EXPORT" | "IMPORT" | null {
   if (!pickup || !delivery) return null;
+  const p = pickup.toLowerCase();
+  if (IMPORT_PICKUP_MARKERS.some((m) => p.includes(m))) return "IMPORT";
   const d = delivery.toLowerCase();
   if (EXPORT_DELIVERY_MARKERS.some((m) => d.includes(m))) return "EXPORT";
   return "OPS";
@@ -330,7 +335,17 @@ export async function createShipmentWithLegs(
 
   for (const leg of sortedTemplate) {
     const from = resolveEndpoint(leg.from, booking, hubAddress);
-    const to = resolveEndpoint(leg.to, booking, hubAddress);
+    let to = resolveEndpoint(leg.to, booking, hubAddress);
+
+    // Multi-drop: delivery→delivery leg gebruikt final_delivery_address als echte bestemming
+    if (
+      leg.from === "delivery" &&
+      leg.to === "delivery" &&
+      typeof booking.final_delivery_address === "string" &&
+      booking.final_delivery_address.trim().length > 0
+    ) {
+      to = booking.final_delivery_address;
+    }
 
     const orderPayload: Record<string, unknown> = {
       tenant_id: tenantId,

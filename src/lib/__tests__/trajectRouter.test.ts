@@ -199,6 +199,16 @@ describe("inferAfdeling", () => {
     expect(inferAfdeling("hoofdweg 1", "RCS Import Schiphol")).toBe("OPS");
   });
 
+  it("returns IMPORT when pickup is RCS Import", () => {
+    expect(
+      inferAfdeling("RCS Import Schiphol", "Coolsingel 10, 3011 AD Rotterdam"),
+    ).toBe("IMPORT");
+  });
+
+  it("returns IMPORT when pickup is rcs_import case-variant", () => {
+    expect(inferAfdeling("rcs_import schiphol", "Rotterdam")).toBe("IMPORT");
+  });
+
   it("returns OPS when no RCS involved", () => {
     expect(inferAfdeling("hoofdweg 1", "Rotterdam")).toBe("OPS");
     expect(inferAfdeling("hoofdweg 1", "Dubai, UAE")).toBe("OPS");
@@ -475,5 +485,45 @@ describe("createShipmentWithLegs", () => {
     expect(leg2.pickup_address).toBe("RCS Export");
     expect(leg2.delivery_address).toBe("RCS Export");
     expect(leg2.pickup_address).toBe(leg2.delivery_address);
+  });
+
+  it("uses final_delivery_address as leg-2 delivery for EXPORT multi-drop bookings", async () => {
+    const rule = makeRule({
+      id: "rule-export-multi-drop",
+      name: "Export multi-drop via afdeling",
+      priority: 20,
+      match_conditions: { afdeling_equals: "EXPORT" },
+      legs_template: [
+        { sequence: 1, from: "pickup", to: "delivery", department_code: "OPS", leg_role: "OPS_PICKUP" },
+        { sequence: 2, from: "delivery", to: "delivery", department_code: "EXPORT", leg_role: "EXPORT_LEG" },
+      ],
+    });
+    setTable("traject_rules", { rows: [rule] });
+    setTable("departments", {
+      rows: [
+        { id: "dept-ops-id", code: "OPS" },
+        { id: "dept-export-id", code: "EXPORT" },
+      ],
+    });
+
+    const result = await createShipmentWithLegs(
+      {
+        pickup_address: "Hoofdweg 1",
+        delivery_address: "RCS Export",
+        final_delivery_address: "Dubai, UAE",
+        afdeling: "EXPORT",
+      },
+      TENANT,
+    );
+
+    expect(result.legs).toHaveLength(2);
+
+    const leg1 = result.legs[0];
+    expect(leg1.pickup_address).toBe("Hoofdweg 1");
+    expect(leg1.delivery_address).toBe("RCS Export");
+
+    const leg2 = result.legs[1];
+    expect(leg2.pickup_address).toBe("RCS Export");
+    expect(leg2.delivery_address).toBe("Dubai, UAE");
   });
 });
