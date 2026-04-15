@@ -1,0 +1,1158 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>Orders — Premium Comfortable</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* ═════ OrderFlow tokens ═════ */
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --primary: 0 78% 42%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 30 8% 93%;
+    --muted-foreground: 0 0% 40%;
+    --border: 30 8% 88%;
+    --input: 30 8% 85%;
+    --ring: 0 78% 42%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 85%;
+
+    --gold: 38 35% 55%;
+    --gold-deep: 32 42% 42%;
+    --gold-light: 42 55% 72%;
+    --gold-soft: 38 45% 92%;
+    --ink: 0 0% 10%;
+    --page-bg: 30 10% 96%;
+
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+
+    --status-draft-bg: #eff6ff; --status-draft-text: #1d4ed8; --status-draft-border: #bfdbfe; --status-draft-dot: #3b82f6;
+    --status-pending-bg: #fffbeb; --status-pending-text: #b45309; --status-pending-border: #fde68a; --status-pending-dot: #f59e0b;
+    --status-planned-bg: #f5f3ff; --status-planned-text: #6d28d9; --status-planned-border: #ddd6fe; --status-planned-dot: #8b5cf6;
+    --status-transit-bg: #fef2f2; --status-transit-text: #dc2626; --status-transit-border: #fecaca; --status-transit-dot: #dc2626;
+    --status-delivered-bg: #ecfdf5; --status-delivered-text: #047857; --status-delivered-border: #a7f3d0; --status-delivered-dot: #10b981;
+  }
+
+  body {
+    font-family: var(--font-ui);
+    font-size: 0.9375rem;
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(ellipse 900px 400px at 50% -180px, hsl(var(--gold-soft) / 0.5), transparent 60%),
+      hsl(var(--page-bg));
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.005em;
+  }
+
+  /* ─── Ribbon ─── */
+  .ribbon {
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.375rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .ribbon .tag { color: hsl(var(--gold)); font-weight: 600; }
+
+  /* ─── Page header ─── */
+  .page-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: hsl(var(--gold-deep));
+    text-transform: uppercase;
+    margin-bottom: 0.625rem;
+  }
+  .page-eyebrow::before {
+    content: '';
+    width: 20px; height: 1px;
+    background: hsl(var(--gold));
+  }
+  .page-title {
+    font-family: var(--font-display);
+    font-size: 1.875rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: hsl(var(--foreground));
+    line-height: 1.15;
+  }
+  .page-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin-top: 0.75rem;
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .page-meta .dot {
+    width: 3px; height: 3px; border-radius: 50%;
+    background: hsl(var(--gold));
+  }
+  .page-meta strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Buttons ─── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.375rem;
+    padding: 0 0.875rem;
+    border-radius: 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .15s;
+    font-family: var(--font-ui);
+  }
+  .btn-primary {
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    color: white;
+    box-shadow:
+      0 1px 2px hsl(var(--primary) / 0.35),
+      0 4px 12px -2px hsl(var(--primary) / 0.28),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2);
+    height: 2.5rem;
+    padding: 0 1.125rem;
+    font-weight: 500;
+  }
+  .btn-primary:hover {
+    box-shadow: 0 2px 4px hsl(var(--primary) / 0.4), 0 8px 20px -2px hsl(var(--primary) / 0.4), inset 0 1px 0 hsl(0 0% 100% / 0.2);
+    transform: translateY(-1px);
+  }
+  .btn-ghost {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border) / 0.7);
+  }
+  .btn-ghost:hover {
+    background: hsl(var(--gold-soft) / 0.5);
+    border-color: hsl(var(--gold) / 0.3);
+  }
+
+  /* ─── Hairline ─── */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--gold) / 0.35) 50%, transparent 100%);
+  }
+
+  /* ─── KPI strip ─── */
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.75rem;
+  }
+  @media (max-width: 900px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.4);
+    border-radius: 0.875rem;
+    padding: 0.875rem 1rem;
+    cursor: pointer;
+    transition: all .18s;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.3), transparent);
+  }
+  .kpi:hover {
+    border-color: hsl(var(--gold) / 0.4);
+    box-shadow:
+      0 1px 2px hsl(var(--ink) / 0.04),
+      0 4px 12px -4px hsl(var(--gold) / 0.15);
+    transform: translateY(-1px);
+  }
+  .kpi--active {
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.6) 100%);
+    border-color: hsl(var(--gold) / 0.5);
+    box-shadow: 0 2px 8px -2px hsl(var(--gold) / 0.2), inset 0 1px 0 hsl(0 0% 100%);
+  }
+  .kpi__label {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .kpi__value {
+    font-family: var(--font-display);
+    font-size: 1.625rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: hsl(var(--foreground));
+    line-height: 1.1;
+    margin-top: 0.25rem;
+  }
+  .kpi__delta {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.125rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi__delta--up { color: hsl(142 50% 40%); }
+  .kpi__delta--down { color: hsl(var(--primary)); }
+  .kpi__dot {
+    position: absolute;
+    top: 0.875rem;
+    right: 1rem;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+
+  /* ─── Filter bar ─── */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .field-sm {
+    height: 2.25rem;
+    padding: 0 0.75rem;
+    border: 1px solid hsl(var(--input) / 0.7);
+    border-radius: 0.5rem;
+    background: hsl(var(--card));
+    font-size: 0.8125rem;
+    color: hsl(var(--foreground));
+    font-family: var(--font-ui);
+    transition: all .15s;
+  }
+  .field-sm:hover { border-color: hsl(var(--gold) / 0.35); }
+  .field-sm:focus { outline: none; border-color: hsl(var(--gold) / 0.5); box-shadow: 0 0 0 3px hsl(var(--gold) / 0.12); }
+  .search-box {
+    position: relative;
+    flex: 1;
+    min-width: 240px;
+    max-width: 360px;
+  }
+  .search-box svg {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+  }
+  .search-box input {
+    width: 100%;
+    padding-left: 2.25rem;
+  }
+  select.field-sm {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23737373' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    padding-right: 1.75rem;
+  }
+  .filter-active {
+    position: relative;
+  }
+  .filter-active::after {
+    content: '';
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+    box-shadow: 0 0 0 2px hsl(var(--card));
+  }
+
+  /* ─── Orders table ─── */
+  .orders-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.04),
+      0 4px 12px -4px hsl(var(--ink) / 0.06),
+      0 24px 48px -24px hsl(var(--ink) / 0.1);
+    position: relative;
+  }
+  .orders-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent);
+  }
+
+  .orders-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.35);
+    background: linear-gradient(180deg, transparent 0%, hsl(var(--muted) / 0.2) 100%);
+  }
+  .orders-tools__count {
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .orders-tools__count strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .orders-tbl { width: 100%; border-collapse: collapse; }
+  .orders-tbl thead th {
+    text-align: left;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    padding: 0.875rem 1rem;
+    background: transparent;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+    cursor: pointer;
+    user-select: none;
+    transition: color .12s;
+    white-space: nowrap;
+  }
+  .orders-tbl thead th:hover { color: hsl(var(--foreground)); }
+  .orders-tbl thead th[aria-sort="ascending"]::after  { content: '▴'; margin-left: 0.375rem; color: hsl(var(--gold)); }
+  .orders-tbl thead th[aria-sort="descending"]::after { content: '▾'; margin-left: 0.375rem; color: hsl(var(--gold)); }
+
+  .orders-tbl tbody tr {
+    border-bottom: 1px solid hsl(var(--border) / 0.22);
+    position: relative;
+    transition: background .15s;
+    cursor: pointer;
+  }
+  .orders-tbl tbody tr:last-child { border-bottom: none; }
+  .orders-tbl tbody tr:hover {
+    background: linear-gradient(90deg, hsl(var(--gold-soft) / 0.5) 0%, hsl(var(--gold-soft) / 0.2) 40%, transparent 100%);
+  }
+  .orders-tbl tbody tr.selected {
+    background: linear-gradient(90deg, hsl(var(--gold-soft) / 0.7) 0%, hsl(var(--gold-soft) / 0.3) 50%, transparent 100%);
+  }
+
+  /* Priority left-bar accent */
+  .orders-tbl tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    font-size: 0.875rem;
+    line-height: 1.35;
+  }
+  .orders-tbl tbody td:first-child {
+    position: relative;
+    padding-left: 1.25rem;
+  }
+  .orders-tbl tbody tr[data-prio="spoed"] td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary) / 0.6));
+  }
+  .orders-tbl tbody tr[data-prio="concept"] td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: hsl(var(--status-draft-dot) / 0.5);
+  }
+  .orders-tbl tbody tr[data-prio="normal"] td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: hsl(var(--gold) / 0.25);
+  }
+
+  /* Cell content */
+  .ord-num {
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    padding: 0.1875rem 0.5rem;
+    background: hsl(var(--gold-soft) / 0.6);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 0.3125rem;
+    color: hsl(var(--foreground));
+    white-space: nowrap;
+    display: inline-block;
+  }
+
+  .client {
+    font-weight: 500;
+    color: hsl(var(--foreground));
+  }
+  .client__ref {
+    display: block;
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+    font-variant-numeric: tabular-nums;
+    margin-top: 0.125rem;
+    letter-spacing: 0.02em;
+  }
+
+  .route {
+    font-size: 0.8125rem;
+    color: hsl(var(--foreground));
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+  .route__arr {
+    color: hsl(var(--gold));
+    font-weight: 500;
+    font-size: 0.75rem;
+  }
+  .route__leg-badge {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    color: hsl(var(--gold-deep));
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 0.375rem;
+  }
+
+  .when {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8125rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+  }
+  .when__day { font-weight: 600; }
+  .when__month {
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .when__time {
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+    margin-left: 0.375rem;
+    padding-left: 0.5rem;
+    border-left: 1px solid hsl(var(--border));
+  }
+
+  /* ═══ Status — premium minimalist ═══
+     Geen gekleurde kaders meer. Text in foreground, dot draagt de kleur,
+     met halo-glow + delicate animatie voor actieve status. */
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+  }
+  .status__dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    position: relative;
+    box-shadow: 0 0 0 2.5px hsl(var(--card)), 0 0 0 4px var(--dot-halo, transparent);
+  }
+  .status__dot::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 50%;
+    background: inherit;
+    opacity: 0;
+  }
+
+  .status--draft     { --dot-halo: hsl(var(--status-draft-dot) / 0.18);     }
+  .status--draft     .status__dot { background: radial-gradient(circle at 30% 30%, hsl(210 80% 70%), var(--status-draft-dot)); }
+  .status--pending   { --dot-halo: hsl(var(--status-pending-dot) / 0.22);   }
+  .status--pending   .status__dot { background: radial-gradient(circle at 30% 30%, hsl(42 100% 68%), var(--status-pending-dot)); }
+  .status--planned   { --dot-halo: hsl(var(--status-planned-dot) / 0.2);    }
+  .status--planned   .status__dot { background: radial-gradient(circle at 30% 30%, hsl(265 85% 78%), var(--status-planned-dot)); }
+  .status--transit   { --dot-halo: hsl(var(--status-transit-dot) / 0.22);   color: hsl(var(--foreground)); }
+  .status--transit   .status__dot { background: radial-gradient(circle at 30% 30%, hsl(4 92% 68%), var(--status-transit-dot)); animation: status-pulse 2s infinite; }
+  .status--delivered { --dot-halo: hsl(var(--status-delivered-dot) / 0.2);  }
+  .status--delivered .status__dot { background: radial-gradient(circle at 30% 30%, hsl(158 70% 55%), var(--status-delivered-dot)); }
+
+  @keyframes status-pulse {
+    0%, 100% { box-shadow: 0 0 0 2.5px hsl(var(--card)), 0 0 0 4px var(--dot-halo), 0 0 0 4px var(--dot-halo); }
+    50%      { box-shadow: 0 0 0 2.5px hsl(var(--card)), 0 0 0 4px var(--dot-halo), 0 0 0 8px transparent; }
+  }
+
+  /* ═══ Signal-chips — ADR / Temp / PMT / Secure / Info-pending ═══
+     Tiny inline indicators naast klantnaam of onder referentie. */
+  .chiplet {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.125rem 0.4375rem;
+    border-radius: 0.3125rem;
+    white-space: nowrap;
+    border: 1px solid;
+  }
+  .chiplet svg { width: 10px; height: 10px; }
+  .chiplet--info   { background: var(--status-pending-bg); color: var(--status-pending-text); border-color: var(--status-pending-border); }
+  .chiplet--adr    { background: hsl(0 78% 96%); color: hsl(0 78% 38%); border-color: hsl(0 78% 85%); }
+  .chiplet--temp   { background: hsl(200 80% 96%); color: hsl(200 80% 35%); border-color: hsl(200 60% 82%); }
+  .chiplet--pmt    { background: hsl(var(--gold-soft) / 0.6); color: hsl(var(--gold-deep)); border-color: hsl(var(--gold) / 0.3); }
+  .chiplet--secure { background: hsl(142 45% 94%); color: hsl(142 50% 30%); border-color: hsl(142 45% 82%); }
+  .chiplet--km     { background: hsl(var(--muted) / 0.5); color: hsl(var(--muted-foreground)); border-color: hsl(var(--border)); }
+  .chiplet--delay  { background: hsl(0 78% 96%); color: hsl(0 78% 38%); border-color: hsl(0 78% 85%); }
+
+  /* Info-waiting (backward-compat — dezelfde stijl als chiplet--info) */
+  .info-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.125rem 0.4375rem;
+    border-radius: 0.3125rem;
+    background: var(--status-pending-bg);
+    color: var(--status-pending-text);
+    border: 1px solid var(--status-pending-border);
+  }
+  .info-chip::before {
+    content: '';
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--status-pending-dot);
+  }
+
+  /* Signal-groep onder klantref (legacy — niet meer gebruikt voor default) */
+  .signal-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+  }
+
+  /* Route meta-rij: km/duur + optionele cargo-chips (ADR/Temp/KM-warn) */
+  .route__meta {
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.25rem;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  /* Status-stack: status-dot + evt. operationele chip naast elkaar */
+  .status-stack {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  /* KM-afwijking: amber, geen groene match-variant (dat is de norm) */
+  .chiplet--km-warn {
+    background: var(--status-pending-bg);
+    color: var(--status-pending-text);
+    border: 1px solid var(--status-pending-border);
+  }
+
+  /* Row actions */
+  .row-actions {
+    display: flex;
+    gap: 0.125rem;
+    justify-content: flex-end;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .orders-tbl tbody tr:hover .row-actions { opacity: 1; }
+  .icon-btn {
+    width: 26px; height: 26px;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .12s;
+  }
+  .icon-btn:hover {
+    background: hsl(var(--card));
+    border-color: hsl(var(--gold) / 0.35);
+    color: hsl(var(--gold-deep));
+  }
+
+  /* Pagination */
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1.25rem;
+    border-top: 1px solid hsl(var(--border) / 0.35);
+    background: hsl(var(--muted) / 0.15);
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .pager__nums {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .pager-btn {
+    min-width: 32px; height: 32px;
+    padding: 0 0.5rem;
+    border: 1px solid hsl(var(--border) / 0.6);
+    background: hsl(var(--card));
+    border-radius: 0.4375rem;
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--foreground));
+    cursor: pointer;
+    transition: all .12s;
+    position: relative;
+  }
+  .pager-btn:hover {
+    border-color: hsl(var(--gold) / 0.4);
+    background: hsl(var(--gold-soft) / 0.4);
+  }
+  .pager-btn--active {
+    background: hsl(var(--foreground));
+    color: hsl(var(--card));
+    border-color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+  .pager-btn--active::after {
+    content: '';
+    position: absolute;
+    bottom: -5px; left: 50%;
+    transform: translateX(-50%);
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+  }
+
+  /* Select all checkbox in header */
+  .chk {
+    appearance: none;
+    width: 16px; height: 16px;
+    border: 1.5px solid hsl(var(--input));
+    border-radius: 4px;
+    background: hsl(var(--card));
+    cursor: pointer;
+    position: relative;
+  }
+  .chk:checked {
+    background: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+  }
+  .chk:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px; top: 1px;
+    width: 4px; height: 9px;
+    border: solid white;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+</style>
+</head>
+<body>
+
+<div class="ribbon">
+  <span><span class="tag">Mockup</span> &nbsp; Orders — Premium Comfortable</span>
+  <span style="opacity:0.4; letter-spacing:0;">docs/mockups/orders-redesign.html</span>
+</div>
+
+<div class="max-w-[1440px] mx-auto px-8 pt-8 pb-12 space-y-6">
+
+  <!-- ═══ Page header ═══ -->
+  <div>
+    <div class="page-eyebrow">Orders</div>
+    <div class="flex items-start justify-between gap-6">
+      <div style="flex: 1;">
+        <h1 class="page-title">Orderlijst</h1>
+        <div class="page-meta">
+          <strong>247</strong> orders
+          <span class="dot"></span>
+          <strong>12</strong> concept
+          <span class="dot"></span>
+          <strong>8</strong> vandaag
+          <span class="dot"></span>
+          <span style="font-style: italic;">gesynchroniseerd 14:23</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-ghost">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Export
+        </button>
+        <button class="btn btn-ghost">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+          Bulk
+        </button>
+        <button class="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Nieuwe order
+        </button>
+      </div>
+    </div>
+    <div class="hairline" style="margin-top: 1.5rem;"></div>
+  </div>
+
+  <!-- ═══ KPI strip ═══ -->
+  <div class="kpi-strip">
+    <div class="kpi">
+      <span class="kpi__dot" style="background: var(--status-draft-dot);"></span>
+      <div class="kpi__label">Concept</div>
+      <div class="kpi__value">12</div>
+      <div class="kpi__delta">niet verzonden</div>
+    </div>
+    <div class="kpi kpi--active">
+      <span class="kpi__dot" style="background: var(--status-planned-dot);"></span>
+      <div class="kpi__label">Gepland</div>
+      <div class="kpi__value">86</div>
+      <div class="kpi__delta kpi__delta--up">+9 vs gisteren</div>
+    </div>
+    <div class="kpi">
+      <span class="kpi__dot" style="background: var(--status-transit-dot);"></span>
+      <div class="kpi__label">Onderweg</div>
+      <div class="kpi__value">34</div>
+      <div class="kpi__delta">3 met vertraging</div>
+    </div>
+    <div class="kpi">
+      <span class="kpi__dot" style="background: var(--status-pending-dot);"></span>
+      <div class="kpi__label">Wacht op info</div>
+      <div class="kpi__value">18</div>
+      <div class="kpi__delta kpi__delta--down">4× T-1u escalatie</div>
+    </div>
+    <div class="kpi">
+      <span class="kpi__dot" style="background: var(--status-delivered-dot);"></span>
+      <div class="kpi__label">Geleverd · 7d</div>
+      <div class="kpi__value">121</div>
+      <div class="kpi__delta kpi__delta--up">+12% week</div>
+    </div>
+  </div>
+
+  <!-- ═══ Filter bar ═══ -->
+  <div class="filter-bar">
+    <div class="search-box">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input class="field-sm" placeholder="Zoek op ordernummer, klant, adres…" />
+    </div>
+    <select class="field-sm"><option>Alle statussen</option><option>Concept</option><option>Gepland</option><option>Onderweg</option><option>Geleverd</option></select>
+    <select class="field-sm filter-active"><option>Alle afdelingen</option><option>OPS</option><option>EXPORT</option></select>
+    <select class="field-sm"><option>Alle klanten</option></select>
+    <select class="field-sm"><option>Alle data</option><option>Vandaag</option><option>Deze week</option><option>Komende 7 dagen</option></select>
+    <button class="btn btn-ghost" style="height: 2.25rem; font-size: 0.75rem;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      Reset
+    </button>
+  </div>
+
+  <!-- ═══ Orders table ═══ -->
+  <div class="orders-card">
+    <div class="orders-tools">
+      <div class="orders-tools__count">Toont <strong>1–18</strong> van <strong>247</strong> orders</div>
+      <div class="flex items-center gap-2">
+        <span style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Dichtheid</span>
+        <div class="seg-ctrl" style="display: inline-flex; background: hsl(var(--muted) / 0.4); border-radius: 0.5rem; padding: 2px; gap: 2px;">
+          <button style="padding: 0.25rem 0.5rem; font-size: 0.6875rem; background: transparent; border: none; border-radius: 0.375rem; cursor: pointer; color: hsl(var(--muted-foreground));">Compact</button>
+          <button style="padding: 0.25rem 0.5rem; font-size: 0.6875rem; background: hsl(var(--card)); border: none; border-radius: 0.375rem; cursor: pointer; color: hsl(var(--foreground)); font-weight: 600; box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 1px 2px hsl(var(--ink) / 0.06);">Comfort</button>
+          <button style="padding: 0.25rem 0.5rem; font-size: 0.6875rem; background: transparent; border: none; border-radius: 0.375rem; cursor: pointer; color: hsl(var(--muted-foreground));">Ruim</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table class="orders-tbl">
+        <thead>
+          <tr>
+            <th style="width: 36px;"><input type="checkbox" class="chk" /></th>
+            <th>Order</th>
+            <th>Klant</th>
+            <th>Route</th>
+            <th>Wanneer</th>
+            <th>Status</th>
+            <th style="width: 120px; text-align: right;"></th>
+          </tr>
+        </thead>
+        <tbody>
+
+        <tbody>
+
+          <!-- Uitzondering: info-wacht T-1u + spoed (linker stripe) -->
+          <tr data-prio="spoed">
+            <td><input type="checkbox" class="chk" /></td>
+            <td><span class="ord-num">ORD-2026-04-0847</span></td>
+            <td>
+              <div class="client">Van der Berg Logistics BV</div>
+              <span class="client__ref">PO-99812</span>
+            </td>
+            <td>
+              <div class="route">
+                Rotterdam <span class="route__arr">→</span> Düsseldorf
+                <span class="route__leg-badge">EXPORT</span>
+              </div>
+              <div class="route__meta">412 km · 5u 20m</div>
+            </td>
+            <td>
+              <div class="when">
+                <span class="when__day">15</span>
+                <span class="when__month">apr</span>
+                <span class="when__time">08:00 – 10:00</span>
+              </div>
+            </td>
+            <td>
+              <div class="status-stack">
+                <span class="status status--planned"><span class="status__dot"></span>Gepland</span>
+                <span class="chiplet chiplet--info" title="2 velden wachten op info van klant — T-1u escalatie">info 2</span>
+              </div>
+            </td>
+            <td>
+              <div class="row-actions">
+                <button class="icon-btn" aria-label="Bekijk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <button class="icon-btn" aria-label="Dupliceer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+                <button class="icon-btn" aria-label="Meer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Uitzondering: vertraging in transit -->
+          <tr data-prio="normal" class="selected">
+            <td><input type="checkbox" class="chk" checked /></td>
+            <td><span class="ord-num">ORD-2026-04-0846</span></td>
+            <td>
+              <div class="client">Oostlandse Kassen</div>
+              <span class="client__ref">—</span>
+            </td>
+            <td>
+              <div class="route">
+                Naaldwijk <span class="route__arr">→</span> Hamburg
+                <span class="route__leg-badge">EXPORT</span>
+              </div>
+              <div class="route__meta">487 km · 6u 10m</div>
+            </td>
+            <td>
+              <div class="when">
+                <span class="when__day">15</span>
+                <span class="when__month">apr</span>
+                <span class="when__time">14:00 – 17:00</span>
+              </div>
+            </td>
+            <td>
+              <div class="status-stack">
+                <span class="status status--transit"><span class="status__dot"></span>Onderweg</span>
+                <span class="chiplet chiplet--delay" title="Vertraging gedetecteerd via VRP">+18m</span>
+              </div>
+            </td>
+            <td><div class="row-actions"><button class="icon-btn">⋯</button></div></td>
+          </tr>
+
+          <!-- Clean: geen uitzonderingen -->
+          <tr data-prio="normal">
+            <td><input type="checkbox" class="chk" /></td>
+            <td><span class="ord-num">ORD-2026-04-0845</span></td>
+            <td>
+              <div class="client">Royal Frozen Foods BV</div>
+              <span class="client__ref">RFF-5521</span>
+            </td>
+            <td>
+              <div class="route">
+                Zaandam <span class="route__arr">→</span> Utrecht
+                <span class="route__leg-badge">OPS</span>
+              </div>
+              <div class="route__meta">48 km · 55m</div>
+            </td>
+            <td>
+              <div class="when">
+                <span class="when__day">15</span>
+                <span class="when__month">apr</span>
+                <span class="when__time">10:30</span>
+              </div>
+            </td>
+            <td><span class="status status--delivered"><span class="status__dot"></span>Geleverd</span></td>
+            <td></td>
+          </tr>
+
+          <!-- Uitzonderingen: ADR (bij Route) + info-wacht (bij Status) + concept (linker stripe) -->
+          <tr data-prio="concept">
+            <td><input type="checkbox" class="chk" /></td>
+            <td><span class="ord-num">ORD-2026-04-0844</span></td>
+            <td>
+              <div class="client">Kramer Transport GmbH</div>
+              <span class="client__ref">KT-2026-0411</span>
+            </td>
+            <td>
+              <div class="route" style="color: hsl(var(--muted-foreground));">
+                Amsterdam <span class="route__arr">→</span> <em style="font-style: italic;">adres ontbreekt</em>
+              </div>
+              <div class="route__meta">
+                <span class="chiplet chiplet--adr" title="ADR — UN1950 Aerosolen klasse 2.1">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                  ADR · UN1950
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="when" style="color: hsl(var(--muted-foreground));">
+                <span style="font-size: 0.75rem; font-style: italic;">datum n.t.b.</span>
+              </div>
+            </td>
+            <td>
+              <div class="status-stack">
+                <span class="status status--draft"><span class="status__dot"></span>Concept</span>
+                <span class="chiplet chiplet--info" title="4 velden wachten op info van klant">info 4</span>
+              </div>
+            </td>
+            <td></td>
+          </tr>
+
+          <!-- Uitzondering: luchtvracht PMT nog niet afgehandeld (wacht op info) -->
+          <tr data-prio="normal">
+            <td><input type="checkbox" class="chk" /></td>
+            <td><span class="ord-num">ORD-2026-04-0843</span></td>
+            <td>
+              <div class="client">FlowerLink International</div>
+              <span class="client__ref">FL-APR-0019</span>
+            </td>
+            <td>
+              <div class="route">
+                Aalsmeer <span class="route__arr">→</span> Heathrow
+                <span class="route__leg-badge">EXPRESS</span>
+              </div>
+              <div class="route__meta">482 km · 7u 15m</div>
+            </td>
+            <td>
+              <div class="when">
+                <span class="when__day">16</span>
+                <span class="when__month">apr</span>
+                <span class="when__time">02:00 – 04:00</span>
+              </div>
+            </td>
+            <td>
+              <div class="status-stack">
+                <span class="status status--pending"><span class="status__dot"></span>Wacht op info</span>
+                <span class="chiplet chiplet--pmt" title="PMT X-RAY moet nog worden gepland">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M6 11v6M10 11v6M14 11v6M18 11v6"/></svg>
+                  X-RAY open
+                </span>
+              </div>
+            </td>
+            <td></td>
+          </tr>
+
+          <!-- Uitzondering: KM-afwijking bij Route -->
+          <tr data-prio="normal">
+            <td><input type="checkbox" class="chk" /></td>
+            <td><span class="ord-num">ORD-2026-04-0842</span></td>
+            <td>
+              <div class="client">MedSupply Nederland</div>
+              <span class="client__ref">MS-8821</span>
+            </td>
+            <td>
+              <div class="route">
+                Leiden <span class="route__arr">→</span> Antwerpen
+                <span class="route__leg-badge">OPS</span>
+              </div>
+              <div class="route__meta">
+                156 km · 2u 05m
+                <span class="chiplet chiplet--km-warn" title="Gewicht wijkt +23% af van KM-referentie">KM · +23%</span>
+              </div>
+            </td>
+            <td>
+              <div class="when">
+                <span class="when__day">16</span>
+                <span class="when__month">apr</span>
+                <span class="when__time">09:00</span>
+              </div>
+            </td>
+            <td><span class="status status--planned"><span class="status__dot"></span>Gepland</span></td>
+            <td></td>
+          </tr>
+
+          <!-- Clean: alleen spoed-stripe (geen chips) -->
+          <tr data-prio="spoed">
+            <td><input type="checkbox" class="chk" /></td>
+            <td><span class="ord-num">ORD-2026-04-0841</span></td>
+            <td>
+              <div class="client">AutoParts Europa</div>
+              <span class="client__ref">AP-99022</span>
+            </td>
+            <td>
+              <div class="route">
+                Eindhoven <span class="route__arr">→</span> Keulen
+                <span class="route__leg-badge">EXPORT</span>
+              </div>
+              <div class="route__meta">217 km · 2u 40m</div>
+            </td>
+            <td>
+              <div class="when">
+                <span class="when__day">15</span>
+                <span class="when__month">apr</span>
+                <span class="when__time">22:00</span>
+              </div>
+            </td>
+            <td><span class="status status--transit"><span class="status__dot"></span>Onderweg</span></td>
+            <td></td>
+          </tr>
+
+          <!-- Clean -->
+          <tr data-prio="normal">
+            <td><input type="checkbox" class="chk" /></td>
+            <td><span class="ord-num">ORD-2026-04-0840</span></td>
+            <td>
+              <div class="client">BlueWave Shipping</div>
+              <span class="client__ref">BW-0408</span>
+            </td>
+            <td>
+              <div class="route">
+                Rotterdam <span class="route__arr">→</span> Gent
+                <span class="route__leg-badge">OPS</span>
+              </div>
+              <div class="route__meta">196 km · 2u 20m</div>
+            </td>
+            <td>
+              <div class="when">
+                <span class="when__day">17</span>
+                <span class="when__month">apr</span>
+                <span class="when__time">11:00 – 13:00</span>
+              </div>
+            </td>
+            <td><span class="status status--planned"><span class="status__dot"></span>Gepland</span></td>
+            <td></td>
+          </tr>
+
+          <!-- Clean -->
+          <tr data-prio="normal">
+            <td><input type="checkbox" class="chk" /></td>
+            <td><span class="ord-num">ORD-2026-04-0839</span></td>
+            <td>
+              <div class="client">Van Dijk Vers</div>
+              <span class="client__ref">VD-117</span>
+            </td>
+            <td>
+              <div class="route">
+                Barneveld <span class="route__arr">→</span> Breda
+                <span class="route__leg-badge">OPS</span>
+              </div>
+              <div class="route__meta">89 km · 1u 10m</div>
+            </td>
+            <td>
+              <div class="when">
+                <span class="when__day">15</span>
+                <span class="when__month">apr</span>
+                <span class="when__time">07:00</span>
+              </div>
+            </td>
+            <td><span class="status status--delivered"><span class="status__dot"></span>Geleverd</span></td>
+            <td></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pager -->
+    <div class="pager">
+      <span>Pagina 1 van 14 · 18 per pagina</span>
+      <div class="pager__nums">
+        <button class="pager-btn" aria-label="Vorige">‹</button>
+        <button class="pager-btn pager-btn--active">1</button>
+        <button class="pager-btn">2</button>
+        <button class="pager-btn">3</button>
+        <button class="pager-btn">4</button>
+        <span style="display: inline-flex; align-items: center; padding: 0 0.375rem; color: hsl(var(--muted-foreground));">…</span>
+        <button class="pager-btn">14</button>
+        <button class="pager-btn" aria-label="Volgende">›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer note -->
+  <div style="font-size: 10px; color: hsl(var(--muted-foreground) / 0.5); font-variant-numeric: tabular-nums; text-align: center; padding-top: 1rem;">
+    Orders redesign · Premium Comfortable · v0.1
+  </div>
+</div>
+
+<script>
+  // KPI → filter: click toggles active state
+  document.querySelectorAll('.kpi').forEach(k => {
+    k.addEventListener('click', () => {
+      document.querySelectorAll('.kpi').forEach(x => x.classList.remove('kpi--active'));
+      k.classList.add('kpi--active');
+    });
+  });
+  // Row select toggle on checkbox change
+  document.querySelectorAll('.orders-tbl tbody input.chk').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      e.target.closest('tr').classList.toggle('selected', e.target.checked);
+    });
+  });
+  // Row click navigeert (simulatie — niet op checkbox/knoppen)
+  document.querySelectorAll('.orders-tbl tbody tr').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('input, button')) return;
+      tr.style.outline = '1px solid hsl(38 35% 55% / 0.5)';
+      setTimeout(() => tr.style.outline = '', 300);
+    });
+  });
+  // Density switch visual only
+  document.querySelectorAll('.seg-ctrl button').forEach(b => {
+    b.addEventListener('click', () => {
+      b.parentElement.querySelectorAll('button').forEach(x => {
+        x.style.background = 'transparent';
+        x.style.color = 'hsl(var(--muted-foreground))';
+        x.style.fontWeight = '';
+        x.style.boxShadow = 'none';
+      });
+      b.style.background = 'hsl(var(--card))';
+      b.style.color = 'hsl(var(--foreground))';
+      b.style.fontWeight = '600';
+      b.style.boxShadow = 'inset 0 1px 0 hsl(0 0% 100%), 0 1px 2px hsl(var(--ink) / 0.06)';
+    });
+  });
+</script>
+</body>
+</html>
