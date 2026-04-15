@@ -3,6 +3,9 @@ project_id = "kdszxexyefsbssfhnwxc"
 [functions.parse-order]
 verify_jwt = false
 
+[functions.analyze-vehicle-photo]
+verify_jwt = false
+
 [functions.import-email]
 verify_jwt = false
 
