@@ -9,6 +9,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // Stub-env zodat Supabase client module-load slaagt op CI (zonder .env).
+    // Hooks die echt de client aanroepen moeten supabase mocken per testfile.
+    env: {
+      VITE_SUPABASE_URL: "http://localhost:54321",
+      VITE_SUPABASE_PUBLISHABLE_KEY: "stub-key-for-tests",
+    },
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary", "html", "lcov"],

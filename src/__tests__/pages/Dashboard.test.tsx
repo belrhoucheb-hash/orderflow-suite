@@ -38,6 +38,24 @@ vi.mock("@/hooks/useVehicles", () => ({ useVehicles: mockUseVehicles }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ effectiveRole: "admin", session: { user: { id: "test-user" } }, loading: false }),
 }));
+// CI-omgeving heeft geen SUPABASE_URL env, mock de client-module voor ChildrenRenderen.
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      then: vi.fn().mockImplementation((cb: any) => cb({ data: [], error: null })),
+    }),
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user: { id: "test-user" } }, error: null }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    },
+    channel: vi.fn().mockReturnValue({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnValue({ unsubscribe: vi.fn() }) }),
+    removeChannel: vi.fn(),
+  },
+}));
 
 vi.mock("@/components/dashboard/FinancialKPIWidget", () => ({
   FinancialKPIWidget: () => <div data-testid="financial-widget">Financial KPI</div>,
@@ -77,7 +95,24 @@ function renderDashboard() {
 }
 
 describe("Dashboard", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Reset persistente mockReturnValue's tussen tests, anders bleed-through.
+    mockUseOrders.mockReset();
+    mockUseVehicles.mockReset();
+    mockUseOrders.mockImplementation(() => ({
+      data: { orders: [
+        { id: "o1", orderNumber: "ORD-001", customer: "Acme BV", status: "DELIVERED", priority: "normaal", totalWeight: 500, deliveryAddress: "Amsterdam", createdAt: "2025-01-10T10:00:00Z", estimatedDelivery: "2025-01-12T10:00:00Z" },
+        { id: "o2", orderNumber: "ORD-002", customer: "Widget NL", status: "IN_TRANSIT", priority: "spoed", totalWeight: 1200, deliveryAddress: "Rotterdam", createdAt: "2025-01-11T10:00:00Z", estimatedDelivery: "2024-01-01T10:00:00Z" },
+        { id: "o3", orderNumber: "ORD-003", customer: "Test Corp", status: "PENDING", priority: "normaal", totalWeight: 300, deliveryAddress: "Utrecht", createdAt: "2025-01-09T10:00:00Z", estimatedDelivery: "2030-01-01T10:00:00Z" },
+      ], totalCount: 3 },
+      isLoading: false, isError: false, refetch: vi.fn(),
+    }));
+    mockUseVehicles.mockImplementation(() => ({
+      data: [{ id: "v1", code: "V01", name: "Truck 1", plate: "AB-123-CD" }, { id: "v2", code: "V02", name: "Truck 2", plate: "EF-456-GH" }],
+      isLoading: false, isError: false, refetch: vi.fn(),
+    }));
+  });
 
   it("renders without crashing", () => {
     renderDashboard();
@@ -129,8 +164,10 @@ describe("Dashboard", () => {
   it("clicking retry in error state calls refetch", async () => {
     const user = userEvent.setup();
     const mockRefetch = vi.fn();
-    mockUseOrders.mockReturnValueOnce({ data: null, isLoading: false, isError: true, refetch: mockRefetch });
-    mockUseVehicles.mockReturnValueOnce({ data: [], isLoading: false, isError: true, refetch: mockRefetch });
+    // mockReturnValue i.p.v. Once, zodat re-renders tijdens userEvent.click
+    // dezelfde mock-refetch blijven krijgen (anders kaapt het default-mock die).
+    mockUseOrders.mockReturnValue({ data: null, isLoading: false, isError: true, refetch: mockRefetch });
+    mockUseVehicles.mockReturnValue({ data: [], isLoading: false, isError: true, refetch: mockRefetch });
     renderDashboard();
     const retryBtn = screen.getByText(/Probeer opnieuw|Opnieuw/i);
     await user.click(retryBtn);

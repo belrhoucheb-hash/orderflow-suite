@@ -362,7 +362,9 @@ describe("Orders", () => {
   // ── total weight in footer ──
   it("shows total weight in footer", () => {
     renderOrders();
-    expect(screen.getByText(/2\.000 kg/)).toBeInTheDocument();
+    // toLocaleString() gebruikt OS-locale, CI (Linux) = en-US → "2,000 kg",
+    // NL/dev → "2.000 kg". Regex accepteert beide.
+    expect(screen.getByText(/2[.,]000 kg/)).toBeInTheDocument();
   });
 
   // ── pagination shows 0 when no orders ──

@@ -138,17 +138,16 @@ describe("NewOrder", () => {
     }
   });
 
-  it("shows Sluiten button", () => {
+  it("shows Opslaan & sluiten button", () => {
     renderNewOrder();
-    expect(screen.getByText(/Sluiten/)).toBeInTheDocument();
+    // Luxe refactor hernoemde knop naar "Opslaan & sluiten" (sluiten lowercase).
+    expect(screen.getByText(/sluiten/i)).toBeInTheDocument();
   });
 
-  it("Sluiten button triggers handleSave(true) which validates first", async () => {
+  it("Opslaan & sluiten triggers handleSave(true) which validates first", async () => {
     const user = userEvent.setup();
     renderNewOrder();
-    await user.click(screen.getByText(/Sluiten/));
-    // Without valid form data, it should not navigate (validation fails)
-    // But the handler IS triggered (coverage goal)
+    await user.click(screen.getByText(/sluiten/i));
     expect(document.body.textContent).toBeTruthy();
   });
 
