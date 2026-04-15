@@ -35,6 +35,9 @@ const { mockUseOrders, mockUseVehicles } = vi.hoisted(() => {
 
 vi.mock("@/hooks/useOrders", () => ({ useOrders: mockUseOrders }));
 vi.mock("@/hooks/useVehicles", () => ({ useVehicles: mockUseVehicles }));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({ effectiveRole: "admin", session: { user: { id: "test-user" } }, loading: false }),
+}));
 
 vi.mock("@/components/dashboard/FinancialKPIWidget", () => ({
   FinancialKPIWidget: () => <div data-testid="financial-widget">Financial KPI</div>,

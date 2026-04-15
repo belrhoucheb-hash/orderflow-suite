@@ -32,7 +32,7 @@ const { mockSupabase, mockOrder, mockUpdateOrder, mockCreateInvoice } = vi.hoist
     mockUpdateOrder: vi.fn().mockResolvedValue({}),
     mockCreateInvoice: vi.fn().mockResolvedValue({ id: "inv-new" }),
     mockSupabase: {
-      auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }), onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }) },
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "test-user-id" } }, error: null }), getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }), onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }) },
       from: vi.fn().mockImplementation(chain),
       functions: { invoke: vi.fn().mockResolvedValue({ data: { success: true, message: "Bevestiging verzonden" }, error: null }) },
       channel: vi.fn().mockReturnValue({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnValue({ unsubscribe: vi.fn() }) }),
@@ -49,6 +49,16 @@ vi.mock("@/components/orders/SmartLabel", () => ({ default: () => <div data-test
 vi.mock("@/components/orders/PodViewer", () => ({ default: () => <div data-testid="pod-viewer" /> }));
 vi.mock("@/components/orders/CMRDocument", () => ({ default: () => <div data-testid="cmr-doc" /> }));
 vi.mock("@/components/orders/LabelWorkshop", () => ({ default: () => <div data-testid="label-workshop" /> }));
+// Render DropdownMenu inline zodat tests bij action-items kunnen zonder eerst de
+// trigger-knop te openen. De actions zitten na de luxe refactor in een ... menu.
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onClick, asChild }: any) =>
+    asChild ? children : <button onClick={onClick}>{children}</button>,
+  DropdownMenuSeparator: () => <hr />,
+}));
 
 import OrderDetail from "@/pages/OrderDetail";
 
@@ -71,7 +81,8 @@ describe("OrderDetail", () => {
   it("renders without crashing", async () => {
     renderOrderDetail();
     await waitFor(() => {
-      expect(screen.getByText(/1001/)).toBeInTheDocument();
+      // Order-nummer komt nu meerdere keren voor: header + facturatie/documenten sectie.
+      expect(screen.getAllByText(/1001/).length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -188,9 +199,10 @@ describe("OrderDetail", () => {
     const user = userEvent.setup();
     renderOrderDetail();
     await waitFor(() => {
-      expect(screen.queryByText(/CMR/i)).toBeInTheDocument();
+      // CMR komt voor in dropdown-action én in facturatie/documenten sectie.
+      expect(screen.getAllByText(/CMR/i).length).toBeGreaterThanOrEqual(1);
     });
-    await user.click(screen.getByText(/CMR/i));
+    await user.click(screen.getAllByText(/CMR/i)[0]);
     await waitFor(() => {
       expect(document.body.textContent).toBeTruthy();
     });
@@ -314,9 +326,9 @@ describe("OrderDetail", () => {
     const user = userEvent.setup();
     renderOrderDetail();
     await waitFor(() => {
-      expect(screen.queryByText(/CMR/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/CMR/i).length).toBeGreaterThanOrEqual(1);
     });
-    await user.click(screen.getByText(/CMR/i));
+    await user.click(screen.getAllByText(/CMR/i)[0]);
     // Should trigger generateCmr which calls supabase
     await waitFor(() => {
       expect(mockSupabase.from).toHaveBeenCalled();

@@ -68,6 +68,13 @@ vi.mock("@/components/fleet/DocumentDialog", () => ({
     </div>
   ) : null,
 }));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({ effectiveRole: "admin", session: { user: { id: "test-user" } }, loading: false }),
+}));
+vi.mock("@/hooks/useVehicleCheckHistory", () => ({
+  useLatestVehicleCheck: () => ({ data: null, isLoading: false }),
+  useVehicleCheckHistory: () => ({ data: [], isLoading: false }),
+}));
 
 import VehicleDetail from "@/pages/VehicleDetail";
 
