@@ -1,0 +1,2744 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>NewOrder — Redesign (OrderFlow huisstijl)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* ═════ OrderFlow Suite design tokens (uit src/index.css) ═════ */
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8%;
+    --primary: 0 78% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 12% 55%;
+    --muted: 30 8% 93%;
+    --muted-foreground: 0 0% 40%;
+    --border: 30 8% 88%;
+    --input: 30 8% 85%;
+    --ring: 0 78% 42%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-border: 0 0% 15%;
+
+    --status-pending-bg: #fffbeb;
+    --status-pending-text: #b45309;
+    --status-pending-border: #fde68a;
+    --status-pending-dot: #f59e0b;
+    --status-planned-bg: #f5f3ff;
+    --status-planned-text: #6d28d9;
+    --status-planned-border: #ddd6fe;
+    --status-draft-bg: #eff6ff;
+    --status-draft-text: #1d4ed8;
+    --status-draft-border: #bfdbfe;
+
+    --text-section-title: 1.125rem;
+    --text-body: 0.875rem;
+    --text-small: 0.75rem;
+    --text-caption: 0.6875rem;
+
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  /* ─── Luxe accent ─── */
+  :root {
+    --gold: 38 35% 55%;
+    --gold-deep: 32 42% 42%;
+    --gold-light: 42 55% 72%;
+    --gold-soft: 38 45% 92%;
+    --ink: 0 0% 10%;
+    --page-bg: 30 10% 96%;
+    --font-serif: 'Fraunces', 'Times New Roman', serif;
+  }
+
+  /* Gold foil gradient — luxury accent */
+  .gold-foil {
+    background: linear-gradient(135deg,
+      hsl(var(--gold-deep)) 0%,
+      hsl(var(--gold)) 35%,
+      hsl(var(--gold-light)) 55%,
+      hsl(var(--gold)) 75%,
+      hsl(var(--gold-deep)) 100%);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: foil 8s ease-in-out infinite;
+  }
+  @keyframes foil {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* Subtle noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.02 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.4;
+    mix-blend-mode: multiply;
+  }
+  body > * { position: relative; z-index: 2; }
+
+  /* Chapter number (large display in corner of each card) */
+  .chapter-num {
+    font-family: var(--font-serif);
+    font-size: 4rem;
+    font-weight: 400;
+    font-style: italic;
+    line-height: 1;
+    color: hsl(var(--gold) / 0.18);
+    letter-spacing: -0.04em;
+    user-select: none;
+  }
+
+  /* Hairline divider */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      hsl(var(--gold) / 0.4) 50%,
+      transparent 100%);
+  }
+
+  html, body {
+    font-family: var(--font-ui);
+    font-size: 0.9375rem;   /* 15px — ruimer leesbaar */
+    line-height: 1.55;
+    color: hsl(var(--foreground));
+    background:
+      radial-gradient(ellipse 1200px 600px at 50% -200px, hsl(var(--gold-soft) / 0.6), transparent 60%),
+      hsl(var(--page-bg));
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); }
+
+  /* ─── Cards ─── */
+  .card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.4);
+    border-radius: 1.25rem;
+    box-shadow:
+      0 1px 0 hsl(0 0% 100%) inset,
+      0 1px 2px hsl(var(--ink) / 0.04),
+      0 4px 12px -4px hsl(var(--ink) / 0.06),
+      0 24px 48px -24px hsl(var(--ink) / 0.12);
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow .3s ease, transform .3s ease;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      hsl(var(--gold) / 0.35) 20%,
+      hsl(var(--gold) / 0.5) 50%,
+      hsl(var(--gold) / 0.35) 80%,
+      transparent 100%);
+  }
+  .card-header {
+    padding: 1.75rem 2.25rem 1.375rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.3);
+    position: relative;
+  }
+  .card-body { padding: 1.75rem 2.25rem 2rem; }
+
+  /* Subtle chapter mark */
+  .card-chapter {
+    position: absolute;
+    top: 1.875rem;
+    right: 2.25rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1;
+    color: hsl(var(--gold-deep));
+    letter-spacing: 0.2em;
+    user-select: none;
+    pointer-events: none;
+    padding: 0.25rem 0.625rem;
+    background: hsl(var(--gold-soft) / 0.5);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 0.25rem;
+  }
+
+  .section-label {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: hsl(var(--gold-deep));
+  }
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 1.1875rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.015em;
+    margin-top: 0.375rem;
+    line-height: 1.25;
+  }
+  .section-hint {
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.5rem;
+    letter-spacing: 0;
+  }
+
+  .label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: hsl(var(--foreground) / 0.7);
+    letter-spacing: 0.01em;
+    display: block;
+    margin-bottom: 0.5rem;
+    text-transform: none;
+  }
+
+  /* ─── Fields ─── */
+  .field {
+    height: 2.625rem;
+    padding: 0 0.875rem;
+    border: 1px solid hsl(var(--input) / 0.8);
+    border-radius: 0.625rem;
+    background: hsl(var(--card));
+    font-family: var(--font-ui);
+    font-size: 0.9375rem;
+    color: hsl(var(--foreground));
+    width: 100%;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+  }
+  .field::placeholder { color: hsl(var(--muted-foreground) / 0.5); }
+  .field:hover { border-color: hsl(var(--border)); }
+  .field:focus {
+    outline: none;
+    border-color: hsl(var(--ring) / 0.4);
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.12);
+  }
+  .field[readonly], .field.ro {
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    cursor: not-allowed;
+  }
+  textarea.field { height: auto; padding: 0.5rem 0.75rem; line-height: 1.5; resize: vertical; }
+  select.field {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23737373' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    padding-right: 1.75rem;
+  }
+
+  /* ─── Buttons ─── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    padding: 0 1.125rem;
+    border-radius: 0.625rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: var(--font-ui);
+    letter-spacing: -0.005em;
+  }
+  .btn-primary {
+    background: linear-gradient(180deg, hsl(0 78% 48%) 0%, hsl(0 78% 38%) 100%);
+    color: hsl(var(--primary-foreground));
+    box-shadow:
+      0 1px 2px hsl(var(--primary) / 0.4),
+      0 4px 12px -2px hsl(var(--primary) / 0.3),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2),
+      inset 0 -1px 0 hsl(0 0% 0% / 0.1);
+    position: relative;
+    overflow: hidden;
+    font-weight: 500;
+  }
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      hsl(0 0% 100% / 0.15) 50%,
+      transparent 100%);
+    transform: translateX(-100%);
+    transition: transform .6s ease;
+  }
+  .btn-primary:hover {
+    box-shadow:
+      0 2px 4px hsl(var(--primary) / 0.4),
+      0 8px 20px -2px hsl(var(--primary) / 0.4),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2);
+    transform: translateY(-1px);
+  }
+  .btn-primary:hover::after {
+    transform: translateX(100%);
+  }
+  .btn-ghost {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border) / 0.7);
+  }
+  .btn-ghost:hover {
+    background: hsl(var(--muted) / 0.6);
+    border-color: hsl(var(--border));
+  }
+  .btn-subtle {
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+  }
+  .btn-subtle:hover { color: hsl(var(--foreground)); background: hsl(var(--muted) / 0.5); }
+
+  /* ─── Topbar ─── */
+  .sidebar-bar {
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    border-bottom: 1px solid hsl(var(--sidebar-border));
+  }
+  .topbar { background: hsl(var(--card)); border-bottom: 1px solid hsl(var(--border) / 0.6); }
+
+  /* ─── Tabs ─── */
+  .tab {
+    padding: 1rem 0;
+    margin-right: 2.25rem;
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    border-bottom: 1.5px solid transparent;
+    letter-spacing: 0.02em;
+    transition: color .2s;
+    position: relative;
+  }
+  .tab:hover { color: hsl(var(--foreground)); }
+  .tab-active {
+    color: hsl(var(--foreground));
+    border-bottom-color: hsl(var(--primary));
+  }
+  .tab-active::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -2px;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+    transform: translateX(-50%) translateY(100%);
+  }
+
+  /* ─── Traject banner ─── */
+  .traject {
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.35) 100%);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    color: hsl(var(--foreground));
+    border-radius: 1rem;
+    padding: 1.125rem 1.5rem;
+    box-shadow:
+      0 1px 2px hsl(var(--ink) / 0.03),
+      0 8px 24px -12px hsl(var(--gold) / 0.15);
+  }
+  .leg-row {
+    display: grid;
+    grid-template-columns: 2rem 5rem 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.625rem 0;
+    font-size: 0.9375rem;
+  }
+  .leg-row + .leg-row { border-top: 1px solid hsl(var(--gold) / 0.15); }
+  .leg-num {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    color: hsl(var(--gold));
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+  }
+  .leg-dept {
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    color: hsl(var(--foreground));
+    padding: 4px 10px;
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  /* ─── Table ─── */
+  .tbl { width: 100%; border-collapse: collapse; }
+  .tbl th {
+    text-align: left;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    font-weight: 600;
+    padding: 0.875rem 1rem;
+    background: hsl(var(--muted) / 0.35);
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+  }
+  .tbl td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.25);
+    font-size: 0.9375rem;
+    vertical-align: middle;
+  }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl-wrap {
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: hsl(var(--card));
+  }
+
+  /* ─── Checkbox (primary red) ─── */
+  .chk {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid hsl(var(--input));
+    border-radius: 4px;
+    background: hsl(var(--card));
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: all .12s;
+  }
+  .chk:hover { border-color: hsl(var(--primary) / 0.5); }
+  .chk:checked { background: hsl(var(--primary)); border-color: hsl(var(--primary)); }
+  .chk:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px; top: 1px;
+    width: 4px; height: 9px;
+    border: solid #fff;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+
+  /* Info-tracking panel = pending-status colors */
+  .panel-pending {
+    background: var(--status-pending-bg);
+    border: 1px solid var(--status-pending-border);
+  }
+
+  /* Disclosure */
+  details summary { list-style: none; cursor: pointer; }
+  details summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(90deg); }
+  .chev { display: inline-block; transition: transform .15s; color: hsl(var(--muted-foreground)); }
+
+  /* Ribbon */
+  .ribbon {
+    background: hsl(var(--sidebar-background));
+    color: hsl(var(--sidebar-foreground));
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.375rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ribbon .tag {
+    color: hsl(var(--primary) / 0.9);
+    font-weight: 600;
+  }
+
+  .req { color: hsl(var(--primary)); margin-left: 2px; font-weight: 500; }
+
+  /* ─── L × B × H group ─── */
+  .dim-group { display: flex; align-items: center; gap: 0.25rem; }
+  .field.dim {
+    width: 3.25rem;
+    padding: 0 0.375rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-display);
+  }
+  .dim-sep {
+    color: hsl(var(--gold));
+    font-weight: 500;
+    font-size: 0.875rem;
+  }
+
+  /* ─── Toggle (stapelbaar) ─── */
+  .toggle { display: inline-block; position: relative; cursor: pointer; }
+  .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .toggle span {
+    display: block;
+    width: 36px; height: 20px;
+    border-radius: 999px;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    position: relative;
+    transition: all .2s;
+  }
+  .toggle span::after {
+    content: '';
+    position: absolute;
+    left: 2px; top: 1px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 2px hsl(var(--ink) / 0.15);
+    transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .toggle input:checked + span {
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    border-color: hsl(var(--primary));
+  }
+  .toggle input:checked + span::after { left: 18px; }
+
+  /* ─── Tariff mode switcher ─── */
+  .mode-switch {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.625rem;
+  }
+  .mode-btn {
+    text-align: left;
+    padding: 1rem 1.125rem;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.6);
+    border-radius: 0.875rem;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    position: relative;
+    font-family: var(--font-ui);
+  }
+  .mode-btn svg {
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 0.25rem;
+    transition: color .2s;
+  }
+  .mode-btn:hover {
+    border-color: hsl(var(--gold) / 0.4);
+    background: hsl(var(--gold-soft) / 0.3);
+  }
+  .mode-btn--active {
+    border-color: hsl(var(--gold) / 0.6);
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.5) 100%);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--gold) / 0.1),
+      0 4px 12px -4px hsl(var(--gold) / 0.2);
+  }
+  .mode-btn--active svg { color: hsl(var(--gold-deep)); }
+  .mode-btn--active::after {
+    content: '';
+    position: absolute;
+    top: 0.875rem;
+    right: 0.875rem;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+    box-shadow: 0 0 0 3px hsl(var(--gold) / 0.25);
+  }
+  .mode-btn__title {
+    font-family: var(--font-display);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.01em;
+  }
+  .mode-btn__desc {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.35;
+  }
+
+  /* ─── Segmented control ─── */
+  .seg-ctrl {
+    display: inline-flex;
+    background: hsl(var(--muted) / 0.5);
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 0.625rem;
+    padding: 3px;
+    gap: 2px;
+    width: 100%;
+  }
+  .seg-btn {
+    flex: 1;
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    background: transparent;
+    border: none;
+    border-radius: 0.4375rem;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: var(--font-ui);
+    white-space: nowrap;
+  }
+  .seg-btn:hover { color: hsl(var(--foreground)); }
+  .seg-btn--active {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.06),
+      0 0 0 1px hsl(var(--gold) / 0.2);
+  }
+
+  /* ─── Luxe callout (reusable info-box) ─── */
+  .callout--luxe {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.875rem;
+    padding: 0.875rem 1.125rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.4) 100%);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 0.875rem;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+    overflow: hidden;
+  }
+  .callout--luxe::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .callout--luxe__icon { flex-shrink: 0; color: hsl(var(--gold-deep)); margin-top: 1px; }
+  .callout--luxe__title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: hsl(var(--foreground));
+  }
+  .callout--luxe__body {
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.375rem;
+    line-height: 1.5;
+  }
+  .callout--luxe__tags { display: flex; gap: 0.375rem; margin-top: 0.625rem; flex-wrap: wrap; }
+  .callout--luxe__tag {
+    font-size: 0.6875rem;
+    padding: 0.25rem 0.5rem;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 0.375rem;
+    color: hsl(var(--gold-deep));
+    font-weight: 500;
+  }
+
+  /* ─── KM-database reference chip (onder input in lading-regel) ─── */
+  .km-ref-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.375rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.1875rem 0.5rem;
+    border-radius: 0.3125rem;
+  }
+  .km-ref-chip--match {
+    background: hsl(158 64% 94%);
+    color: hsl(158 64% 28%);
+    border: 1px solid hsl(158 64% 80%);
+  }
+  .km-ref-chip--warn {
+    background: var(--status-pending-bg);
+    color: var(--status-pending-text);
+    border: 1px solid var(--status-pending-border);
+  }
+  .field--warn {
+    border-color: var(--status-pending-dot) !important;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 0 0 2px hsl(38 92% 50% / 0.1) !important;
+  }
+
+  /* ─── Surcharge chip (toggle-style for % surcharges) ─── */
+  .surcharge-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.6);
+    border-radius: 0.75rem;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .surcharge-chip:hover {
+    border-color: hsl(var(--gold) / 0.4);
+    background: hsl(var(--gold-soft) / 0.3);
+  }
+  .surcharge-chip input {
+    appearance: none;
+    width: 18px; height: 18px;
+    border: 1.5px solid hsl(var(--border));
+    border-radius: 5px;
+    background: hsl(var(--card));
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .surcharge-chip input:checked {
+    background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary) / 0.88));
+    border-color: hsl(var(--primary));
+  }
+  .surcharge-chip input:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px; top: 1px;
+    width: 5px; height: 10px;
+    border: solid white;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .surcharge-chip:has(input:checked) {
+    border-color: hsl(var(--gold) / 0.5);
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.5) 100%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 2px 6px -2px hsl(var(--gold) / 0.2);
+  }
+  .surcharge-chip > div { display: flex; flex-direction: column; gap: 0.125rem; flex: 1; }
+  .surcharge-chip__title {
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+  .surcharge-chip__pct {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: hsl(var(--gold-deep));
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Rate preview block ─── */
+  .rate-preview {
+    margin-top: 1.5rem;
+    padding: 1.125rem 1.375rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.4) 100%);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .rate-preview::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .rate-preview__label {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    letter-spacing: -0.01em;
+  }
+  .rate-preview__sub {
+    display: block;
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.25rem;
+  }
+  .rate-preview__amount {
+    font-family: var(--font-display);
+    font-size: 1.875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: hsl(var(--gold-deep));
+  }
+
+  /* ─── Toast notifications (luxe) ─── */
+  .toast-stack {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    width: 380px;
+    pointer-events: none;
+  }
+  .toast {
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    gap: 0.875rem;
+    padding: 0.875rem 1rem 0.875rem 1.25rem;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 0.875rem;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100%),
+      0 1px 2px hsl(var(--ink) / 0.06),
+      0 8px 24px -8px hsl(var(--ink) / 0.18),
+      0 24px 48px -20px hsl(var(--ink) / 0.2);
+    overflow: hidden;
+    animation: toast-in .3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(12px) scale(0.98); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  .toast::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--toast-accent, hsl(var(--gold)));
+  }
+  .toast::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--toast-accent, hsl(var(--gold) / 0.6)) 50%, transparent 100%);
+    opacity: 0.5;
+  }
+  .toast__icon {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--toast-icon-bg, hsl(var(--gold-soft) / 0.8));
+    color: var(--toast-accent, hsl(var(--gold-deep)));
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.5);
+  }
+  .toast__body { flex: 1; min-width: 0; }
+  .toast__title {
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: hsl(var(--foreground));
+    margin-bottom: 0.125rem;
+  }
+  .toast__desc {
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-foreground));
+    line-height: 1.45;
+  }
+  .toast__close {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border: none;
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    border-radius: 0.375rem;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .toast__close:hover { background: hsl(var(--muted) / 0.5); color: hsl(var(--foreground)); }
+
+  /* Progress bar bottom — ticks down over lifetime */
+  .toast__progress {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 2px;
+    background: var(--toast-accent, hsl(var(--gold)));
+    opacity: 0.25;
+    transform-origin: left;
+    animation: toast-progress 5s linear forwards;
+  }
+  @keyframes toast-progress { to { transform: scaleX(0); } }
+
+  /* Variants */
+  .toast--success { --toast-accent: hsl(var(--color-success, 158 64% 40%)); --toast-icon-bg: hsl(158 64% 92%); }
+  .toast--error   { --toast-accent: hsl(var(--primary)); --toast-icon-bg: hsl(0 78% 94%); }
+  .toast--warning { --toast-accent: var(--status-pending-dot); --toast-icon-bg: var(--status-pending-bg); }
+  .toast--info    { --toast-accent: var(--status-draft-text); --toast-icon-bg: var(--status-draft-bg); }
+
+  /* Inline field error state */
+  .field--error,
+  .picker--error {
+    border-color: hsl(var(--primary) / 0.6) !important;
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1), inset 0 1px 0 hsl(0 0% 100%) !important;
+    background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(0 78% 98%) 100%) !important;
+  }
+  .field-error-msg {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: hsl(var(--primary));
+    margin-top: 0.375rem;
+    font-weight: 500;
+  }
+  .field-error-msg::before {
+    content: '';
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+  }
+
+  /* ─── Cargo summary cards ─── */
+  .cargo-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.3) 100%);
+    border: 1px solid hsl(var(--gold) / 0.2);
+    border-radius: 0.875rem;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+  }
+  .sum-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    border-left: 2px solid hsl(var(--gold) / 0.35);
+  }
+  .sum-card:first-child { border-left: none; padding-left: 0; }
+  .sum-label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+  .sum-value {
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: hsl(var(--foreground));
+    line-height: 1.1;
+  }
+  .sum-unit {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    margin-left: 0.125rem;
+  }
+
+  /* Auto-chip voor readonly routing-velden */
+  .auto-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 10px;
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+    margin-top: 0.25rem;
+  }
+  .auto-chip::before {
+    content: '';
+    width: 5px; height: 5px; border-radius: 50%;
+    background: hsl(var(--secondary));
+  }
+
+  /* ─── Premium date/time pickers (button-style) ─── */
+  .picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    height: 2.625rem;
+    padding: 0 0.875rem;
+    width: 100%;
+    background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.2) 100%);
+    border: 1px solid hsl(var(--gold) / 0.25);
+    border-radius: 0.625rem;
+    cursor: pointer;
+    transition: all .2s;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 1px 2px hsl(var(--ink) / 0.03);
+    text-align: left;
+    font-family: var(--font-display);
+    color: hsl(var(--foreground));
+    position: relative;
+  }
+  .picker > input[type="date"],
+  .picker > input[type="time"] { display: none; }
+
+  /* ─── Custom premium calendar popup ─── */
+  .cal-pop {
+    position: absolute;
+    z-index: 100;
+    min-width: 320px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    box-shadow:
+      0 1px 0 hsl(0 0% 100%) inset,
+      0 4px 12px -2px hsl(var(--ink) / 0.08),
+      0 24px 48px -12px hsl(var(--ink) / 0.2),
+      0 0 0 1px hsl(var(--gold) / 0.08);
+    font-family: var(--font-display);
+    animation: pop-in .18s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .cal-pop::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+    border-radius: 1rem 1rem 0 0;
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .cal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: 0.875rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+  }
+  .cal-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: hsl(var(--foreground));
+    text-transform: capitalize;
+  }
+  .cal-title em {
+    font-style: normal;
+    color: hsl(var(--gold-deep));
+    font-variant-numeric: tabular-nums;
+    margin-left: 0.375rem;
+  }
+  .cal-nav {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .cal-nav-btn {
+    width: 28px; height: 28px;
+    border-radius: 0.5rem;
+    border: 1px solid hsl(var(--border) / 0.5);
+    background: hsl(var(--card));
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+    font-size: 14px;
+  }
+  .cal-nav-btn:hover {
+    border-color: hsl(var(--gold) / 0.5);
+    color: hsl(var(--gold-deep));
+    background: hsl(var(--gold-soft) / 0.5);
+  }
+
+  .cal-dow {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0;
+    margin-bottom: 0.375rem;
+  }
+  .cal-dow span {
+    text-align: center;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    padding: 0.375rem 0;
+  }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .cal-day {
+    aspect-ratio: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--foreground));
+    border-radius: 0.5rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .12s;
+    background: transparent;
+    user-select: none;
+  }
+  .cal-day:hover {
+    background: hsl(var(--gold-soft) / 0.6);
+    border-color: hsl(var(--gold) / 0.3);
+  }
+  .cal-day--other { color: hsl(var(--muted-foreground) / 0.35); }
+  .cal-day--today {
+    color: hsl(var(--gold-deep));
+    font-weight: 600;
+  }
+  .cal-day--today::after {
+    content: '';
+    position: absolute;
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: hsl(var(--gold));
+    margin-top: 22px;
+  }
+  .cal-day--selected {
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    color: white;
+    border-color: hsl(var(--primary));
+    box-shadow:
+      0 1px 2px hsl(var(--primary) / 0.4),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2);
+    font-weight: 600;
+  }
+  .cal-day--selected:hover { background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%)); border-color: hsl(var(--primary)); }
+
+  .cal-foot {
+    margin-top: 0.875rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid hsl(var(--border) / 0.4);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+  }
+  .cal-foot-btn {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: hsl(var(--gold-deep));
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+  }
+  .cal-foot-btn:hover { background: hsl(var(--gold-soft) / 0.6); }
+
+  /* ─── Custom time popup ─── */
+  .time-pop {
+    position: absolute;
+    z-index: 100;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--gold) / 0.3);
+    border-radius: 1rem;
+    box-shadow:
+      0 1px 0 hsl(0 0% 100%) inset,
+      0 4px 12px -2px hsl(var(--ink) / 0.08),
+      0 24px 48px -12px hsl(var(--ink) / 0.2);
+    font-family: var(--font-display);
+    animation: pop-in .18s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0.625rem;
+    display: flex;
+    gap: 0.5rem;
+  }
+  .time-col {
+    display: flex;
+    flex-direction: column;
+    max-height: 220px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--gold) / 0.3) transparent;
+    scroll-snap-type: y mandatory;
+    padding: 0 0.25rem;
+  }
+  .time-col::-webkit-scrollbar { width: 4px; }
+  .time-col::-webkit-scrollbar-thumb { background: hsl(var(--gold) / 0.3); border-radius: 2px; }
+  .time-col-label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    text-align: center;
+    padding: 0.25rem 0 0.5rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.4);
+    margin-bottom: 0.25rem;
+    position: sticky;
+    top: 0;
+    background: hsl(var(--card));
+  }
+  .time-slot {
+    padding: 0.375rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    color: hsl(var(--foreground));
+    border: none;
+    background: transparent;
+    min-width: 48px;
+    scroll-snap-align: center;
+    transition: all .12s;
+  }
+  .time-slot:hover { background: hsl(var(--gold-soft) / 0.6); }
+  .time-slot--selected {
+    background: linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%));
+    color: white;
+    box-shadow: 0 1px 2px hsl(var(--primary) / 0.3), inset 0 1px 0 hsl(0 0% 100% / 0.2);
+  }
+  .time-sep {
+    align-self: center;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: hsl(var(--gold));
+    padding: 0 0.125rem;
+  }
+  .picker:hover {
+    border-color: hsl(var(--gold) / 0.5);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100%), 0 3px 10px -2px hsl(var(--gold) / 0.2);
+  }
+  .picker__icon {
+    width: 16px;
+    height: 16px;
+    color: hsl(var(--gold-deep));
+    flex-shrink: 0;
+  }
+  .picker__main {
+    display: flex;
+    align-items: baseline;
+    gap: 0.375rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .picker__day {
+    font-size: 1rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .picker__month {
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: hsl(var(--muted-foreground));
+  }
+  .picker__year {
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--muted-foreground));
+    margin-left: auto;
+    padding-left: 0.625rem;
+    border-left: 1px solid hsl(var(--border) / 0.5);
+  }
+  .picker__time {
+    font-size: 1rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .picker__time-suffix {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: hsl(var(--muted-foreground));
+    margin-left: auto;
+    text-transform: uppercase;
+  }
+
+  /* Time-range group (van → tot) */
+  .time-range {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .time-range .picker {
+    padding: 0 0.75rem;
+    gap: 0.5rem;
+  }
+  .time-range__arrow {
+    color: hsl(var(--gold));
+    font-size: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  /* Utility classes — deduped inline-style patterns */
+  .mono-num { font-variant-numeric: tabular-nums; }
+  .mono-num-md {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+  .mono-num-primary {
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--primary));
+    font-weight: 600;
+  }
+  .mono-num-muted {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-display);
+    color: hsl(var(--muted-foreground));
+  }
+  .is-hidden { display: none; }
+  .suggestion-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: hsl(var(--muted-foreground));
+  }
+  .body-pointer { font-size: var(--text-body); cursor: pointer; }
+  .flex-1 { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- ═══ Toast notifications demo (4 varianten, stacked) ═══ -->
+<div class="toast-stack">
+
+  <div class="toast toast--success">
+    <span class="toast__icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+    </span>
+    <div class="toast__body">
+      <div class="toast__title">Order aangemaakt</div>
+      <div class="toast__desc">Shipment aangemaakt met 2 legs (OPS + EXPORT)</div>
+    </div>
+    <button class="toast__close" aria-label="Sluiten">×</button>
+    <span class="toast__progress"></span>
+  </div>
+
+  <div class="toast toast--error">
+    <span class="toast__icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+    </span>
+    <div class="toast__body">
+      <div class="toast__title">Formulier bevat 3 validatiefouten</div>
+      <div class="toast__desc">Klantnaam is verplicht · Ophaaladres is verplicht · Gewicht moet groter zijn dan 0</div>
+    </div>
+    <button class="toast__close" aria-label="Sluiten">×</button>
+    <span class="toast__progress" style="animation-duration: 7s;"></span>
+  </div>
+
+  <div class="toast toast--warning">
+    <span class="toast__icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+    </span>
+    <div class="toast__body">
+      <div class="toast__title">Info-tracking niet aangemaakt</div>
+      <div class="toast__desc">Order is wél opgeslagen — rappellijst kon niet worden geactiveerd.</div>
+    </div>
+    <button class="toast__close" aria-label="Sluiten">×</button>
+    <span class="toast__progress"></span>
+  </div>
+
+  <div class="toast toast--info">
+    <span class="toast__icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    </span>
+    <div class="toast__body">
+      <div class="toast__title">Item toegevoegd aan vrachtlijst</div>
+      <div class="toast__desc">24 pallets · 4.800 kg — Rotterdam → Düsseldorf</div>
+    </div>
+    <button class="toast__close" aria-label="Sluiten">×</button>
+    <span class="toast__progress"></span>
+  </div>
+
+</div>
+
+<div class="ribbon">
+  <span><span class="tag">Mockup</span> &nbsp; NewOrder — OrderFlow huisstijl</span>
+  <span style="opacity:0.4; letter-spacing:0;">docs/mockups/new-order-redesign.html</span>
+</div>
+
+<!-- ── Body ── -->
+<div class="max-w-[1320px] mx-auto px-6 pt-6 pb-6 space-y-5">
+
+  <!-- Hero header card -->
+  <section class="card" style="padding: 2.25rem 2.25rem 0; background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.25) 100%);">
+    <div class="flex items-start justify-between gap-6">
+      <div>
+        <div class="section-label" style="display: flex; align-items: center; gap: 0.625rem;">
+          <span style="width: 20px; height: 1px; background: hsl(var(--gold));"></span>
+          Orders · nieuw
+        </div>
+        <h1 style="font-family: var(--font-display); font-size: 1.875rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; margin-top: 0.625rem; color: hsl(var(--foreground));">
+          Nieuwe order
+        </h1>
+        <div style="margin-top: 0.875rem; display: flex; align-items: center; gap: 0.75rem; font-size: 0.8125rem; color: hsl(var(--muted-foreground));">
+          <span style="font-family: var(--font-display); font-variant-numeric: tabular-nums; color: hsl(var(--foreground)); font-weight: 600; letter-spacing: 0.02em; padding: 0.25rem 0.625rem; background: hsl(var(--gold-soft) / 0.6); border: 1px solid hsl(var(--gold) / 0.25); border-radius: 0.375rem; font-size: 0.75rem;">ORD-2026-04-0847</span>
+          <span style="width: 3px; height: 3px; background: hsl(var(--gold)); border-radius: 50%;"></span>
+          <span>woensdag 15 april 2026</span>
+          <span style="width: 3px; height: 3px; background: hsl(var(--gold)); border-radius: 50%;"></span>
+          <span style="display: inline-flex; align-items: center; gap: 0.375rem;">
+            <span style="width: 6px; height: 6px; background: hsl(var(--status-draft-text)); border-radius: 50%; box-shadow: 0 0 0 3px hsl(var(--status-draft-text) / 0.15);"></span>
+            Concept
+          </span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-subtle">Annuleren</button>
+        <button class="btn btn-ghost">Afdrukken</button>
+        <button class="btn btn-ghost">Goedkeuren</button>
+        <button class="btn btn-ghost">Opslaan</button>
+        <button class="btn btn-primary">Opslaan &amp; sluiten</button>
+      </div>
+    </div>
+
+    <div class="hairline" style="margin-top: 2rem;"></div>
+
+    <div class="flex items-center" style="padding: 0;">
+      <button class="tab tab-active" data-tab="algemeen">Algemeen</button>
+      <button class="tab" data-tab="financieel">Financieel</button>
+      <button class="tab" data-tab="vrachtdossier">Vrachtdossier</button>
+      <span class="ml-auto" style="font-size: 0.75rem; color: hsl(var(--muted-foreground)); font-style: italic; letter-spacing: 0.01em;">Facturen &amp; Callbacks verschijnen na opslaan</span>
+    </div>
+  </section>
+
+  <!-- Validatie-legenda -->
+  <div style="display: flex; align-items: center; gap: 0.625rem; font-size: 0.8125rem; color: hsl(var(--muted-foreground)); padding: 0 0.25rem;">
+    <span class="req" style="margin-left: 0;">*</span>
+    <span>Velden met een sterretje zijn verplicht om de order te kunnen plannen. Een concept kan ook zonder volledige invulling worden opgeslagen.</span>
+  </div>
+
+<div id="tab-algemeen" class="tab-panel">
+
+  <!-- Traject-preview -->
+  <div class="traject">
+    <div class="flex items-center justify-between mb-3">
+      <span class="section-label" style="display: flex; align-items: center; gap: 0.5rem;">
+        <span style="width: 16px; height: 1px; background: hsl(var(--gold));"></span>
+        Traject-preview · auto
+      </span>
+      <span style="font-family: var(--font-display); font-size: 0.9375rem; font-variant-numeric: tabular-nums; color: hsl(var(--foreground)); font-weight: 500; letter-spacing: 0.01em;">412 km · 5u 20m</span>
+    </div>
+    <div>
+      <div class="leg-row">
+        <span class="leg-num">01</span>
+        <span class="leg-dept">OPS</span>
+        <span>Rotterdam <span style="opacity:0.4;">→</span> Venlo</span>
+        <span style="font-variant-numeric: tabular-nums; opacity: 0.6;">168 km</span>
+      </div>
+      <div class="leg-row">
+        <span class="leg-num">02</span>
+        <span class="leg-dept">EXPORT</span>
+        <span>Venlo <span style="opacity:0.4;">→</span> Düsseldorf</span>
+        <span style="font-variant-numeric: tabular-nums; opacity: 0.6;">244 km</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 01 Klant & order -->
+  <section class="card">
+    <span class="card-chapter">I</span>
+    <div class="card-header">
+      <div>
+        <div class="section-label">Klant &amp; order</div>
+        <h3 class="section-title">Klantgegevens &amp; referentie</h3>
+        <p class="section-hint">Wie is de klant en waar verwijs je naar.</p>
+      </div>
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
+      <div>
+        <label class="label">Klant <span class="req">*</span></label>
+        <input class="field field--error" value="" placeholder="Zoek klant of relatie…" />
+        <span class="field-error-msg">Klantnaam is verplicht</span>
+      </div>
+      <div>
+        <label class="label">Contactpersoon</label>
+        <select class="field"><option>Jan de Vries</option><option>Piet Jansen</option></select>
+      </div>
+      <div>
+        <label class="label">Prioriteit</label>
+        <select class="field"><option>Standaard</option><option>Spoed</option><option>Retour</option></select>
+      </div>
+      <div>
+        <label class="label">Klant-referentie <span class="req">*</span></label>
+        <input class="field" placeholder="PO-nummer of bestelreferentie" />
+      </div>
+      <div class="md:col-span-2">
+        <label class="label">Opmerkingen voor planner</label>
+        <textarea class="field" rows="2" placeholder="Bijzonderheden, instructies…"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 Transport-setup -->
+  <section class="card">
+    <span class="card-chapter">II</span>
+    <div class="card-header">
+      <div>
+        <div class="section-label">Transport</div>
+        <h3 class="section-title">Type en voertuig</h3>
+        <p class="section-hint">Afdeling wordt automatisch bepaald door het traject. Chauffeur wordt later toegewezen.</p>
+      </div>
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+      <div>
+        <label class="label">Transport type <span class="req">*</span></label>
+        <select class="field" id="transport-type"><option>FTL</option><option>LTL</option><option>Koel</option><option>Express</option></select>
+      </div>
+      <div>
+        <label class="label">Voertuigtype</label>
+        <select class="field"><option>Vrachtwagen</option><option>Bestelbus</option><option>Trailer</option></select>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 Vrachtplanning -->
+  <section class="card">
+    <span class="card-chapter">III</span>
+    <div class="card-header">
+      <div>
+        <div class="section-label">Vrachtplanning</div>
+        <h3 class="section-title">Laad- en losstops</h3>
+        <p class="section-hint">Tijdvensters per regel — geen losse box meer.</p>
+      </div>
+      <button class="btn btn-ghost">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Regel toevoegen
+      </button>
+    </div>
+    <div class="card-body">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th style="width:110px;">Activiteit <span class="req">*</span></th>
+              <th>Adres <span class="req">*</span></th>
+              <th style="width:140px;">Datum <span class="req">*</span></th>
+              <th style="width:190px;">Tijdvenster <span class="req">*</span></th>
+              <th style="width:120px;">Referentie</th>
+              <th style="width:140px;">Contact op locatie</th>
+              <th style="width:160px;">Opmerking</th>
+              <th style="width:36px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><select class="field"><option>Laden</option><option>Lossen</option></select></td>
+              <td><input class="field" value="Wolgaweg 12, 3198 LR Rotterdam" /></td>
+              <td>
+                <label class="picker" data-date role="button" aria-haspopup="dialog" aria-label="Kies datum">
+                  <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                  <span class="picker__main">
+                    <span class="picker__day">15</span>
+                    <span class="picker__month">apr</span>
+                  </span>
+                  <span class="picker__year">2026</span>
+                  <input type="date" value="2026-04-15" />
+                </label>
+              </td>
+              <td>
+                <div class="time-range">
+                  <label class="picker" data-time role="button" aria-haspopup="dialog" aria-label="Kies tijd">
+                    <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    <span class="picker__time">08:00</span>
+                    <input type="time" value="08:00" />
+                  </label>
+                  <span class="time-range__arrow">→</span>
+                  <label class="picker" data-time role="button" aria-haspopup="dialog" aria-label="Kies tijd">
+                    <span class="picker__time" style="margin-left:auto;">10:00</span>
+                    <input type="time" value="10:00" />
+                  </label>
+                </div>
+              </td>
+              <td><input class="field" value="PO-99812" /></td>
+              <td><input class="field" placeholder="Naam / telefoon" value="Mark — 06 12 34 56 78" /></td>
+              <td><input class="field" placeholder="Bv. achterom laden" /></td>
+              <td><button class="btn-subtle suggestion-btn">×</button></td>
+            </tr>
+            <tr>
+              <td><select class="field"><option>Lossen</option><option>Laden</option></select></td>
+              <td><input class="field" value="Königsallee 44, 40212 Düsseldorf" /></td>
+              <td>
+                <label class="picker" data-date role="button" aria-haspopup="dialog" aria-label="Kies datum">
+                  <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                  <span class="picker__main">
+                    <span class="picker__day">16</span>
+                    <span class="picker__month">apr</span>
+                  </span>
+                  <span class="picker__year">2026</span>
+                  <input type="date" value="2026-04-16" />
+                </label>
+              </td>
+              <td>
+                <div class="time-range">
+                  <label class="picker" data-time role="button" aria-haspopup="dialog" aria-label="Kies tijd">
+                    <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    <span class="picker__time">13:00</span>
+                    <input type="time" value="13:00" />
+                  </label>
+                  <span class="time-range__arrow">→</span>
+                  <label class="picker" data-time role="button" aria-haspopup="dialog" aria-label="Kies tijd">
+                    <span class="picker__time" style="margin-left:auto;">17:00</span>
+                    <input type="time" value="17:00" />
+                  </label>
+                </div>
+              </td>
+              <td><input class="field" value="DE-4421" /></td>
+              <td><input class="field" placeholder="Naam / telefoon" value="Schmidt — +49 211…" /></td>
+              <td><input class="field" placeholder="Bv. aanmelden bij receptie" value="Aanmelden receptie" /></td>
+              <td><button class="btn-subtle suggestion-btn">×</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 Lading -->
+  <section class="card">
+    <span class="card-chapter">IV</span>
+    <div class="card-header">
+      <div>
+        <div class="section-label">Lading</div>
+        <h3 class="section-title">Wat wordt er vervoerd</h3>
+        <p class="section-hint">Voeg meerdere regels toe voor verschillende soorten lading.</p>
+      </div>
+      <button class="btn btn-ghost" id="add-cargo">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Regel toevoegen
+      </button>
+    </div>
+    <div class="card-body">
+
+      <!-- KM-database match banner -->
+      <div style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.3) 100%); border: 1px solid hsl(var(--gold) / 0.25); border-radius: 0.75rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: inset 0 1px 0 hsl(0 0% 100%); font-size: 0.8125rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color: hsl(var(--gold-deep)); flex-shrink: 0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span class="flex-1">
+          Waarden worden automatisch vergeleken met de <strong>KM-zendingdatabase</strong> (bekende product-afmetingen per klant). Afwijkingen &gt;10% worden gemarkeerd.
+        </span>
+        <span style="font-size: 0.6875rem; padding: 0.25rem 0.625rem; background: hsl(var(--card)); border: 1px solid hsl(var(--gold) / 0.3); border-radius: 0.375rem; color: hsl(var(--gold-deep)); font-weight: 600; letter-spacing: 0.04em;">1 match · 1 afwijking</span>
+      </div>
+
+      <!-- Ladingregels -->
+      <div class="tbl-wrap" style="margin-bottom: 1.125rem;">
+        <table class="tbl" id="cargo-tbl">
+          <thead>
+            <tr>
+              <th style="width:80px;">Aantal <span class="req">*</span></th>
+              <th style="width:120px;">Eenheid <span class="req">*</span></th>
+              <th style="width:100px;">Gewicht (kg) <span class="req">*</span></th>
+              <th style="width:150px;">L × B × H (cm) <span class="req">*</span></th>
+              <th style="width:90px; text-align:center;">Stapelbaar</th>
+              <th style="width:100px;">ADR / UN</th>
+              <th>Omschrijving</th>
+              <th style="width:36px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="number" class="field mono-num" value="24" /></td>
+              <td><select class="field"><option>Pallets</option><option>Colli</option><option>Box</option><option>IBC</option></select></td>
+              <td><input type="number" class="field mono-num" value="4800" /></td>
+              <td>
+                <div class="dim-group">
+                  <input type="number" class="field dim" value="120" />
+                  <span class="dim-sep">×</span>
+                  <input type="number" class="field dim" value="80" />
+                  <span class="dim-sep">×</span>
+                  <input type="number" class="field dim" value="100" />
+                </div>
+              </td>
+              <td style="text-align:center;"><label class="toggle"><input type="checkbox" checked><span></span></label></td>
+              <td><input class="field mono-num" placeholder="—" /></td>
+              <td>
+                <input class="field" value="Industriële componenten" />
+                <span class="km-ref-chip km-ref-chip--match" title="Komt overeen met KM-database referentie">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  KM-ref · match
+                </span>
+              </td>
+              <td><button class="btn-subtle suggestion-btn">×</button></td>
+            </tr>
+            <tr>
+              <td><input type="number" class="field field--warn mono-num" value="4" /></td>
+              <td><select class="field"><option>Colli</option><option>Pallets</option><option>Box</option><option>IBC</option></select></td>
+              <td><input type="number" class="field field--warn mono-num" value="320" /></td>
+              <td>
+                <div class="dim-group">
+                  <input type="number" class="field dim" value="60" />
+                  <span class="dim-sep">×</span>
+                  <input type="number" class="field dim" value="40" />
+                  <span class="dim-sep">×</span>
+                  <input type="number" class="field dim" value="45" />
+                </div>
+              </td>
+              <td style="text-align:center;"><label class="toggle"><input type="checkbox"><span></span></label></td>
+              <td><input class="field mono-num" value="UN1950" /></td>
+              <td>
+                <input class="field" value="Aerosolen (klasse 2.1)" />
+                <span class="km-ref-chip km-ref-chip--warn" title="Gewicht wijkt 23% af van KM-referentie (260 kg verwacht)">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                  KM-ref · +23% gewicht
+                </span>
+              </td>
+              <td><button class="btn-subtle suggestion-btn">×</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Totalen + routing-metrics -->
+      <div class="cargo-summary">
+        <div class="sum-card">
+          <span class="sum-label">Totaal aantal</span>
+          <span class="sum-value">28 <span class="sum-unit">stuks</span></span>
+        </div>
+        <div class="sum-card">
+          <span class="sum-label">Totaal gewicht</span>
+          <span class="sum-value">5.120 <span class="sum-unit">kg</span></span>
+        </div>
+        <div class="sum-card">
+          <span class="sum-label">Afstand · auto</span>
+          <span class="sum-value">412 <span class="sum-unit">km</span></span>
+        </div>
+        <div class="sum-card">
+          <span class="sum-label">Duur · auto</span>
+          <span class="sum-value">5<span class="sum-unit">u</span> 20<span class="sum-unit">m</span></span>
+        </div>
+      </div>
+
+      <!-- Conditional: Temperatuur (bij Koel) -->
+      <div class="conditional-row is-hidden" id="temp-row">
+        <div class="flex items-center gap-3 p-4 rounded-xl" style="background: hsl(var(--status-draft-bg)); border: 1px solid var(--status-draft-border);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color: var(--status-draft-text); flex-shrink: 0;"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+          <div class="flex-1">
+            <label class="label" style="color: var(--status-draft-text); margin-bottom: 0.25rem;">Temperatuurbereik — verplicht bij Koeltransport</label>
+            <div class="flex items-center gap-2">
+              <input type="number" class="field" placeholder="min" value="2" style="width: 90px; font-variant-numeric: tabular-nums;" />
+              <span style="color: var(--status-draft-text);">°C  →</span>
+              <input type="number" class="field" placeholder="max" value="7" style="width: 90px; font-variant-numeric: tabular-nums;" />
+              <span style="color: var(--status-draft-text);">°C</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 05 Luchtvracht-beveiliging (PMT) — conditional op airfreight -->
+  <section class="card is-hidden" id="pmt-section">
+    <span class="card-chapter">V</span>
+    <div class="card-header">
+      <div>
+        <div class="section-label">Luchtvracht-beveiliging</div>
+        <h3 class="section-title">PMT · EDD of X-RAY</h3>
+        <p class="section-hint">Verschijnt automatisch bij luchtvracht (Express). Standaard gaat de sectie uit van een vooraf beveiligde zending.</p>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <!-- Shipment safe toggle (default = TRUE) -->
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: hsl(var(--muted) / 0.3); border: 1px solid hsl(var(--border) / 0.5); border-radius: 0.875rem; margin-bottom: 1.125rem;">
+        <div>
+          <div style="font-family: var(--font-display); font-weight: 600; font-size: 0.9375rem;">Zending is vooraf beveiligd (Secure)</div>
+          <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-top: 0.125rem;">Uitzetten wanneer screening nog moet gebeuren — er wordt dan een PMT-traject gestart.</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="shipment-safe" checked><span></span></label>
+      </div>
+
+      <!-- PMT panel (toont wanneer shipment_safe = false) -->
+      <div id="pmt-panel" class="is-hidden">
+
+        <!-- Methode selector -->
+        <div class="section-label" style="color: hsl(var(--muted-foreground)); margin-bottom: 0.75rem;">PMT-methode <span class="req">*</span></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5" style="margin-bottom: 1.25rem;">
+          <button type="button" class="mode-btn" data-pmt="edd" role="radio" aria-checked="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11H7a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-2M9 11V7a3 3 0 116 0v4M9 11h6"/></svg>
+            <span class="mode-btn__title">EDD · Hondenscan</span>
+          </button>
+          <button type="button" class="mode-btn" data-pmt="xray" role="radio" aria-checked="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M6 11v6M10 11v6M14 11v6M18 11v6"/></svg>
+            <span class="mode-btn__title">X-RAY · Röntgenscan</span>
+          </button>
+        </div>
+
+        <!-- Validatie-melding wanneer methode niet gekozen -->
+        <div id="pmt-method-error" class="field-error-msg" style="margin-bottom: 1rem; display: none;">
+          Kies een PMT-methode — verplicht voor niet-beveiligde luchtvracht
+        </div>
+
+        <!-- PMT-gegevens (REQ-12.4: data voor RCS-verklaring) -->
+        <div id="pmt-data" class="is-hidden">
+          <div class="section-label" style="color: hsl(var(--muted-foreground)); margin-bottom: 0.75rem; margin-top: 0.5rem;">PMT-gegevens voor RCS-verklaring</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4" style="margin-bottom: 1.25rem;">
+            <div>
+              <label class="label">Operator / screeningsbedrijf</label>
+              <input class="field" placeholder="Bv. Schiphol Cargo Security BV" />
+            </div>
+            <div>
+              <label class="label">PMT-referentienummer</label>
+              <input class="field" placeholder="PMT-2026-…" style="font-variant-numeric: tabular-nums; font-family: var(--font-display);" />
+            </div>
+            <div>
+              <label class="label">Datum / tijd screening</label>
+              <label class="picker" data-date role="button" aria-haspopup="dialog" aria-label="Kies datum">
+                <svg class="picker__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                <span class="picker__main">
+                  <span class="picker__day">—</span>
+                  <span class="picker__month">kies</span>
+                </span>
+                <span class="picker__year">datum</span>
+                <input type="date" value="" />
+              </label>
+            </div>
+            <div>
+              <label class="label">Locatie screening</label>
+              <input class="field" placeholder="Bv. Schiphol Zuidoost — Gebouw 4" />
+            </div>
+            <div>
+              <label class="label">Seal-nummer (na screening)</label>
+              <input class="field" placeholder="Optioneel — wordt later ingevuld" style="font-variant-numeric: tabular-nums; font-family: var(--font-display);" />
+            </div>
+            <div>
+              <label class="label">PMT-keuze bepaald door klant</label>
+              <div style="display: flex; align-items: center; gap: 0.75rem; height: 2.625rem;">
+                <label class="toggle"><input type="checkbox" id="pmt-by-customer" checked><span></span></label>
+                <span style="font-size: 0.8125rem; color: hsl(var(--muted-foreground));" id="pmt-by-customer-label">Bevestigd door klant</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Info-tracking hint: nog niet geleverd -->
+          <div style="padding: 0.625rem 0.875rem; background: var(--status-pending-bg); border: 1px solid var(--status-pending-border); border-radius: 0.625rem; font-size: 0.75rem; color: var(--status-pending-text); display: flex; align-items: center; gap: 0.5rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            <span>Tip: vink bovenstaande velden aan in <strong>Info volgt nog van klant</strong> wanneer de operator of het PMT-nummer nog moet volgen.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 06 Info-tracking -->
+  <section class="card panel-pending">
+    <span class="card-chapter" style="color: var(--status-pending-text); opacity: 0.2;">VI</span>
+    <div class="card-header" style="border-bottom-color: var(--status-pending-border);">
+      <div>
+        <div class="section-label" style="color: var(--status-pending-text);">Info volgt nog van klant — optioneel</div>
+        <h3 class="section-title" style="color: var(--status-pending-text);">Rappellijst instellen</h3>
+        <p class="section-hint" style="color: var(--status-pending-text); opacity: 0.8;">Aangevinkte velden krijgen een T-4u herinnering en T-1u escalatie naar planner.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-y-2.5 gap-x-6 mb-5">
+        <label class="flex items-center gap-2.5 body-pointer"><input type="checkbox" class="chk" checked> MRN-nummer</label>
+        <label class="flex items-center gap-2.5 body-pointer"><input type="checkbox" class="chk"> Pickup-referentie</label>
+        <label class="flex items-center gap-2.5 body-pointer"><input type="checkbox" class="chk" checked> Laadtijd bevestigd</label>
+        <label class="flex items-center gap-2.5 body-pointer"><input type="checkbox" class="chk"> Colli-specificatie</label>
+        <label class="flex items-center gap-2.5 body-pointer"><input type="checkbox" class="chk"> Afleveradres bevestigd</label>
+        <label class="flex items-center gap-2.5 body-pointer"><input type="checkbox" class="chk"> Gewicht definitief</label>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4" style="border-top: 1px dashed var(--status-pending-border);">
+        <div>
+          <label class="label" style="color: var(--status-pending-text); opacity: 0.8;">Contactpersoon bij klant</label>
+          <input class="field" placeholder="Naam" />
+        </div>
+        <div>
+          <label class="label" style="color: var(--status-pending-text); opacity: 0.8;">E-mail voor herinneringen</label>
+          <input type="email" class="field" placeholder="klant@voorbeeld.nl" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 Extra -->
+  <details class="card">
+    <span class="card-chapter">VII</span>
+    <summary class="card-header" style="border-bottom: 0;">
+      <div class="flex items-center gap-4">
+        <span class="chev" style="font-size: 1.5rem; color: hsl(var(--gold));">›</span>
+        <div>
+          <div class="section-label">Extra</div>
+          <h3 class="section-title">Additionele diensten &amp; overige referenties</h3>
+        </div>
+      </div>
+      <span style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-style: italic;">Niet nodig voor standaard orders</span>
+    </summary>
+    <div class="card-body" style="border-top: 1px solid hsl(var(--border) / 0.4);">
+      <p style="font-size: var(--text-small); color: hsl(var(--muted-foreground));">Placeholder voor optionele velden — alleen openen wanneer relevant.</p>
+    </div>
+  </details>
+
+  <!-- Changelog (dark sidebar-achtig) -->
+  <section class="card" style="background: hsl(var(--sidebar-background)); border-color: hsl(var(--sidebar-border)); color: hsl(var(--sidebar-foreground));">
+    <div class="card-header" style="border-bottom-color: hsl(var(--sidebar-border));">
+      <div>
+        <div class="section-label" style="color: hsl(var(--primary) / 0.9);">Wijzigingen</div>
+        <h3 class="section-title" style="color: hsl(var(--sidebar-foreground));">Verschillen t.o.v. huidige NewOrder.tsx</h3>
+      </div>
+    </div>
+    <div class="card-body grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5" style="font-size: var(--text-small); color: hsl(var(--sidebar-foreground) / 0.8);">
+      <div class="flex gap-3"><span class="mono-num-primary">01</span><span>Tabs 5 → 3 (Facturen &amp; Callbacks naar OrderDetail)</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">02</span><span>Algemeen opgedeeld in 4 genummerde blokken</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">03</span><span>Voertuigtype van 2× naar 1×</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">04</span><span>Tijdvensters geïntegreerd per vrachtregel</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">05</span><span>Afstand &amp; duur auto uit routing</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">06</span><span>Dropdowns uit DB (Afdeling, Chauffeur, Contact)</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">07</span><span>Orderdatum / Soort order / Contact krijgen state</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">08</span><span>MRN doc naar Vrachtdossier</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">09</span><span>"Retour" weg uit Transport type</span></div>
+      <div class="flex gap-3"><span class="mono-num-primary">10</span><span>Bottom-tabs → één Extra-sectie</span></div>
+    </div>
+  </section>
+
+</div>
+<!-- /tab-algemeen -->
+
+<!-- ═══ FINANCIEEL TAB ═══ -->
+<div id="tab-financieel" class="tab-panel is-hidden">
+  <div class="max-w-[1320px] mx-auto px-6 pt-2 pb-6 space-y-5">
+
+    <!-- Tariefstructuur — Royalty Cargo pricing model -->
+    <section class="card">
+      <span class="card-chapter">I</span>
+      <div class="card-header">
+        <div>
+          <div class="section-label">Tariefstructuur</div>
+          <h3 class="section-title">Hoe wordt deze rit berekend</h3>
+          <p class="section-hint">Basistarieven volgen de Royalty Cargo tariefmatrix. Kilometers worden automatisch afgerond naar boven op 5.</p>
+        </div>
+      </div>
+      <div class="card-body" style="padding-top: 0.5rem;">
+
+        <!-- Mode switcher (per rit / per km / afwijkend) -->
+        <div class="mode-switch">
+          <button class="mode-btn mode-btn--active" data-mode="rit">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M8 8l-5 4 5 4M16 8l5 4-5 4"/></svg>
+            <span class="mode-btn__title">Per rit</span>
+          </button>
+          <button class="mode-btn" data-mode="km">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            <span class="mode-btn__title">Per kilometer</span>
+          </button>
+          <button class="mode-btn" data-mode="custom">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            <span class="mode-btn__title">Afwijkend</span>
+          </button>
+        </div>
+
+        <!-- Mode: Per rit -->
+        <div class="mode-panel" data-mode-panel="rit">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4" style="margin-top: 1.25rem;">
+            <div>
+              <label class="label">Voertuigtype <span class="req">*</span></label>
+              <select class="field" id="rit-vehicle">
+                <option data-ex="841" data-inc="1103.30" data-scr-ex="948.50" data-scr-inc="1210.80" data-min="115">Caddy</option>
+                <option data-ex="986" data-inc="1291.80" data-scr-ex="1093.50" data-scr-inc="1399.30" data-min="125">Bus</option>
+                <option data-ex="1073" data-inc="1404.90" data-scr-ex="1180.50" data-scr-inc="1512.40" data-min="125">Koel klein</option>
+                <option data-ex="1189" data-inc="1555.70" data-scr-ex="1296.50" data-scr-inc="1663.20" data-min="135">Koel groot</option>
+                <option data-ex="1276" data-inc="1668.80" data-scr-ex="1383.50" data-scr-inc="1776.30" data-min="145">Bakbus</option>
+                <option data-ex="1986.50" data-inc="2592.45" data-scr-ex="2204" data-scr-inc="2809.95" data-min="275" data-daf>DAF Truck</option>
+                <option data-ex="913.50" data-inc="1197.55" data-min="97.50">Hoya</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Dieseltoeslag inbegrepen?</label>
+              <div class="seg-ctrl">
+                <button class="seg-btn seg-btn--active" data-diesel="inc">Incl. diesel (+30%)</button>
+                <button class="seg-btn" data-diesel="ex">Excl. diesel</button>
+              </div>
+            </div>
+            <div>
+              <label class="label">Zending / screening</label>
+              <div class="flex items-center gap-2.5 h-10">
+                <label class="toggle" style="margin-top: 0.25rem;"><input type="checkbox" id="screening-toggle"><span></span></label>
+                <span style="font-size: 0.8125rem; color: hsl(var(--muted-foreground));">Incl. screenen / aanleveren / docs</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tarief preview -->
+          <div class="rate-preview">
+            <div>
+              <span class="rate-preview__label">Basistarief rit A → B</span>
+              <span class="rate-preview__sub">Caddy · incl. diesel · zonder screening</span>
+            </div>
+            <span class="rate-preview__amount" id="base-rate">€ 1.103,30</span>
+          </div>
+        </div>
+
+        <!-- Mode: Per km -->
+        <div class="mode-panel is-hidden" data-mode-panel="km">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4" style="margin-top: 1.25rem;">
+            <div>
+              <label class="label">Voertuigtype <span class="req">*</span></label>
+              <select class="field" id="km-vehicle">
+                <option data-ex="841" data-inc="1103.30" data-min="115">Caddy</option>
+                <option data-ex="986" data-inc="1291.80" data-min="125">Bus</option>
+                <option data-ex="1073" data-inc="1404.90" data-min="125">Koel klein</option>
+                <option data-ex="1189" data-inc="1555.70" data-min="135">Koel groot</option>
+                <option data-ex="1276" data-inc="1668.80" data-min="145">Bakbus</option>
+                <option data-ex="1986.50" data-inc="2592.45" data-min="275">DAF Truck</option>
+                <option data-ex="913.50" data-inc="1197.55" data-min="97.50">Hoya</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Afstand (km) <span class="req">*</span></label>
+              <div style="display: flex; gap: 0.375rem; align-items: center;">
+                <input type="number" class="field" value="127" id="km-input" style="font-variant-numeric: tabular-nums; font-family: var(--font-display); font-weight: 500;" />
+                <span style="font-size: 0.6875rem; color: hsl(var(--gold-deep)); letter-spacing: 0.08em; font-weight: 600; white-space: nowrap;">→ <span id="km-rounded" class="mono-num">130</span> km</span>
+              </div>
+              <span class="auto-chip" style="color: hsl(var(--gold-deep));">afronding naar boven op 5</span>
+            </div>
+            <div>
+              <label class="label">Dieseltoeslag</label>
+              <div class="seg-ctrl" id="km-diesel">
+                <button class="seg-btn seg-btn--active" data-km-diesel="inc">Incl. diesel</button>
+                <button class="seg-btn" data-km-diesel="ex">Excl. diesel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="rate-preview" style="margin-top: 1.5rem;">
+            <div class="flex-1">
+              <span class="rate-preview__label">Basistarief <span id="km-vehicle-name">Caddy</span></span>
+              <span class="rate-preview__sub" id="km-breakdown">
+                <span class="mono-num">130 km</span> × <span class="mono-num">€ 1,5218 / km</span> &nbsp; <span style="opacity: 0.6;">(€ 1.103,30 ÷ 725 km basis)</span>
+              </span>
+            </div>
+            <span class="rate-preview__amount" id="km-total">€ 197,84</span>
+          </div>
+          <div id="km-min-note" style="display: none; margin-top: 0.75rem; padding: 0.625rem 0.875rem; background: hsl(var(--status-pending-bg)); border: 1px solid var(--status-pending-border); border-radius: 0.625rem; font-size: 0.75rem; color: var(--status-pending-text);">
+            <strong>Minimum toegepast</strong> · Berekende prijs (€ <span id="km-calc-raw" class="mono-num">—</span>) ligt onder het minimumtarief voor <span id="km-min-vehicle">dit voertuig</span> (€ <span id="km-min-amount" class="mono-num">—</span>).
+          </div>
+        </div>
+
+        <!-- Mode: Afwijkend / custom -->
+        <div class="mode-panel is-hidden" data-mode-panel="custom">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4" style="margin-top: 1.25rem;">
+            <div>
+              <label class="label">Handmatig basistarief <span class="req">*</span></label>
+              <div style="position: relative;">
+                <span style="position: absolute; left: 0.875rem; top: 50%; transform: translateY(-50%); color: hsl(var(--muted-foreground)); font-family: var(--font-display); font-weight: 500;">€</span>
+                <input type="number" step="0.01" class="field" placeholder="0,00" style="padding-left: 1.875rem; font-variant-numeric: tabular-nums; font-family: var(--font-display); font-weight: 600;" />
+              </div>
+            </div>
+            <div class="md:col-span-2">
+              <label class="label">Reden afwijking</label>
+              <input class="field" placeholder="Bv. Schiphol-regio, spoedrit, maatwerk-afspraak" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Toeslagen (Royalty Cargo matrix) -->
+    <section class="card">
+      <span class="card-chapter">II</span>
+      <div class="card-header">
+        <div>
+          <div class="section-label">Toeslagen</div>
+          <h3 class="section-title">Percentage- en vaste toeslagen</h3>
+          <p class="section-hint">Worden automatisch toegepast op het basistarief. Niet-cumulatief tenzij aangegeven.</p>
+        </div>
+      </div>
+      <div class="card-body">
+
+        <!-- Percentage-toeslagen als toggle grid -->
+        <div>
+          <div class="section-label" style="color: hsl(var(--muted-foreground)); margin-bottom: 0.75rem;">Tijdgebonden toeslagen</div>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+            <label class="surcharge-chip">
+              <input type="checkbox" />
+              <div>
+                <span class="surcharge-chip__title">Ochtend / avond</span>
+                <span class="surcharge-chip__pct">+35%</span>
+              </div>
+            </label>
+            <label class="surcharge-chip">
+              <input type="checkbox" />
+              <div>
+                <span class="surcharge-chip__title">Zaterdag</span>
+                <span class="surcharge-chip__pct">+50%</span>
+              </div>
+            </label>
+            <label class="surcharge-chip">
+              <input type="checkbox" />
+              <div>
+                <span class="surcharge-chip__title">Zondag / feestdag</span>
+                <span class="surcharge-chip__pct">+75%</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Vaste toeslagen -->
+        <div style="margin-top: 1.5rem;">
+          <div class="section-label" style="color: hsl(var(--muted-foreground)); margin-bottom: 0.75rem;">Vaste toeslagen</div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Omschrijving</th>
+                  <th style="width: 110px; text-align: center;">Aantal</th>
+                  <th style="width: 130px; text-align: right;">Tarief</th>
+                  <th style="width: 140px; text-align: right;">Subtotaal</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Wachturen</td>
+                  <td style="text-align: center;"><input type="number" class="field" value="0" min="0" style="width: 72px; margin: 0 auto; text-align: center; font-variant-numeric: tabular-nums;" /></td>
+                  <td style="text-align: right; color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; font-family: var(--font-display);">€ 52,50 / u</td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-display); font-weight: 500;">€ 0,00</td>
+                </tr>
+                <tr>
+                  <td>Extra stops</td>
+                  <td style="text-align: center;"><input type="number" class="field" value="0" min="0" style="width: 72px; margin: 0 auto; text-align: center; font-variant-numeric: tabular-nums;" /></td>
+                  <td style="text-align: right; color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; font-family: var(--font-display);">€ 45,00</td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-display); font-weight: 500;">€ 0,00</td>
+                </tr>
+                <tr>
+                  <td>Tolheffing / andere kosten</td>
+                  <td style="text-align: center;">—</td>
+                  <td style="text-align: right;">
+                    <div style="display: inline-flex; align-items: center; gap: 0.25rem; justify-content: flex-end;">
+                      <span style="color: hsl(var(--muted-foreground));">€</span>
+                      <input type="number" step="0.01" class="field" value="47.50" style="width: 90px; text-align: right; font-variant-numeric: tabular-nums;" />
+                    </div>
+                  </td>
+                  <td style="text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-display); font-weight: 500;">€ 47,50</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- BTW + Totaal -->
+    <section class="card card--luxe">
+      <span class="card-chapter">III</span>
+      <div class="card-header">
+        <div>
+          <div class="section-label">Totaaloverzicht</div>
+          <h3 class="section-title">Berekend totaal</h3>
+          <p class="section-hint">Alle bedragen exclusief tenzij anders aangegeven.</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display: grid; grid-template-columns: 1fr auto; row-gap: 0.75rem; column-gap: 2rem; align-items: baseline; max-width: 560px; margin-left: auto; font-variant-numeric: tabular-nums;">
+
+          <span style="color: hsl(var(--muted-foreground)); font-size: 0.8125rem;">Basistarief (28 × €185,00)</span>
+          <span style="font-family: var(--font-display); font-weight: 500;">€ 5.180,00</span>
+
+          <span style="color: hsl(var(--muted-foreground)); font-size: 0.8125rem;">Brandstoftoeslag (12%)</span>
+          <span style="font-family: var(--font-display); font-weight: 500;">€ 621,60</span>
+
+          <span style="color: hsl(var(--muted-foreground)); font-size: 0.8125rem;">Tolheffing Duitsland</span>
+          <span style="font-family: var(--font-display); font-weight: 500;">€ 47,50</span>
+
+          <span style="grid-column: span 2;" class="hairline"></span>
+
+          <span style="font-family: var(--font-display); font-weight: 600;">Subtotaal excl. BTW</span>
+          <span style="font-family: var(--font-display); font-weight: 600; font-size: 1.0625rem;">€ 5.849,10</span>
+
+          <span style="color: hsl(var(--muted-foreground)); font-size: 0.8125rem; display: flex; align-items: center; gap: 0.5rem;">
+            BTW
+            <select class="field" style="width: 80px; height: 28px; padding: 0 0.5rem; font-size: 0.75rem;"><option>21%</option><option>9%</option><option>0%</option><option>Verlegd</option></select>
+          </span>
+          <span style="font-family: var(--font-display); font-weight: 500;">€ 1.228,31</span>
+
+          <span style="grid-column: span 2;" class="hairline"></span>
+
+          <span style="font-family: var(--font-display); font-weight: 700; font-size: 1.0625rem;">Totaal incl. BTW</span>
+          <span style="font-family: var(--font-display); font-weight: 700; font-size: 1.75rem; color: hsl(var(--gold-deep)); letter-spacing: -0.02em;">€ 7.077,41</span>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Factuurinstellingen -->
+    <section class="card">
+      <span class="card-chapter">IV</span>
+      <div class="card-header">
+        <div>
+          <div class="section-label">Facturatie</div>
+          <h3 class="section-title">Hoe wordt deze order gefactureerd</h3>
+          <p class="section-hint">Factuur wordt automatisch gegenereerd bij goedkeuring. Betalingstermijn en factuuradres komen uit de klantkaart.</p>
+        </div>
+      </div>
+      <div class="card-body grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
+        <div>
+          <label class="label">Factuur-timing</label>
+          <select class="field">
+            <option>Direct na afronding</option>
+            <option>Wekelijks verzamelen</option>
+            <option>Maandelijks verzamelen</option>
+            <option>Handmatig</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Betalingstermijn</label>
+          <input class="field ro" value="30 dagen (uit klantkaart)" readonly />
+          <span class="auto-chip">uit klant</span>
+        </div>
+        <div>
+          <label class="label">Factuurreferentie</label>
+          <input class="field" placeholder="Eigen factuurcode (optioneel)" />
+        </div>
+        <div class="md:col-span-3">
+          <label class="label">Factuuradres</label>
+          <div class="flex items-center justify-between gap-3 p-3 rounded-xl" style="background: hsl(var(--muted) / 0.3); border: 1px solid hsl(var(--border) / 0.5);">
+            <div style="font-size: 0.8125rem; line-height: 1.5;">
+              <div style="font-weight: 600;">Van der Berg Logistics BV — t.a.v. crediteurenadministratie</div>
+              <div style="color: hsl(var(--muted-foreground));">Havenstraat 120, 3071 CN Rotterdam · BTW NL812345678B01</div>
+            </div>
+            <button class="btn btn-ghost" style="height: 2rem; font-size: 0.75rem;">Wijzig</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+<!-- /tab-financieel -->
+
+<!-- ═══ VRACHTDOSSIER TAB ═══ -->
+<div id="tab-vrachtdossier" class="tab-panel is-hidden">
+  <div class="max-w-[1320px] mx-auto px-6 pt-2 pb-6 space-y-5">
+
+    <!-- PMT-output preview (verhuisd vanuit Algemeen) -->
+    <section class="card is-hidden" id="vd-pmt-section">
+      <span class="card-chapter">V</span>
+      <div class="card-header">
+        <div>
+          <div class="section-label">PMT-output</div>
+          <h3 class="section-title">Te genereren documenten</h3>
+          <p class="section-hint">Op basis van de gekozen PMT-methode worden de volgende documenten automatisch aangemaakt na goedkeuring.</p>
+        </div>
+      </div>
+      <div class="card-body space-y-3">
+
+        <!-- EDD output preview -->
+        <div id="vd-pmt-edd" class="callout--luxe">
+          <svg class="callout--luxe__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+          <div class="flex-1">
+            <div class="callout--luxe__title">Docksheet — live tracking</div>
+            <div class="callout--luxe__body">
+              Kolommen: <span style="color: hsl(var(--foreground));">Order · Chauffeur · Gearriveerd <span style="font-size: 0.625rem; color: hsl(var(--gold-deep)); letter-spacing: 0.08em; font-weight: 600;">LIVE</span> · EAT</span>
+            </div>
+            <div class="callout--luxe__tags">
+              <span class="callout--luxe__tag">Live via driver_positions</span>
+              <span class="callout--luxe__tag">EAT uit vrpSolver</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- X-RAY output preview -->
+        <div id="vd-pmt-xray" class="callout--luxe is-hidden">
+          <svg class="callout--luxe__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13l2 2 4-4"/></svg>
+          <div class="flex-1">
+            <div class="callout--luxe__title">Excel-export op X-RAY-template</div>
+            <div class="callout--luxe__body">
+              Inclusief chauffeur-kolom. Ingevulde PMT-gegevens vloeien terug in de <strong style="color: hsl(var(--foreground));">RCS-verklaring (PDF)</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- RCS-verklaring altijd -->
+        <div class="callout--luxe">
+          <svg class="callout--luxe__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><circle cx="12" cy="15" r="2"/><path d="M12 12v1M12 18v-1"/></svg>
+          <div class="flex-1">
+            <div class="callout--luxe__title">RCS-verklaring (PDF)</div>
+            <div class="callout--luxe__body">
+              Regulated Cargo Status verklaring — wordt samengesteld uit PMT-gegevens (operator, referentie, datum, locatie, seal) en gekoppeld aan de shipment.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Generieke documenten placeholder -->
+    <section class="card">
+      <div class="card-body" style="text-align: center; padding: 3rem 2rem;">
+        <div class="section-label" style="justify-content: center;">Overige documenten</div>
+        <h3 class="section-title" style="margin-top: 0.5rem;">CMR, MRN, POD en bijlagen</h3>
+        <p class="section-hint" style="max-width: 420px; margin: 0.5rem auto 0;">Beschikbaar na goedkeuring van de order.</p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="max-w-[1320px] mx-auto px-6 pb-10">
+  <div style="font-size: 10px; color: hsl(var(--muted-foreground) / 0.5); font-variant-numeric: tabular-nums;">v0.2 · static mockup · no state · OrderFlow huisstijl</div>
+</div>
+
+<script>
+  const MND = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+  const MND_SHORT = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  const DOW = ['ma','di','wo','do','vr','za','zo'];
+  const TODAY = new Date(); // 2026-04-15 in context
+
+  let openPop = null;
+  let openTrigger = null;
+  function closePop() {
+    if (openPop) { openPop.remove(); openPop = null; }
+    if (openTrigger) { openTrigger.removeAttribute('aria-expanded'); openTrigger = null; }
+  }
+  document.addEventListener('click', (e) => {
+    if (openPop && !openPop.contains(e.target) && !e.target.closest('label.picker')) closePop();
+  });
+
+  /* ─── Date picker ─── */
+  function openCal(picker) {
+    closePop();
+    const input = picker.querySelector('input[type=date]');
+    const [cy, cm, cd] = (input.value || '2026-04-14').split('-').map(Number);
+    let viewY = cy, viewM = cm - 1;
+
+    const pop = document.createElement('div');
+    pop.className = 'cal-pop';
+    const render = () => {
+      const first = new Date(viewY, viewM, 1);
+      const startDow = (first.getDay() + 6) % 7; // ma=0
+      const daysInMonth = new Date(viewY, viewM + 1, 0).getDate();
+      const daysPrev = new Date(viewY, viewM, 0).getDate();
+
+      let html = `
+        <div class="cal-head">
+          <div class="cal-title">${MND[viewM]} <em>${viewY}</em></div>
+          <div class="cal-nav">
+            <button class="cal-nav-btn" data-nav="-1">‹</button>
+            <button class="cal-nav-btn" data-nav="1">›</button>
+          </div>
+        </div>
+        <div class="cal-dow">${DOW.map(d=>`<span>${d}</span>`).join('')}</div>
+        <div class="cal-grid">`;
+
+      for (let i = startDow - 1; i >= 0; i--) {
+        html += `<button class="cal-day cal-day--other" data-d="${daysPrev-i}" data-m="${viewM-1}" data-y="${viewY}">${daysPrev-i}</button>`;
+      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        const isToday = (viewY === TODAY.getFullYear() && viewM === TODAY.getMonth() && d === TODAY.getDate());
+        const isSel = (viewY === cy && viewM === cm - 1 && d === cd);
+        const classes = ['cal-day'];
+        if (isToday) classes.push('cal-day--today');
+        if (isSel) classes.push('cal-day--selected');
+        html += `<button class="${classes.join(' ')}" data-d="${d}" data-m="${viewM}" data-y="${viewY}">${d}</button>`;
+      }
+      const tot = startDow + daysInMonth;
+      const trailing = (7 - (tot % 7)) % 7;
+      for (let i = 1; i <= trailing; i++) {
+        html += `<button class="cal-day cal-day--other" data-d="${i}" data-m="${viewM+1}" data-y="${viewY}">${i}</button>`;
+      }
+      html += `</div>
+        <div class="cal-foot">
+          <span>Geselecteerd: <strong style="color:hsl(var(--foreground));font-variant-numeric:tabular-nums;">${String(cd).padStart(2,'0')} ${MND_SHORT[cm-1]} ${cy}</strong></span>
+          <button class="cal-foot-btn" data-today>Vandaag</button>
+        </div>`;
+      pop.innerHTML = html;
+    };
+    render();
+
+    pop.addEventListener('click', (e) => {
+      const nav = e.target.closest('[data-nav]');
+      if (nav) {
+        viewM += parseInt(nav.dataset.nav, 10);
+        if (viewM < 0) { viewM = 11; viewY--; }
+        if (viewM > 11) { viewM = 0; viewY++; }
+        render();
+        return;
+      }
+      if (e.target.dataset.today !== undefined) {
+        const t = new Date();
+        select(t.getFullYear(), t.getMonth() + 1, t.getDate());
+        return;
+      }
+      const day = e.target.closest('.cal-day');
+      if (day) {
+        select(parseInt(day.dataset.y,10), parseInt(day.dataset.m,10)+1, parseInt(day.dataset.d,10));
+      }
+    });
+
+    const select = (y, m, d) => {
+      input.value = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      picker.querySelector('.picker__day').textContent = String(d);
+      picker.querySelector('.picker__month').textContent = MND_SHORT[m-1];
+      picker.querySelector('.picker__year').textContent = y;
+      closePop();
+    };
+
+    positionPop(pop, picker);
+    document.body.appendChild(pop);
+    openPop = pop;
+    openTrigger = picker;
+    picker.setAttribute('aria-expanded', 'true');
+  }
+
+  /* ─── Time picker ─── */
+  function openTime(picker) {
+    closePop();
+    const input = picker.querySelector('input[type=time]');
+    const [ch, cmin] = (input.value || '08:00').split(':').map(Number);
+
+    const pop = document.createElement('div');
+    pop.className = 'time-pop';
+
+    const hours = Array.from({length: 24}, (_, i) => String(i).padStart(2,'0'));
+    const mins = ['00','15','30','45'];
+
+    pop.innerHTML = `
+      <div class="time-col" data-col="h">
+        <div class="time-col-label">uur</div>
+        ${hours.map(h => `<button class="time-slot ${parseInt(h)===ch?'time-slot--selected':''}" data-h="${h}">${h}</button>`).join('')}
+      </div>
+      <span class="time-sep">:</span>
+      <div class="time-col" data-col="m">
+        <div class="time-col-label">min</div>
+        ${mins.map(m => `<button class="time-slot ${parseInt(m)===cmin?'time-slot--selected':''}" data-m="${m}">${m}</button>`).join('')}
+      </div>`;
+
+    let selH = ch, selM = cmin;
+    const apply = () => {
+      const v = `${String(selH).padStart(2,'0')}:${String(selM).padStart(2,'0')}`;
+      input.value = v;
+      picker.querySelector('.picker__time').textContent = v;
+    };
+
+    pop.addEventListener('click', (e) => {
+      const h = e.target.closest('[data-h]');
+      const m = e.target.closest('[data-m]');
+      if (h) {
+        selH = parseInt(h.dataset.h, 10);
+        pop.querySelectorAll('[data-h]').forEach(el => el.classList.toggle('time-slot--selected', el === h));
+        apply();
+      }
+      if (m) {
+        selM = parseInt(m.dataset.m, 10);
+        pop.querySelectorAll('[data-m]').forEach(el => el.classList.toggle('time-slot--selected', el === m));
+        apply();
+        setTimeout(closePop, 120);
+      }
+    });
+
+    positionPop(pop, picker);
+    document.body.appendChild(pop);
+    openPop = pop;
+    openTrigger = picker;
+    picker.setAttribute('aria-expanded', 'true');
+    // scroll selected into view
+    setTimeout(() => {
+      pop.querySelectorAll('.time-slot--selected').forEach(el => el.scrollIntoView({block:'center'}));
+    }, 0);
+  }
+
+  function positionPop(pop, picker) {
+    const r = picker.getBoundingClientRect();
+    pop.style.visibility = 'hidden';
+    document.body.appendChild(pop);
+    const pw = pop.offsetWidth;
+    const ph = pop.offsetHeight;
+    let left = r.left + window.scrollX;
+    let top = r.bottom + window.scrollY + 6;
+    if (left + pw > window.innerWidth - 16) left = window.innerWidth - pw - 16;
+    if (r.bottom + ph > window.innerHeight - 16) top = r.top + window.scrollY - ph - 6;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    pop.style.visibility = '';
+  }
+
+  document.querySelectorAll('label.picker[data-date]').forEach(p => {
+    p.addEventListener('click', (e) => { e.preventDefault(); openCal(p); });
+  });
+  document.querySelectorAll('label.picker[data-time]').forEach(p => {
+    p.addEventListener('click', (e) => { e.preventDefault(); openTime(p); });
+  });
+
+  /* ─── Cargo: regel toevoegen + totaal berekenen ─── */
+  function cargoRow() {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="number" class="field mono-num" placeholder="0" /></td>
+      <td><select class="field"><option>Pallets</option><option>Colli</option><option>Box</option><option>IBC</option></select></td>
+      <td><input type="number" class="field mono-num" placeholder="0" /></td>
+      <td>
+        <div class="dim-group">
+          <input type="number" class="field dim" placeholder="L" />
+          <span class="dim-sep">×</span>
+          <input type="number" class="field dim" placeholder="B" />
+          <span class="dim-sep">×</span>
+          <input type="number" class="field dim" placeholder="H" />
+        </div>
+      </td>
+      <td style="text-align:center;"><label class="toggle"><input type="checkbox"><span></span></label></td>
+      <td><input class="field mono-num" placeholder="—" /></td>
+      <td><input class="field" placeholder="Omschrijving" /></td>
+      <td><button class="btn-subtle row-del suggestion-btn">×</button></td>`;
+    return tr;
+  }
+  function recalc() {
+    const tbl = document.getElementById('cargo-tbl');
+    let qty = 0, kg = 0;
+    tbl.querySelectorAll('tbody tr').forEach(tr => {
+      const cells = tr.querySelectorAll('input[type=number]');
+      qty += parseFloat(cells[0]?.value) || 0;
+      kg  += parseFloat(cells[1]?.value) || 0;
+    });
+    document.querySelectorAll('.cargo-summary .sum-card')[0].querySelector('.sum-value').innerHTML =
+      `${qty.toLocaleString('nl-NL')} <span class="sum-unit">stuks</span>`;
+    document.querySelectorAll('.cargo-summary .sum-card')[1].querySelector('.sum-value').innerHTML =
+      `${kg.toLocaleString('nl-NL')} <span class="sum-unit">kg</span>`;
+  }
+  document.getElementById('add-cargo')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelector('#cargo-tbl tbody').appendChild(cargoRow());
+    recalc();
+  });
+  document.getElementById('cargo-tbl')?.addEventListener('click', (e) => {
+    if (e.target.closest('.row-del')) {
+      const rows = document.querySelectorAll('#cargo-tbl tbody tr');
+      if (rows.length > 1) { e.target.closest('tr').remove(); recalc(); }
+    }
+  });
+  document.getElementById('cargo-tbl')?.addEventListener('input', recalc);
+  recalc();
+
+  /* ─── Conditional: Temperatuur bij Koel ─── */
+  const tt = document.getElementById('transport-type');
+  const tempRow = document.getElementById('temp-row');
+  const syncTemp = () => { tempRow.style.display = tt.value === 'Koel' ? 'block' : 'none'; };
+  tt?.addEventListener('change', syncTemp);
+  syncTemp();
+
+  /* ─── Tab switching ─── */
+  document.querySelectorAll('.tab[data-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.remove('tab-active'));
+      tab.classList.add('tab-active');
+      const id = 'tab-' + tab.dataset.tab;
+      document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+      document.getElementById(id).style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  /* ─── Financieel: mode switch ─── */
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('mode-btn--active'));
+      btn.classList.add('mode-btn--active');
+      const m = btn.dataset.mode;
+      document.querySelectorAll('.mode-panel').forEach(p => p.style.display = 'none');
+      document.querySelector(`.mode-panel[data-mode-panel="${m}"]`).style.display = 'block';
+    });
+  });
+
+  /* ─── Segmented controls ─── */
+  document.querySelectorAll('.seg-ctrl').forEach(ctrl => {
+    ctrl.addEventListener('click', (e) => {
+      const btn = e.target.closest('.seg-btn');
+      if (!btn) return;
+      ctrl.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('seg-btn--active'));
+      btn.classList.add('seg-btn--active');
+      if (btn.dataset.diesel) updateRate();
+    });
+  });
+
+  /* ─── Per-km: afronding naar boven op 5 + live tariefberekening ─── */
+  const KM_BASIS = 725; // heen + terug standaard-afstand uit CSV
+  const fmtEuro = (n) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtRate = (n) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+
+  function updateKmRate() {
+    const kmIn = document.getElementById('km-input');
+    const kmOut = document.getElementById('km-rounded');
+    const sel = document.getElementById('km-vehicle');
+    if (!kmIn || !sel) return;
+
+    const raw = parseFloat(kmIn.value) || 0;
+    const rounded = Math.ceil(raw / 5) * 5;
+    kmOut.textContent = rounded;
+
+    const opt = sel.options[sel.selectedIndex];
+    const dieselInc = document.querySelector('[data-km-diesel="inc"]')?.classList.contains('seg-btn--active');
+    const baseTariff = parseFloat(dieselInc ? opt.dataset.inc : opt.dataset.ex);
+    const minimum = parseFloat(opt.dataset.min);
+    const perKm = baseTariff / KM_BASIS;
+    const calc = rounded * perKm;
+    const final = Math.max(calc, minimum);
+
+    document.getElementById('km-vehicle-name').textContent = opt.textContent;
+    document.getElementById('km-breakdown').innerHTML =
+      `<span class="mono-num">${rounded} km</span> × ` +
+      `<span class="mono-num">${fmtRate(perKm)} / km</span> ` +
+      `&nbsp;<span style="opacity: 0.6;">(${fmtEuro(baseTariff)} ÷ ${KM_BASIS} km basis)</span>`;
+    document.getElementById('km-total').textContent = fmtEuro(final);
+
+    const minNote = document.getElementById('km-min-note');
+    if (calc < minimum) {
+      minNote.style.display = 'block';
+      document.getElementById('km-calc-raw').textContent =
+        calc.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      document.getElementById('km-min-vehicle').textContent = opt.textContent;
+      document.getElementById('km-min-amount').textContent =
+        minimum.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } else {
+      minNote.style.display = 'none';
+    }
+  }
+  document.getElementById('km-input')?.addEventListener('input', updateKmRate);
+  document.getElementById('km-vehicle')?.addEventListener('change', updateKmRate);
+  document.querySelectorAll('[data-km-diesel]').forEach(b => b.addEventListener('click', () => setTimeout(updateKmRate, 0)));
+  updateKmRate();
+
+  /* ─── PMT: conditional op transport-type, safe-toggle, methode-keuze, data-validatie ─── */
+  const pmtSection = document.getElementById('pmt-section');
+  const vdPmtSection = document.getElementById('vd-pmt-section');
+  // PMT alleen bij luchtvracht-relevante types
+  const PMT_TYPES = new Set(['Express']);
+  function syncPmtVisibility() {
+    const isAir = PMT_TYPES.has(tt?.value);
+    if (pmtSection) pmtSection.style.display = isAir ? 'block' : 'none';
+    if (vdPmtSection) vdPmtSection.style.display = isAir ? 'block' : 'none';
+  }
+  tt?.addEventListener('change', syncPmtVisibility);
+  syncPmtVisibility();
+
+  // Safe-toggle: toont/verbergt PMT-paneel
+  const safeToggle = document.getElementById('shipment-safe');
+  const pmtPanel = document.getElementById('pmt-panel');
+  const pmtErr = document.getElementById('pmt-method-error');
+  const syncPmt = () => {
+    if (pmtPanel) pmtPanel.style.display = safeToggle?.checked ? 'none' : 'block';
+    if (safeToggle?.checked) {
+      pmtErr.style.display = 'none';
+      document.querySelectorAll('#pmt-panel [data-pmt]').forEach(b => b.classList.remove('mode-btn--active'));
+      document.getElementById('pmt-data').style.display = 'none';
+    }
+  };
+  safeToggle?.addEventListener('change', syncPmt);
+  syncPmt();
+
+  // Methode-keuze — syncs Algemeen-tab keuze met Vrachtdossier output-preview
+  document.querySelectorAll('#pmt-panel [data-pmt]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#pmt-panel [data-pmt]').forEach(b => {
+        b.classList.remove('mode-btn--active');
+        b.setAttribute('aria-checked', 'false');
+      });
+      btn.classList.add('mode-btn--active');
+      btn.setAttribute('aria-checked', 'true');
+      // Sync Vrachtdossier-previews
+      document.getElementById('vd-pmt-edd').style.display = btn.dataset.pmt === 'edd' ? 'flex' : 'none';
+      document.getElementById('vd-pmt-xray').style.display = btn.dataset.pmt === 'xray' ? 'flex' : 'none';
+      // PMT-data velden tonen
+      document.getElementById('pmt-data').style.display = 'block';
+      pmtErr.style.display = 'none';
+    });
+  });
+
+  // Validatie: trigger bij "Opslaan & sluiten" — mockup-sim
+  document.querySelectorAll('.btn-primary').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if (!safeToggle || safeToggle.checked) return;
+      const methodeGekozen = document.querySelector('#pmt-panel [data-pmt].mode-btn--active');
+      if (!methodeGekozen && pmtSection && pmtSection.style.display !== 'none') {
+        pmtErr.style.display = 'flex';
+        pmtSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        e.preventDefault();
+      }
+    });
+  });
+
+  // Klant-bevestiging label sync
+  const byCustomer = document.getElementById('pmt-by-customer');
+  const byCustomerLabel = document.getElementById('pmt-by-customer-label');
+  byCustomer?.addEventListener('change', () => {
+    byCustomerLabel.textContent = byCustomer.checked
+      ? 'Bevestigd door klant'
+      : 'Keuze gemaakt door planner (niet door klant)';
+  });
+
+  /* ─── Toast dismiss (× knop en auto-dismiss na progress-bar) ─── */
+  document.querySelectorAll('.toast').forEach(toast => {
+    const close = toast.querySelector('.toast__close');
+    const dismiss = () => {
+      toast.style.transition = 'opacity .2s, transform .25s cubic-bezier(0.4, 0, 0.2, 1), margin .25s';
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(12px) scale(0.98)';
+      toast.style.marginTop = '-' + toast.offsetHeight + 'px';
+      setTimeout(() => toast.remove(), 260);
+    };
+    close?.addEventListener('click', dismiss);
+    // Auto-dismiss wanneer progress-balk leeg is
+    const progress = toast.querySelector('.toast__progress');
+    if (progress) {
+      const dur = parseFloat(getComputedStyle(progress).animationDuration) || 5;
+      setTimeout(dismiss, dur * 1000);
+    }
+  });
+
+  /* ─── Per-rit basistarief uit voertuigkeuze + diesel + screening ─── */
+  function updateRate() {
+    const sel = document.getElementById('rit-vehicle');
+    if (!sel) return;
+    const opt = sel.options[sel.selectedIndex];
+    const dieselInc = document.querySelector('[data-diesel="inc"]')?.classList.contains('seg-btn--active');
+    const screen = document.getElementById('screening-toggle')?.checked;
+    let val;
+    if (screen && opt.dataset.scrEx) {
+      val = dieselInc ? parseFloat(opt.dataset.scrInc) : parseFloat(opt.dataset.scrEx);
+    } else {
+      val = dieselInc ? parseFloat(opt.dataset.inc) : parseFloat(opt.dataset.ex);
+    }
+    const el = document.getElementById('base-rate');
+    if (el && !isNaN(val)) {
+      el.textContent = '€ ' + val.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    const sub = document.querySelector('.rate-preview__sub');
+    if (sub) {
+      sub.textContent = `${opt.textContent} · ${dieselInc ? 'incl. diesel' : 'excl. diesel'} · ${screen ? 'incl. screening' : 'zonder screening'}`;
+    }
+  }
+  document.getElementById('rit-vehicle')?.addEventListener('change', updateRate);
+  document.getElementById('screening-toggle')?.addEventListener('change', updateRate);
+</script>
+</body>
+</html>
