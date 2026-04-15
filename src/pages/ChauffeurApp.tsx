@@ -11,6 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { TripFlow } from "@/components/chauffeur/TripFlow";
+import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
+import { useVehicleCheckGate } from "@/hooks/useVehicleCheck";
 import { useDriverTrips, useUpdateStopStatus, useSavePOD } from "@/hooks/useTrips";
 import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
@@ -448,6 +450,9 @@ export default function ChauffeurApp() {
   // -- Position Reporter (GPS -> vehicle_positions) --
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const activeDriverVehicleId = drivers?.find(d => d.id === activeDriverId)?.current_vehicle_id || null;
+
+  // Voertuigcheck-gate: mag chauffeur vandaag orders zien voor dit voertuig?
+  const gateQ = useVehicleCheckGate(activeDriverId, activeDriverVehicleId);
   const positionReporter = usePositionReporter(
     activeTripId,
     activeDriverId,
@@ -972,6 +977,61 @@ export default function ChauffeurApp() {
         </div>
       </div>
     );
+  }
+
+  // GATE: voertuigcheck verplicht vóór orderlijst zichtbaar is.
+  // Fail-closed: alleen doorlaten als gate-query expliciet passed=true geeft.
+  if (activeDriverId) {
+    if (!activeDriverVehicleId) {
+      return (
+        <div className="h-screen w-full flex items-center justify-center bg-slate-50 p-4">
+          <div className="max-w-sm text-center text-sm text-slate-700">
+            Geen voertuig toegewezen. Neem contact op met de planner voor je kunt rijden.
+          </div>
+        </div>
+      );
+    }
+    if (gateQ.isLoading) {
+      return (
+        <div className="h-screen w-full flex items-center justify-center bg-slate-50">
+          <div className="text-slate-600">Voertuigcheck laden…</div>
+        </div>
+      );
+    }
+    if (gateQ.isError) {
+      return (
+        <div className="h-screen w-full flex items-center justify-center bg-slate-50 p-4">
+          <div className="max-w-sm text-center text-sm text-red-700">
+            Kon voertuigcheck niet laden: {(gateQ.error as any)?.message ?? "onbekende fout"}.
+            <button
+              className="mt-3 block mx-auto underline"
+              onClick={() => gateQ.refetch()}
+            >
+              Opnieuw proberen
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (!gateQ.data?.passed) {
+      if (!activeDriver?.tenant_id) {
+        return (
+          <div className="h-screen w-full flex items-center justify-center bg-slate-50 p-4">
+            <div className="max-w-sm text-center text-sm text-slate-700">
+              Geen tenant-koppeling. Neem contact op met de planner.
+            </div>
+          </div>
+        );
+      }
+      return (
+        <VehicleCheckScreen
+          tenantId={activeDriver.tenant_id}
+          driverId={activeDriverId}
+          vehicleId={activeDriverVehicleId}
+          onCompleted={() => gateQ.refetch()}
+        />
+      );
+    }
   }
 
   // MAIN DRIVER DASHBOARD

@@ -6,7 +6,10 @@ import {
 } from "lucide-react";
 import { useOrders } from "@/hooks/useOrders";
 import { useVehicles } from "@/hooks/useVehicles";
+import { usePendingReleaseCount } from "@/hooks/useVehicleCheckHistory";
+import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
+import { ShieldAlert } from "lucide-react";
 import { motion } from "framer-motion";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -30,6 +33,9 @@ const overdueImpacts: Record<string, { label: string; color: string }> = {};
 
 const Dashboard = () => {
   const today = new Date();
+  const { effectiveRole } = useAuth();
+  const canSeeVehicleCheck = effectiveRole === "admin" || effectiveRole === "planner";
+  const { data: pendingReleaseCount = 0 } = usePendingReleaseCount();
   const { data: ordersData, isLoading: ordersLoading, isError: ordersError, refetch: refetchOrders } = useOrders();
   const orders = ordersData?.orders ?? [];
   const { data: vehicles = [], isLoading: vehiclesLoading, isError: vehiclesError, refetch: refetchVehicles } = useVehicles();
@@ -117,6 +123,49 @@ const Dashboard = () => {
       {/* AI Autonomy widget */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <AutonomyScoreCard compact />
+        {canSeeVehicleCheck && (
+          <Link
+            to="/voertuigcheck?status=DAMAGE_FOUND"
+            className="card--luxe p-4 flex items-center gap-4 hover:shadow-md transition-shadow group"
+            style={{ fontFamily: "var(--font-ui)" }}
+          >
+            <div
+              className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
+              style={{
+                background: pendingReleaseCount > 0 ? "hsl(0 80% 95%)" : "hsl(var(--gold-soft))",
+                color: pendingReleaseCount > 0 ? "hsl(0 65% 40%)" : "hsl(var(--gold-deep))",
+              }}
+            >
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-[10px] uppercase tracking-[0.28em] font-semibold text-[hsl(var(--gold-deep))] mb-1"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Voertuigcheck
+              </div>
+              <div
+                className="text-lg font-semibold leading-tight"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Te vrijgeven voertuigchecks
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Checks met schade die op planner-vrijgave wachten.
+              </p>
+            </div>
+            <div
+              className="text-[2rem] font-semibold tabular-nums shrink-0"
+              style={{
+                fontFamily: "var(--font-display)",
+                color: pendingReleaseCount > 0 ? "hsl(0 65% 40%)" : "hsl(var(--muted-foreground))",
+              }}
+            >
+              {pendingReleaseCount}
+            </div>
+          </Link>
+        )}
       </div>
 
       {/* Two column layout */}
