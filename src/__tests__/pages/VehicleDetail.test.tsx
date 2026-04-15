@@ -306,7 +306,8 @@ describe("VehicleDetail", () => {
   // ── Specs tab shows capacity (default tab) ──
   it("shows capacity info in specs tab", () => {
     renderVehicleDetail();
-    expect(screen.getByText(/1\.?500/)).toBeInTheDocument();
+    // toLocaleString() varieert per locale: NL "1.500", en-US "1,500", raw "1500".
+    expect(screen.getByText(/1[.,]?500/)).toBeInTheDocument();
   });
 
   // ── Shows vehicle features ──
@@ -392,7 +393,8 @@ describe("VehicleDetail", () => {
     renderVehicleDetail();
     await user.click(screen.getByText("Onderhoud"));
     await waitFor(() => {
-      expect(screen.getByText(/45\.?000/)).toBeInTheDocument();
+      // toLocaleString() varieert per locale: NL "45.000", en-US "45,000".
+      expect(screen.getByText(/45[.,]?000/)).toBeInTheDocument();
     });
   });
 });
