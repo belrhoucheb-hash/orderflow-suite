@@ -166,16 +166,62 @@ export function evaluateMatch(
 
 // ─── Afdeling-inference ───────────────────────────────────────────────────
 
-const EXPORT_DELIVERY_MARKERS = ["rcs export", "rcs_export", "royalty cargo export"];
-const IMPORT_PICKUP_MARKERS = ["rcs import", "rcs_import", "royalty cargo import"];
+// Fallback markers (gebruikt als tenant geen warehouses heeft geconfigureerd)
+const FALLBACK_EXPORT_MARKERS = ["rcs export", "rcs_export", "royalty cargo export"];
+const FALLBACK_IMPORT_MARKERS = ["rcs import", "rcs_import", "royalty cargo import"];
+
+interface WarehouseRow {
+  address: string;
+  warehouse_type: "OPS" | "EXPORT" | "IMPORT";
+}
+
+// Per-tenant cache (TTL 60s) zodat we niet bij elke keystroke DB-queries doen
+const warehouseCache = new Map<string, { data: WarehouseRow[]; ts: number }>();
+const CACHE_TTL = 60_000;
+
+async function getWarehousesForTenant(tenantId: string): Promise<WarehouseRow[]> {
+  const cached = warehouseCache.get(tenantId);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
+  const { data, error } = await (supabase as any)
+    .from("tenant_warehouses")
+    .select("address, warehouse_type")
+    .eq("tenant_id", tenantId);
+  const rows = (error || !data) ? [] : data as WarehouseRow[];
+  warehouseCache.set(tenantId, { data: rows, ts: Date.now() });
+  return rows;
+}
 
 /**
- * Leidt de afdeling af uit pickup + delivery adressen. Business-rules:
- *   1. Pickup = RCS import → IMPORT (1 leg: IMPORT hub → delivery)
- *   2. Delivery = RCS export → EXPORT (2 legs: OPS pickup + EXPORT placeholder)
- *   3. Anders → OPS (1 leg)
- *
- * Dit is puur een UI/preview-hint — de traject_rules blijven autoritatief.
+ * Leidt de afdeling af uit pickup + delivery adressen.
+ * Leest warehouses uit DB (per tenant). Fallback naar hardcoded markers.
+ */
+export async function inferAfdelingAsync(
+  pickup: string | null | undefined,
+  delivery: string | null | undefined,
+  tenantId?: string | null,
+): Promise<"OPS" | "EXPORT" | "IMPORT" | null> {
+  if (!pickup || !delivery) return null;
+
+  const warehouses = tenantId ? await getWarehousesForTenant(tenantId) : [];
+
+  if (warehouses.length > 0) {
+    const p = pickup.toLowerCase();
+    const d = delivery.toLowerCase();
+    for (const wh of warehouses) {
+      const addr = wh.address.toLowerCase();
+      if (wh.warehouse_type === "IMPORT" && p.includes(addr)) return "IMPORT";
+      if (wh.warehouse_type === "EXPORT" && d.includes(addr)) return "EXPORT";
+    }
+    return "OPS";
+  }
+
+  // Fallback: hardcoded markers
+  return inferAfdeling(pickup, delivery);
+}
+
+/**
+ * Synchrone fallback (hardcoded markers). Gebruikt als er geen tenantId is
+ * of voor snelle UI-hint zonder await.
  */
 export function inferAfdeling(
   pickup: string | null | undefined,
@@ -183,9 +229,9 @@ export function inferAfdeling(
 ): "OPS" | "EXPORT" | "IMPORT" | null {
   if (!pickup || !delivery) return null;
   const p = pickup.toLowerCase();
-  if (IMPORT_PICKUP_MARKERS.some((m) => p.includes(m))) return "IMPORT";
+  if (FALLBACK_IMPORT_MARKERS.some((m) => p.includes(m))) return "IMPORT";
   const d = delivery.toLowerCase();
-  if (EXPORT_DELIVERY_MARKERS.some((m) => d.includes(m))) return "EXPORT";
+  if (FALLBACK_EXPORT_MARKERS.some((m) => d.includes(m))) return "EXPORT";
   return "OPS";
 }
 
