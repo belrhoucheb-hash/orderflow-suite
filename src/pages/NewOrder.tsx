@@ -736,58 +736,6 @@ const NewOrder = () => {
         </div>
       </div>
 
-      {/* ── Traject-preview banner ── */}
-      {trajectPreview && trajectPreview.matched && trajectPreview.legs.length > 0 && (
-        <div className="bg-card border-b border-border px-4 py-2">
-          <div className={cn(
-            "flex items-start gap-2 rounded-md border px-3 py-2 text-xs",
-            trajectPreview.legs.length > 1
-              ? "border-amber-300 bg-amber-50 text-amber-900"
-              : "border-blue-300 bg-blue-50 text-blue-900",
-          )}>
-            <Route className="h-4 w-4 mt-0.5 shrink-0" />
-            <div className="flex-1 space-y-1">
-              <div className="font-semibold flex items-center gap-2">
-                <span>
-                  {trajectPreview.legs.length > 1
-                    ? `Deze boeking wordt gesplitst in ${trajectPreview.legs.length} legs`
-                    : `Traject: ${trajectPreview.rule?.name ?? ""}`}
-                </span>
-                {afdeling && (
-                  <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/70 border">
-                    Afdeling: {afdeling}
-                  </span>
-                )}
-              </div>
-              <ul className="space-y-0.5">
-                {trajectPreview.legs.map((leg) => (
-                  <li key={leg.sequence} className="flex items-baseline gap-2">
-                    <span className="font-medium">#{leg.sequence}</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-white/70 border">
-                      {leg.department_code}
-                    </span>
-                    <span className="truncate">{leg.from || "?"} → {leg.to || "?"}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-      {trajectPreview && !trajectPreview.matched && trajectPreview.reason && (
-        <div className="bg-card border-b border-border px-4 py-2">
-          <div className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900">
-            <Route className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>{trajectPreview.reason}</span>
-          </div>
-        </div>
-      )}
-      {previewLoading && !trajectPreview && (
-        <div className="bg-card border-b border-border px-4 py-1 text-xs text-muted-foreground">
-          Traject-preview wordt berekend…
-        </div>
-      )}
-
       {/* ── Body ── */}
       <div className="flex-1 overflow-y-auto">
         {mainTab === "algemeen" && (
@@ -856,82 +804,12 @@ const NewOrder = () => {
               </div>
             </section>
 
-            {/* ══ Chapter II · Transport ══ */}
-            <section className="card--luxe p-6 relative">
-              <span className="card-chapter">II</span>
-              <div className="mb-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
-                  02 · Transport
-                </div>
-                <h3 className="section-title">Type en voertuig</h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Afdeling wordt automatisch bepaald door het traject{afdeling ? ` (${afdeling})` : ""}. Chauffeur wordt later toegewezen.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Transport type <span className="text-red-600">*</span></label>
-                  <Select value={transportType} onValueChange={setTransportType}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecteer…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="FTL">FTL</SelectItem>
-                      <SelectItem value="LTL">LTL</SelectItem>
-                      <SelectItem value="Koel">Koel</SelectItem>
-                      <SelectItem value="Express">Express</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Voertuigtype</label>
-                  <Select value={voertuigtype} onValueChange={setVoertuigtype}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecteer…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Vrachtwagen">Vrachtwagen</SelectItem>
-                      <SelectItem value="Bestelbus">Bestelbus</SelectItem>
-                      <SelectItem value="Trailer">Trailer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Afdeling <span className="text-red-600">*</span></label>
-                  <Select
-                    value={afdeling || undefined}
-                    onValueChange={v => { setAfdeling(v); setAfdelingManual(true); clearError("afdeling"); }}
-                  >
-                    <SelectTrigger className={cn("h-9 text-sm", errors.afdeling && "border-red-500")}>
-                      <SelectValue placeholder="Selecteer…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="OPS">Operations</SelectItem>
-                      <SelectItem value="EXPORT">Export</SelectItem>
-                      <SelectItem value="IMPORT">Import</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {!afdelingManual && afdeling && (
-                    <span className="text-[10px] text-[hsl(var(--gold-deep))] tracking-wider mt-0.5 block">
-                      Automatisch bepaald op basis van traject
-                    </span>
-                  )}
-                  {afdelingManual && (
-                    <button
-                      type="button"
-                      onClick={() => setAfdelingManual(false)}
-                      className="text-[10px] text-muted-foreground hover:text-foreground underline mt-0.5 block"
-                    >
-                      Terug naar automatische detectie
-                    </button>
-                  )}
-                  {errors.afdeling && <span className="text-[11px] text-red-500">{errors.afdeling}</span>}
-                </div>
-              </div>
-            </section>
-
-            {/* ══ Chapter III · Vrachtplanning ══ */}
+{/* ══ Chapter II · Vrachtplanning ══ */}
             <section className="card--luxe p-6 relative">
               <span className="card-chapter">III</span>
               <div className="mb-5">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
-                  03 · Vrachtplanning
+                  02 · Vrachtplanning
                 </div>
                 <h3 className="section-title">Laad- en losstops</h3>
                 <p className="text-xs text-muted-foreground mt-1">Adres, datum en tijdvenster per stop.</p>
@@ -1060,20 +938,137 @@ const NewOrder = () => {
               </div>
             </section>
 
+            {/* ── Traject-preview (onder stops) ── */}
+            {(trajectPreview || previewLoading) && (
+              <div className="card--luxe p-5 relative">
+                {previewLoading && !trajectPreview && (
+                  <div className="text-xs text-muted-foreground">Traject wordt berekend…</div>
+                )}
+                {trajectPreview && trajectPreview.matched && trajectPreview.legs.length > 0 && (
+                  <div className="flex items-start gap-3">
+                    <span className="w-7 h-7 rounded-lg bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))] inline-flex items-center justify-center shrink-0 mt-0.5">
+                      <Route className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold flex items-center gap-2 flex-wrap">
+                        <span>
+                          {trajectPreview.legs.length > 1
+                            ? `Boeking wordt gesplitst in ${trajectPreview.legs.length} legs`
+                            : `Traject: ${trajectPreview.rule?.name ?? ""}`}
+                        </span>
+                        {afdeling && (
+                          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-md bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))] border border-[hsl(var(--gold)_/_0.25)]">
+                            {afdeling}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 space-y-1.5">
+                        {trajectPreview.legs.map((leg) => (
+                          <div key={leg.sequence} className="flex items-center gap-2 text-xs">
+                            <span className="w-5 h-5 rounded-md bg-[hsl(var(--muted)_/_0.5)] text-muted-foreground inline-flex items-center justify-center text-[10px] font-bold shrink-0">
+                              {leg.sequence}
+                            </span>
+                            <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-[hsl(var(--gold-soft)_/_0.5)] text-[hsl(var(--gold-deep))] border border-[hsl(var(--gold)_/_0.15)]">
+                              {leg.department_code}
+                            </span>
+                            <span className="text-muted-foreground truncate">{leg.from || "?"} → {leg.to || "?"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {trajectPreview && !trajectPreview.matched && trajectPreview.reason && (
+                  <div className="flex items-start gap-3">
+                    <span className="w-7 h-7 rounded-lg bg-[hsl(var(--muted))] text-muted-foreground inline-flex items-center justify-center shrink-0 mt-0.5">
+                      <Route className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="text-xs text-muted-foreground">{trajectPreview.reason}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ══ Chapter III · Transport ══ */}
+            <section className="card--luxe p-6 relative">
+              <span className="card-chapter">II</span>
+              <div className="mb-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                  03 · Transport
+                </div>
+                <h3 className="section-title">Type en voertuig</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Afdeling wordt automatisch bepaald door het traject{afdeling ? ` (${afdeling})` : ""}. Chauffeur wordt later toegewezen.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Transport type <span className="text-red-600">*</span></label>
+                  <Select value={transportType} onValueChange={setTransportType}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecteer…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FTL">FTL</SelectItem>
+                      <SelectItem value="LTL">LTL</SelectItem>
+                      <SelectItem value="Koel">Koel</SelectItem>
+                      <SelectItem value="Express">Express</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Voertuigtype</label>
+                  <Select value={voertuigtype} onValueChange={setVoertuigtype}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecteer…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Vrachtwagen">Vrachtwagen</SelectItem>
+                      <SelectItem value="Bestelbus">Bestelbus</SelectItem>
+                      <SelectItem value="Trailer">Trailer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Afdeling <span className="text-red-600">*</span></label>
+                  <Select
+                    value={afdeling || undefined}
+                    onValueChange={v => { setAfdeling(v); setAfdelingManual(true); clearError("afdeling"); }}
+                  >
+                    <SelectTrigger className={cn("h-9 text-sm", errors.afdeling && "border-red-500")}>
+                      <SelectValue placeholder="Selecteer…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="OPS">Operations</SelectItem>
+                      <SelectItem value="EXPORT">Export</SelectItem>
+                      <SelectItem value="IMPORT">Import</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!afdelingManual && afdeling && (
+                    <span className="text-[10px] text-[hsl(var(--gold-deep))] tracking-wider mt-0.5 block">
+                      Automatisch bepaald op basis van traject
+                    </span>
+                  )}
+                  {afdelingManual && (
+                    <button
+                      type="button"
+                      onClick={() => setAfdelingManual(false)}
+                      className="text-[10px] text-muted-foreground hover:text-foreground underline mt-0.5 block"
+                    >
+                      Terug naar automatische detectie
+                    </button>
+                  )}
+                  {errors.afdeling && <span className="text-[11px] text-red-500">{errors.afdeling}</span>}
+                </div>
+              </div>
+            </section>
+
+            
             {/* ══ Chapter IV · Lading ══ */}
             <section className="card--luxe p-6 relative">
               <span className="card-chapter">IV</span>
-              <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
-                    04 · Lading
-                  </div>
-                  <h3 className="section-title">Wat wordt er vervoerd</h3>
-                  <p className="text-xs text-muted-foreground mt-1">Voeg meerdere regels toe voor verschillende soorten lading.</p>
+              <div className="mb-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                  04 · Lading
                 </div>
-                <Button size="sm" variant="outline" onClick={addCargoRow} className="h-8 px-4 text-xs gap-1.5 whitespace-nowrap shrink-0">
-                  <Plus className="h-3.5 w-3.5 shrink-0" /> Lading-regel
-                </Button>
+                <h3 className="section-title">Wat wordt er vervoerd</h3>
+                <p className="text-xs text-muted-foreground mt-1">Voeg meerdere regels toe voor verschillende soorten lading.</p>
               </div>
 
               <div className="overflow-x-auto mb-4">
@@ -1166,6 +1161,16 @@ const NewOrder = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="mb-4">
+                <button
+                  type="button"
+                  onClick={addCargoRow}
+                  className="text-xs text-[hsl(var(--gold-deep))] hover:text-foreground font-medium inline-flex items-center gap-1 transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Lading-regel toevoegen
+                </button>
               </div>
 
               {/* Klep / laadklep toggle */}
