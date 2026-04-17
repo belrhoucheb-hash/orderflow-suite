@@ -858,7 +858,7 @@ const NewOrder = () => {
               </div>
             </section>
 
-{/* ══ Chapter III · Vrachtplanning ══ */}
+            {/* ══ Chapter III · Vrachtplanning ══ */}
             <section className="card--luxe p-6 relative">
               <span className="card-chapter">III</span>
               <div className="mb-5">
@@ -869,60 +869,42 @@ const NewOrder = () => {
                 <p className="text-xs text-muted-foreground mt-1">Adres, datum en tijdvenster per stop.</p>
               </div>
 
-              {/* ── Laden/Lossen kaarten ── */}
-              <div className="space-y-4">
+              <div className="space-y-0 divide-y divide-[hsl(var(--border)_/_0.4)]">
                 {freightLines.map((line, idx) => (
-                  <div
-                    key={line.id}
-                    className={cn(
-                      "rounded-xl border p-5 transition-all",
-                      line.activiteit === "Laden"
-                        ? "border-emerald-200/60 bg-gradient-to-br from-emerald-50/40 to-white"
-                        : "border-blue-200/60 bg-gradient-to-br from-blue-50/40 to-white",
-                    )}
-                  >
-                    {/* Top row: type badge + verwijder */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-8 h-8 rounded-lg inline-flex items-center justify-center text-xs font-bold",
-                          line.activiteit === "Laden"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-blue-100 text-blue-700",
-                        )}>
-                          {line.activiteit === "Laden" ? (
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg>
-                          ) : (
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 7v14"/><path d="m18 13-6-6-6 6"/><path d="M19 3H5"/></svg>
-                          )}
-                        </div>
-                        <div>
-                          <Select value={line.activiteit} onValueChange={v => updateFreightLine(line.id, "activiteit", v)}>
-                            <SelectTrigger className="h-8 text-sm font-semibold border-0 bg-transparent px-0 shadow-none focus:ring-0">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Laden">Laden</SelectItem>
-                              <SelectItem value="Lossen">Lossen</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <span className="text-[10px] text-muted-foreground">Stop {idx + 1}</span>
-                        </div>
+                  <div key={line.id} className="py-5 first:pt-0 last:pb-0">
+                    {/* Type + stop-nummer + verwijder */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-6 h-6 rounded-md bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))] inline-flex items-center justify-center">
+                          <Route className="h-3 w-3" />
+                        </span>
+                        <Select value={line.activiteit} onValueChange={v => updateFreightLine(line.id, "activiteit", v)}>
+                          <SelectTrigger className="h-7 w-auto text-sm font-semibold border-0 bg-transparent px-0 shadow-none focus:ring-0 gap-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Laden">Laden</SelectItem>
+                            <SelectItem value="Lossen">Lossen</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <span className="text-[10px] text-muted-foreground tracking-wider uppercase">Stop {idx + 1}</span>
                       </div>
                       {freightLines.length > 2 && (
                         <button
                           onClick={() => removeFreightLine(line.id)}
-                          className="text-muted-foreground hover:text-destructive transition-colors p-1.5 rounded-lg hover:bg-destructive/10"
+                          className="text-muted-foreground/50 hover:text-muted-foreground transition-colors p-1"
                           aria-label="Stop verwijderen"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </div>
 
-                    {/* Adres — prominente rij */}
-                    <div className="mb-4">
-                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">{line.activiteit === "Laden" ? "Ophaaladres" : "Afleveradres"} <span className="text-red-600">*</span></label>
+                    {/* Adres */}
+                    <div className="mb-3">
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+                        {line.activiteit === "Laden" ? "Ophaaladres" : "Afleveradres"}
+                      </label>
                       <AddressAutocomplete
                         value={line.locatie}
                         onChange={v => {
@@ -931,19 +913,19 @@ const NewOrder = () => {
                           if (line.activiteit === "Lossen") clearError("delivery_address");
                         }}
                         className={cn(
-                          "h-11 text-sm",
-                          line.activiteit === "Laden" && errors.pickup_address && "border-red-500",
-                          line.activiteit === "Lossen" && errors.delivery_address && "border-red-500",
+                          "h-10 text-sm",
+                          line.activiteit === "Laden" && errors.pickup_address && "border-[hsl(var(--primary))]",
+                          line.activiteit === "Lossen" && errors.delivery_address && "border-[hsl(var(--primary))]",
                         )}
                       />
-                      {line.activiteit === "Laden" && errors.pickup_address && <span className="text-[11px] text-red-500 mt-0.5 block">{errors.pickup_address}</span>}
-                      {line.activiteit === "Lossen" && errors.delivery_address && <span className="text-[11px] text-red-500 mt-0.5 block">{errors.delivery_address}</span>}
+                      {line.activiteit === "Laden" && errors.pickup_address && <span className="text-[11px] text-[hsl(var(--primary))] mt-0.5 block">{errors.pickup_address}</span>}
+                      {line.activiteit === "Lossen" && errors.delivery_address && <span className="text-[11px] text-[hsl(var(--primary))] mt-0.5 block">{errors.delivery_address}</span>}
                     </div>
 
                     {/* Datum + tijdvenster */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="grid grid-cols-3 gap-3 mb-3">
                       <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Datum <span className="text-red-600">*</span></label>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Datum</label>
                         <LuxeDatePicker
                           value={line.datum}
                           onChange={v => updateFreightLine(line.id, "datum", v)}
@@ -966,7 +948,7 @@ const NewOrder = () => {
                     </div>
 
                     {/* Extra velden */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className="text-xs font-medium text-muted-foreground block mb-1.5">Referentie</label>
                         <Input
@@ -999,16 +981,14 @@ const NewOrder = () => {
                 ))}
               </div>
 
-              {/* Nieuwe stop toevoegen */}
-              <div className="pt-4 flex items-center gap-3">
+              <div className="pt-4">
                 <button
                   type="button"
                   onClick={addFreightLine}
-                  className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-[hsl(var(--border)_/_0.7)] bg-white text-foreground transition-all duration-200 hover:bg-[hsl(var(--muted)_/_0.6)] hover:border-[hsl(var(--border))] gap-2"
+                  className="text-xs text-[hsl(var(--gold-deep))] hover:text-foreground font-medium inline-flex items-center gap-1.5 transition-colors"
                 >
-                  <Plus className="h-4 w-4" /> Tussenstop toevoegen
+                  <Plus className="h-3.5 w-3.5" /> Tussenstop toevoegen
                 </button>
-                <span className="text-[11px] text-muted-foreground">Multi-drop: voeg extra laad- of losstops toe.</span>
               </div>
             </section>
 
