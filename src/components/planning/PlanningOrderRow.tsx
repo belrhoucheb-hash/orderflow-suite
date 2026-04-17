@@ -1,6 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Package, AlertTriangle, Clock, X } from "lucide-react";
+import { IncompleteBadge } from "@/components/orders/IncompleteBadge";
 import { cn } from "@/lib/utils";
 import { type PlanOrder } from "./types";
 
@@ -60,6 +61,7 @@ export function PlanningOrderRow({
           {index + 1}
         </span>
         <Package className="h-3 w-3 text-muted-foreground shrink-0" />
+        <IncompleteBadge order={order} size="dot" className="h-3.5 w-3.5 text-[9px]" />
         <span className="font-medium">#{order.order_number}</span>
         <span className="text-muted-foreground truncate">{order.client_name}</span>
         {timeWindowLabel && (
