@@ -81,11 +81,5 @@ export interface AutoInvoiceResult {
 }
 
 // ─── Pricing with Confidence ───────────────────────────────────
-
-export interface PriceBreakdownWithConfidence {
-  basisbedrag: number;
-  toeslagen: import("@/types/rateModels").PriceSurchargeItem[];
-  totaal: number;
-  regels: import("@/types/rateModels").PriceLineItem[];
-  confidence: number;
-}
+// Canoniek gedefinieerd in _shared/rateModels.ts, re-export voor bestaande imports.
+export type { PriceBreakdownWithConfidence } from "@/types/rateModels";
