@@ -116,6 +116,12 @@
     "reference": "Referentie",
     "weight": "Gewicht",
     "quantity": "Aantal",
+    "department": "Afdeling",
+    "departmentAutoHint": "Automatisch bepaald op basis van traject",
+    "departmentOverrideHint": "Overschreven door planner",
+    "departmentRequired": "Kies een afdeling, wordt normaal automatisch bepaald uit het traject",
+    "incomplete": "Incompleet",
+    "incompleteTooltipTitle": "Ontbrekende informatie",
     "status": {
       "draft": "Concept",
       "pending": "In behandeling",
@@ -123,6 +129,26 @@
       "in_transit": "Onderweg",
       "delivered": "Afgeleverd"
     }
+  },
+  "clients": {
+    "billing": "Facturatie",
+    "billingEmail": "Factuur e-mail",
+    "billingAddress": "Factuuradres",
+    "billingSameAsMain": "Factuuradres = hoofdadres",
+    "mainAddress": "Hoofdadres",
+    "shippingAddress": "Postadres",
+    "shippingSameAsMain": "Postadres = hoofdadres",
+    "sameAsMain": "Gelijk aan hoofdadres",
+    "contacts": "Contactpersonen",
+    "contactsTabTitle": "Contacten",
+    "contactRolePrimary": "Primair",
+    "contactRoleBackup": "Backup",
+    "contactRoleOther": "Overig",
+    "contactEmpty": "Voeg een primair en backup contactpersoon toe.",
+    "contactAdd": "Toevoegen",
+    "contactMakePrimary": "Maak primair",
+    "contactMakeBackup": "Maak backup",
+    "contactDeleteConfirm": "Contactpersoon verwijderen?"
   },
   "invoicing": {
     "title": "Facturatie",
