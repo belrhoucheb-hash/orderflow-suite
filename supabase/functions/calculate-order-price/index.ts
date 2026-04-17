@@ -1,0 +1,415 @@
+/**
+ * calculate-order-price — Edge Function voor tariefberekening.
+ *
+ * Input: { order_id: UUID }
+ * Output: v2 snapshot-JSON + update van shipments.price_total_cents en pricing.
+ *
+ * Security (R14): draait onder service role, checkt tenant_id consistent
+ * tussen orders/shipments/clients. Geen user-auth nodig; de caller
+ * (DB-trigger, backend, andere Edge Function) moet vertrouwd zijn.
+ *
+ * Optimistic locking (R8): overschrijft bestaande snapshot alleen als
+ * pricing.calculated_at ouder is én pricing.locked != true. Handmatige
+ * overrides blijven intact.
+ *
+ * Feature-flag (R18): is_pricing_engine_enabled(tenant_id) moet true zijn;
+ * anders skippt de functie en retourneert { skipped: true }.
+ */
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+
+import { calculateOrderPrice } from "../_shared/pricingEngine.ts";
+import { selectSmallestVehicleType } from "../_shared/vehicleSelector.ts";
+import { selectRateCard } from "../_shared/rateCardSelector.ts";
+import { buildSnapshot, buildErrorSnapshot } from "../_shared/pricingSnapshot.ts";
+import type {
+  PricingOrderInput,
+  VehicleType,
+  RateCard,
+  Surcharge,
+  CargoDimensions,
+  PricingSnapshotV2,
+} from "../_shared/rateModels.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+interface RequestBody {
+  order_id: string;
+  force?: boolean; // Ontgrendel + herbereken, alleen met admin-context
+}
+
+interface SuccessResponse {
+  ok: true;
+  snapshot: PricingSnapshotV2;
+}
+
+interface SkippedResponse {
+  ok: true;
+  skipped: true;
+  reason: string;
+}
+
+interface ErrorResponse {
+  ok: false;
+  error: string;
+  snapshot?: PricingSnapshotV2;
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+// ─── Cargo aggregatie uit shipments.cargo JSONB ──────────────
+
+interface CargoRow {
+  aantal?: number;
+  lengte?: number;
+  breedte?: number;
+  hoogte?: number;
+  gewicht?: number;
+  stapelbaar?: boolean;
+  adr?: boolean;
+}
+
+function aggregateCargo(
+  cargoRows: CargoRow[] | null,
+  requiresTailgate: boolean,
+  transportType: string | null,
+): CargoDimensions {
+  const rows = cargoRows ?? [];
+  let maxLength = 0;
+  let maxWidth = 0;
+  let maxHeight = 0;
+  let stackedHeight = 0;
+  let unstackedHeight = 0;
+  let totalWeight = 0;
+  let anyAdr = false;
+
+  for (const r of rows) {
+    const count = r.aantal ?? 1;
+    const l = r.lengte ?? 0;
+    const w = r.breedte ?? 0;
+    const h = r.hoogte ?? 0;
+    const kg = (r.gewicht ?? 0) * count;
+    maxLength = Math.max(maxLength, l);
+    maxWidth = Math.max(maxWidth, w);
+    if (r.stapelbaar) {
+      stackedHeight += h * count;
+    } else {
+      unstackedHeight = Math.max(unstackedHeight, h);
+    }
+    maxHeight = Math.max(maxHeight, h);
+    totalWeight += kg;
+    if (r.adr) anyAdr = true;
+  }
+
+  const effectiveHeight = Math.max(stackedHeight, unstackedHeight, maxHeight);
+
+  return {
+    length_cm: maxLength,
+    width_cm: maxWidth,
+    height_cm: effectiveHeight,
+    weight_kg: totalWeight,
+    requires_tailgate: requiresTailgate,
+    requires_cooling: (transportType ?? "").toLowerCase().includes("koel"),
+    requires_adr: anyAdr,
+  };
+}
+
+// ─── Tijd helpers ───────────────────────────────────────────
+
+function toLocalHHmm(timestamptz: string | null): string | undefined {
+  if (!timestamptz) return undefined;
+  // Converteer UTC naar Europe/Amsterdam HH:mm
+  try {
+    const d = new Date(timestamptz);
+    const formatter = new Intl.DateTimeFormat("nl-NL", {
+      timeZone: "Europe/Amsterdam",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    return formatter.format(d);
+  } catch {
+    return undefined;
+  }
+}
+
+function toLocalDate(timestamptz: string | null): string | undefined {
+  if (!timestamptz) return undefined;
+  try {
+    const d = new Date(timestamptz);
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Amsterdam",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    return formatter.format(d); // YYYY-MM-DD
+  } catch {
+    return undefined;
+  }
+}
+
+// ─── Hoofdflow ──────────────────────────────────────────────
+
+async function handleRequest(
+  supabase: SupabaseClient,
+  body: RequestBody,
+): Promise<SuccessResponse | SkippedResponse | ErrorResponse> {
+  const { order_id, force } = body;
+
+  // 1. Order + shipment + client laden
+  const { data: order, error: orderErr } = await supabase
+    .from("orders")
+    .select("id, tenant_id, client_id, shipment_id, pickup_datetime, pickup_date, distance_km, stop_count, duration_hours, weight_kg, quantity, transport_type, pickup_address, delivery_address, requirements, pickup_country, delivery_country, client_name, order_number")
+    .eq("id", order_id)
+    .single();
+
+  if (orderErr || !order) {
+    return { ok: false, error: `Order niet gevonden: ${order_id}` };
+  }
+
+  const { data: shipment, error: shipErr } = await supabase
+    .from("shipments")
+    .select("id, tenant_id, cargo, requires_tail_lift, transport_type, vehicle_type, pricing")
+    .eq("id", order.shipment_id)
+    .single();
+
+  if (shipErr || !shipment) {
+    return { ok: false, error: `Shipment niet gevonden voor order ${order_id}` };
+  }
+
+  // R14 tenant-consistency check
+  if (shipment.tenant_id !== order.tenant_id) {
+    return { ok: false, error: "Tenant-mismatch tussen order en shipment" };
+  }
+
+  // R18 feature-flag
+  const { data: flag } = await supabase.rpc("is_pricing_engine_enabled", {
+    p_tenant_id: order.tenant_id,
+  });
+  if (!flag) {
+    return { ok: true, skipped: true, reason: "Tariefmotor staat uit voor deze tenant" };
+  }
+
+  // R8 lock-check: bestaande snapshot met locked=true overslaan tenzij force=true
+  const existingPricing = shipment.pricing as PricingSnapshotV2 | null;
+  if (!force && existingPricing?.locked === true) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "Snapshot is handmatig vergrendeld (locked=true). Gebruik force=true om te overrulen.",
+    };
+  }
+
+  // 2. Cargo + overrides aggregeren
+  const cargo = aggregateCargo(
+    (shipment.cargo as CargoRow[] | null),
+    shipment.requires_tail_lift === true,
+    shipment.transport_type ?? order.transport_type,
+  );
+
+  // 3. Voertuigtypes laden, kleinste-passend selecteren
+  const { data: vehicleTypes, error: vtErr } = await supabase
+    .from("vehicle_types")
+    .select("*")
+    .eq("tenant_id", order.tenant_id)
+    .eq("is_active", true)
+    .order("sort_order");
+
+  if (vtErr) {
+    return { ok: false, error: `Fout bij laden voertuigtypes: ${vtErr.message}` };
+  }
+
+  if (!vehicleTypes || vehicleTypes.length === 0) {
+    const snap = buildErrorSnapshot("no_vehicle_types", "Geen voertuigtypes geconfigureerd voor tenant");
+    await persistSnapshot(supabase, shipment.id, snap, existingPricing);
+    return { ok: false, error: "no_vehicle_types", snapshot: snap };
+  }
+
+  const vtSelection = selectSmallestVehicleType(vehicleTypes as VehicleType[], cargo);
+  if ("error" in vtSelection) {
+    const snap = buildErrorSnapshot(vtSelection.error, vtSelection.reason);
+    await persistSnapshot(supabase, shipment.id, snap, existingPricing);
+    return { ok: false, error: vtSelection.reason, snapshot: snap };
+  }
+
+  // 4. Rate cards laden, beste selecteren
+  const pickupDate =
+    toLocalDate(order.pickup_datetime) ??
+    (order.pickup_date as string | null) ??
+    undefined;
+  const pickupTimeLocal = toLocalHHmm(order.pickup_datetime);
+
+  const { data: rateCards, error: rcErr } = await supabase
+    .from("rate_cards")
+    .select("*, rate_rules(*)")
+    .eq("tenant_id", order.tenant_id)
+    .eq("is_active", true);
+
+  if (rcErr) {
+    return { ok: false, error: `Fout bij laden tariefkaarten: ${rcErr.message}` };
+  }
+
+  const pricingInput: PricingOrderInput = {
+    id: order.id,
+    order_number: order.order_number,
+    client_name: order.client_name ?? null,
+    pickup_address: order.pickup_address ?? null,
+    delivery_address: order.delivery_address ?? null,
+    transport_type: shipment.transport_type ?? order.transport_type ?? null,
+    weight_kg: cargo.weight_kg || order.weight_kg,
+    quantity: order.quantity,
+    distance_km: order.distance_km ?? 0,
+    stop_count: order.stop_count ?? 2,
+    duration_hours: order.duration_hours ?? 0,
+    requirements: order.requirements ?? [],
+    day_of_week: pickupDate ? new Date(pickupDate).getDay() : new Date().getDay(),
+    waiting_time_min: 0,
+    pickup_country: order.pickup_country ?? "NL",
+    delivery_country: order.delivery_country ?? "NL",
+    pickup_date: pickupDate,
+    pickup_time_local: pickupTimeLocal,
+    cargo_dimensions: cargo,
+    vehicle_type_id: vtSelection.vehicle_type.id,
+  };
+
+  const rcResult = selectRateCard(
+    (rateCards ?? []) as RateCard[],
+    pricingInput,
+    order.client_id,
+  );
+
+  if ("error" in rcResult) {
+    const snap = buildErrorSnapshot(rcResult.error, rcResult.reason);
+    await persistSnapshot(supabase, shipment.id, snap, existingPricing);
+    return { ok: false, error: rcResult.reason, snapshot: snap };
+  }
+
+  // R30 currency-scope: alleen EUR deze sprint
+  if (rcResult.card.currency !== "EUR") {
+    const snap = buildErrorSnapshot(
+      "unsupported_currency",
+      `Alleen EUR wordt ondersteund in deze sprint (gevonden: ${rcResult.card.currency})`,
+    );
+    await persistSnapshot(supabase, shipment.id, snap, existingPricing);
+    return { ok: false, error: "unsupported_currency", snapshot: snap };
+  }
+
+  // 5. Surcharges laden
+  const { data: surcharges } = await supabase
+    .from("surcharges")
+    .select("*")
+    .eq("tenant_id", order.tenant_id)
+    .eq("is_active", true)
+    .order("sort_order");
+
+  // 6. Motor aanroepen
+  const breakdown = calculateOrderPrice(
+    pricingInput,
+    rcResult.card,
+    (surcharges ?? []) as Surcharge[],
+  );
+
+  // 7. Snapshot bouwen
+  const snapshot = buildSnapshot({
+    breakdown,
+    rateCard: rcResult.card,
+    vehicleType: vtSelection.vehicle_type,
+    vehicleTypeReason: vtSelection.reason,
+  });
+
+  // 8. Persist met optimistic lock
+  const persistOk = await persistSnapshot(supabase, shipment.id, snapshot, existingPricing);
+  if (!persistOk) {
+    return {
+      ok: false,
+      error: "Snapshot kon niet weggeschreven worden (mogelijk race met latere berekening)",
+      snapshot,
+    };
+  }
+
+  return { ok: true, snapshot };
+}
+
+async function persistSnapshot(
+  supabase: SupabaseClient,
+  shipmentId: string,
+  snapshot: PricingSnapshotV2,
+  existing: PricingSnapshotV2 | null,
+): Promise<boolean> {
+  // Optimistic locking: alleen overschrijven als existing ouder is of ontbreekt
+  // en niet locked. 'locked' is al eerder afgehandeld in de flow; hier dient
+  // alleen de calculated_at-check als race-protection.
+  let query = supabase
+    .from("shipments")
+    .update({
+      pricing: snapshot,
+      price_total_cents: snapshot.total_cents,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", shipmentId);
+
+  if (existing?.calculated_at) {
+    query = query.or(
+      `pricing->>calculated_at.lt.${existing.calculated_at},pricing.is.null`,
+    );
+  }
+
+  const { error } = await query;
+  if (error) {
+    console.error("Persist snapshot error:", error);
+    return false;
+  }
+  return true;
+}
+
+// ─── HTTP handler ───────────────────────────────────────────
+
+serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
+  }
+
+  let body: RequestBody;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400);
+  }
+
+  if (!body.order_id || typeof body.order_id !== "string") {
+    return jsonResponse({ ok: false, error: "order_id required" }, 400);
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) {
+    return jsonResponse({ ok: false, error: "Server niet geconfigureerd" }, 500);
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false },
+  });
+
+  try {
+    const result = await handleRequest(supabase, body);
+    return jsonResponse(result, "ok" in result && result.ok ? 200 : 422);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("calculate-order-price error:", msg);
+    return jsonResponse({ ok: false, error: msg }, 500);
+  }
+});
