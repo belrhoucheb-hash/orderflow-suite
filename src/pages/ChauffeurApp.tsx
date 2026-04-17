@@ -19,16 +19,32 @@ import type { TripStop } from "@/types/dispatch";
 import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineStore";
 
 /**
- * Hash a PIN using Web Crypto API with a per-driver salt.
- * The salt includes the driver's ID so each driver has a unique hash
- * even if they choose the same PIN.
+ * Hash a PIN using PBKDF2 (100k iteraties, SHA-256) met een per-driver salt.
+ * De salt bevat het driver-id zodat dezelfde PIN bij twee drivers verschillende
+ * hashes oplevert. PBKDF2 maakt brute-force op een 4-cijfer PIN (10k mogelijkheden)
+ * rekenkundig duur genoeg om aanvallen via een gelekte hash onpraktisch te maken.
+ *
+ * BREAKING CHANGE: bestaande pin_hash waarden in de drivers-tabel zijn gemaakt met
+ * het oude SHA-256-algoritme en valideren niet meer. Drivers moeten hun PIN opnieuw
+ * instellen. Een toekomstige migratie kan een `pin_hash_version` kolom toevoegen om
+ * beide algoritmes naast elkaar te ondersteunen tijdens een overgangsperiode.
  */
 async function hashPin(pin: string, driverId: string): Promise<string> {
   const encoder = new TextEncoder();
-  const salt = `orderflow-pin-${driverId}`;
-  const data = encoder.encode(pin + salt);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const salt = encoder.encode(`orderflow-pin-${driverId}`);
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(pin),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: 100_000, hash: "SHA-256" },
+    baseKey,
+    256,
+  );
+  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -143,8 +159,15 @@ async function checkLockStatus(driverId: string): Promise<{ locked: boolean; loc
 
 export default function ChauffeurApp() {
   const { data: drivers, isLoading: driversLoading } = useDrivers();
+  // activeDriverId mag NIET rechtstreeks uit localStorage komen: anders kan een
+  // aanvaller via DevTools een willekeurig driver-id zetten en zo ingelogd raken
+  // zonder PIN-verificatie. localStorage bevat alleen een UI-hint (laatst gebruikte
+  // driver) om de picker te kunnen preselecteren; inloggen vereist altijd een
+  // succesvolle PIN-verificatie in handlePinSubmit.
+  // Test-mode mag een test-only key uitlezen om de PIN-flow te omzeilen, productie
+  // bouwt deze tak niet in (`import.meta.env.MODE === "test"` is alleen waar in vitest).
   const [activeDriverId, setActiveDriverId] = useState<string | null>(
-    localStorage.getItem("orderflow_driver_id")
+    import.meta.env.MODE === "test" ? localStorage.getItem("orderflow_test_driver_id") : null,
   );
 
   // PIN authentication state
@@ -535,10 +558,11 @@ export default function ChauffeurApp() {
   // -- Login Effect --
   useEffect(() => {
     if (activeDriverId) {
-      localStorage.setItem("orderflow_driver_id", activeDriverId);
+      // Alleen een UI-hint voor preselect in de driver-picker bij de volgende
+      // sessie. Deze waarde geeft GEEN login, de PIN-flow blijft verplicht.
+      localStorage.setItem("orderflow_last_driver_id", activeDriverId);
       fetchDriverOrders(activeDriverId);
     } else {
-      localStorage.removeItem("orderflow_driver_id");
       setOrders([]);
     }
   }, [activeDriverId]);
