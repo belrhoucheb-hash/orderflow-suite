@@ -1,18 +1,21 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  Truck, 
-  Package, 
-  AlertTriangle, 
-  Check, 
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  Truck,
+  Package,
+  AlertTriangle,
+  Check,
   X,
   Loader2,
-  Info
+  Info,
+  Warehouse,
 } from "lucide-react";
+import { useWarehouses, useCreateWarehouse, useUpdateWarehouse, useDeleteWarehouse, type WarehouseInput, type Warehouse as WarehouseType } from "@/hooks/useWarehouses";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Card, 
   CardContent, 
@@ -331,6 +334,9 @@ export function MasterDataSection() {
         </Card>
       </section>
 
+      {/* ─── Warehouses ─── */}
+      <WarehousesSection />
+
       <div className="bg-primary/5 rounded-2xl border border-primary/10 p-5 mt-10">
         <div className="flex gap-3">
           <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
@@ -346,3 +352,131 @@ export function MasterDataSection() {
     </div>
   );
 }
+
+function WarehousesSection() {
+  const { data: warehouses = [], isLoading } = useWarehouses();
+  const createMut = useCreateWarehouse();
+  const updateMut = useUpdateWarehouse();
+  const deleteMut = useDeleteWarehouse();
+
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<WarehouseInput>({ name: '', address: '', warehouse_type: 'OPS', is_default: false });
+
+  const resetForm = () => { setForm({ name: '', address: '', warehouse_type: 'OPS', is_default: false }); setIsAdding(false); setEditingId(null); };
+
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.address.trim()) return;
+    if (editingId) {
+      await updateMut.mutateAsync({ id: editingId, ...form });
+    } else {
+      await createMut.mutateAsync(form);
+    }
+    resetForm();
+  };
+
+  const startEdit = (wh: WarehouseType) => {
+    setEditingId(wh.id);
+    setForm({ name: wh.name, address: wh.address, warehouse_type: wh.warehouse_type, is_default: wh.is_default });
+    setIsAdding(true);
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Warehouse className="h-4.5 w-4.5 text-primary" strokeWidth={1.5} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold">Warehouses</h3>
+            <p className="text-xs text-muted-foreground">Hub-adressen voor automatische afdeling-detectie (OPS / EXPORT / IMPORT).</p>
+          </div>
+        </div>
+        {!isAdding && (
+          <Button size="sm" className="h-8 gap-1.5 rounded-lg" onClick={() => { resetForm(); setIsAdding(true); }}>
+            <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />Toevoegen
+          </Button>
+        )}
+      </div>
+
+      <Card className="rounded-2xl border-border/40 overflow-hidden shadow-sm">
+        {isLoading ? (
+          <div className="flex items-center justify-center p-12 text-muted-foreground gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+            Laden...
+          </div>
+        ) : (
+          <Table>
+            <TableHeader className="bg-muted/30">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[200px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
+                <TableHead className="text-xs uppercase tracking-wider font-semibold">Adres</TableHead>
+                <TableHead className="w-[120px] text-xs uppercase tracking-wider font-semibold">Type</TableHead>
+                <TableHead className="w-[100px] text-xs uppercase tracking-wider font-semibold">Standaard</TableHead>
+                <TableHead className="w-[100px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isAdding && (
+                <TableRow className="bg-primary/5 hover:bg-primary/5 border-b-primary/20">
+                  <TableCell><Input className="h-8 text-xs bg-background" placeholder="RCS Export Hub" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></TableCell>
+                  <TableCell><Input className="h-8 text-xs bg-background" placeholder="Volledig adres" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></TableCell>
+                  <TableCell>
+                    <Select value={form.warehouse_type} onValueChange={v => setForm({ ...form, warehouse_type: v as any })}>
+                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OPS">OPS</SelectItem>
+                        <SelectItem value="EXPORT">EXPORT</SelectItem>
+                        <SelectItem value="IMPORT">IMPORT</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <input type="checkbox" checked={form.is_default} onChange={e => setForm({ ...form, is_default: e.target.checked })} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={handleSave} disabled={!form.name || !form.address}>
+                        <Check className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={resetForm}>
+                        <X className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {warehouses.map((wh) => (
+                <TableRow key={wh.id} className="group transition-colors">
+                  <TableCell className="font-medium text-xs">{wh.name}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{wh.address}</TableCell>
+                  <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{wh.warehouse_type}</code></TableCell>
+                  <TableCell className="text-xs text-center text-muted-foreground">{wh.is_default ? 'Ja' : ''}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => startEdit(wh)}>
+                        <Edit2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => deleteMut.mutate(wh.id)}>
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!isLoading && warehouses.length === 0 && !isAdding && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-8">
+                    Nog geen warehouses. Voeg er een toe om afdeling-detectie in te schakelen.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
+    </section>
+  );
+}
+
