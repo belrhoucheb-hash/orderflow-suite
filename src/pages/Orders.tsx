@@ -542,12 +542,30 @@ const Orders = () => {
             </SelectContent>
           </Select>
 
-          {(statusFilter !== "alle" || infoFilter !== "alle" || orderTypeFilter !== "alle") && (
+          <Select value={departmentFilter} onValueChange={handleDepartmentFilterChange}>
+            <SelectTrigger
+              aria-label="Afdeling"
+              className="h-9 w-[160px] text-sm"
+              style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+            >
+              <SelectValue placeholder="Alle afdelingen" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="alle" style={{ fontSize: "var(--text-small)" }}>Alle afdelingen</SelectItem>
+              <SelectSeparator />
+              <SelectItem value="OPS" style={{ fontSize: "var(--text-small)" }}>Operations</SelectItem>
+              <SelectItem value="EXPORT" style={{ fontSize: "var(--text-small)" }}>Export</SelectItem>
+              <SelectItem value="IMPORT" style={{ fontSize: "var(--text-small)" }}>Import</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {(statusFilter !== "alle" || infoFilter !== "alle" || orderTypeFilter !== "alle" || departmentFilter !== "alle") && (
             <button
               onClick={() => {
                 setStatusFilter("alle");
                 setInfoFilter("alle");
                 setOrderTypeFilter("alle");
+                setDepartmentFilter("alle");
                 setPage(0);
                 clearSelection();
               }}
