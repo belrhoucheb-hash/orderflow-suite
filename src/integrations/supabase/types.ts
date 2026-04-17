@@ -326,6 +326,12 @@ export type Database = {
       clients: {
         Row: {
           address: string | null
+          billing_address: string | null
+          billing_city: string | null
+          billing_country: string | null
+          billing_email: string | null
+          billing_same_as_main: boolean
+          billing_zipcode: string | null
           btw_number: string | null
           city: string | null
           contact_person: string | null
@@ -338,11 +344,22 @@ export type Database = {
           name: string
           payment_terms: number | null
           phone: string | null
+          shipping_address: string | null
+          shipping_city: string | null
+          shipping_country: string | null
+          shipping_same_as_main: boolean
+          shipping_zipcode: string | null
           tenant_id: string
           zipcode: string | null
         }
         Insert: {
           address?: string | null
+          billing_address?: string | null
+          billing_city?: string | null
+          billing_country?: string | null
+          billing_email?: string | null
+          billing_same_as_main?: boolean
+          billing_zipcode?: string | null
           btw_number?: string | null
           city?: string | null
           contact_person?: string | null
@@ -355,11 +372,22 @@ export type Database = {
           name: string
           payment_terms?: number | null
           phone?: string | null
+          shipping_address?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_same_as_main?: boolean
+          shipping_zipcode?: string | null
           tenant_id: string
           zipcode?: string | null
         }
         Update: {
           address?: string | null
+          billing_address?: string | null
+          billing_city?: string | null
+          billing_country?: string | null
+          billing_email?: string | null
+          billing_same_as_main?: boolean
+          billing_zipcode?: string | null
           btw_number?: string | null
           city?: string | null
           contact_person?: string | null
@@ -372,6 +400,11 @@ export type Database = {
           name?: string
           payment_terms?: number | null
           phone?: string | null
+          shipping_address?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_same_as_main?: boolean
+          shipping_zipcode?: string | null
           tenant_id?: string
           zipcode?: string | null
         }
@@ -381,6 +414,63 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_contacts: {
+        Row: {
+          id: string
+          tenant_id: string
+          client_id: string
+          name: string
+          email: string | null
+          phone: string | null
+          role: "primary" | "backup" | "other"
+          is_active: boolean
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tenant_id: string
+          client_id: string
+          name: string
+          email?: string | null
+          phone?: string | null
+          role: "primary" | "backup" | "other"
+          is_active?: boolean
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tenant_id?: string
+          client_id?: string
+          name?: string
+          email?: string | null
+          phone?: string | null
+          role?: "primary" | "backup" | "other"
+          is_active?: boolean
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_contacts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_contacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
