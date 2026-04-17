@@ -72,6 +72,13 @@ const VEHICLE_MATRIX: Record<VehicleKey, { ex: number; inc: number; min: number;
 };
 const KM_BASIS = 725;
 
+const DAGDEEL_TOESLAGEN: { label: string; check: (hour: number) => boolean; percentage: number }[] = [
+  { label: "Vroege ochtend (voor 07:00)", check: (h) => h < 7, percentage: 25 },
+  { label: "Ochtend (07:00-09:00)", check: (h) => h >= 7 && h < 9, percentage: 15 },
+  { label: "Avond (18:00-22:00)", check: (h) => h >= 18 && h < 22, percentage: 15 },
+  { label: "Nacht (22:00-06:00)", check: (h) => h >= 22 || h < 6, percentage: 35 },
+];
+
 const today = new Date().toISOString().split("T")[0];
 const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
@@ -135,9 +142,13 @@ const NewOrder = () => {
     setInfoFollows(prev => ({ ...prev, [fieldName]: !prev[fieldName] }));
   };
 
+  // Klep / laadklep
+  const [klepNodig, setKlepNodig] = useState(false);
+
   // Financieel state — Royalty Cargo pricing model
   const [pricingMode, setPricingMode] = useState<"standard" | "override">("standard");
   const [kmVehicle, setKmVehicle] = useState<VehicleKey>("Caddy");
+  const [vehicleManual, setVehicleManual] = useState(false);
   const [kmAfstand, setKmAfstand] = useState("");
   const [dieselInclusief, setDieselInclusief] = useState(true);
   const [screeningIncl, setScreeningIncl] = useState(false);
@@ -233,6 +244,47 @@ const NewOrder = () => {
     if (cargoTotals.primaryUnit) setTransportEenheid(cargoTotals.primaryUnit);
   }, [cargoTotals.totAantal, cargoTotals.totGewicht, cargoTotals.primaryUnit]);
 
+  // Vehicle capacity mapping voor auto-selectie
+  const VEHICLE_CAPACITY: Record<VehicleKey, { maxKg: number; L: number; B: number; H: number }> = {
+    "Caddy":       { maxKg: 400,  L: 180, B: 110, H: 110 },
+    "Hoya":        { maxKg: 500,  L: 200, B: 120, H: 120 },
+    "Bus":         { maxKg: 800,  L: 280, B: 150, H: 150 },
+    "Koel klein":  { maxKg: 600,  L: 240, B: 130, H: 130 },
+    "Koel groot":  { maxKg: 1000, L: 320, B: 160, H: 170 },
+    "Bakbus":      { maxKg: 1200, L: 400, B: 180, H: 190 },
+    "DAF Truck":   { maxKg: 8000, L: 700, B: 240, H: 240 },
+  };
+
+  const VEHICLE_PREFERENCE: VehicleKey[] = ["Caddy", "Hoya", "Bus", "Koel klein", "Koel groot", "Bakbus", "DAF Truck"];
+
+  const autoVehicleResult = useMemo(() => {
+    const totalWeight = cargoTotals.totGewicht;
+    const maxL = Math.max(0, ...cargoRows.map(r => parseFloat(r.lengte) || 0));
+    const maxB = Math.max(0, ...cargoRows.map(r => parseFloat(r.breedte) || 0));
+    const maxH = Math.max(0, ...cargoRows.map(r => parseFloat(r.hoogte) || 0));
+
+    if (totalWeight <= 0 && maxL <= 0 && maxB <= 0 && maxH <= 0) return null;
+
+    const minIndex = klepNodig ? VEHICLE_PREFERENCE.indexOf("Bakbus") : 0;
+
+    for (let i = minIndex; i < VEHICLE_PREFERENCE.length; i++) {
+      const key = VEHICLE_PREFERENCE[i];
+      const cap = VEHICLE_CAPACITY[key];
+      if (totalWeight <= cap.maxKg && maxL <= cap.L && maxB <= cap.B && maxH <= cap.H) {
+        return { vehicle: key, forced: klepNodig && i >= minIndex && VEHICLE_PREFERENCE.indexOf(key) >= minIndex && minIndex > 0 };
+      }
+    }
+    return null;
+  }, [cargoRows, cargoTotals.totGewicht, klepNodig]);
+
+  // Auto-select vehicle wanneer gebruiker niet handmatig heeft gekozen
+  useEffect(() => {
+    if (vehicleManual) return;
+    if (autoVehicleResult) {
+      setKmVehicle(autoVehicleResult.vehicle);
+    }
+  }, [autoVehicleResult, vehicleManual]);
+
   // Royalty Cargo pricing computation
   const pricing = useMemo(() => {
     const km = parseFloat(kmAfstand) || 0;
@@ -242,12 +294,26 @@ const NewOrder = () => {
     const perKm = matrixTariff / KM_BASIS;
     const calcRaw = rounded * perKm;
     const screeningFee = screeningIncl ? matrix.screening : 0;
-    const withScreening = calcRaw + screeningFee;
     const minApplied = calcRaw < matrix.min;
     const base = minApplied ? matrix.min : calcRaw;
-    const total = base + screeningFee;
-    return { km, rounded, matrixTariff, perKm, calcRaw, screeningFee, withScreening, minApplied, total, min: matrix.min };
-  }, [kmAfstand, kmVehicle, dieselInclusief, screeningIncl]);
+
+    // Dagdeel-toeslag op basis van eerste Laden-regel
+    const ladenTijd = freightLines.find(f => f.activiteit === "Laden")?.tijd;
+    const ladenHour = ladenTijd ? parseInt(ladenTijd.split(":")[0], 10) : null;
+    const dagdeelMatch = ladenHour !== null && !Number.isNaN(ladenHour)
+      ? DAGDEEL_TOESLAGEN.find(d => d.check(ladenHour)) ?? null
+      : null;
+    const surchargePercentage = dagdeelMatch?.percentage ?? 0;
+    const surchargeAmount = base * (surchargePercentage / 100);
+
+    const total = base + surchargeAmount + screeningFee;
+    return {
+      km, rounded, matrixTariff, perKm, calcRaw, screeningFee, minApplied, total, min: matrix.min, base,
+      surchargeLabel: dagdeelMatch?.label ?? null,
+      surchargePercentage,
+      surchargeAmount,
+    };
+  }, [kmAfstand, kmVehicle, dieselInclusief, screeningIncl, freightLines]);
 
   // 8.12 – Save ALL form fields to the database, not just a subset.
   // Fields without a dedicated DB column are stored in the `attachments` JSON
@@ -261,6 +327,7 @@ const NewOrder = () => {
     const newErrors: Record<string, string> = {};
 
     if (!clientName.trim()) newErrors.client_name = "Klantnaam is verplicht";
+    if (!afdeling.trim()) newErrors.afdeling = "Afdeling is verplicht — wordt normaal automatisch bepaald";
     if (!pickupLine?.locatie?.trim()) newErrors.pickup_address = "Ophaaladres is verplicht";
     else if (!isValidAddress(pickupLine.locatie)) newErrors.pickup_address = "Onvolledig ophaaladres — straat + huisnummer vereist";
     if (!deliveryLine?.locatie?.trim()) newErrors.delivery_address = "Afleveradres is verplicht";
@@ -319,6 +386,9 @@ const NewOrder = () => {
             screening_fee: pricing.screeningFee,
             min_applied: pricing.minApplied,
             min_tariff: pricing.min,
+            surcharge_label: pricing.surchargeLabel,
+            surcharge_percentage: pricing.surchargePercentage,
+            surcharge_amount: pricing.surchargeAmount,
             total: pricing.total,
           },
         };
@@ -701,7 +771,7 @@ const NewOrder = () => {
                   Afdeling wordt automatisch bepaald door het traject{afdeling ? ` (${afdeling})` : ""}. Chauffeur wordt later toegewezen.
                 </p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Transport type <span className="text-red-600">*</span></label>
                   <Select value={transportType} onValueChange={setTransportType}>
@@ -724,6 +794,17 @@ const NewOrder = () => {
                       <SelectItem value="Trailer">Trailer</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Afdeling <span className="text-red-600">*</span></label>
+                  <Input
+                    value={afdeling || ""}
+                    readOnly
+                    tabIndex={-1}
+                    placeholder="Wordt automatisch bepaald"
+                    className={cn("h-9 text-sm bg-muted/40 cursor-default", errors.afdeling && "border-red-500")}
+                  />
+                  {errors.afdeling && <span className="text-[11px] text-red-500">{errors.afdeling}</span>}
                 </div>
               </div>
             </section>
@@ -958,6 +1039,19 @@ const NewOrder = () => {
                 </table>
               </div>
 
+              {/* Klep / laadklep toggle */}
+              <div className="flex items-center gap-3 mb-4">
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={klepNodig}
+                    onChange={e => setKlepNodig(e.target.checked)}
+                  />
+                  <span></span>
+                </label>
+                <span className="text-xs font-medium text-foreground">Klep / laadklep nodig</span>
+              </div>
+
               {(errors.quantity || errors.weight_kg || errors.unit) && (
                 <div className="text-xs text-red-500 mb-3 space-y-0.5">
                   {errors.quantity && <div>{errors.quantity}</div>}
@@ -1060,7 +1154,7 @@ const NewOrder = () => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-x-5 gap-y-4">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground block mb-1">Voertuigtype <span className="text-red-600">*</span></label>
-                      <Select value={kmVehicle} onValueChange={v => setKmVehicle(v as VehicleKey)}>
+                      <Select value={kmVehicle} onValueChange={v => { setKmVehicle(v as VehicleKey); setVehicleManual(true); }}>
                         <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {(Object.keys(VEHICLE_MATRIX) as VehicleKey[]).map(k => (
@@ -1068,6 +1162,25 @@ const NewOrder = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                      {!vehicleManual && autoVehicleResult && (
+                        <span className="text-[10px] text-[hsl(var(--gold-deep))] tracking-wider mt-0.5 block">
+                          Automatisch geselecteerd op basis van lading
+                        </span>
+                      )}
+                      {!vehicleManual && autoVehicleResult?.forced && (
+                        <span className="text-[10px] text-amber-700 tracking-wider mt-0.5 block">
+                          Voertuig opgeschaald vanwege laadklep-vereiste
+                        </span>
+                      )}
+                      {vehicleManual && autoVehicleResult && (
+                        <button
+                          type="button"
+                          onClick={() => setVehicleManual(false)}
+                          className="text-[10px] text-muted-foreground hover:text-foreground underline mt-0.5 block"
+                        >
+                          Terug naar automatische selectie
+                        </button>
+                      )}
                     </div>
                     <div>
                       <label className="text-xs font-medium text-muted-foreground block mb-1">Afstand (km) <span className="text-red-600">*</span></label>
@@ -1137,6 +1250,14 @@ const NewOrder = () => {
                         <span className="opacity-60">(€ {pricing.matrixTariff.toFixed(2).replace(".", ",")} ÷ {KM_BASIS} km basis)</span>
                         {pricing.screeningFee > 0 && <> + € {pricing.screeningFee.toFixed(2).replace(".", ",")} screening</>}
                       </div>
+                      {pricing.surchargeLabel && (
+                        <div
+                          className="mt-1.5 text-xs font-medium tabular-nums px-2 py-1 rounded-md inline-block"
+                          style={{ background: "hsl(38 80% 90%)", color: "hsl(30 60% 28%)", border: "1px solid hsl(38 70% 80%)" }}
+                        >
+                          {pricing.surchargeLabel} +{pricing.surchargePercentage}% = € {pricing.surchargeAmount.toFixed(2).replace(".", ",")}
+                        </div>
+                      )}
                     </div>
                     <span
                       className="text-2xl font-semibold tabular-nums text-[hsl(var(--gold-deep))]"
@@ -1151,6 +1272,10 @@ const NewOrder = () => {
                       <strong>Minimum toegepast</strong> · Berekende prijs (€ {pricing.calcRaw.toFixed(2).replace(".", ",")}) ligt onder het minimumtarief voor {kmVehicle} (€ {pricing.min.toFixed(2).replace(".", ",")}).
                     </div>
                   )}
+
+                  <p className="mt-4 text-[11px] text-muted-foreground/70">
+                    Toeslagen worden automatisch bepaald op basis van het laadtijdstip. Tarieven onder voorbehoud, definitieve toeslagentabel volgt.
+                  </p>
 
                   <button
                     type="button"
