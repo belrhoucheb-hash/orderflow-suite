@@ -797,13 +797,33 @@ const NewOrder = () => {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Afdeling <span className="text-red-600">*</span></label>
-                  <Input
-                    value={afdeling || ""}
-                    readOnly
-                    tabIndex={-1}
-                    placeholder="Wordt automatisch bepaald"
-                    className={cn("h-9 text-sm bg-muted/40 cursor-default", errors.afdeling && "border-red-500")}
-                  />
+                  <Select
+                    value={afdeling || undefined}
+                    onValueChange={v => { setAfdeling(v); setAfdelingManual(true); clearError("afdeling"); }}
+                  >
+                    <SelectTrigger className={cn("h-9 text-sm", errors.afdeling && "border-red-500")}>
+                      <SelectValue placeholder="Selecteer…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="OPS">Operations</SelectItem>
+                      <SelectItem value="EXPORT">Export</SelectItem>
+                      <SelectItem value="IMPORT">Import</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!afdelingManual && afdeling && (
+                    <span className="text-[10px] text-[hsl(var(--gold-deep))] tracking-wider mt-0.5 block">
+                      Automatisch bepaald op basis van traject
+                    </span>
+                  )}
+                  {afdelingManual && (
+                    <button
+                      type="button"
+                      onClick={() => setAfdelingManual(false)}
+                      className="text-[10px] text-muted-foreground hover:text-foreground underline mt-0.5 block"
+                    >
+                      Terug naar automatische detectie
+                    </button>
+                  )}
                   {errors.afdeling && <span className="text-[11px] text-red-500">{errors.afdeling}</span>}
                 </div>
               </div>
