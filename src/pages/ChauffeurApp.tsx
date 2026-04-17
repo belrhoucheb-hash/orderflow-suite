@@ -361,8 +361,11 @@ export default function ChauffeurApp() {
       if (result.synced > 0) {
         toast.success(`${result.synced} POD(s) gesynchroniseerd`);
       }
-      if (result.failed > 0) {
-        toast.error(`${result.failed} POD(s) konden niet worden gesynchroniseerd`);
+      if (result.abandoned > 0) {
+        toast.warning(`${result.abandoned} POD(s) verwijderd na herhaalde fouten. Neem contact op met de planner.`, { duration: 10000 });
+      }
+      if (result.failed > 0 && result.failed <= 2) {
+        toast.error(`${result.failed} POD(s) niet gesynchroniseerd. Volgende poging bij herladen.`);
       }
       await refreshPendingCount();
     } catch {

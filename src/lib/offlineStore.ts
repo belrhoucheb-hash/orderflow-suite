@@ -17,7 +17,10 @@ export interface PendingPOD {
   photoDataUrls: string[];
   notes: string;
   createdAt: string;
+  retryCount?: number;
 }
+
+const MAX_RETRIES = 5;
 
 // ─── IndexedDB Constants ────────────────────────────────────────────
 
@@ -181,22 +184,34 @@ async function syncSinglePOD(pod: PendingPOD): Promise<boolean> {
  * Attempt to sync all pending PODs.
  * Returns counts of synced and failed items.
  */
-export async function syncPendingPODs(): Promise<{ synced: number; failed: number }> {
+export async function syncPendingPODs(): Promise<{ synced: number; failed: number; abandoned: number }> {
   const pending = await getPendingPODs();
-  if (pending.length === 0) return { synced: 0, failed: 0 };
+  if (pending.length === 0) return { synced: 0, failed: 0, abandoned: 0 };
 
   let synced = 0;
   let failed = 0;
+  let abandoned = 0;
 
   for (const pod of pending) {
+    const retries = pod.retryCount ?? 0;
+
+    if (retries >= MAX_RETRIES) {
+      // Te vaak gefaald, verwijder zodat het niet blijft spammen.
+      await removePendingPOD(pod.id);
+      abandoned++;
+      continue;
+    }
+
     const success = await syncSinglePOD(pod);
     if (success) {
       await removePendingPOD(pod.id);
       synced++;
     } else {
+      // Verhoog retry-teller en sla opnieuw op.
+      await savePendingPOD({ ...pod, retryCount: retries + 1 });
       failed++;
     }
   }
 
-  return { synced, failed };
+  return { synced, failed, abandoned };
 }
