@@ -72,12 +72,16 @@ const VEHICLE_MATRIX: Record<VehicleKey, { ex: number; inc: number; min: number;
 };
 const KM_BASIS = 725;
 
-const DAGDEEL_TOESLAGEN: { label: string; check: (hour: number) => boolean; percentage: number }[] = [
-  { label: "Vroege ochtend (voor 07:00)", check: (h) => h < 7, percentage: 25 },
-  { label: "Ochtend (07:00-09:00)", check: (h) => h >= 7 && h < 9, percentage: 15 },
-  { label: "Avond (18:00-22:00)", check: (h) => h >= 18 && h < 22, percentage: 15 },
-  { label: "Nacht (22:00-06:00)", check: (h) => h >= 22 || h < 6, percentage: 35 },
-];
+const PERCENTAGE_TOESLAGEN = [
+  { key: "ochtend_avond", label: "Ochtend / avond", percentage: 35 },
+  { key: "zaterdag", label: "Zaterdag", percentage: 50 },
+  { key: "zondag_feestdag", label: "Zondag / feestdag", percentage: 75 },
+] as const;
+
+const VASTE_TOESLAGEN = [
+  { key: "wachturen", label: "Wachturen", tarief: 52.50, unit: "/ u" },
+  { key: "extra_stops", label: "Extra stops", tarief: 45.00, unit: "" },
+] as const;
 
 const today = new Date().toISOString().split("T")[0];
 const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -154,6 +158,12 @@ const NewOrder = () => {
   const [screeningIncl, setScreeningIncl] = useState(false);
   const [overrideBedrag, setOverrideBedrag] = useState("");
   const [overrideReden, setOverrideReden] = useState("");
+
+  // Toeslagen state
+  const [activeToeslagen, setActiveToeslagen] = useState<Record<string, boolean>>({});
+  const [wachturenAantal, setWachturenAantal] = useState(0);
+  const [extraStopsAantal, setExtraStopsAantal] = useState(0);
+  const [tolBedrag, setTolBedrag] = useState("");
 
   // Freight lines
   const [freightLines, setFreightLines] = useState<FreightLine[]>([
@@ -297,23 +307,26 @@ const NewOrder = () => {
     const minApplied = calcRaw < matrix.min;
     const base = minApplied ? matrix.min : calcRaw;
 
-    // Dagdeel-toeslag op basis van eerste Laden-regel
-    const ladenTijd = freightLines.find(f => f.activiteit === "Laden")?.tijd;
-    const ladenHour = ladenTijd ? parseInt(ladenTijd.split(":")[0], 10) : null;
-    const dagdeelMatch = ladenHour !== null && !Number.isNaN(ladenHour)
-      ? DAGDEEL_TOESLAGEN.find(d => d.check(ladenHour)) ?? null
-      : null;
-    const surchargePercentage = dagdeelMatch?.percentage ?? 0;
-    const surchargeAmount = base * (surchargePercentage / 100);
+    // Percentage-toeslagen (toggles)
+    const percToeslagItems = PERCENTAGE_TOESLAGEN
+      .filter(t => activeToeslagen[t.key])
+      .map(t => ({ label: t.label, percentage: t.percentage, amount: base * (t.percentage / 100) }));
+    const percToeslagTotaal = percToeslagItems.reduce((s, t) => s + t.amount, 0);
 
-    const total = base + surchargeAmount + screeningFee;
+    // Vaste toeslagen
+    const wachturenBedrag = wachturenAantal * 52.50;
+    const extraStopsBedrag = extraStopsAantal * 45.00;
+    const tolBedragNum = parseFloat(tolBedrag.replace(",", ".")) || 0;
+    const vastToeslagTotaal = wachturenBedrag + extraStopsBedrag + tolBedragNum;
+
+    const total = base + percToeslagTotaal + vastToeslagTotaal + screeningFee;
     return {
-      km, rounded, matrixTariff, perKm, calcRaw, screeningFee, minApplied, total, min: matrix.min, base,
-      surchargeLabel: dagdeelMatch?.label ?? null,
-      surchargePercentage,
-      surchargeAmount,
+      km, rounded, matrixTariff, perKm, calcRaw, screeningFee, minApplied, min: matrix.min, base,
+      percToeslagItems, percToeslagTotaal,
+      wachturenBedrag, extraStopsBedrag, tolBedragNum, vastToeslagTotaal,
+      total,
     };
-  }, [kmAfstand, kmVehicle, dieselInclusief, screeningIncl, freightLines]);
+  }, [kmAfstand, kmVehicle, dieselInclusief, screeningIncl, activeToeslagen, wachturenAantal, extraStopsAantal, tolBedrag]);
 
   // 8.12 – Save ALL form fields to the database, not just a subset.
   // Fields without a dedicated DB column are stored in the `attachments` JSON
@@ -386,9 +399,12 @@ const NewOrder = () => {
             screening_fee: pricing.screeningFee,
             min_applied: pricing.minApplied,
             min_tariff: pricing.min,
-            surcharge_label: pricing.surchargeLabel,
-            surcharge_percentage: pricing.surchargePercentage,
-            surcharge_amount: pricing.surchargeAmount,
+            perc_toeslagen: pricing.percToeslagItems,
+            perc_toeslag_totaal: pricing.percToeslagTotaal,
+            wachturen: { aantal: wachturenAantal, bedrag: pricing.wachturenBedrag },
+            extra_stops: { aantal: extraStopsAantal, bedrag: pricing.extraStopsBedrag },
+            tol_bedrag: pricing.tolBedragNum,
+            vast_toeslag_totaal: pricing.vastToeslagTotaal,
             total: pricing.total,
           },
         };
@@ -1270,14 +1286,6 @@ const NewOrder = () => {
                         <span className="opacity-60">(€ {pricing.matrixTariff.toFixed(2).replace(".", ",")} ÷ {KM_BASIS} km basis)</span>
                         {pricing.screeningFee > 0 && <> + € {pricing.screeningFee.toFixed(2).replace(".", ",")} screening</>}
                       </div>
-                      {pricing.surchargeLabel && (
-                        <div
-                          className="mt-1.5 text-xs font-medium tabular-nums px-2 py-1 rounded-md inline-block"
-                          style={{ background: "hsl(38 80% 90%)", color: "hsl(30 60% 28%)", border: "1px solid hsl(38 70% 80%)" }}
-                        >
-                          {pricing.surchargeLabel} +{pricing.surchargePercentage}% = € {pricing.surchargeAmount.toFixed(2).replace(".", ",")}
-                        </div>
-                      )}
                     </div>
                     <span
                       className="text-2xl font-semibold tabular-nums text-[hsl(var(--gold-deep))]"
@@ -1292,10 +1300,6 @@ const NewOrder = () => {
                       <strong>Minimum toegepast</strong> · Berekende prijs (€ {pricing.calcRaw.toFixed(2).replace(".", ",")}) ligt onder het minimumtarief voor {kmVehicle} (€ {pricing.min.toFixed(2).replace(".", ",")}).
                     </div>
                   )}
-
-                  <p className="mt-4 text-[11px] text-muted-foreground/70">
-                    Toeslagen worden automatisch bepaald op basis van het laadtijdstip. Tarieven onder voorbehoud, definitieve toeslagentabel volgt.
-                  </p>
 
                   <button
                     type="button"
@@ -1357,6 +1361,173 @@ const NewOrder = () => {
                   </button>
                 </div>
               )}
+            </section>
+
+            {/* ══ Chapter II · Toeslagen ══ */}
+            <section className="card--luxe p-6 relative">
+              <span className="card-chapter">II</span>
+              <div className="mb-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                  02 · Toeslagen
+                </div>
+                <h3 className="section-title">Percentage- en vaste toeslagen</h3>
+                <p className="text-xs text-muted-foreground mt-1">Worden automatisch toegepast op het basistarief. Niet-cumulatief tenzij aangegeven.</p>
+              </div>
+
+              {/* Tijdgebonden percentage-toeslagen */}
+              <div className="mb-5">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">Tijdgebonden toeslagen</div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+                  {PERCENTAGE_TOESLAGEN.map(t => (
+                    <label
+                      key={t.key}
+                      className={cn(
+                        "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all",
+                        activeToeslagen[t.key]
+                          ? "border-[hsl(var(--gold)/0.5)] bg-[hsl(var(--gold-soft)/0.5)]"
+                          : "border-border hover:border-[hsl(var(--gold)/0.3)]",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!activeToeslagen[t.key]}
+                        onChange={e => setActiveToeslagen(prev => ({ ...prev, [t.key]: e.target.checked }))}
+                        className="h-3.5 w-3.5 rounded border-border accent-amber-600 mt-0.5"
+                      />
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-medium">{t.label}</span>
+                        <span className="text-sm font-semibold text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>+{t.percentage}%</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vaste toeslagen */}
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">Vaste toeslagen</div>
+                <div className="overflow-x-auto rounded-lg border border-border/60">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-muted/30 border-b border-border/60">
+                        <th className="px-3 py-2 text-left font-semibold">Omschrijving</th>
+                        <th className="px-3 py-2 text-center font-semibold w-[110px]">Aantal</th>
+                        <th className="px-3 py-2 text-right font-semibold w-[130px]">Tarief</th>
+                        <th className="px-3 py-2 text-right font-semibold w-[140px]">Subtotaal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-border/40">
+                        <td className="px-3 py-2">Wachturen</td>
+                        <td className="px-3 py-2 text-center">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={wachturenAantal || ""}
+                            onChange={e => setWachturenAantal(parseInt(e.target.value) || 0)}
+                            className="h-8 w-[72px] mx-auto text-center text-xs tabular-nums"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums" style={{ fontFamily: "var(--font-display)" }}>€ 52,50 / u</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {pricing.wachturenBedrag.toFixed(2).replace(".", ",")}</td>
+                      </tr>
+                      <tr className="border-b border-border/40">
+                        <td className="px-3 py-2">Extra stops</td>
+                        <td className="px-3 py-2 text-center">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={extraStopsAantal || ""}
+                            onChange={e => setExtraStopsAantal(parseInt(e.target.value) || 0)}
+                            className="h-8 w-[72px] mx-auto text-center text-xs tabular-nums"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums" style={{ fontFamily: "var(--font-display)" }}>€ 45,00</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {pricing.extraStopsBedrag.toFixed(2).replace(".", ",")}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2">Tolheffing / andere kosten</td>
+                        <td className="px-3 py-2 text-center text-muted-foreground">—</td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="inline-flex items-center gap-1 justify-end">
+                            <span className="text-muted-foreground">€</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={tolBedrag}
+                              onChange={e => setTolBedrag(e.target.value)}
+                              placeholder="0,00"
+                              className="h-8 w-[90px] text-right text-xs tabular-nums"
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {pricing.tolBedragNum.toFixed(2).replace(".", ",")}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            {/* ══ Chapter III · Totaaloverzicht ══ */}
+            <section className="card--luxe p-6 relative">
+              <span className="card-chapter">III</span>
+              <div className="mb-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                  03 · Totaaloverzicht
+                </div>
+                <h3 className="section-title">Berekend totaal</h3>
+                <p className="text-xs text-muted-foreground mt-1">Alle bedragen exclusief BTW tenzij anders aangegeven.</p>
+              </div>
+
+              <div className="max-w-[560px] ml-auto tabular-nums space-y-3">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-xs text-muted-foreground">Basistarief ({pricing.rounded} km × € {pricing.perKm.toFixed(4).replace(".", ",")})</span>
+                  <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {pricing.base.toFixed(2).replace(".", ",")}</span>
+                </div>
+                {pricing.screeningFee > 0 && (
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-muted-foreground">Screening / docs</span>
+                    <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {pricing.screeningFee.toFixed(2).replace(".", ",")}</span>
+                  </div>
+                )}
+                {pricing.percToeslagItems.map(t => (
+                  <div key={t.label} className="flex justify-between items-baseline">
+                    <span className="text-xs text-muted-foreground">{t.label} (+{t.percentage}%)</span>
+                    <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {t.amount.toFixed(2).replace(".", ",")}</span>
+                  </div>
+                ))}
+                {pricing.wachturenBedrag > 0 && (
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-muted-foreground">Wachturen ({wachturenAantal} × € 52,50)</span>
+                    <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {pricing.wachturenBedrag.toFixed(2).replace(".", ",")}</span>
+                  </div>
+                )}
+                {pricing.extraStopsBedrag > 0 && (
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-muted-foreground">Extra stops ({extraStopsAantal} × € 45,00)</span>
+                    <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {pricing.extraStopsBedrag.toFixed(2).replace(".", ",")}</span>
+                  </div>
+                )}
+                {pricing.tolBedragNum > 0 && (
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-muted-foreground">Tolheffing / andere kosten</span>
+                    <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>€ {pricing.tolBedragNum.toFixed(2).replace(".", ",")}</span>
+                  </div>
+                )}
+
+                <div className="pt-3 mt-3" style={{ borderTop: "1px solid hsl(var(--gold) / 0.3)" }}>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm font-semibold" style={{ fontFamily: "var(--font-display)" }}>Subtotaal excl. BTW</span>
+                    <span
+                      className="text-2xl font-semibold text-[hsl(var(--gold-deep))]"
+                      style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.02em" }}
+                    >
+                      € {pricing.total.toFixed(2).replace(".", ",")}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </section>
           </div>
         )}
