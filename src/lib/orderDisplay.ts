@@ -40,3 +40,71 @@ export const legacyStatusMap: Record<string, OrderStatus> = {
 export function normalizeStatus(dbStatus: string): OrderStatus {
   return (legacyStatusMap[dbStatus] ?? dbStatus) as OrderStatus;
 }
+
+// Human-readable labels voor missing_fields keys die vanuit de AI-extractie
+// of info-tracking worden gezet. Onbekende keys vallen terug op de key zelf.
+const MISSING_FIELD_LABELS: Record<string, string> = {
+  pickup_address: "Ophaaladres",
+  delivery_address: "Afleveradres",
+  quantity: "Aantal",
+  weight_kg: "Gewicht",
+  weight: "Gewicht",
+  unit: "Eenheid",
+  mrn_document: "MRN-document",
+  mrn: "MRN-document",
+  contact_person: "Contactpersoon",
+  laadreferentie: "Laadreferentie",
+  losreferentie: "Losreferentie",
+  pickup_time_window: "Ophaalvenster",
+  delivery_time_window: "Afleververster",
+  transport_type: "Transporttype",
+  dimensions: "Afmetingen",
+  department_id: "Afdeling",
+  afdeling: "Afdeling",
+  requirements: "Vereisten",
+};
+
+export interface OrderIncompleteSummary {
+  incomplete: boolean;
+  fields: string[];
+  infoLabel: string | null;
+}
+
+/**
+ * Bepaalt of een order ontbrekende informatie heeft voor de planning.
+ * Bron: missing_fields array (AI-extraction) plus info_status (info-tracking).
+ * Accepteert zowel DB-snake_case als UI-camelCase, zodat zowel ruwe
+ * Supabase-rijen als gemapte Order-objecten direct bruikbaar zijn.
+ */
+export function getOrderIncompleteSummary(order: {
+  missing_fields?: string[] | null;
+  missingFields?: string[] | null;
+  info_status?: string | null;
+  infoStatus?: string | null;
+}): OrderIncompleteSummary {
+  const missing = order.missing_fields ?? order.missingFields ?? [];
+  const infoStatus = order.info_status ?? order.infoStatus ?? "COMPLETE";
+  const infoIncomplete = infoStatus !== "COMPLETE";
+
+  if (missing.length === 0 && !infoIncomplete) {
+    return { incomplete: false, fields: [], infoLabel: null };
+  }
+
+  const labels = missing.map((f) => MISSING_FIELD_LABELS[f] ?? f);
+  const infoLabel = infoIncomplete ? (INFO_STATUS_LABEL[infoStatus] ?? infoStatus) : null;
+
+  return {
+    incomplete: true,
+    fields: labels,
+    infoLabel,
+  };
+}
+
+export function isOrderIncomplete(order: {
+  missing_fields?: string[] | null;
+  missingFields?: string[] | null;
+  info_status?: string | null;
+  infoStatus?: string | null;
+}): boolean {
+  return getOrderIncompleteSummary(order).incomplete;
+}

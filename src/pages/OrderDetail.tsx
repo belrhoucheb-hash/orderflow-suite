@@ -35,6 +35,7 @@ import OrderTimeline from "@/components/orders/OrderTimeline";
 import { OrderInfoRequestsCard } from "@/components/orders/OrderInfoRequestsCard";
 import { OrderPricePreview } from "@/components/orders/OrderPricePreview";
 import { InfoStatusBadge } from "@/components/orders/InfoStatusBadge";
+import { IncompleteBadge } from "@/components/orders/IncompleteBadge";
 import { FollowFromClientPopover } from "@/components/orders/FollowFromClientPopover";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
@@ -527,6 +528,7 @@ const OrderDetail = () => {
           <div className="flex items-center gap-2 shrink-0 mt-2">
             <StatusBadge status={order.status as OrderStatus} variant="luxe" />
             <InfoStatusBadge status={order.info_status} />
+            <IncompleteBadge order={order} size="icon" />
 
             {/* Acties icon-button → opent alle acties */}
             <DropdownMenu>
