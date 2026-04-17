@@ -421,6 +421,43 @@ const NewOrder = () => {
         };
       })();
 
+      // §25 Cargo-detail als JSONB array
+      const cargoPayload = cargoRows
+        .filter(r => r.aantal || r.gewicht)
+        .map(r => ({
+          aantal: parseInt(r.aantal) || 0,
+          eenheid: r.eenheid || null,
+          gewicht: parseFloat(r.gewicht) || 0,
+          lengte: parseFloat(r.lengte) || null,
+          breedte: parseFloat(r.breedte) || null,
+          hoogte: parseFloat(r.hoogte) || null,
+          stapelbaar: r.stapelbaar,
+          adr: r.adr || null,
+          omschrijving: r.omschrijving || null,
+        }));
+
+      // §25 PMT-gegevens als JSONB
+      const pmtPayload = showPmt ? {
+        secure: shipmentSecure,
+        methode: shipmentSecure ? null : (pmtMethode || null),
+        operator: pmtOperator.trim() || null,
+        referentie: pmtReferentie.trim() || null,
+        datum: pmtDatum || null,
+        locatie: pmtLocatie.trim() || null,
+        seal: pmtSeal.trim() || null,
+        by_customer: pmtByCustomer,
+      } : null;
+
+      // §25 Dimensions samengesteld uit cargo-rij afmetingen
+      const dimParts = cargoRows
+        .filter(r => r.lengte && r.breedte && r.hoogte)
+        .map(r => `${r.lengte}×${r.breedte}×${r.hoogte}cm`);
+      const dimensionsStr = dimParts.length > 0 ? dimParts.join(", ") : (afmetingen || null);
+
+      // Requirements array
+      const reqs: string[] = [];
+      if (klepNodig) reqs.push("laadklep");
+
       const booking: BookingInput = {
         pickup_address: pickupLine?.locatie || null,
         delivery_address: deliveryLine?.locatie || null,
@@ -432,13 +469,33 @@ const NewOrder = () => {
         weight_kg: weightKg ? parseInt(weightKg) : null,
         quantity: quantity ? parseInt(quantity) : null,
         unit: transportEenheid || null,
-        pickup_time_window_start: pickupTimeFrom || null,
-        pickup_time_window_end: pickupTimeTo || null,
-        delivery_time_window_start: deliveryTimeFrom || null,
-        delivery_time_window_end: deliveryTimeTo || null,
-        notes: [klantReferentie && `Ref: ${klantReferentie}`, referentie].filter(Boolean).join(" — ") || null,
+        priority: prioriteit || null,
+        requirements: reqs.length > 0 ? reqs : null,
+        pickup_time_window_start: pickupLine?.tijd || pickupTimeFrom || null,
+        pickup_time_window_end: pickupLine?.tijdTot || pickupTimeTo || null,
+        delivery_time_window_start: deliveryLine?.tijd || deliveryTimeFrom || null,
+        delivery_time_window_end: deliveryLine?.tijdTot || deliveryTimeTo || null,
+        notes: referentie.trim() || null,
         price_total_cents: pricingPayload.cents,
         pricing: pricingPayload.details,
+        // §25 Shipment-level velden
+        contact_person: contactpersoon || null,
+        vehicle_type: voertuigtype || null,
+        client_reference: klantReferentie.trim() || null,
+        mrn_document: mrnDoc.trim() || null,
+        requires_tail_lift: klepNodig,
+        pmt: pmtPayload,
+        cargo: cargoPayload.length > 0 ? cargoPayload : null,
+        // Per-leg detail
+        pickup_date_str: pickupLine?.datum || null,
+        delivery_date_str: deliveryLine?.datum || null,
+        pickup_reference: pickupLine?.referentie || null,
+        delivery_reference: deliveryLine?.referentie || null,
+        pickup_contact: pickupLine?.contactLocatie || null,
+        delivery_contact: deliveryLine?.contactLocatie || null,
+        pickup_notes: pickupLine?.opmerkingen || null,
+        delivery_notes: deliveryLine?.opmerkingen || null,
+        dimensions: dimensionsStr,
       };
 
       const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);

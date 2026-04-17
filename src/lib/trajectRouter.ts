@@ -40,6 +40,24 @@ export interface BookingInput {
   notes?: string | null;
   price_total_cents?: number | null;
   pricing?: Record<string, unknown> | null;
+  // §25 shipment-level velden
+  contact_person?: string | null;
+  vehicle_type?: string | null;
+  client_reference?: string | null;
+  mrn_document?: string | null;
+  requires_tail_lift?: boolean;
+  pmt?: Record<string, unknown> | null;
+  cargo?: Record<string, unknown>[] | null;
+  // Per-leg detail (doorgesluisd naar orderPayload)
+  pickup_date_str?: string | null;
+  delivery_date_str?: string | null;
+  pickup_reference?: string | null;
+  delivery_reference?: string | null;
+  pickup_contact?: string | null;
+  delivery_contact?: string | null;
+  pickup_notes?: string | null;
+  delivery_notes?: string | null;
+  dimensions?: string | null;
   [key: string]: unknown;
 }
 
@@ -287,6 +305,13 @@ export async function createShipmentWithLegs(
     traject_rule_id: rule.id,
     price_total_cents: booking.price_total_cents ?? null,
     pricing: booking.pricing ?? null,
+    contact_person: booking.contact_person ?? null,
+    vehicle_type: booking.vehicle_type ?? null,
+    client_reference: booking.client_reference ?? null,
+    mrn_document: booking.mrn_document ?? null,
+    requires_tail_lift: booking.requires_tail_lift ?? false,
+    pmt: booking.pmt ?? null,
+    cargo: booking.cargo ?? null,
   };
 
   const { data: shipmentData, error: shipmentErr } = await (supabase as any)
@@ -375,8 +400,19 @@ export async function createShipmentWithLegs(
           : leg.to === "hub"
             ? null
             : booking.pickup_time_window_end ?? null,
-      notes: booking.notes ?? null,
-      // order_number: laat leeg; bestaande trigger vult aan.
+      notes: leg.from === "pickup"
+        ? (booking.pickup_notes || booking.notes) ?? null
+        : (booking.delivery_notes || booking.notes) ?? null,
+      reference: leg.from === "pickup"
+        ? booking.pickup_reference ?? null
+        : booking.delivery_reference ?? null,
+      pickup_date: leg.from === "pickup"
+        ? booking.pickup_date_str ?? null
+        : booking.delivery_date_str ?? null,
+      delivery_date: leg.to === "delivery"
+        ? booking.delivery_date_str ?? null
+        : null,
+      dimensions: booking.dimensions ?? null,
     };
 
     const { data: orderData, error: orderErr } = await (supabase as any)
