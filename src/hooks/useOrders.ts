@@ -146,6 +146,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
           legNumber: (o as any).leg_number ?? null,
           legRole: (o as any).leg_role ?? null,
           infoStatus: ((o as any).info_status ?? null) as any,
+          missingFields: ((o as any).missing_fields ?? null) as string[] | null,
         };
       });
 
@@ -236,6 +237,7 @@ export function useOrder(id: string) {
         legNumber: (data as any).leg_number ?? null,
         legRole: (data as any).leg_role ?? null,
         infoStatus: ((data as any).info_status ?? null) as any,
+        missingFields: ((data as any).missing_fields ?? null) as string[] | null,
       } as Order;
     },
     enabled: !!id,

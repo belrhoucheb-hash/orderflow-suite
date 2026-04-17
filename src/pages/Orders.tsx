@@ -28,6 +28,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { KPIStrip, type KPIItem } from "@/components/ui/KPIStrip";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { InfoStatusBadge } from "@/components/orders/InfoStatusBadge";
+import { IncompleteBadge } from "@/components/orders/IncompleteBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { OrderStatus } from "@/components/ui/StatusBadge";
 import { BulkImportDialog } from "@/components/orders/BulkImportDialog";
@@ -705,14 +706,17 @@ const Orders = () => {
                       />
                     </td>
                     <td className="table-cell">
-                      <Link
-                        to={`/orders/${order.id}`}
-                        className="text-[14px] font-semibold text-foreground hover:text-[hsl(var(--gold-deep))] transition-colors tabular-nums tracking-[0.02em] whitespace-nowrap"
-                        style={{ fontFamily: "var(--font-display)" }}
-                        title={order.notes?.trim() || undefined}
-                      >
-                        {order.orderNumber}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <IncompleteBadge order={order} size="dot" />
+                        <Link
+                          to={`/orders/${order.id}`}
+                          className="text-[14px] font-semibold text-foreground hover:text-[hsl(var(--gold-deep))] transition-colors tabular-nums tracking-[0.02em] whitespace-nowrap"
+                          style={{ fontFamily: "var(--font-display)" }}
+                          title={order.notes?.trim() || undefined}
+                        >
+                          {order.orderNumber}
+                        </Link>
+                      </div>
                     </td>
                     <td className="table-cell text-foreground/90 font-medium" style={{ fontFamily: "var(--font-display)" }}>
                       {order.customer}

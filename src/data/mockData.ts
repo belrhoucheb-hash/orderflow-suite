@@ -33,6 +33,8 @@ export interface Order {
   legRole?: string | null;
   /** §22 info-tracking: parallelle dimensie naast status */
   infoStatus?: "COMPLETE" | "AWAITING_INFO" | "OVERDUE" | null;
+  /** Sprint 1 OA-05: velden die nog van de klant moeten komen. */
+  missingFields?: string[] | null;
 }
 
 export interface Vehicle {
