@@ -198,12 +198,30 @@ serve(async (req) => {
       console.log(`Uploaded: ${urlData.publicUrl}`);
     }
 
+    // §27: orders.department_id is NOT NULL. Bij binnenkomst van een mail
+    // weten we de echte afdeling nog niet, dus starten we op OPS. Parse-order
+    // werkt dit bij zodra extractie een EXPORT-adres detecteert.
+    const { data: opsDept, error: deptErr } = await supabase
+      .from("departments")
+      .select("id")
+      .eq("tenant_id", tenantIdStr)
+      .eq("code", "OPS")
+      .single();
+    if (deptErr || !opsDept) {
+      console.error("Kon OPS-department niet vinden voor tenant:", tenantIdStr, deptErr);
+      return new Response(JSON.stringify({ error: "OPS-department ontbreekt voor deze tenant" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Create draft order
     const { data: order, error: insertError } = await supabase
       .from("orders")
       .insert({
         tenant_id: tenantIdStr,
         status: "DRAFT",
+        department_id: opsDept.id,
         source_email_from: parsed.from,
         source_email_subject: parsed.subject,
         source_email_body: parsed.body,
