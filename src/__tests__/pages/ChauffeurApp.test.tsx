@@ -160,7 +160,7 @@ import ChauffeurApp from "@/pages/ChauffeurApp";
 
 function renderChauffeurApp() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  localStorage.removeItem("orderflow_driver_id");
+  localStorage.removeItem("orderflow_test_driver_id");
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
@@ -172,7 +172,7 @@ function renderChauffeurApp() {
 
 function renderWithActiveDriver(driverId = "d1") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  localStorage.setItem("orderflow_driver_id", driverId);
+  localStorage.setItem("orderflow_test_driver_id", driverId);
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
@@ -555,9 +555,10 @@ describe("ChauffeurApp", () => {
     });
   });
 
-  it("stores driver_id in localStorage when active", () => {
+  it("stores last-used driver-id in localStorage when active", () => {
     renderWithActiveDriver("d1");
-    expect(localStorage.getItem("orderflow_driver_id")).toBe("d1");
+    // Login-effect zet "orderflow_last_driver_id" als UI-hint voor preselect.
+    expect(localStorage.getItem("orderflow_last_driver_id")).toBe("d1");
   });
 
   it("shows driver name when driver is active", async () => {
@@ -943,7 +944,8 @@ describe("ChauffeurApp", () => {
         fireEvent.click(logoutBtn);
       });
       await waitFor(() => {
-        expect(localStorage.getItem("orderflow_driver_id")).toBeNull();
+        // Logout toont de driver-selectie weer (geen actieve driver-naam meer).
+        expect(screen.queryByText(/Jan Jansen/)).not.toBeInTheDocument();
       });
     }
     expect(document.body.textContent).toBeTruthy();
