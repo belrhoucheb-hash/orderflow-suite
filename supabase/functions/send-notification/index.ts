@@ -314,7 +314,7 @@ serve(async (req) => {
     // ─── 4. Fetch tenant branding ───────────────────────────────
     const { data: tenantData } = await supabase
       .from("tenants")
-      .select("name, slug, logo, primary_color")
+      .select("name, slug, logo, primary_color, fleet_manager_email")
       .eq("id", tenant_id)
       .single();
 
@@ -337,22 +337,28 @@ serve(async (req) => {
     };
 
     // ─── 6. Determine recipients ────────────────────────────────
-    const recipientEmail =
-      payload.recipient_email ??
-      order?.recipient_email ??
-      order?.clients?.contact_email ??
-      order?.source_email_from?.match(/<([^>]+)>/)?.[1] ??
-      order?.source_email_from ??
-      "";
+    const isDamageEvent = trigger_event === "VEHICLE_DAMAGE";
 
-    const recipientPhone =
-      payload.recipient_phone ??
-      order?.recipient_phone ??
-      order?.clients?.phone ??
-      "";
+    const recipientEmail = isDamageEvent
+      ? (payload.recipient_email ?? tenantData?.fleet_manager_email ?? "")
+      : (payload.recipient_email ??
+         order?.recipient_email ??
+         order?.clients?.contact_email ??
+         order?.source_email_from?.match(/<([^>]+)>/)?.[1] ??
+         order?.source_email_from ??
+         "");
 
-    // Check order-level notification preferences
-    const prefs = order?.notification_preferences ?? { email: true, sms: false };
+    const recipientPhone = isDamageEvent
+      ? ""
+      : (payload.recipient_phone ??
+         order?.recipient_phone ??
+         order?.clients?.phone ??
+         "");
+
+    // Damage events bypass order-level prefs (no order context).
+    const prefs = isDamageEvent
+      ? { email: true, sms: false }
+      : (order?.notification_preferences ?? { email: true, sms: false });
 
     // ─── 7. SMTP config ─────────────────────────────────────────
     const smtpHost = Deno.env.get("SMTP_HOST") ?? "";

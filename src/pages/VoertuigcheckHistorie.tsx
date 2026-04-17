@@ -417,7 +417,7 @@ export default function VoertuigcheckHistorie() {
         ))}
       </div>
 
-      <div className="card--luxe p-5 mb-4">
+      <div className="card--luxe p-5 mb-4" style={{ overflow: "visible" }}>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 items-end">
           <div className="flex flex-col min-w-0">
             <label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1.5" style={{ fontFamily: "var(--font-display)" }}>
