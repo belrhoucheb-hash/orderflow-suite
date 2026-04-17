@@ -223,7 +223,7 @@ describe("NewOrder", () => {
     const user = userEvent.setup();
     renderNewOrder();
     // Look for add line button
-    const addBtn = screen.queryByText(/Regel toevoegen|Toevoegen/i);
+    const addBtn = screen.queryByText(/Tussenstop toevoegen/i) || screen.queryByText(/Regel toevoegen/i);
     if (addBtn) {
       await user.click(addBtn);
     }
