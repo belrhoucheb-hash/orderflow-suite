@@ -24,6 +24,7 @@ export interface PlanOrder {
   delivery_date: string | null;
   pickup_date: string | null;
   info_status?: string | null;
+  missing_fields?: string[] | null;
 }
 
 export type Assignments = Record<string, PlanOrder[]>;

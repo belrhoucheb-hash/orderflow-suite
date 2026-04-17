@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { type PlanOrder } from "./types";
 import { getCity, getTotalWeight, hasTag } from "./planningUtils";
 import { InfoStatusBadge } from "@/components/orders/InfoStatusBadge";
+import { IncompleteBadge } from "@/components/orders/IncompleteBadge";
+import { isOrderIncomplete } from "@/lib/orderDisplay";
 
 function getTimeWindow(order: PlanOrder): string {
   if (order.time_window_start && order.time_window_end) {
@@ -41,7 +43,10 @@ export function PlanningOrderCard({
     ? undefined
     : { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.3 : 1 };
 
-  const isIncomplete = !order.delivery_address || order.delivery_address === "Onbekend" || !order.weight_kg;
+  const runtimeIncomplete =
+    !order.delivery_address || order.delivery_address === "Onbekend" || !order.weight_kg;
+  const dbIncomplete = isOrderIncomplete(order);
+  const isIncomplete = runtimeIncomplete || dbIncomplete;
 
   return (
     <div
@@ -59,10 +64,13 @@ export function PlanningOrderCard({
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-mono text-muted-foreground/60 font-medium">#{order.order_number}</span>
         <div className="flex gap-1">
-          {isIncomplete && (
+          {runtimeIncomplete && (
             <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase tracking-wide bg-destructive/10 text-destructive border border-destructive/20 rounded-md px-1.5 py-0.5">
               <AlertTriangle className="h-2.5 w-2.5" />INCOMPLEET
             </span>
+          )}
+          {!runtimeIncomplete && dbIncomplete && (
+            <IncompleteBadge order={order} size="dot" />
           )}
           {hasTag(order, "ADR") && (
             <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase tracking-wide bg-amber-500/10 text-amber-700 border border-amber-200/60 rounded-md px-1.5 py-0.5">
