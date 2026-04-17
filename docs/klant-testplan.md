@@ -1,14 +1,29 @@
-# Sprint 1, klant-testplan voor Royalty Cargo
+# Klant-testplan Royalty Cargo
 
-**Doel van deze sprint**: voorkomen dat orders "verdwijnen" uit de planning. Elke order moet een afdeling (Operations of Export) hebben, en onvolledige orders moeten meteen opvallen.
+Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionaliteit wordt opgeleverd. De meest recente toevoegingen staan bovenaan per sectie, en in "Wat is er nieuw sinds de vorige test" hieronder.
+
+**Laatste update**: 2026-04-17, Sprint 1 (data-integriteit: afdeling, traject, stamgegevens)
 
 **Hoe dit document te gebruiken**:
-- Loop de scenario's in volgorde door.
+- Kijk eerst naar "Wat is er nieuw sinds de vorige test" voor een snelle samenvatting.
+- Loop dan de bijbehorende scenario's door in de secties.
+- Scenario's die je al eerder hebt afgevinkt en die niet veranderd zijn, kun je overslaan.
 - Vink aan of het werkt zoals verwacht, of noteer wat afwijkt.
 - Bij twijfel: schrijf op wat je zag en hoe het voelde, ook kleine dingen tellen.
 - Aan het eind is er ruimte voor algemene opmerkingen.
 
 **Tester**: _______________________  **Datum**: _______________________
+
+---
+
+## Wat is er nieuw sinds de vorige test
+
+**Sprint 1 (2026-04-17), data-integriteit**:
+- Afdeling (Operations of Export) is voortaan verplicht op elke order en wordt automatisch bepaald uit het traject.
+- Orders met ontbrekende informatie krijgen een rode waarschuwingsbadge in de orderlijst, op de detailpagina en op het planbord.
+- Klantgegevens zijn uitgebreid met een apart factuur-e-mailadres, factuuradres, optioneel postadres en een contactpersonen-tabblad met primair- en backup-rol.
+
+Alle scenario's in secties 1 tot en met 7 horen bij deze sprint.
 
 ---
 
