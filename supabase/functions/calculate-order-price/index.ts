@@ -123,41 +123,6 @@ function aggregateCargo(
   };
 }
 
-// ─── Tijd helpers ───────────────────────────────────────────
-
-function toLocalHHmm(timestamptz: string | null): string | undefined {
-  if (!timestamptz) return undefined;
-  // Converteer UTC naar Europe/Amsterdam HH:mm
-  try {
-    const d = new Date(timestamptz);
-    const formatter = new Intl.DateTimeFormat("nl-NL", {
-      timeZone: "Europe/Amsterdam",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    return formatter.format(d);
-  } catch {
-    return undefined;
-  }
-}
-
-function toLocalDate(timestamptz: string | null): string | undefined {
-  if (!timestamptz) return undefined;
-  try {
-    const d = new Date(timestamptz);
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Amsterdam",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    return formatter.format(d); // YYYY-MM-DD
-  } catch {
-    return undefined;
-  }
-}
-
 // ─── Hoofdflow ──────────────────────────────────────────────
 
 async function handleRequest(
@@ -166,10 +131,14 @@ async function handleRequest(
 ): Promise<SuccessResponse | SkippedResponse | ErrorResponse> {
   const { order_id, force } = body;
 
-  // 1. Order + shipment + client laden
+  // 1. Order laden. We vragen alleen kolommen die zeker op orders staan;
+  // distance_km, stop_count, duration_hours etc. leven nu niet op orders
+  // (hooguit op trips.total_distance_km). De motor behandelt afwezige waarden
+  // als defaults, een PER_KM rule met distance_km = 0 levert 0 op en een
+  // duidelijke regel in het snapshot.
   const { data: order, error: orderErr } = await supabase
     .from("orders")
-    .select("id, tenant_id, client_id, shipment_id, pickup_datetime, pickup_date, distance_km, stop_count, duration_hours, weight_kg, quantity, transport_type, pickup_address, delivery_address, requirements, pickup_country, delivery_country, client_name, order_number")
+    .select("id, tenant_id, client_id, shipment_id, pickup_date, weight_kg, quantity, transport_type, pickup_address, delivery_address, requirements, client_name, order_number, time_window_start")
     .eq("id", order_id)
     .single();
 
@@ -242,12 +211,13 @@ async function handleRequest(
     return { ok: false, error: vtSelection.reason, snapshot: snap };
   }
 
-  // 4. Rate cards laden, beste selecteren
-  const pickupDate =
-    toLocalDate(order.pickup_datetime) ??
-    (order.pickup_date as string | null) ??
-    undefined;
-  const pickupTimeLocal = toLocalHHmm(order.pickup_datetime);
+  // 4. Rate cards laden, beste selecteren.
+  // pickup_datetime bestaat niet op orders; we leiden af uit pickup_date +
+  // time_window_start (HH:mm string). Ontbreekt een van beide, dan vallen de
+  // tijd/dag surcharges terug op "matcht alleen zonder tijd/dag-conditie".
+  const pickupDate = (order.pickup_date as string | null) ?? undefined;
+  const pickupTimeLocal =
+    (order.time_window_start as string | null)?.slice(0, 5) ?? undefined;
 
   const { data: rateCards, error: rcErr } = await supabase
     .from("rate_cards")
@@ -259,6 +229,23 @@ async function handleRequest(
     return { ok: false, error: `Fout bij laden tariefkaarten: ${rcErr.message}` };
   }
 
+  // distance_km leeft niet op orders. Als er een gekoppelde trip is via
+  // trip_stops, gebruik trips.total_distance_km als schatting; anders 0.
+  // PER_KM rules produceren dan een zichtbare 0-regel die planner via
+  // handmatig overschrijven kan corrigeren.
+  let distanceKm = 0;
+  const { data: stop } = await supabase
+    .from("trip_stops")
+    .select("trip_id, trips(total_distance_km)")
+    .eq("order_id", order.id)
+    .limit(1)
+    .maybeSingle();
+  // deno-lint-ignore no-explicit-any
+  const linkedTrip = (stop as any)?.trips;
+  if (linkedTrip?.total_distance_km != null) {
+    distanceKm = Number(linkedTrip.total_distance_km);
+  }
+
   const pricingInput: PricingOrderInput = {
     id: order.id,
     order_number: order.order_number,
@@ -268,14 +255,14 @@ async function handleRequest(
     transport_type: shipment.transport_type ?? order.transport_type ?? null,
     weight_kg: cargo.weight_kg || order.weight_kg,
     quantity: order.quantity,
-    distance_km: order.distance_km ?? 0,
-    stop_count: order.stop_count ?? 2,
-    duration_hours: order.duration_hours ?? 0,
+    distance_km: distanceKm,
+    stop_count: 2,
+    duration_hours: 0,
     requirements: order.requirements ?? [],
     day_of_week: pickupDate ? new Date(pickupDate).getDay() : new Date().getDay(),
     waiting_time_min: 0,
-    pickup_country: order.pickup_country ?? "NL",
-    delivery_country: order.delivery_country ?? "NL",
+    pickup_country: "NL",
+    delivery_country: "NL",
     pickup_date: pickupDate,
     pickup_time_local: pickupTimeLocal,
     cargo_dimensions: cargo,
