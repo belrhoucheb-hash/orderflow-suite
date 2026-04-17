@@ -115,6 +115,7 @@ const NewOrder = () => {
   const [transportType, setTransportType] = useState("");
   const [afdeling, setAfdeling] = useState("");
   const [afdelingManual, setAfdelingManual] = useState(false);
+  const [inferredAfdeling, setInferredAfdeling] = useState<string | null>(null);
   const [voertuigtype, setVoertuigtype] = useState("");
   const [chauffeur, setChauffeur] = useState("");
   const [mrnDoc, setMrnDoc] = useState("");
@@ -351,11 +352,11 @@ const NewOrder = () => {
     const newErrors: Record<string, string> = {};
 
     if (!clientName.trim()) newErrors.client_name = "Klantnaam is verplicht";
-    if (!afdeling.trim()) newErrors.afdeling = "Afdeling is verplicht — wordt normaal automatisch bepaald";
+    if (!afdeling.trim()) newErrors.afdeling = "Kies een afdeling, wordt normaal automatisch bepaald uit het traject";
     if (!pickupLine?.locatie?.trim()) newErrors.pickup_address = "Ophaaladres is verplicht";
-    else if (!isValidAddress(pickupLine.locatie)) newErrors.pickup_address = "Onvolledig ophaaladres — straat + huisnummer vereist";
+    else if (!isValidAddress(pickupLine.locatie)) newErrors.pickup_address = "Onvolledig ophaaladres, straat en huisnummer vereist";
     if (!deliveryLine?.locatie?.trim()) newErrors.delivery_address = "Afleveradres is verplicht";
-    else if (!isValidAddress(deliveryLine.locatie)) newErrors.delivery_address = "Onvolledig afleveradres — straat + huisnummer vereist";
+    else if (!isValidAddress(deliveryLine.locatie)) newErrors.delivery_address = "Onvolledig afleveradres, straat en huisnummer vereist";
     if (!quantity || parseInt(quantity) <= 0) newErrors.quantity = "Aantal moet groter zijn dan 0";
     if (!weightKg || parseFloat(weightKg) <= 0) newErrors.weight_kg = "Gewicht moet groter zijn dan 0";
     if (!transportEenheid || !validUnits.includes(transportEenheid)) newErrors.unit = `Eenheid moet een van ${validUnits.join(", ")} zijn`;
@@ -595,13 +596,17 @@ const NewOrder = () => {
     } finally { setSaving(false); }
   };
 
-  // Auto-infer afdeling zolang de planner 'm niet handmatig heeft gekozen.
+  // Auto-infer afdeling. De inferred-waarde houden we altijd bij, ook als de
+  // planner handmatig overrulet, zodat we een "Overschreven door planner"-hint
+  // kunnen tonen met de automatische suggestie erbij.
   useEffect(() => {
-    if (afdelingManual) return;
     const pickup = freightLines.find((f) => f.activiteit === "Laden")?.locatie || "";
     const delivery = freightLines.find((f) => f.activiteit === "Lossen")?.locatie || "";
     const inferred = inferAfdeling(pickup, delivery);
-    setAfdeling(inferred ?? "");
+    setInferredAfdeling(inferred ?? null);
+    if (!afdelingManual) {
+      setAfdeling(inferred ?? "");
+    }
   }, [freightLines, afdelingManual]);
 
   // Live traject-preview zodra beide adressen ingevuld zijn.
@@ -1043,6 +1048,11 @@ const NewOrder = () => {
                   {!afdelingManual && afdeling && (
                     <span className="text-[10px] text-[hsl(var(--gold-deep))] tracking-wider mt-0.5 block">
                       Automatisch bepaald op basis van traject
+                    </span>
+                  )}
+                  {afdelingManual && inferredAfdeling && inferredAfdeling !== afdeling && (
+                    <span className="text-[10px] text-amber-600 tracking-wider mt-0.5 block">
+                      Overschreven door planner, automatisch zou {inferredAfdeling} zijn
                     </span>
                   )}
                   {afdelingManual && (
