@@ -38,7 +38,7 @@
 
     --border: 30 8% 88%;
     --input: 30 8% 85%;
-    --ring: 0 78% 42%;
+    --ring: 38 35% 55%;
 
     --radius: 0.5rem;
 
@@ -171,7 +171,7 @@
 
     --border: 222 12% 20%;
     --input: 222 12% 20%;
-    --ring: 0 78% 55%;
+    --ring: 38 30% 60%;
 
     --sidebar-background: 222 22% 5%;
     --sidebar-foreground: 210 15% 85%;
@@ -270,9 +270,10 @@
     font-family: var(--font-display);
   }
 
-  /* Keyboard focus indicators */
+  /* Keyboard focus indicators — gold past bij luxe design */
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-primary;
+    outline: 2px solid hsl(var(--gold) / 0.5);
+    outline-offset: 2px;
   }
 
   [class*="focus-visible:ring"]:focus-visible {
