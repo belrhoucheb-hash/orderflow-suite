@@ -37,14 +37,15 @@ export function AutonomyScoreCard({ compact = false }: AutonomyScoreCardProps) {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-card rounded-xl border border-border/40 shadow-sm p-4"
+        className="card--luxe p-5"
       >
-        <div className="flex items-center gap-2 mb-3">
-          <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center">
-            <Brain className="h-3.5 w-3.5 text-violet-600" />
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="h-7 w-7 rounded-lg flex items-center justify-center"
+            style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)) 0%, hsl(var(--gold) / 0.3) 100%)" }}>
+            <Brain className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold font-display">AI Autonomie</h2>
+            <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>AI Autonomie</span>
             <p className="text-xs text-muted-foreground">Laden...</p>
           </div>
         </div>
@@ -81,17 +82,17 @@ export function AutonomyScoreCard({ compact = false }: AutonomyScoreCardProps) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.06 }}
-      className="bg-card rounded-xl border border-border/40 shadow-sm p-4"
+      className="card--luxe p-5"
     >
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center">
-          <Brain className="h-3.5 w-3.5 text-violet-600" />
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="h-7 w-7 rounded-lg flex items-center justify-center"
+          style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)) 0%, hsl(var(--gold) / 0.3) 100%)" }}>
+          <Brain className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
         </div>
-        <div>
-          <h2 className="text-sm font-semibold font-display">AI Autonomie</h2>
-          <p className="text-xs text-muted-foreground">Gemiddelde betrouwbaarheid</p>
-        </div>
+        <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]"
+          style={{ fontFamily: "var(--font-display)" }}>
+          AI Autonomie
+        </span>
       </div>
 
       {/* Overall score */}

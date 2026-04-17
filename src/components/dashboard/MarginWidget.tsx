@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/invoiceUtils";
@@ -80,14 +80,14 @@ export function MarginWidget() {
 
   if (isLoading || !data) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Marge overzicht</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">
+      <div className="card--luxe p-5">
+        <div className="flex items-center gap-2.5 mb-3">
+          <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>Marge</span>
+        </div>
+        <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">
           Laden...
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
@@ -95,31 +95,31 @@ export function MarginWidget() {
   const isPositive = marginEuro >= 0;
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">Marge (4 weken)</CardTitle>
-          <div className="flex items-center gap-1.5">
-            {isPositive ? (
-              <TrendingUp className="h-4 w-4 text-green-600" />
-            ) : marginEuro < 0 ? (
-              <TrendingDown className="h-4 w-4 text-red-600" />
-            ) : (
-              <Minus className="h-4 w-4 text-muted-foreground" />
-            )}
-            <span className={`font-bold text-lg ${isPositive ? "text-green-600" : "text-red-600"}`}>
-              {marginPct}%
-            </span>
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {formatCurrency(data.totalRevenue)} omzet / {formatCurrency(data.totalCost)} kosten ={" "}
-          <span className={isPositive ? "text-green-600" : "text-red-600"}>
-            {formatCurrency(marginEuro)}
+    <div className="card--luxe p-5">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+          Marge (4 weken)
+        </span>
+        <div className="flex items-center gap-1.5">
+          {isPositive ? (
+            <TrendingUp className="h-4 w-4 text-emerald-600" />
+          ) : marginEuro < 0 ? (
+            <TrendingDown className="h-4 w-4 text-red-600" />
+          ) : (
+            <Minus className="h-4 w-4 text-muted-foreground" />
+          )}
+          <span className={`font-bold text-lg ${isPositive ? "text-emerald-600" : "text-red-600"}`} style={{ fontFamily: "var(--font-display)" }}>
+            {marginPct}%
           </span>
-        </p>
-      </CardHeader>
-      <CardContent>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        {formatCurrency(data.totalRevenue)} omzet / {formatCurrency(data.totalCost)} kosten ={" "}
+        <span className={isPositive ? "text-emerald-600" : "text-red-600"}>
+          {formatCurrency(marginEuro)}
+        </span>
+      </p>
+      <div>
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={weeks} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -136,7 +136,7 @@ export function MarginWidget() {
             <Bar dataKey="cost" fill="#ef4444" radius={[4, 4, 0, 0]} name="cost" />
           </BarChart>
         </ResponsiveContainer>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

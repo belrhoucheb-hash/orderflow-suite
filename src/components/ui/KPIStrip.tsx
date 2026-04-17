@@ -4,17 +4,11 @@ import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
 export interface KPIItem {
-  /** Display label below the value */
   label: string;
-  /** The main value to display */
   value: string | number;
-  /** Lucide icon component */
   icon: LucideIcon;
-  /** Tailwind text-color class for the icon, e.g. "text-blue-600" */
   iconColor?: string;
-  /** Tailwind bg class for the icon container, e.g. "bg-blue-500/10" */
   iconBg?: string;
-  /** Optional trend indicator */
   trend?: {
     value: string;
     direction: "up" | "down" | "neutral";
@@ -23,11 +17,8 @@ export interface KPIItem {
 
 interface KPIStripProps {
   items: KPIItem[];
-  /** Number of columns on large screens. Default: matches item count, max 6. */
   columns?: 3 | 4 | 5 | 6;
-  /** Additional className */
   className?: string;
-  /** Enable entrance animation (default true) */
   animate?: boolean;
 }
 
@@ -60,18 +51,28 @@ export function KPIStrip({ items, columns, className, animate = true }: KPIStrip
           : {};
 
         return (
-          <Wrapper key={item.label} {...animationProps} className="card-stat">
+          <Wrapper
+            key={item.label}
+            {...animationProps}
+            className="relative p-3.5 rounded-xl overflow-hidden flex items-center gap-3"
+            style={{
+              background: "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.15) 100%)",
+              border: "1px solid hsl(var(--gold) / 0.15)",
+            }}
+          >
+            <span
+              className="absolute top-0 left-1/4 right-1/4 h-px pointer-events-none"
+              style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold) / 0.3), transparent)" }}
+            />
             <div
-              className={cn(
-                "card-stat__icon-wrap",
-                item.iconBg ?? "bg-muted",
-              )}
+              className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: "hsl(var(--gold-soft) / 0.4)" }}
             >
-              <item.icon className={cn("h-4 w-4", item.iconColor ?? "text-muted-foreground")} />
+              <item.icon className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-1.5">
-                <p className="card-stat__value">{item.value}</p>
+                <p className="text-lg font-semibold tabular-nums" style={{ fontFamily: "var(--font-display)" }}>{item.value}</p>
                 {item.trend && (
                   <span
                     className={cn(
@@ -87,7 +88,7 @@ export function KPIStrip({ items, columns, className, animate = true }: KPIStrip
                   </span>
                 )}
               </div>
-              <p className="card-stat__label">{item.label}</p>
+              <p className="text-[11px] text-muted-foreground">{item.label}</p>
             </div>
           </Wrapper>
         );

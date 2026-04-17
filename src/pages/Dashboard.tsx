@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo } from "react";
 import {
-  Truck, MapPin, CheckCircle2, AlertTriangle, Clock,
-  TrendingUp, ArrowRight, CalendarClock, Phone, Mail,
+  Truck, MapPin, CheckCircle2, AlertTriangle,
+  TrendingUp, ArrowRight, CalendarClock, Sparkles, Activity,
   BarChart3, CircleDot, Navigation, Timer,
 } from "lucide-react";
 import { useOrders } from "@/hooks/useOrders";
@@ -11,28 +11,21 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
 import { ShieldAlert } from "lucide-react";
 import { motion } from "framer-motion";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import { AutonomyScoreCard } from "@/components/dashboard/AutonomyScoreCard";
 import { FinancialKPIWidget } from "@/components/dashboard/FinancialKPIWidget";
 import { OperationalForecastWidget } from "@/components/dashboard/OperationalForecastWidget";
-// Perf: MarginWidget trekt de recharts bundle (~410KB) mee; lazy houdt die
-// uit de initial Dashboard-load en laadt 'm pas als het widget rendert.
 const MarginWidget = lazy(() =>
   import("@/components/dashboard/MarginWidget").then((m) => ({ default: m.MarginWidget })),
 );
-import { toast } from "sonner";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { KPIStrip, type KPIItem } from "@/components/ui/KPIStrip";
+import { KPIStrip } from "@/components/ui/KPIStrip";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { OrderStatus } from "@/components/ui/StatusBadge";
 
-const overdueImpacts: Record<string, { label: string; color: string }> = {};
-
 const Dashboard = () => {
   const today = new Date();
+  const todayFormatted = today.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const { effectiveRole } = useAuth();
   const canSeeVehicleCheck = effectiveRole === "admin" || effectiveRole === "planner";
   const { data: pendingReleaseCount = 0 } = usePendingReleaseCount();
@@ -50,20 +43,11 @@ const Dashboard = () => {
     const spoedOrders = orders.filter((o) => o.priority === "spoed" || o.priority === "hoog");
     const onderwegOrders = orders.filter((o) => o.status === "IN_TRANSIT");
     const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
-
     const overdueOrders = orders.filter((o) => {
       if (o.status === "DELIVERED" || o.status === "CANCELLED") return false;
       return o.estimatedDelivery && new Date(o.estimatedDelivery) < today;
     });
-
-    return {
-      byStatus,
-      spoedOrders,
-      onderwegOrders,
-      totalWeight,
-      totalVehicles: vehicles.length,
-      overdueOrders,
-    };
+    return { byStatus, spoedOrders, onderwegOrders, totalWeight, totalVehicles: vehicles.length, overdueOrders };
   }, [orders, vehicles]);
 
   const recentOrders = useMemo(() =>
@@ -73,270 +57,189 @@ const Dashboard = () => {
     [orders]
   );
 
-  if (isLoading) {
-    return <LoadingState message="Dashboard laden..." />;
-  }
+  const aiInsights = useMemo(() => {
+    const insights: { type: "warning" | "opportunity" | "info"; text: string }[] = [];
+    if (stats.overdueOrders.length > 0) {
+      insights.push({ type: "warning", text: `${stats.overdueOrders.length} order${stats.overdueOrders.length > 1 ? "s" : ""} ${stats.overdueOrders.length > 1 ? "lopen" : "loopt"} risico op vertraging op basis van huidige status` });
+    }
+    const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
+    const totalCapacity = vehicles.reduce((s, v) => s + v.capacityKg, 0);
+    const loadPct = totalCapacity > 0 ? Math.round((totalWeight / totalCapacity) * 100) : 0;
+    if (loadPct < 50 && totalCapacity > 0) {
+      insights.push({ type: "opportunity", text: `Beladingsgraad is ${loadPct}%, er is ruimte voor ${Math.round((totalCapacity - totalWeight) / 1000)} ton extra lading` });
+    } else if (loadPct > 85) {
+      insights.push({ type: "warning", text: `Beladingsgraad is ${loadPct}%, vloot nadert maximale capaciteit` });
+    }
+    const plannedCount = orders.filter(o => o.status === "PLANNED" || o.status === "IN_TRANSIT").length;
+    if (plannedCount > 0) {
+      insights.push({ type: "info", text: `${plannedCount} ritten actief gepland, capaciteit wordt gemonitord` });
+    }
+    const delivered = stats.byStatus["DELIVERED"] || 0;
+    if (orders.length > 0 && delivered > 0) {
+      const deliveryRate = Math.round((delivered / orders.length) * 100);
+      insights.push({ type: "info", text: `Leveringsratio: ${deliveryRate}% van alle orders succesvol afgeleverd` });
+    }
+    if (insights.length === 0) {
+      insights.push({ type: "info", text: "Alle systemen operationeel, geen bijzonderheden gedetecteerd" });
+    }
+    return insights.slice(0, 4);
+  }, [orders, vehicles, stats]);
 
-  if (isError) {
-    return (
-      <QueryError
-        message="Kan dashboardgegevens niet laden."
-        onRetry={() => { refetchOrders(); refetchVehicles(); }}
-      />
-    );
-  }
+  if (isLoading) return <LoadingState message="Dashboard laden..." />;
+  if (isError) return <QueryError message="Kan dashboardgegevens niet laden." onRetry={() => { refetchOrders(); refetchVehicles(); }} />;
 
   return (
-    <div className="page-container">
-      {/* Header */}
-      <PageHeader
-        title="Operationeel Dashboard"
-        subtitle={today.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-      />
-
-      {/* KPI Strip */}
-      <KPIStrip
-        columns={6}
-        items={[
-          { label: "Totaal orders", value: orders.length, icon: BarChart3, iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
-          { label: "Voertuigen", value: vehicles.length, icon: Truck, iconColor: "text-violet-600", iconBg: "bg-violet-500/10" },
-          { label: "Nieuw", value: (stats.byStatus["DRAFT"] || 0) + (stats.byStatus["PENDING"] || 0), icon: CircleDot, iconColor: "text-sky-600", iconBg: "bg-sky-500/10" },
-          { label: "Onderweg", value: stats.byStatus["IN_TRANSIT"] || 0, icon: Navigation, iconColor: "text-primary", iconBg: "bg-primary/10" },
-          { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: CheckCircle2, iconColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-          { label: "Achterstallig", value: stats.overdueOrders.length, icon: Timer, iconColor: stats.overdueOrders.length > 0 ? "text-destructive" : "text-muted-foreground", iconBg: stats.overdueOrders.length > 0 ? "bg-destructive/10" : "bg-muted" },
-        ]}
-      />
-
-      {/* Financial & Forecast widgets */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <FinancialKPIWidget orders={orders} vehicles={vehicles} />
-        <OperationalForecastWidget vehicles={vehicles} orders={orders} />
-      </div>
-
-      {/* Margin widget */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Suspense fallback={<div className="h-64 rounded-lg border border-border bg-card animate-pulse" />}>
-          <MarginWidget />
-        </Suspense>
-      </div>
-
-      {/* AI Autonomy widget */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <AutonomyScoreCard compact />
-        {canSeeVehicleCheck && (
-          <Link
-            to="/voertuigcheck?status=DAMAGE_FOUND"
-            className="card--luxe p-4 flex items-center gap-4 hover:shadow-md transition-shadow group"
-            style={{ fontFamily: "var(--font-ui)" }}
-          >
-            <div
-              className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
-              style={{
-                background: pendingReleaseCount > 0 ? "hsl(0 80% 95%)" : "hsl(var(--gold-soft))",
-                color: pendingReleaseCount > 0 ? "hsl(0 65% 40%)" : "hsl(var(--gold-deep))",
-              }}
-            >
-              <ShieldAlert className="h-6 w-6" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div
-                className="text-[10px] uppercase tracking-[0.28em] font-semibold text-[hsl(var(--gold-deep))] mb-1"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Voertuigcheck
-              </div>
-              <div
-                className="text-lg font-semibold leading-tight"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Te vrijgeven voertuigchecks
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Checks met schade die op planner-vrijgave wachten.
-              </p>
-            </div>
-            <div
-              className="text-[2rem] font-semibold tabular-nums shrink-0"
-              style={{
-                fontFamily: "var(--font-display)",
-                color: pendingReleaseCount > 0 ? "hsl(0 65% 40%)" : "hsl(var(--muted-foreground))",
-              }}
-            >
-              {pendingReleaseCount}
-            </div>
-          </Link>
-        )}
-      </div>
-
-      {/* Two column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: Recent orders */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="lg:col-span-2 bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden"
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="h-4 w-4 text-muted-foreground" />
-              <h2 className="section-title text-sm">Recente orders</h2>
-            </div>
-            <Link to="/orders" className="text-xs text-primary hover:underline flex items-center gap-1">
-              Bekijk alles <ArrowRight className="h-3 w-3" />
-            </Link>
+    <div className="-m-6 min-h-[calc(100vh-3rem)] flex flex-col bg-muted/30">
+      {/* Luxe hero header */}
+      <div className="relative bg-card border-b border-border/50 shrink-0">
+        <span className="absolute top-0 left-0 right-0 h-px pointer-events-none" style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent)" }} />
+        <div className="px-6 py-5">
+          <div className="inline-flex items-center gap-2 mb-2">
+            <span className="w-4 h-px bg-[hsl(var(--gold))]" />
+            <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]">Dashboard</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr className="border-b border-border/30 bg-muted/20">
-                  <th className="table-header">Order</th>
-                  <th className="table-header">Klant</th>
-                  <th className="table-header hidden md:table-cell">Bezorging</th>
-                  <th className="table-header text-right hidden sm:table-cell">Gewicht</th>
-                  <th className="table-header">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/20">
-                {recentOrders.map((order) => (
-                  <tr key={order.id} className="table-row">
-                    <td className="table-cell">
-                      <Link to={`/orders/${order.id}`} className="font-mono text-sm font-medium text-foreground hover:text-primary transition-colors">
-                        {order.orderNumber}
-                      </Link>
-                    </td>
-                    <td className="table-cell text-foreground/80">{order.customer}</td>
-                    <td className="table-cell text-muted-foreground hidden md:table-cell">
-                      <span className="flex items-center gap-1 truncate max-w-[180px]">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        {order.deliveryAddress}
-                      </span>
-                    </td>
-                    <td className="table-cell text-foreground/80 text-right tabular-nums font-medium hidden sm:table-cell">
-                      {order.totalWeight.toLocaleString()} kg
-                    </td>
-                    <td className="table-cell">
-                      <StatusBadge status={order.status as OrderStatus} />
-                    </td>
-                  </tr>
-                ))}
-                {recentOrders.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                      Geen orders gevonden
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground leading-tight" style={{ fontFamily: "var(--font-display)" }}>
+            Operationeel overzicht
+          </h1>
+          <p className="text-xs text-muted-foreground mt-1.5">{todayFormatted}</p>
+        </div>
+      </div>
 
-        {/* Right column */}
-        <div className="space-y-4">
-          {/* Samenvatting */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-card rounded-xl border border-border/40 shadow-sm p-4"
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              <h2 className="section-title text-sm">Samenvatting</h2>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="card-stat__value text-lg">{orders.length}</p>
-                <p className="card-stat__label">Totaal orders</p>
-              </div>
-              <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="card-stat__value text-lg">{stats.byStatus["DELIVERED"] || 0}</p>
-                <p className="card-stat__label">Afgeleverd</p>
-              </div>
-              <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="card-stat__value text-lg">{stats.totalWeight.toLocaleString()}</p>
-                <p className="card-stat__label">Totaal kg</p>
-              </div>
-              <div className="rounded-lg bg-muted/30 p-3 text-center">
-                <p className="card-stat__value text-lg">{vehicles.length}</p>
-                <p className="card-stat__label">Voertuigen</p>
-              </div>
-            </div>
-          </motion.div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[1400px] mx-auto px-6 pt-5 pb-8 space-y-5">
 
-          {/* Aandachtspunten */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-card rounded-xl border border-border/40 shadow-sm p-4"
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <h2 className="section-title text-sm">Aandachtspunten</h2>
+          {/* AI Inzichten */}
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="card--luxe p-5 relative">
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="h-7 w-7 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)) 0%, hsl(var(--gold) / 0.3) 100%)" }}>
+                <Sparkles className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+              </div>
+              <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                AI Inzichten
+              </span>
             </div>
-            <div className="space-y-2">
-              {stats.overdueOrders.length > 0 ? (
-                stats.overdueOrders.map((order) => (
-                  <Popover key={order.id}>
-                    <PopoverTrigger asChild>
-                      <button className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-destructive/5 border border-destructive/10 hover:bg-destructive/10 transition-colors text-left group">
-                        <Clock className="h-3.5 w-3.5 text-destructive shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground truncate">{order.orderNumber}</p>
-                          <p className="text-xs text-muted-foreground truncate">{order.customer}</p>
-                        </div>
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-56 p-3" side="left" align="start">
-                      <p className="text-sm font-semibold font-display mb-2">Quick Actions</p>
-                      <div className="space-y-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start gap-2 h-8 text-sm"
-                          onClick={() => {
-                            if (order.phone) {
-                              window.open(`tel:${order.phone}`, "_self");
-                            } else {
-                              toast.error("Geen telefoonnummer beschikbaar");
-                            }
-                          }}
-                        >
-                          <Phone className="h-3 w-3" /> Bel Chauffeur
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full justify-start gap-2 h-8 text-sm"
-                          onClick={() => {
-                            if (order.email) {
-                              window.open(`mailto:${order.email}`, "_self");
-                            } else {
-                              toast.error("Geen e-mailadres beschikbaar");
-                            }
-                          }}
-                        >
-                          <Mail className="h-3 w-3" /> Mail Klant
-                        </Button>
-                        <Link to={`/orders/${order.id}`}>
-                          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 h-8 text-sm text-primary">
-                            <ArrowRight className="h-3 w-3" /> Bekijk order
-                          </Button>
-                        </Link>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                ))
-              ) : (
-                <div className="text-center py-4">
-                  <CheckCircle2 className="h-6 w-6 mx-auto mb-1.5 text-emerald-500/50" />
-                  <p className="text-sm text-muted-foreground">Geen achterstallige orders</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {aiInsights.map((insight, i) => (
+                <div key={i} className="flex items-start gap-2.5 p-3 rounded-lg" style={{ background: "hsl(var(--gold-soft) / 0.15)", border: "1px solid hsl(var(--gold) / 0.12)" }}>
+                  {insight.type === "warning" && <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />}
+                  {insight.type === "opportunity" && <TrendingUp className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />}
+                  {insight.type === "info" && <Activity className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0 mt-0.5" />}
+                  <p className="text-xs text-foreground leading-relaxed">{insight.text}</p>
                 </div>
-              )}
+              ))}
+            </div>
+          </motion.section>
+
+          {/* KPI Strip */}
+          <KPIStrip
+            columns={6}
+            items={[
+              { label: "Totaal orders", value: orders.length, icon: BarChart3, iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+              { label: "Voertuigen", value: vehicles.length, icon: Truck, iconColor: "text-violet-600", iconBg: "bg-violet-500/10" },
+              { label: "Nieuw", value: (stats.byStatus["DRAFT"] || 0) + (stats.byStatus["PENDING"] || 0), icon: CircleDot, iconColor: "text-sky-600", iconBg: "bg-sky-500/10" },
+              { label: "Onderweg", value: stats.byStatus["IN_TRANSIT"] || 0, icon: Navigation, iconColor: "text-primary", iconBg: "bg-primary/10" },
+              { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: CheckCircle2, iconColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+              { label: "Achterstallig", value: stats.overdueOrders.length, icon: Timer, iconColor: stats.overdueOrders.length > 0 ? "text-destructive" : "text-muted-foreground", iconBg: stats.overdueOrders.length > 0 ? "bg-destructive/10" : "bg-muted" },
+            ]}
+          />
+
+          {/* Financial & Forecast widgets */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <FinancialKPIWidget orders={orders} vehicles={vehicles} />
+            <OperationalForecastWidget vehicles={vehicles} orders={orders} />
+          </div>
+
+          {/* Margin widget */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Suspense fallback={<div className="h-64 rounded-lg border border-border bg-card animate-pulse" />}>
+              <MarginWidget />
+            </Suspense>
+          </div>
+
+          {/* AI Autonomy + Voertuigcheck */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <AutonomyScoreCard compact />
+            {canSeeVehicleCheck && (
+              <Link
+                to="/voertuigcheck?status=DAMAGE_FOUND"
+                className="card--luxe p-4 flex items-center gap-4 hover:shadow-md transition-shadow group"
+              >
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: pendingReleaseCount > 0 ? "hsl(0 80% 95%)" : "hsl(var(--gold-soft))", color: pendingReleaseCount > 0 ? "hsl(0 65% 40%)" : "hsl(var(--gold-deep))" }}>
+                  <ShieldAlert className="h-6 w-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] uppercase tracking-[0.28em] font-semibold text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                    Voertuigcheck
+                  </div>
+                  <div className="text-lg font-semibold leading-tight" style={{ fontFamily: "var(--font-display)" }}>
+                    Te vrijgeven voertuigchecks
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">Checks met schade die op planner-vrijgave wachten.</p>
+                </div>
+                <div className="text-[2rem] font-semibold tabular-nums shrink-0"
+                  style={{ fontFamily: "var(--font-display)", color: pendingReleaseCount > 0 ? "hsl(0 65% 40%)" : "hsl(var(--muted-foreground))" }}>
+                  {pendingReleaseCount}
+                </div>
+              </Link>
+            )}
+          </div>
+
+          {/* Recente orders */}
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card--luxe overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: "hsl(var(--gold) / 0.15)" }}>
+              <div className="flex items-center gap-2.5">
+                <CalendarClock className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+                <h2 className="text-sm font-semibold" style={{ fontFamily: "var(--font-display)" }}>Recente orders</h2>
+              </div>
+              <Link to="/orders" className="text-xs text-[hsl(var(--gold-deep))] hover:text-foreground font-medium flex items-center gap-1 transition-colors">
+                Bekijk alles <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr className="border-b" style={{ borderColor: "hsl(var(--gold) / 0.1)", background: "hsl(var(--gold-soft) / 0.1)" }}>
+                    <th className="table-header">Order</th>
+                    <th className="table-header">Klant</th>
+                    <th className="table-header hidden md:table-cell">Bezorging</th>
+                    <th className="table-header text-right hidden sm:table-cell">Gewicht</th>
+                    <th className="table-header">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/20">
+                  {recentOrders.map((order) => (
+                    <tr key={order.id} className="table-row">
+                      <td className="table-cell">
+                        <Link to={`/orders/${order.id}`} className="font-mono text-sm font-medium text-foreground hover:text-[hsl(var(--gold-deep))] transition-colors">
+                          {order.orderNumber}
+                        </Link>
+                      </td>
+                      <td className="table-cell text-foreground/80">{order.customer}</td>
+                      <td className="table-cell text-muted-foreground hidden md:table-cell">
+                        <span className="flex items-center gap-1 truncate max-w-[240px]">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          {order.deliveryAddress}
+                        </span>
+                      </td>
+                      <td className="table-cell text-foreground/80 text-right tabular-nums font-medium hidden sm:table-cell">
+                        {order.totalWeight.toLocaleString()} kg
+                      </td>
+                      <td className="table-cell">
+                        <StatusBadge status={order.status as OrderStatus} />
+                      </td>
+                    </tr>
+                  ))}
+                  {recentOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">Geen orders gevonden</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </motion.div>
+
         </div>
       </div>
     </div>
