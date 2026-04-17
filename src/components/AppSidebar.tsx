@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Shield, Send, Brain, Radar } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Shield, Send, Brain, Radar, Warehouse } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -40,6 +40,10 @@ const mainItemsDef = [
   { titleKey: "nav.exceptions", url: "/exceptions", icon: Shield },
   { titleKey: "nav.autonomy", url: "/autonomie", icon: Brain },
   { titleKey: "nav.invoicing", url: "/facturatie", icon: Receipt },
+];
+
+const stamgegevensDef = [
+  { titleKey: "nav.warehouses", titleFallback: "Warehouses", url: "/stamgegevens/warehouses", icon: Warehouse },
 ];
 
 const adminItemsDef = [
@@ -103,6 +107,8 @@ export function AppSidebar() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const mainItems = useMemo(() => toItems(mainItemsDef), [t, i18n.language]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stamgegevensItems = useMemo(() => toItems(stamgegevensDef), [t, i18n.language]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const adminItems = useMemo(() => toItems(adminItemsDef), [t, i18n.language]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,6 +202,39 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {adminItems.map((item) => {
+                  const active = isActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={active}>
+                        <NavLink
+                          to={item.url}
+                          className={cn(
+                            "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+                            active
+                              ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
+                              : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
+                          )}
+                        >
+                          <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {effectiveRole !== "chauffeur" && (
+          <SidebarGroup className="mt-4">
+            <SidebarGroupLabel className="text-sidebar-foreground/30 text-xs uppercase tracking-[0.15em] font-medium mb-1 px-3">
+              Stamgegevens
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {stamgegevensItems.map((item) => {
                   const active = isActive(item.url);
                   return (
                     <SidebarMenuItem key={item.title}>

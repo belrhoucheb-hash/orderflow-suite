@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { isValidAddress } from "@/components/inbox/utils";
 import { useTenantOptional } from "@/contexts/TenantContext";
-import { createShipmentWithLegs, inferAfdeling, type BookingInput } from "@/lib/trajectRouter";
+import { createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
@@ -602,12 +602,17 @@ const NewOrder = () => {
   useEffect(() => {
     const pickup = freightLines.find((f) => f.activiteit === "Laden")?.locatie || "";
     const delivery = freightLines.find((f) => f.activiteit === "Lossen")?.locatie || "";
-    const inferred = inferAfdeling(pickup, delivery);
-    setInferredAfdeling(inferred ?? null);
-    if (!afdelingManual) {
-      setAfdeling(inferred ?? "");
-    }
-  }, [freightLines, afdelingManual]);
+    if (!pickup || !delivery) return;
+    let cancelled = false;
+    inferAfdelingAsync(pickup, delivery, tenant?.id).then((inferred) => {
+      if (cancelled) return;
+      setInferredAfdeling(inferred ?? null);
+      if (!afdelingManual) {
+        setAfdeling(inferred ?? "");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [freightLines, afdelingManual, tenant?.id]);
 
   // Live traject-preview zodra beide adressen ingevuld zijn.
   useEffect(() => {
