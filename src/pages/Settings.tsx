@@ -35,6 +35,7 @@ import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
+import { InboxSettings } from "@/components/settings/InboxSettings";
 import { useTranslation } from "react-i18next";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -218,6 +219,7 @@ const Settings = () => {
     if (location.pathname.includes("/branding")) return "branding";
     if (location.pathname.includes("/sms")) return "sms";
     if (location.pathname.includes("/integraties")) return "integraties";
+    if (location.pathname.includes("/inboxen")) return "inboxen";
     if (location.pathname.includes("/tarieven")) return "tarieven";
     if (location.pathname.includes("/kosten")) return "kosten";
     return "algemeen";
@@ -277,6 +279,12 @@ const Settings = () => {
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
             >
               {t('pages.settings.tabs.integrations')}
+            </TabsTrigger>
+            <TabsTrigger
+              value="inboxen"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+            >
+              Inboxen
             </TabsTrigger>
             <TabsTrigger
               value="tarieven"
@@ -907,6 +915,11 @@ const Settings = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Inboxen Tab */}
+        <TabsContent value="inboxen" className="outline-none">
+          <InboxSettings />
         </TabsContent>
 
         {/* Webhooks Tab */}

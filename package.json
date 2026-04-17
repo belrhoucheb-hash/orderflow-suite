@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "check:secret-leaks": "node scripts/check-secret-leaks.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

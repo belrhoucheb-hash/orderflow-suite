@@ -26,6 +26,7 @@ const mockSaveMutateAsync = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@/contexts/TenantContext", () => ({
   useTenant: () => ({ tenant: { id: "t1", name: "Test BV", slug: "test", logoUrl: null, primaryColor: "#3b82f6" }, loading: false }),
+  useTenantOptional: () => ({ tenant: { id: "t1" } }),
 }));
 
 vi.mock("@/hooks/useSettings", () => ({
@@ -81,6 +82,19 @@ vi.mock("@/lib/notificationRenderer", () => ({
   renderTemplate: (template: string) => template,
   extractVariables: () => [],
   buildTrackUrl: () => "https://example.com/track",
+}));
+
+// Inbox hook, leeg voor Settings-smoke tests
+vi.mock("@/hooks/useTenantInboxes", () => ({
+  useTenantInboxes: () => ({
+    data: [],
+    isLoading: false,
+    create: { mutateAsync: vi.fn(), isPending: false },
+    update: { mutateAsync: vi.fn(), isPending: false },
+    remove: { mutateAsync: vi.fn(), isPending: false },
+    setActive: { mutateAsync: vi.fn(), isPending: false },
+    testConnection: { mutateAsync: vi.fn(), isPending: false },
+  }),
 }));
 
 // Mock clipboard API and toast
@@ -833,6 +847,26 @@ describe("Settings", () => {
 
   it("opens integraties tab from URL path", () => {
     renderSettings("/settings/integraties");
+    expect(document.body.textContent).toBeTruthy();
+  });
+
+  // ── Inboxen tab ──
+  it("switches to Inboxen tab and shows empty state", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    const inboxTab = screen.queryByText(/Inboxen/i);
+    expect(inboxTab).toBeTruthy();
+    if (inboxTab) {
+      await user.click(inboxTab);
+      await waitFor(() => {
+        expect(screen.getByText(/Nog geen inboxen gekoppeld/i)).toBeInTheDocument();
+      });
+      expect(screen.getAllByText(/Nieuwe inbox/i).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("opens inboxen tab from URL path", () => {
+    renderSettings("/settings/inboxen");
     expect(document.body.textContent).toBeTruthy();
   });
 
