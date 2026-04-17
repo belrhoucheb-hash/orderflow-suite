@@ -790,18 +790,14 @@
   /* Chapter badge (small gold-chipped marker in card corner) */
   .card-chapter {
     position: absolute;
-    top: 1.875rem;
-    right: 2.25rem;
+    top: 1.5rem;
+    left: 1.5rem;
     font-family: var(--font-display);
     font-size: 0.6875rem;
     font-weight: 600;
     line-height: 1;
-    color: hsl(var(--gold-deep));
+    color: hsl(var(--gold) / 0.35);
     letter-spacing: 0.2em;
-    padding: 0.25rem 0.625rem;
-    background: hsl(var(--gold-soft) / 0.5);
-    border: 1px solid hsl(var(--gold) / 0.25);
-    border-radius: 0.25rem;
     user-select: none;
     pointer-events: none;
   }
