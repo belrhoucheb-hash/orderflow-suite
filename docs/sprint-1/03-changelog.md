@@ -153,6 +153,8 @@ Alle tests moeten groen zijn. Bestaande `trajectRouter.test.ts` (19 tests) is ni
 6. Factuur-mail template die op `billing_email` richt, komt in Sprint TA-06.
 7. POD-mail op stamgegevens-contact komt in Sprint PD-03.
 
+**Post-deploy fix (commit `14af934`)**: na het draaien van de NOT NULL-migratie bleek dat drie edge-functions DRAFT-orders inserten voordat de afdeling bekend is: `import-email`, `poll-inbox`, `create-order`. Elk resolvet nu één keer het OPS-department van de tenant en zet dat als fallback in de insert. Consistent met de migratie-backfill. `parse-order` werkt het later bij zodra een EXPORT-adres gedetecteerd wordt.
+
 **Niet aangeraakt, bewust buiten scope**:
 
 - Trips, trip_stops, proof_of_delivery, delivery_exceptions hebben nog permissive RLS. Aanscherpen is een aparte sprint.
