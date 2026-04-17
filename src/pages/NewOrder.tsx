@@ -1014,8 +1014,8 @@ const NewOrder = () => {
                   <h3 className="section-title">Wat wordt er vervoerd</h3>
                   <p className="text-xs text-muted-foreground mt-1">Voeg meerdere regels toe voor verschillende soorten lading.</p>
                 </div>
-                <Button size="sm" variant="ghost" onClick={addCargoRow} className="h-8 px-3 text-xs gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> Lading-regel
+                <Button size="sm" variant="outline" onClick={addCargoRow} className="h-8 px-4 text-xs gap-1.5 whitespace-nowrap shrink-0">
+                  <Plus className="h-3.5 w-3.5 shrink-0" /> Lading-regel
                 </Button>
               </div>
 
