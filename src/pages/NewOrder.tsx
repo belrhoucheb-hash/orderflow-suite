@@ -608,27 +608,40 @@ const NewOrder = () => {
             <p className="text-xs text-muted-foreground mt-1.5">{todayFormatted}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button size="sm" variant="ghost" onClick={() => navigate("/orders")} className="h-9 px-3 text-xs gap-1.5">
-              <X className="h-3.5 w-3.5" /> Annuleren
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => window.print()} className="h-9 px-3 text-xs gap-1.5">
-              <Printer className="h-3.5 w-3.5" /> Afdrukken
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => handleSave(false)} disabled={saving} className="h-9 px-3 text-xs gap-1.5">
-              <Save className="h-3.5 w-3.5" /> Opslaan
-            </Button>
-            <Button
-              size="sm"
+            <button
+              type="button"
+              onClick={() => navigate("/orders")}
+              className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-transparent bg-transparent text-muted-foreground transition-all duration-200 hover:text-foreground hover:bg-[hsl(var(--muted)_/_0.5)]"
+            >
+              Annuleren
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-[hsl(var(--border)_/_0.7)] bg-white text-foreground transition-all duration-200 hover:bg-[hsl(var(--muted)_/_0.6)] hover:border-[hsl(var(--border))]"
+            >
+              Afdrukken
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-[hsl(var(--border)_/_0.7)] bg-white text-foreground transition-all duration-200 hover:bg-[hsl(var(--muted)_/_0.6)] hover:border-[hsl(var(--border))] disabled:opacity-50"
+            >
+              Opslaan
+            </button>
+            <button
+              type="button"
               onClick={() => handleSave(true)}
               disabled={saving}
-              className="h-9 px-4 text-xs gap-1.5 font-medium"
+              className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-transparent text-white relative overflow-hidden transition-all duration-200 hover:-translate-y-px disabled:opacity-50"
               style={{
-                background: "linear-gradient(180deg, hsl(0 78% 48%), hsl(0 78% 38%))",
-                boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.2), 0 1px 2px hsl(var(--primary) / 0.35), 0 4px 12px -2px hsl(var(--primary) / 0.3)",
+                background: "linear-gradient(180deg, hsl(0 78% 48%) 0%, hsl(0 78% 38%) 100%)",
+                boxShadow: "0 1px 2px hsl(var(--primary) / 0.4), 0 4px 12px -2px hsl(var(--primary) / 0.3), inset 0 1px 0 hsl(0 0% 100% / 0.2), inset 0 -1px 0 hsl(0 0% 0% / 0.1)",
               }}
             >
-              <Save className="h-3.5 w-3.5" /> Opslaan &amp; sluiten
-            </Button>
+              Opslaan & sluiten
+            </button>
           </div>
         </div>
 
