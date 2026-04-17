@@ -18,6 +18,19 @@ export interface Client {
   is_active: boolean;
   created_at: string;
   active_order_count?: number;
+
+  billing_email: string | null;
+  billing_same_as_main: boolean;
+  billing_address: string | null;
+  billing_zipcode: string | null;
+  billing_city: string | null;
+  billing_country: string | null;
+
+  shipping_same_as_main: boolean;
+  shipping_address: string | null;
+  shipping_zipcode: string | null;
+  shipping_city: string | null;
+  shipping_country: string | null;
 }
 
 export interface ClientLocation {
@@ -156,6 +169,23 @@ export function useCreateClient() {
       const { data, error } = await supabase
         .from("clients")
         .insert({ name: client.name!, ...client } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+  });
+}
+
+export function useUpdateClient() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...patch }: Partial<Client> & { id: string }) => {
+      const { data, error } = await supabase
+        .from("clients")
+        .update(patch as any)
+        .eq("id", id)
         .select()
         .single();
       if (error) throw error;

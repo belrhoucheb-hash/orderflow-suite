@@ -2,9 +2,10 @@ import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { type Client, useClientLocations, useClientRates, useClientOrders } from "@/hooks/useClients";
-import { MapPin, Clock, Truck, Euro, FileText, Building2, Hash } from "lucide-react";
+import { MapPin, Clock, Truck, Euro, FileText, Building2, Hash, Mail } from "lucide-react";
 import { ClientPortalTab } from "./ClientPortalTab";
 import { ClientEmballageTab } from "./ClientEmballageTab";
+import { ClientContactsSection } from "./ClientContactsSection";
 
 interface Props {
   client: Client;
@@ -19,7 +20,7 @@ export function ClientDetailPanel({ client }: Props) {
   return (
     <Tabs defaultValue="overzicht" className="w-full">
       <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent px-6 h-auto py-0">
-        {["Overzicht", "Locaties", "Tarieven", "Orders", "Portaal", "Emballage"].map((tab) => (
+        {["Overzicht", "Contacten", "Locaties", "Tarieven", "Orders", "Portaal", "Emballage"].map((tab) => (
           <TabsTrigger
             key={tab}
             value={tab.toLowerCase()}
@@ -45,11 +46,54 @@ export function ClientDetailPanel({ client }: Props) {
           <Field label="Telefoon" value={client.phone} />
         </Section>
 
-        <Section title="Facturatieadres">
+        <Section title="Hoofdadres">
           <p className="text-sm text-foreground">
-            {[client.address, client.zipcode, client.city, client.country].filter(Boolean).join(", ") || "—"}
+            {formatAddress(client.address, client.zipcode, client.city, client.country)}
           </p>
         </Section>
+
+        <Section title="Facturatie">
+          <Field
+            icon={<Mail className="h-4 w-4" strokeWidth={1.5} />}
+            label="Factuur e-mail"
+            value={client.billing_email || client.email}
+          />
+          <div>
+            <span className="text-xs text-muted-foreground">Factuuradres</span>
+            {client.billing_same_as_main ? (
+              <p className="text-sm text-muted-foreground italic">Gelijk aan hoofdadres</p>
+            ) : (
+              <p className="text-sm text-foreground">
+                {formatAddress(
+                  client.billing_address,
+                  client.billing_zipcode,
+                  client.billing_city,
+                  client.billing_country,
+                )}
+              </p>
+            )}
+          </div>
+        </Section>
+
+        <Section title="Postadres">
+          {client.shipping_same_as_main ? (
+            <p className="text-sm text-muted-foreground italic">Gelijk aan hoofdadres</p>
+          ) : (
+            <p className="text-sm text-foreground">
+              {formatAddress(
+                client.shipping_address,
+                client.shipping_zipcode,
+                client.shipping_city,
+                client.shipping_country,
+              )}
+            </p>
+          )}
+        </Section>
+      </TabsContent>
+
+      {/* Contacten */}
+      <TabsContent value="contacten" className="p-6 mt-0">
+        <ClientContactsSection clientId={client.id} />
       </TabsContent>
 
       {/* Locaties */}
@@ -177,6 +221,18 @@ function Field({ label, value, icon }: { label: string; value: string | null | u
       </div>
     </div>
   );
+}
+
+function formatAddress(
+  street: string | null | undefined,
+  zipcode: string | null | undefined,
+  city: string | null | undefined,
+  country: string | null | undefined,
+) {
+  const parts = [street, [zipcode, city].filter(Boolean).join(" "), country]
+    .map((p) => (typeof p === "string" ? p.trim() : p))
+    .filter(Boolean);
+  return parts.length ? parts.join(", ") : "—";
 }
 
 function rateTypeLabel(type: string) {
