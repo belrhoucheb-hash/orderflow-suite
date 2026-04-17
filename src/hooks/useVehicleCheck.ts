@@ -4,11 +4,14 @@ import { isGatePassed, type VehicleCheckForGate } from "@/lib/vehicleCheckGate";
 
 export type PhotoSide =
   | "front" | "rear" | "left" | "right"
-  | "interior_front" | "interior_cargo";
+  | "interior_front" | "interior_cargo"
+  | "dashboard" | "klep" | "koelunit";
 
 export const REQUIRED_SIDES: PhotoSide[] = [
-  "front", "rear", "left", "right", "interior_front", "interior_cargo",
+  "front", "rear", "left", "right", "interior_front", "interior_cargo", "dashboard",
 ];
+
+export const OPTIONAL_SIDES: PhotoSide[] = ["klep", "koelunit"];
 
 export interface VehicleCheckPhoto {
   id: string;
@@ -20,6 +23,7 @@ export interface VehicleCheckPhoto {
   severity: "none" | "minor" | "blocking";
   baseline_photo_id: string | null;
   confidence?: number | null;
+  driver_note?: string | null;
 }
 
 export interface VehicleCheck {
@@ -271,6 +275,7 @@ export function useSubmitVehicleCheck() {
       checklist: Record<string, boolean>;
       notes?: string;
       photos: VehicleCheckPhoto[];
+      driverNotes?: Partial<Record<PhotoSide, string>>;
       baselineCheckId: string | null;
       asBaselineSeed?: boolean;
     }) => {
@@ -289,6 +294,25 @@ export function useSubmitVehicleCheck() {
         })
         .eq("id", args.checkId);
       if (error) throw error;
+
+      // Sla chauffeur-correcties op per foto (driver_note kolom).
+      if (args.driverNotes) {
+        const updates = args.photos
+          .filter((p) => {
+            const note = args.driverNotes?.[p.side];
+            return note !== undefined && note !== (p.ai_description ?? "");
+          })
+          .map((p) =>
+            (supabase as any)
+              .from("vehicle_check_photos")
+              .update({ driver_note: args.driverNotes![p.side] })
+              .eq("id", p.id),
+          );
+        const results = await Promise.all(updates);
+        for (const r of results) {
+          if (r.error) throw r.error;
+        }
+      }
 
       // Toewijzing: welke chauffeur reed tijdens de baseline?
       let attributedDriverId: string | null = null;

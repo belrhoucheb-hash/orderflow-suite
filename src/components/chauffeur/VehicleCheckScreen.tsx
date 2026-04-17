@@ -4,6 +4,7 @@ import { CameraCapture } from "./CameraCapture";
 import { toast } from "sonner";
 import {
   REQUIRED_SIDES,
+  OPTIONAL_SIDES,
   type PhotoSide,
   type VehicleCheckPhoto,
   useBaseline,
@@ -19,6 +20,9 @@ const SIDE_LABEL: Record<PhotoSide, string> = {
   right: "Rechterzijde",
   interior_front: "Interieur cabine",
   interior_cargo: "Interieur laadruimte",
+  dashboard: "Dashboard (km-stand)",
+  klep: "Klep",
+  koelunit: "Koelunit",
 };
 
 const CHECKLIST_ITEMS: { key: string; label: string }[] = [
@@ -76,6 +80,7 @@ export function VehicleCheckScreen({
   const [notes, setNotes] = useState("");
   const [cameraSide, setCameraSide] = useState<PhotoSide | null>(null);
   const [errorBySide, setErrorBySide] = useState<Partial<Record<PhotoSide, string>>>({});
+  const [driverNotes, setDriverNotes] = useState<Partial<Record<PhotoSide, string>>>({});
   const startedRef = useRef(false);
 
   useEffect(() => {
@@ -114,6 +119,7 @@ export function VehicleCheckScreen({
       });
       console.log("[VehicleCheck] result", side, result);
       setPhotos((prev) => ({ ...prev, [side]: result }));
+      setDriverNotes((prev) => ({ ...prev, [side]: result.ai_description ?? "" }));
       if (result.severity === "blocking") {
         toast.error(`Blokkerende schade gevonden op ${SIDE_LABEL[side]}`);
       } else if (result.severity === "minor") {
@@ -145,7 +151,9 @@ export function VehicleCheckScreen({
   const handleSubmit = async () => {
     if (!checkId) return;
     try {
-      const photoList = REQUIRED_SIDES.map((s) => photos[s]!).filter(Boolean);
+      const photoList = [...REQUIRED_SIDES, ...OPTIONAL_SIDES]
+        .map((s) => photos[s]!)
+        .filter(Boolean);
       const res = await submit.mutateAsync({
         tenantId,
         checkId,
@@ -154,6 +162,7 @@ export function VehicleCheckScreen({
         checklist,
         notes,
         photos: photoList,
+        driverNotes,
         baselineCheckId: baselineQ.data?.checkId ?? null,
         asBaselineSeed,
       });
@@ -258,7 +267,7 @@ export function VehicleCheckScreen({
             className="text-[1.35rem] leading-tight font-semibold tracking-tight mb-2"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            Foto's, alle 6 zijdes
+            Foto's, alle {REQUIRED_SIDES.length} zijdes
           </h2>
           <ProgressStrip
             label="Foto's"
@@ -343,9 +352,130 @@ export function VehicleCheckScreen({
                       {errorBySide[side]}
                     </p>
                   )}
+                  {done && (
+                    <textarea
+                      value={driverNotes[side] ?? ""}
+                      onChange={(e) =>
+                        setDriverNotes((prev) => ({ ...prev, [side]: e.target.value }))
+                      }
+                      placeholder="Correctie of aanvulling (optioneel)"
+                      rows={2}
+                      className="w-full mt-2 rounded-lg px-2.5 py-2 text-[0.8rem] leading-relaxed resize-none outline-none transition-colors"
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        background:
+                          "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.18) 100%)",
+                        border: "1px solid hsl(var(--gold) / 0.28)",
+                        color: "hsl(var(--foreground))",
+                        boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.3)",
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = "hsl(var(--gold) / 0.55)";
+                        e.currentTarget.style.boxShadow =
+                          "inset 0 1px 0 hsl(0 0% 100% / 0.3), 0 0 0 3px hsl(var(--gold) / 0.12)";
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = "hsl(var(--gold) / 0.28)";
+                        e.currentTarget.style.boxShadow =
+                          "inset 0 1px 0 hsl(0 0% 100% / 0.3)";
+                      }}
+                    />
+                  )}
                 </div>
               );
             })}
+          </div>
+
+          <div className="mt-6">
+            <div
+              className="text-[10px] uppercase tracking-[0.14em] font-semibold text-muted-foreground/70 mb-3"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Optioneel (indien van toepassing)
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {OPTIONAL_SIDES.map((side) => {
+                const done = photos[side];
+                return (
+                  <div
+                    key={side}
+                    className={`rounded-xl border p-3 transition-colors ${severityClasses(
+                      done?.severity,
+                    )}`}
+                    style={{ opacity: done ? 1 : 0.7 }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span
+                        className="text-[11px] uppercase tracking-[0.14em] font-semibold text-foreground"
+                        style={{ fontFamily: "var(--font-display)" }}
+                      >
+                        {SIDE_LABEL[side]}
+                      </span>
+                      {done ? (
+                        done.severity === "blocking" ? (
+                          <span className="text-xs font-semibold text-red-700 px-2 py-0.5 rounded-full bg-red-100">
+                            Blokkerend
+                          </span>
+                        ) : done.severity === "minor" ? (
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{
+                              color: "hsl(var(--gold-deep))",
+                              background: "hsl(var(--gold-soft))",
+                              border: "1px solid hsl(var(--gold) / 0.35)",
+                            }}
+                          >
+                            Minor
+                          </span>
+                        ) : (
+                          <Check className="h-4 w-4 text-emerald-600" />
+                        )
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      className={`btn-luxe w-full ${done ? "" : "btn-luxe--primary"}`}
+                      disabled={uploading === side || !checkId}
+                      onClick={() => setCameraSide(side)}
+                    >
+                      {uploading === side ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" /> Analyseren…
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="h-4 w-4" />
+                          {done ? "Opnieuw" : "Foto maken"}
+                        </>
+                      )}
+                    </button>
+                    {done?.ai_diff && (
+                      <p className="text-xs text-foreground/80 mt-2 italic leading-snug">
+                        {done.ai_diff}
+                      </p>
+                    )}
+                    {done &&
+                      done.severity !== "none" &&
+                      typeof done.confidence === "number" && (
+                        <p
+                          className="text-[10px] uppercase tracking-[0.14em] mt-1.5 font-semibold"
+                          style={{
+                            color: "hsl(var(--gold-deep))",
+                            fontFamily: "var(--font-display)",
+                          }}
+                        >
+                          AI-zekerheid {Math.round(done.confidence * 100)}%
+                        </p>
+                      )}
+                    {errorBySide[side] && (
+                      <p className="text-[11px] text-red-700 mt-2 leading-snug break-words">
+                        {errorBySide[side]}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
 
@@ -475,7 +605,7 @@ export function VehicleCheckScreen({
             {!(allPhotosDone && allChecklistDone) && (
               <p className="text-xs text-muted-foreground mt-2 text-center flex items-center justify-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
-                Alle 6 foto's + 10 checklist-items verplicht
+                Alle {REQUIRED_SIDES.length} foto's + {CHECKLIST_ITEMS.length} checklist-items verplicht
               </p>
             )}
           </div>
