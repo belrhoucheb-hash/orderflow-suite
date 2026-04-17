@@ -858,125 +858,157 @@ const NewOrder = () => {
               </div>
             </section>
 
-            {/* ══ Chapter III · Vrachtplanning ══ */}
+{/* ══ Chapter III · Vrachtplanning ══ */}
             <section className="card--luxe p-6 relative">
               <span className="card-chapter">III</span>
-              <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
-                    03 · Vrachtplanning
-                  </div>
-                  <h3 className="section-title">Laad- en losstops</h3>
-                  <p className="text-xs text-muted-foreground mt-1">Tijdvensters per regel, geen losse box meer.</p>
+              <div className="mb-5">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                  03 · Vrachtplanning
                 </div>
-                <Button size="sm" variant="ghost" onClick={addFreightLine} className="h-8 px-3 text-xs gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> Regel toevoegen
-                </Button>
+                <h3 className="section-title">Laad- en losstops</h3>
+                <p className="text-xs text-muted-foreground mt-1">Adres, datum en tijdvenster per stop.</p>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[960px]">
-                  <thead>
-                    <tr className="border-b border-border/60 text-muted-foreground">
-                      <th className="text-left font-semibold py-2 pr-2 w-[110px]">Activiteit <span className="text-red-600">*</span></th>
-                      <th className="text-left font-semibold py-2 pr-2">Adres <span className="text-red-600">*</span></th>
-                      <th className="text-left font-semibold py-2 pr-2 w-[140px]">Datum <span className="text-red-600">*</span></th>
-                      <th className="text-left font-semibold py-2 pr-2 w-[180px]">Tijdvenster</th>
-                      <th className="text-left font-semibold py-2 pr-2 w-[120px]">Referentie</th>
-                      <th className="text-left font-semibold py-2 pr-2 w-[140px]">Contact op locatie</th>
-                      <th className="text-left font-semibold py-2 pr-2 w-[160px]">Opmerking</th>
-                      <th className="w-[36px]" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {freightLines.map(line => (
-                      <tr key={line.id} className="border-b border-border/40 align-top">
-                        <td className="py-2 pr-2">
+
+              {/* ── Laden/Lossen kaarten ── */}
+              <div className="space-y-4">
+                {freightLines.map((line, idx) => (
+                  <div
+                    key={line.id}
+                    className={cn(
+                      "rounded-xl border p-5 transition-all",
+                      line.activiteit === "Laden"
+                        ? "border-emerald-200/60 bg-gradient-to-br from-emerald-50/40 to-white"
+                        : "border-blue-200/60 bg-gradient-to-br from-blue-50/40 to-white",
+                    )}
+                  >
+                    {/* Top row: type badge + verwijder */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-8 h-8 rounded-lg inline-flex items-center justify-center text-xs font-bold",
+                          line.activiteit === "Laden"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-blue-100 text-blue-700",
+                        )}>
+                          {line.activiteit === "Laden" ? (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg>
+                          ) : (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 7v14"/><path d="m18 13-6-6-6 6"/><path d="M19 3H5"/></svg>
+                          )}
+                        </div>
+                        <div>
                           <Select value={line.activiteit} onValueChange={v => updateFreightLine(line.id, "activiteit", v)}>
-                            <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-sm font-semibold border-0 bg-transparent px-0 shadow-none focus:ring-0">
+                              <SelectValue />
+                            </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Laden">Laden</SelectItem>
                               <SelectItem value="Lossen">Lossen</SelectItem>
                             </SelectContent>
                           </Select>
-                        </td>
-                        <td className="py-2 pr-2">
-                          <AddressAutocomplete
-                            value={line.locatie}
-                            onChange={v => {
-                              updateFreightLine(line.id, "locatie", v);
-                              if (line.activiteit === "Laden") clearError("pickup_address");
-                              if (line.activiteit === "Lossen") clearError("delivery_address");
-                            }}
-                            className={cn(
-                              "h-9 text-xs",
-                              line.activiteit === "Laden" && errors.pickup_address && "border-red-500",
-                              line.activiteit === "Lossen" && errors.delivery_address && "border-red-500",
-                            )}
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <LuxeDatePicker
-                            value={line.datum}
-                            onChange={v => updateFreightLine(line.id, "datum", v)}
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <div className="flex items-center gap-1">
-                            <LuxeTimePicker
-                              value={line.tijd}
-                              onChange={v => updateFreightLine(line.id, "tijd", v)}
-                            />
-                            <span className="text-muted-foreground text-[10px]">→</span>
-                            <LuxeTimePicker
-                              value={line.tijdTot}
-                              onChange={v => updateFreightLine(line.id, "tijdTot", v)}
-                            />
-                          </div>
-                        </td>
-                        <td className="py-2 pr-2">
-                          <Input
-                            value={line.referentie}
-                            onChange={e => updateFreightLine(line.id, "referentie", e.target.value)}
-                            className="h-9 text-xs"
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <Input
-                            value={line.contactLocatie}
-                            onChange={e => updateFreightLine(line.id, "contactLocatie", e.target.value)}
-                            placeholder="Naam / telefoon"
-                            className="h-9 text-xs"
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <Input
-                            value={line.opmerkingen}
-                            onChange={e => updateFreightLine(line.id, "opmerkingen", e.target.value)}
-                            placeholder="Bv. aanmelden receptie"
-                            className="h-9 text-xs"
-                          />
-                        </td>
-                        <td className="py-2">
-                          <button
-                            onClick={() => removeFreightLine(line.id)}
-                            className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                            aria-label="Regel verwijderen"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <span className="text-[10px] text-muted-foreground">Stop {idx + 1}</span>
+                        </div>
+                      </div>
+                      {freightLines.length > 2 && (
+                        <button
+                          onClick={() => removeFreightLine(line.id)}
+                          className="text-muted-foreground hover:text-destructive transition-colors p-1.5 rounded-lg hover:bg-destructive/10"
+                          aria-label="Stop verwijderen"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Adres — prominente rij */}
+                    <div className="mb-4">
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">{line.activiteit === "Laden" ? "Ophaaladres" : "Afleveradres"} <span className="text-red-600">*</span></label>
+                      <AddressAutocomplete
+                        value={line.locatie}
+                        onChange={v => {
+                          updateFreightLine(line.id, "locatie", v);
+                          if (line.activiteit === "Laden") clearError("pickup_address");
+                          if (line.activiteit === "Lossen") clearError("delivery_address");
+                        }}
+                        className={cn(
+                          "h-11 text-sm",
+                          line.activiteit === "Laden" && errors.pickup_address && "border-red-500",
+                          line.activiteit === "Lossen" && errors.delivery_address && "border-red-500",
+                        )}
+                      />
+                      {line.activiteit === "Laden" && errors.pickup_address && <span className="text-[11px] text-red-500 mt-0.5 block">{errors.pickup_address}</span>}
+                      {line.activiteit === "Lossen" && errors.delivery_address && <span className="text-[11px] text-red-500 mt-0.5 block">{errors.delivery_address}</span>}
+                    </div>
+
+                    {/* Datum + tijdvenster */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Datum <span className="text-red-600">*</span></label>
+                        <LuxeDatePicker
+                          value={line.datum}
+                          onChange={v => updateFreightLine(line.id, "datum", v)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Tijd van</label>
+                        <LuxeTimePicker
+                          value={line.tijd}
+                          onChange={v => updateFreightLine(line.id, "tijd", v)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Tijd tot</label>
+                        <LuxeTimePicker
+                          value={line.tijdTot}
+                          onChange={v => updateFreightLine(line.id, "tijdTot", v)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Extra velden */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Referentie</label>
+                        <Input
+                          value={line.referentie}
+                          onChange={e => updateFreightLine(line.id, "referentie", e.target.value)}
+                          placeholder="PO-nummer"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Contact op locatie</label>
+                        <Input
+                          value={line.contactLocatie}
+                          onChange={e => updateFreightLine(line.id, "contactLocatie", e.target.value)}
+                          placeholder="Naam / telefoon"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Opmerking</label>
+                        <Input
+                          value={line.opmerkingen}
+                          onChange={e => updateFreightLine(line.id, "opmerkingen", e.target.value)}
+                          placeholder="Bv. aanmelden receptie"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="pt-3">
+
+              {/* Nieuwe stop toevoegen */}
+              <div className="pt-4 flex items-center gap-3">
                 <button
+                  type="button"
                   onClick={addFreightLine}
-                  className="text-xs text-[hsl(var(--gold-deep))] hover:text-foreground font-medium inline-flex items-center gap-1 transition-colors"
+                  className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-[hsl(var(--border)_/_0.7)] bg-white text-foreground transition-all duration-200 hover:bg-[hsl(var(--muted)_/_0.6)] hover:border-[hsl(var(--border))] gap-2"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Nieuwe vrachtregel
+                  <Plus className="h-4 w-4" /> Tussenstop toevoegen
                 </button>
+                <span className="text-[11px] text-muted-foreground">Multi-drop: voeg extra laad- of losstops toe.</span>
               </div>
             </section>
 
