@@ -149,6 +149,17 @@ const NewOrder = () => {
   // Klep / laadklep
   const [klepNodig, setKlepNodig] = useState(false);
 
+  // PMT (EDD / X-RAY) — conditioneel bij luchtvracht
+  const [shipmentSecure, setShipmentSecure] = useState(true);
+  const [pmtMethode, setPmtMethode] = useState<"" | "edd" | "xray">("");
+  const [pmtOperator, setPmtOperator] = useState("");
+  const [pmtReferentie, setPmtReferentie] = useState("");
+  const [pmtDatum, setPmtDatum] = useState("");
+  const [pmtLocatie, setPmtLocatie] = useState("");
+  const [pmtSeal, setPmtSeal] = useState("");
+  const [pmtByCustomer, setPmtByCustomer] = useState(true);
+  const showPmt = transportType === "Express";
+
   // Financieel state — Royalty Cargo pricing model
   const [pricingMode, setPricingMode] = useState<"standard" | "override">("standard");
   const [kmVehicle, setKmVehicle] = useState<VehicleKey>("Caddy");
@@ -1142,12 +1153,129 @@ const NewOrder = () => {
               </div>
             </section>
 
-            {/* ══ Chapter V · Info volgt van klant ══ */}
-            <section className="card--luxe p-6 relative" style={{ background: "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(45 60% 96%) 100%)" }}>
+            {/* ══ Chapter V · Luchtvracht-beveiliging (PMT) ══ */}
+            {showPmt && (
+            <section className="card--luxe p-6 relative">
               <span className="card-chapter">V</span>
+              <div className="mb-5">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                  05 · Luchtvracht-beveiliging
+                </div>
+                <h3 className="section-title">PMT · EDD of X-RAY</h3>
+                <p className="text-xs text-muted-foreground mt-1">Verschijnt automatisch bij luchtvracht. Standaard gaat de sectie uit van een vooraf beveiligde zending.</p>
+              </div>
+
+              {/* Secure toggle */}
+              <div className="flex items-center justify-between p-4 rounded-[0.875rem] bg-[hsl(var(--muted)_/_0.3)] border border-[hsl(var(--border)_/_0.5)] mb-4">
+                <div>
+                  <div className="text-[0.9375rem] font-semibold" style={{ fontFamily: "var(--font-display)" }}>Zending is vooraf beveiligd (Secure)</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Uitzetten wanneer screening nog moet gebeuren, er wordt dan een PMT-traject gestart.</div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={shipmentSecure}
+                  onClick={() => setShipmentSecure(!shipmentSecure)}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                    shipmentSecure ? "bg-[hsl(var(--gold))]" : "bg-[hsl(var(--border))]",
+                  )}
+                >
+                  <span className={cn(
+                    "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+                    shipmentSecure ? "translate-x-5" : "translate-x-0",
+                  )} />
+                </button>
+              </div>
+
+              {/* PMT-methode + gegevens (als NIET secure) */}
+              {!shipmentSecure && (
+                <div className="space-y-4">
+                  <div className="text-xs font-medium text-muted-foreground tracking-wider uppercase mb-2">PMT-methode</div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {(["edd", "xray"] as const).map(m => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setPmtMethode(m)}
+                        className={cn(
+                          "flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
+                          pmtMethode === m
+                            ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold-soft)_/_0.4)] shadow-[0_0_0_1px_hsl(var(--gold)_/_0.3)]"
+                            : "border-[hsl(var(--border)_/_0.5)] bg-white hover:border-[hsl(var(--gold)_/_0.4)]",
+                        )}
+                      >
+                        <span className="w-8 h-8 rounded-lg bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))] inline-flex items-center justify-center shrink-0">
+                          {m === "edd" ? (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11H7a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-2M9 11V7a3 3 0 116 0v4M9 11h6"/></svg>
+                          ) : (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M6 11v6M10 11v6M14 11v6M18 11v6"/></svg>
+                          )}
+                        </span>
+                        <span className="text-sm font-semibold">{m === "edd" ? "EDD · Hondenscan" : "X-RAY · Röntgenscan"}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {pmtMethode && (
+                    <div className="pt-2 space-y-4">
+                      <div className="text-xs font-medium text-muted-foreground tracking-wider uppercase">PMT-gegevens voor RCS-verklaring</div>
+                      <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">Operator / screeningsbedrijf</label>
+                          <Input value={pmtOperator} onChange={e => setPmtOperator(e.target.value)} placeholder="Bv. Schiphol Cargo Security BV" className="h-9 text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">PMT-referentienummer</label>
+                          <Input value={pmtReferentie} onChange={e => setPmtReferentie(e.target.value)} placeholder="PMT-2026-…" className="h-9 text-sm tabular-nums" style={{ fontFamily: "var(--font-display)" }} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">Datum / tijd screening</label>
+                          <LuxeDatePicker value={pmtDatum} onChange={setPmtDatum} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">Locatie screening</label>
+                          <Input value={pmtLocatie} onChange={e => setPmtLocatie(e.target.value)} placeholder="Bv. Schiphol Zuidoost, Gebouw 4" className="h-9 text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">Seal-nummer (na screening)</label>
+                          <Input value={pmtSeal} onChange={e => setPmtSeal(e.target.value)} placeholder="Optioneel, wordt later ingevuld" className="h-9 text-sm tabular-nums" style={{ fontFamily: "var(--font-display)" }} />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">PMT-keuze bepaald door klant</label>
+                          <div className="flex items-center gap-3 h-[42px]">
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={pmtByCustomer}
+                              onClick={() => setPmtByCustomer(!pmtByCustomer)}
+                              className={cn(
+                                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                                pmtByCustomer ? "bg-[hsl(var(--gold))]" : "bg-[hsl(var(--border))]",
+                              )}
+                            >
+                              <span className={cn(
+                                "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+                                pmtByCustomer ? "translate-x-5" : "translate-x-0",
+                              )} />
+                            </button>
+                            <span className="text-[0.8125rem] text-muted-foreground">{pmtByCustomer ? "Bevestigd door klant" : "Niet bevestigd"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+            )}
+
+            {/* ═��� Chapter VI · Info volgt van klant ══ */}
+            <section className="card--luxe p-6 relative" style={{ background: "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(45 60% 96%) 100%)" }}>
+              <span className="card-chapter">VI</span>
               <div className="mb-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
-                  05 · Info volgt nog
+                  06 · Info volgt nog
                 </div>
                 <h3 className="section-title">Info volgt nog van klant <span className="text-[11px] font-normal text-muted-foreground">(optioneel, blokkeert inplannen niet)</span></h3>
                 <p className="text-xs text-muted-foreground mt-1">
