@@ -15,6 +15,8 @@ import { createShipmentWithLegs, inferAfdeling, type BookingInput } from "@/lib/
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
+import { LuxeDatePicker } from "@/components/LuxeDatePicker";
+import { LuxeTimePicker } from "@/components/LuxeTimePicker";
 
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
@@ -783,27 +785,21 @@ const NewOrder = () => {
                           />
                         </td>
                         <td className="py-2 pr-2">
-                          <input
-                            type="date"
+                          <LuxeDatePicker
                             value={line.datum}
-                            onChange={e => updateFreightLine(line.id, "datum", e.target.value)}
-                            className="h-9 w-full text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                            onChange={v => updateFreightLine(line.id, "datum", v)}
                           />
                         </td>
                         <td className="py-2 pr-2">
                           <div className="flex items-center gap-1">
-                            <input
-                              type="time"
+                            <LuxeTimePicker
                               value={line.tijd}
-                              onChange={e => updateFreightLine(line.id, "tijd", e.target.value)}
-                              className="h-9 w-full text-xs rounded-md border border-input bg-background px-1.5 focus:outline-none focus:ring-2 focus:ring-ring"
+                              onChange={v => updateFreightLine(line.id, "tijd", v)}
                             />
                             <span className="text-muted-foreground text-[10px]">→</span>
-                            <input
-                              type="time"
+                            <LuxeTimePicker
                               value={line.tijdTot}
-                              onChange={e => updateFreightLine(line.id, "tijdTot", e.target.value)}
-                              className="h-9 w-full text-xs rounded-md border border-input bg-background px-1.5 focus:outline-none focus:ring-2 focus:ring-ring"
+                              onChange={v => updateFreightLine(line.id, "tijdTot", v)}
                             />
                           </div>
                         </td>
