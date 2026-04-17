@@ -287,6 +287,41 @@ const NewOrder = () => {
       const finalDeliveryAddress =
         lossenLocaties.length >= 2 ? lossenLocaties[lossenLocaties.length - 1] : undefined;
 
+      // §24 Pricing wiring — bereken totaal + details voor audit
+      const pricingPayload: { cents: number | null; details: Record<string, unknown> | null } = (() => {
+        if (pricingMode === "override") {
+          const amt = parseFloat(overrideBedrag.replace(",", "."));
+          if (!Number.isFinite(amt) || amt <= 0) return { cents: null, details: null };
+          return {
+            cents: Math.round(amt * 100),
+            details: {
+              mode: "override",
+              amount: amt,
+              reason: overrideReden.trim() || null,
+            },
+          };
+        }
+        if (pricing.total <= 0) return { cents: null, details: null };
+        return {
+          cents: Math.round(pricing.total * 100),
+          details: {
+            mode: "standard",
+            vehicle: kmVehicle,
+            km: pricing.km,
+            km_rounded: pricing.rounded,
+            diesel_included: dieselInclusief,
+            matrix_tariff: pricing.matrixTariff,
+            per_km: pricing.perKm,
+            calc_raw: pricing.calcRaw,
+            screening_included: screeningIncl,
+            screening_fee: pricing.screeningFee,
+            min_applied: pricing.minApplied,
+            min_tariff: pricing.min,
+            total: pricing.total,
+          },
+        };
+      })();
+
       const booking: BookingInput = {
         pickup_address: pickupLine?.locatie || null,
         delivery_address: deliveryLine?.locatie || null,
@@ -303,6 +338,8 @@ const NewOrder = () => {
         delivery_time_window_start: deliveryTimeFrom || null,
         delivery_time_window_end: deliveryTimeTo || null,
         notes: [klantReferentie && `Ref: ${klantReferentie}`, referentie].filter(Boolean).join(" — ") || null,
+        price_total_cents: pricingPayload.cents,
+        pricing: pricingPayload.details,
       };
 
       const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);

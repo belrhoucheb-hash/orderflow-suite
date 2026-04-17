@@ -38,6 +38,8 @@ export interface BookingInput {
   delivery_time_window_start?: string | null;
   delivery_time_window_end?: string | null;
   notes?: string | null;
+  price_total_cents?: number | null;
+  pricing?: Record<string, unknown> | null;
   [key: string]: unknown;
 }
 
@@ -283,6 +285,8 @@ export async function createShipmentWithLegs(
     destination_address: booking.delivery_address ?? null,
     status: "DRAFT",
     traject_rule_id: rule.id,
+    price_total_cents: booking.price_total_cents ?? null,
+    pricing: booking.pricing ?? null,
   };
 
   const { data: shipmentData, error: shipmentErr } = await (supabase as any)
