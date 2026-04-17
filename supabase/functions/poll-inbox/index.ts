@@ -165,19 +165,14 @@ async function ruleBasedClassify(
 ): Promise<EmailClassification> {
   const subjectLower = subject.toLowerCase();
 
-  // Check for cancellation keywords
   if (subjectLower.includes("annulering") || subjectLower.includes("cancel")) {
-    console.log(`Rule-based: classified as cancellation (subject keyword)`);
     return "cancellation";
   }
 
-  // Check for confirmation keywords
   if (subjectLower.includes("bevestiging") || subjectLower.includes("confirmation")) {
-    console.log(`Rule-based: classified as confirmation (subject keyword)`);
     return "confirmation";
   }
 
-  // Check if sender is a known client (tenant-scoped)
   if (fromAddr) {
     const { data: knownClient } = await supabase
       .from("clients")
@@ -186,70 +181,205 @@ async function ruleBasedClassify(
       .eq("tenant_id", tenantId)
       .limit(1);
     if (knownClient && knownClient.length > 0) {
-      console.log(`Rule-based: classified as order (known client: ${fromAddr})`);
       return "order";
     }
   }
 
-  // Ambiguous — needs AI classification
   return null;
 }
 
-// ── Main handler ──
+// ── Inbox config + lifecycle ──
 
-async function pollInbox(): Promise<Response> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
+interface InboxConfig {
+  id: string | null; // null = env-fallback (no DB row)
+  tenantId: string;
+  label: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  folder: string;
+}
 
-  const imapHost = Deno.env.get("IMAP_HOST")!;
-  const imapPort = parseInt(Deno.env.get("IMAP_PORT") || "993");
-  const imapUser = Deno.env.get("IMAP_USER")!;
-  const imapPass = Deno.env.get("IMAP_PASSWORD")!;
+interface InboxResult {
+  label: string;
+  tenantId: string;
+  processed: number;
+  orders: { orderNumber: number; status: string; confidence: number }[];
+  error?: string;
+}
 
-  if (!imapHost || !imapUser || !imapPass) {
-    return new Response(
-      JSON.stringify({ error: "IMAP credentials niet geconfigureerd" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+// Backoff: <3 failures = immediate, 3 = 15m, 4 = 1h, 5+ = 6h
+function computeNextPollAt(failures: number): string | null {
+  if (failures < 3) return null;
+  const minutes = failures === 3 ? 15 : failures === 4 ? 60 : 360;
+  return new Date(Date.now() + minutes * 60_000).toISOString();
+}
+
+async function loadInboxConfigs(supabase: any): Promise<InboxConfig[]> {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("tenant_inboxes")
+    .select("id, tenant_id, label, host, port, username, folder, next_poll_at, password_secret_id")
+    .eq("is_active", true)
+    .or(`next_poll_at.is.null,next_poll_at.lte.${nowIso}`);
+
+  if (error) {
+    console.error("Failed to load tenant_inboxes:", error.message);
+    return [];
   }
 
+  const configs: InboxConfig[] = [];
+  for (const row of data || []) {
+    if (!row.password_secret_id) {
+      console.warn(`Inbox ${row.label}: no password set, skipping`);
+      continue;
+    }
+    const { data: pwData, error: pwErr } = await supabase.rpc("get_tenant_inbox_password", {
+      p_inbox_id: row.id,
+    });
+    if (pwErr || !pwData) {
+      console.error(`Inbox ${row.label}: decrypt failed`);
+      await markInboxError(supabase, row.id, "decrypt_failed");
+      continue;
+    }
+    configs.push({
+      id: row.id,
+      tenantId: row.tenant_id,
+      label: row.label,
+      host: row.host,
+      port: row.port,
+      username: row.username,
+      password: pwData,
+      folder: row.folder || "INBOX",
+    });
+  }
+
+  // Env fallback: only if no active inboxes exist AT ALL (not just after filter)
+  if (configs.length === 0) {
+    const { count } = await supabase
+      .from("tenant_inboxes")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true);
+    if ((count ?? 0) === 0) {
+      const envCfg = buildEnvFallbackConfig(supabase);
+      if (envCfg) {
+        console.warn("No tenant_inboxes configured, falling back to env IMAP, deprecated");
+        configs.push(envCfg);
+      }
+    }
+  }
+
+  return configs;
+}
+
+function buildEnvFallbackConfig(_supabase: any): InboxConfig | null {
+  const host = Deno.env.get("IMAP_HOST");
+  const user = Deno.env.get("IMAP_USER");
+  const pass = Deno.env.get("IMAP_PASSWORD");
+  if (!host || !user || !pass) return null;
+  return {
+    id: null,
+    tenantId: "", // resolved at poll time
+    label: "env-fallback",
+    host,
+    port: parseInt(Deno.env.get("IMAP_PORT") || "993"),
+    username: user,
+    password: pass,
+    folder: "INBOX",
+  };
+}
+
+async function markInboxError(supabase: any, inboxId: string, errorMsg: string) {
+  const { data } = await supabase
+    .from("tenant_inboxes")
+    .select("consecutive_failures")
+    .eq("id", inboxId)
+    .single();
+  const failures = (data?.consecutive_failures ?? 0) + 1;
+  const update: Record<string, any> = {
+    last_polled_at: new Date().toISOString(),
+    last_error: errorMsg.substring(0, 500),
+    consecutive_failures: failures,
+    next_poll_at: computeNextPollAt(failures),
+  };
+  // Auto-deactivate on repeated decrypt failures, likely key rotation
+  if (errorMsg === "decrypt_failed" && failures >= 3) {
+    update.is_active = false;
+  }
+  await supabase.from("tenant_inboxes").update(update).eq("id", inboxId);
+}
+
+async function markInboxSuccess(supabase: any, inboxId: string) {
+  await supabase.from("tenant_inboxes").update({
+    last_polled_at: new Date().toISOString(),
+    last_error: null,
+    consecutive_failures: 0,
+    next_poll_at: null,
+  }).eq("id", inboxId);
+}
+
+async function resolveEnvFallbackTenant(supabase: any): Promise<string | null> {
+  const { data } = await supabase.from("tenants").select("id").eq("is_active", true).limit(1);
+  return data?.[0]?.id || null;
+}
+
+// ── Single-inbox polling (core logic) ──
+
+async function pollOneInbox(config: InboxConfig, supabase: any): Promise<InboxResult> {
+  const result: InboxResult = {
+    label: config.label,
+    tenantId: config.tenantId,
+    processed: 0,
+    orders: [],
+  };
+
+  let tenantId = config.tenantId;
+  if (!tenantId) {
+    // Env fallback: resolve the first active tenant
+    const fallback = await resolveEnvFallbackTenant(supabase);
+    if (!fallback) {
+      throw new Error("Env fallback kan geen tenant vinden");
+    }
+    tenantId = fallback;
+  }
+
+  // §27: orders.department_id is NOT NULL. Bij binnenkomst van een mail weten we
+  // de echte afdeling nog niet (parse-order werkt het later bij). Fallback: OPS.
+  const { data: opsDept } = await supabase
+    .from("departments")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("code", "OPS")
+    .single();
+  if (!opsDept) {
+    throw new Error(`OPS-department ontbreekt voor tenant ${tenantId}`);
+  }
+  const opsDeptId: string = opsDept.id;
+
   let client: ImapFlow | null = null;
-  const results: { orderNumber: number; status: string; confidence: number }[] = [];
-
-  // Fetch a default tenant for incoming emails
-  const { data: defaultTenant } = await supabase.from("tenants").select("id").eq("is_active", true).limit(1);
-  const tenantId = defaultTenant?.[0]?.id || "00000000-0000-0000-0000-000000000001";
-
   try {
     client = new ImapFlow({
-      host: imapHost,
-      port: imapPort,
-      secure: imapPort === 993,
-      auth: { user: imapUser, pass: imapPass },
+      host: config.host,
+      port: config.port,
+      secure: config.port === 993,
+      auth: { user: config.username, pass: config.password },
       logger: false,
     });
 
     await client.connect();
-    console.log("IMAP connected");
 
-    const lock = await client.getMailboxLock("INBOX");
+    const lock = await client.getMailboxLock(config.folder);
 
     try {
-      // Search for unseen UIDs first (non-blocking)
       const uids = await client.search({ seen: false }, { uid: true });
-      console.log(`Found ${uids.length} unseen messages`);
 
       if (uids.length === 0) {
         lock.release();
         await client.logout();
-        return new Response(
-          JSON.stringify({ success: true, processed: 0, orders: [] }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return result;
       }
 
-      // Process max 10 emails per run to stay within timeout
       const toProcess = uids.slice(0, 10);
 
       for (const uid of toProcess) {
@@ -261,40 +391,37 @@ async function pollInbox(): Promise<Response> {
           const fromAddr = msg.envelope?.from?.[0]?.address || "";
           const subject = msg.envelope?.subject || "";
           const messageId = msg.envelope?.messageId || `uid-${uid}`;
-          console.log(`Processing: ${messageId} from ${fromAddr}`);
 
-          // ── Thread detection: check if this is a reply to an existing order ──
+          // ── Thread detection ──
           const isReply = /^(re|fw|fwd):\s*/i.test(subject);
           const cleanSubject = subject.replace(/^(re|fw|fwd):\s*/gi, "").trim();
           let parentOrder: any = null;
 
           if (isReply && fromAddr) {
-            // Try to find the original order by matching sender + cleaned subject
             const { data: candidates } = await supabase
               .from("orders")
               .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, requirements, status")
               .eq("source_email_from", fromAddr)
+              .eq("tenant_id", tenantId)
               .ilike("source_email_subject", `%${cleanSubject.substring(0, 60)}%`)
               .order("created_at", { ascending: false })
               .limit(1);
-            
+
             if (candidates && candidates.length > 0) {
               parentOrder = candidates[0];
-              console.log(`Thread detected: reply to order #${parentOrder.order_number}`);
             }
           }
 
-          // Dedup check (skip for replies — those are intentional)
           if (!isReply) {
             const { data: existing } = await supabase
               .from("orders")
               .select("id")
               .eq("source_email_from", fromAddr)
               .eq("source_email_subject", subject)
+              .eq("tenant_id", tenantId)
               .limit(1);
 
             if (existing && existing.length > 0) {
-              console.log(`Skipping duplicate: ${messageId}`);
               await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
               continue;
             }
@@ -302,16 +429,12 @@ async function pollInbox(): Promise<Response> {
 
           const parsed = parseEml(rawEmail, messageId);
 
-          // Quick classification: rule-based first, then AI for ambiguous emails
           const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-
           const ruleResult = await ruleBasedClassify(subject, fromAddr, supabase, tenantId);
 
           if (ruleResult) {
-            // Rule-based classification succeeded — skip AI call, email is transport-related
-            console.log(`Rule-based classification: ${ruleResult} — skipping AI classifier`);
+            // Rule-based classification succeeded, skip AI classifier
           } else if (GEMINI_API_KEY && parsed.body) {
-            // Ambiguous email — use AI to determine if it's transport-related
             try {
               const classifyResp = await fetchWithRetry(geminiUrl(), {
                 method: "POST",
@@ -324,8 +447,7 @@ async function pollInbox(): Promise<Response> {
               });
               if (classifyResp.ok) {
                 const classifyResult = await classifyResp.json();
-                
-                // Log AI Usage
+
                 const usage = classifyResult.usageMetadata;
                 if (usage && tenantId) {
                   const inputTokens = usage.promptTokenCount || 0;
@@ -345,21 +467,17 @@ async function pollInbox(): Promise<Response> {
                 if (text) {
                   const parsed_result = JSON.parse(text);
                   if (parsed_result.is_transport === false) {
-                    console.log(`Skipping non-transport email: ${subject}`);
                     await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
                     continue;
                   }
                 }
               } else {
-                await classifyResp.text(); // consume
+                await classifyResp.text();
               }
             } catch (classErr) {
-              console.error("Classification error:", classErr);
-              // Continue anyway if classification fails
+              console.error("Classification error:", classErr instanceof Error ? classErr.message : "unknown");
             }
           } else if (!parsed.body && parsed.attachments.length === 0) {
-            // No body and no attachments — skip
-            console.log(`Skipping empty email: ${subject}`);
             await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
             continue;
           }
@@ -373,13 +491,13 @@ async function pollInbox(): Promise<Response> {
             const { error: uploadError } = await supabase.storage
               .from("email-attachments")
               .upload(path, att.data, { contentType: att.type, upsert: true });
-            if (uploadError) { console.error("Upload error:", uploadError); continue; }
+            if (uploadError) { console.error("Upload error:", uploadError.message); continue; }
 
             const { data: urlData } = supabase.storage.from("email-attachments").getPublicUrl(path);
             uploadedAttachments.push({ name: att.name, url: urlData.publicUrl, type: att.type });
           }
 
-          // AI extraction via parse-order (do this first to determine thread type)
+          // AI extraction via parse-order
           const pdfUrls = uploadedAttachments.filter((a) => a.type === "application/pdf").map((a) => a.url);
           let confidence = 0;
           let extracted: any = null;
@@ -388,6 +506,8 @@ async function pollInbox(): Promise<Response> {
           if (GEMINI_API_KEY && (parsed.body || pdfUrls.length > 0)) {
             try {
               const threadContext = parentOrder ? { parentOrder } : undefined;
+              const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+              const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
               const parseResp = await fetch(`${supabaseUrl}/functions/v1/parse-order`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
@@ -403,24 +523,20 @@ async function pollInbox(): Promise<Response> {
                 await parseResp.text();
               }
             } catch (parseErr) {
-              console.error("AI extraction error:", parseErr);
+              console.error("AI extraction error:", parseErr instanceof Error ? parseErr.message : "unknown");
             }
           }
 
           const detectedThreadType = parseData?.thread_type || (parentOrder ? "update" : "new");
 
-          // ── Reply Merging: if this is a reply that fills in missing data, update the parent order ──
+          // ── Reply merging ──
           if (parentOrder && (detectedThreadType === "update" || detectedThreadType === "confirmation") && extracted) {
-            console.log(`Reply merging: updating parent order #${parentOrder.order_number} (thread: ${detectedThreadType})`);
-
-            // Build update payload: only fill in fields that were missing on the parent
             const mergeUpdate: Record<string, any> = {
               source_email_body: `${parentOrder.source_email_body || ""}\n\n── Reply ${new Date().toISOString()} ──\n${parsed.body}`,
               thread_type: detectedThreadType,
               changes_detected: parseData?.changes_detected || [],
             };
 
-            // Fill missing fields from reply extraction
             const fieldsToMerge = [
               "pickup_address", "delivery_address", "weight_kg", "quantity",
               "unit", "dimensions", "transport_type",
@@ -428,19 +544,16 @@ async function pollInbox(): Promise<Response> {
             for (const field of fieldsToMerge) {
               const parentVal = parentOrder[field];
               const newVal = extracted[field];
-              // Only fill if parent was empty/null and reply has data
               if ((!parentVal || parentVal === "" || parentVal === 0) && newVal && newVal !== "" && newVal !== 0) {
                 mergeUpdate[field] = newVal;
               }
             }
-            // For requirements, merge arrays
             if (extracted.requirements?.length > 0) {
               const existing = parentOrder.requirements || [];
               const merged = [...new Set([...existing, ...extracted.requirements])];
               mergeUpdate.requirements = merged;
             }
 
-            // Recalculate missing fields after merge
             const requiredFields = ["client_name", "pickup_address", "delivery_address", "quantity", "weight_kg", "dimensions"];
             const mergedOrder = { ...parentOrder, ...mergeUpdate };
             const stillMissing = requiredFields.filter(f => {
@@ -453,24 +566,22 @@ async function pollInbox(): Promise<Response> {
             };
             mergeUpdate.missing_fields = stillMissing.map(f => missingLabels[f] || f);
 
-            // If no more missing fields, auto-upgrade status
             if (stillMissing.length === 0 && confidence > 80) {
               mergeUpdate.status = "OPEN";
               mergeUpdate.confidence_score = Math.max(confidence, parentOrder.confidence_score || 0);
-              mergeUpdate.follow_up_draft = null; // Clear follow-up since data is now complete
+              mergeUpdate.follow_up_draft = null;
             }
 
-            // If thread type is cancellation, mark as cancelled
             if (detectedThreadType === "cancellation") {
               mergeUpdate.status = "CANCELLED";
             }
 
             await supabase.from("orders").update(mergeUpdate).eq("id", parentOrder.id);
-            console.log(`Parent order #${parentOrder.order_number} updated via reply merge. Still missing: ${stillMissing.length}`);
 
             await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
-            results.push({ orderNumber: parentOrder.order_number, status: mergeUpdate.status || parentOrder.status, confidence });
-            continue; // Don't create a new draft — we merged into the parent
+            result.orders.push({ orderNumber: parentOrder.order_number, status: mergeUpdate.status || parentOrder.status, confidence });
+            result.processed++;
+            continue;
           }
 
           // ── Normal flow: create a new draft order ──
@@ -479,6 +590,7 @@ async function pollInbox(): Promise<Response> {
             .insert({
               tenant_id: tenantId,
               status: "DRAFT",
+              department_id: opsDeptId,
               source_email_from: fromAddr || parsed.from,
               source_email_subject: subject || parsed.subject,
               source_email_body: parsed.body,
@@ -490,21 +602,14 @@ async function pollInbox(): Promise<Response> {
             .select("id, order_number")
             .single();
 
-          if (insertError) { console.error("Insert error:", insertError); continue; }
+          if (insertError) { console.error("Insert error:", insertError.message); continue; }
 
-          // Apply extracted data to the new order
           let orderStatus = "DRAFT";
-          let orderAutoApproved = false;
           if (extracted) {
-            // Auto-approve logic:
-            //   confidence >= 95 + known client = PENDING (auto-approved)
-            //   confidence >= 80 but unknown client = DRAFT (human review)
-            //   confidence < 80 = DRAFT (human review)
             let newStatus = "DRAFT";
             let autoApproved = false;
 
             if (confidence >= 80) {
-              // Check if client is known in the database
               let isKnownClient = false;
               if (extracted.client_name) {
                 const { data: knownClient } = await supabase
@@ -519,20 +624,9 @@ async function pollInbox(): Promise<Response> {
               if (confidence >= 95 && isKnownClient) {
                 newStatus = "PENDING";
                 autoApproved = true;
-                console.log(`Auto-approved: confidence=${confidence}, known client="${extracted.client_name}"`);
-              } else {
-                newStatus = "DRAFT";
-                if (confidence >= 95 && !isKnownClient) {
-                  console.log(`High confidence (${confidence}) but unknown client "${extracted.client_name}" — requires human review`);
-                } else {
-                  console.log(`Moderate confidence (${confidence}) — requires human review`);
-                }
               }
-            } else {
-              console.log(`Low confidence (${confidence}) — requires human review`);
             }
 
-            // ── Resolve client_id from client_name ──
             let clientId: string | null = null;
             if (extracted.client_name) {
               const { data: existingClient } = await supabase
@@ -551,7 +645,7 @@ async function pollInbox(): Promise<Response> {
                   .select("id")
                   .single();
                 if (clientErr) {
-                  console.error("Failed to create client:", clientErr);
+                  console.error("Failed to create client:", clientErr.message);
                 } else {
                   clientId = newClient.id;
                 }
@@ -581,14 +675,13 @@ async function pollInbox(): Promise<Response> {
             }).eq("id", order.id);
 
             orderStatus = newStatus;
-            orderAutoApproved = autoApproved;
-            console.log(`Order #${order.order_number}: confidence=${confidence}, status=${newStatus}, auto_approved=${autoApproved}, thread=${detectedThreadType}`);
           }
 
           await client.messageFlagsAdd({ uid }, ["\\Seen"], { uid: true });
-          results.push({ orderNumber: order.order_number, status: orderStatus, confidence });
+          result.orders.push({ orderNumber: order.order_number, status: orderStatus, confidence });
+          result.processed++;
         } catch (msgErr) {
-          console.error(`Error processing uid ${uid}:`, msgErr);
+          console.error(`Error processing uid ${uid}:`, msgErr instanceof Error ? msgErr.message : "unknown");
         }
       }
     } finally {
@@ -596,32 +689,94 @@ async function pollInbox(): Promise<Response> {
     }
 
     await client.logout();
-    console.log(`Poll complete: ${results.length} emails processed`);
-
-    return new Response(
-      JSON.stringify({ success: true, processed: results.length, orders: results }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return result;
   } catch (e) {
-    console.error("poll-inbox error:", e);
     if (client) { try { await client.logout(); } catch { /* ignore */ } }
+    throw e;
+  }
+}
+
+// Per-inbox timeout wrapper, isolates slow/broken inboxes from the rest.
+async function pollOneInboxWithTimeout(config: InboxConfig, supabase: any): Promise<InboxResult> {
+  const PER_INBOX_TIMEOUT = 30_000;
+  return await Promise.race([
+    pollOneInbox(config, supabase),
+    new Promise<InboxResult>((_, reject) =>
+      setTimeout(() => reject(new Error("inbox_timeout_30s")), PER_INBOX_TIMEOUT),
+    ),
+  ]);
+}
+
+// ── Main handler ──
+
+async function pollAllInboxes(): Promise<Response> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const configs = await loadInboxConfigs(supabase);
+  if (configs.length === 0) {
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: true, processed: 0, inboxes: 0, orders: [] }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
+
+  const outcomes = await Promise.allSettled(
+    configs.map((cfg) => pollOneInboxWithTimeout(cfg, supabase)),
+  );
+
+  const summaries: InboxResult[] = [];
+  for (let i = 0; i < configs.length; i++) {
+    const cfg = configs[i];
+    const outcome = outcomes[i];
+    if (outcome.status === "fulfilled") {
+      summaries.push(outcome.value);
+      if (cfg.id) await markInboxSuccess(supabase, cfg.id);
+    } else {
+      const errMsg = outcome.reason instanceof Error ? outcome.reason.message : "unknown";
+      console.error(`Inbox ${cfg.label} failed: ${errMsg}`);
+      summaries.push({ label: cfg.label, tenantId: cfg.tenantId, processed: 0, orders: [], error: errMsg });
+      if (cfg.id) await markInboxError(supabase, cfg.id, errMsg);
+    }
+  }
+
+  const totalProcessed = summaries.reduce((sum, s) => sum + s.processed, 0);
+  const allOrders = summaries.flatMap((s) => s.orders);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      inboxes: configs.length,
+      processed: totalProcessed,
+      orders: allOrders,
+      per_inbox: summaries.map((s) => ({
+        label: s.label,
+        processed: s.processed,
+        error: s.error,
+      })),
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  // 50s timeout to stay within edge function limits
   const timeout = new Promise<Response>((resolve) =>
     setTimeout(() => resolve(new Response(
       JSON.stringify({ error: "Timeout na 50 seconden" }),
-      { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    )), 50000)
+      { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    )), 50_000),
   );
 
-  return Promise.race([pollInbox(), timeout]);
+  try {
+    return await Promise.race([pollAllInboxes(), timeout]);
+  } catch (e) {
+    console.error("poll-inbox fatal:", e instanceof Error ? e.message : "unknown");
+    return new Response(
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
 });

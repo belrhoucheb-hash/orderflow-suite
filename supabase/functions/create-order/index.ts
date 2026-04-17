@@ -61,6 +61,7 @@ serve(async (req) => {
       "requirements", "internal_note", "source_email_from", "source_email_subject",
       "source_email_body", "status", "confidence_score", "missing_fields",
       "follow_up_draft", "attachments", "vehicle_id", "stop_sequence",
+      "department_id",
     ];
 
     const orderData: Record<string, unknown> = {};
@@ -81,6 +82,24 @@ serve(async (req) => {
         JSON.stringify({ error: "tenant_id is verplicht" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // §27: orders.department_id is NOT NULL. Als caller geen afdeling meegeeft,
+    // fallback naar OPS van de tenant. Consistent met migratie-backfill.
+    if (!orderData.department_id) {
+      const { data: opsDept, error: deptErr } = await supabase
+        .from("departments")
+        .select("id")
+        .eq("tenant_id", orderData.tenant_id as string)
+        .eq("code", "OPS")
+        .single();
+      if (deptErr || !opsDept) {
+        return new Response(
+          JSON.stringify({ error: "OPS-department ontbreekt voor deze tenant" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      orderData.department_id = opsDept.id;
     }
 
     const { data, error } = await supabase
