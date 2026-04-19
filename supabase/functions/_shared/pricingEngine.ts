@@ -40,6 +40,20 @@ function matchesVehicleType(rule: RateRule, order: PricingOrderInput): boolean {
   return rule.vehicle_type_id === order.vehicle_type_id;
 }
 
+function matchesDieselToggle(rule: RateRule, order: PricingOrderInput): boolean {
+  const ruleToggle = rule.conditions.diesel_included;
+  if (ruleToggle === undefined) return true;
+  if (order.diesel_included === undefined) return true;
+  return ruleToggle === order.diesel_included;
+}
+
+function matchesOptionalPurpose(rule: RateRule, order: PricingOrderInput): boolean {
+  if (rule.conditions.optional !== true) return true;
+  const purpose = rule.conditions.purpose;
+  if (!purpose) return true;
+  return (order.include_optional_purposes ?? []).includes(purpose);
+}
+
 function matchesZone(rule: RateRule, order: PricingOrderInput): boolean {
   const { from_zone, to_zone } = rule.conditions;
   if (!from_zone && !to_zone) return true;
@@ -168,6 +182,8 @@ export function calculateOrderPrice(
   for (const rule of sortedRules) {
     if (!matchesTransportType(rule, order)) continue;
     if (!matchesVehicleType(rule, order)) continue;
+    if (!matchesDieselToggle(rule, order)) continue;
+    if (!matchesOptionalPurpose(rule, order)) continue;
 
     let quantity: number;
     let unit: string;

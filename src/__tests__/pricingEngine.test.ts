@@ -366,4 +366,60 @@ describe("calculateOrderPrice", () => {
     expect(result.toeslagen).toHaveLength(0);
     expect(result.totaal).toBe(100);
   });
+
+  describe("diesel_included matching", () => {
+    it("picks the PER_KM rule that matches diesel_included=true", () => {
+      const rules: RateRule[] = [
+        makeRule({ rule_type: "PER_KM", amount: 1.16, conditions: { diesel_included: false } }),
+        makeRule({ rule_type: "PER_KM", amount: 1.52, conditions: { diesel_included: true } }),
+      ];
+      const order = { ...baseOrder, diesel_included: true };
+      const result = calculateOrderPrice(order, { ...baseRateCard, rate_rules: rules }, []);
+      expect(result.regels).toHaveLength(1);
+      expect(result.regels[0].unit_price).toBe(1.52);
+    });
+
+    it("picks the PER_KM rule that matches diesel_included=false", () => {
+      const rules: RateRule[] = [
+        makeRule({ rule_type: "PER_KM", amount: 1.16, conditions: { diesel_included: false } }),
+        makeRule({ rule_type: "PER_KM", amount: 1.52, conditions: { diesel_included: true } }),
+      ];
+      const order = { ...baseOrder, diesel_included: false };
+      const result = calculateOrderPrice(order, { ...baseRateCard, rate_rules: rules }, []);
+      expect(result.regels).toHaveLength(1);
+      expect(result.regels[0].unit_price).toBe(1.16);
+    });
+
+    it("matches both if caller omits diesel_included", () => {
+      const rules: RateRule[] = [
+        makeRule({ rule_type: "PER_KM", amount: 1.16, conditions: { diesel_included: false } }),
+        makeRule({ rule_type: "PER_KM", amount: 1.52, conditions: { diesel_included: true } }),
+      ];
+      const result = calculateOrderPrice(baseOrder, { ...baseRateCard, rate_rules: rules }, []);
+      expect(result.regels).toHaveLength(2);
+    });
+  });
+
+  describe("optional purpose matching", () => {
+    it("skips rule with conditions.optional=true when purpose not requested", () => {
+      const rules: RateRule[] = [
+        makeRule({ rule_type: "PER_KM", amount: 1.52 }),
+        makeRule({ rule_type: "VAST_BEDRAG", amount: 107.5, conditions: { optional: true, purpose: "screening" } }),
+      ];
+      const result = calculateOrderPrice(baseOrder, { ...baseRateCard, rate_rules: rules }, []);
+      expect(result.regels).toHaveLength(1);
+      expect(result.basisbedrag).toBe(121.6); // alleen de PER_KM
+    });
+
+    it("includes rule with conditions.optional=true when purpose is requested", () => {
+      const rules: RateRule[] = [
+        makeRule({ rule_type: "PER_KM", amount: 1.52 }),
+        makeRule({ rule_type: "VAST_BEDRAG", amount: 107.5, conditions: { optional: true, purpose: "screening" } }),
+      ];
+      const order = { ...baseOrder, include_optional_purposes: ["screening"] };
+      const result = calculateOrderPrice(order, { ...baseRateCard, rate_rules: rules }, []);
+      expect(result.regels).toHaveLength(2);
+      expect(result.basisbedrag).toBe(229.1); // 121.6 + 107.5
+    });
+  });
 });

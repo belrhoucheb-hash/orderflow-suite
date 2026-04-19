@@ -63,6 +63,12 @@ export interface RateRuleConditions {
   from_zone?: string;
   to_zone?: string;
   transport_type?: string;
+  // Toggles, gebruikt door rate_rules waarvan toepassing afhangt van order-input.
+  // diesel_included: rule matcht alleen als input.diesel_included identiek is.
+  // purpose + optional: rule wordt alleen toegepast als caller dit purpose opvraagt.
+  diesel_included?: boolean;
+  purpose?: string;
+  optional?: boolean;
 }
 
 export interface SurchargeAppliesTo {
@@ -229,6 +235,13 @@ export interface PricingOrderInput {
   pickup_time_local?: string; // HH:mm (Europe/Amsterdam) voor time_from/time_to matching
   cargo_dimensions?: CargoDimensions;
   vehicle_type_id?: string | null;
+  // Toggles: matchen tegen rate_rules.conditions.
+  // diesel_included: wanneer gezet, matcht alleen rules met gelijke waarde of
+  // zonder diesel_included-conditie.
+  // include_optional_purposes: lijst van purposes waarvoor optionele rules
+  // (conditions.optional === true) wel meedoen (bijv. ['screening']).
+  diesel_included?: boolean;
+  include_optional_purposes?: string[];
 }
 
 export interface CargoDimensions {
