@@ -8,6 +8,8 @@ export const CONSOLIDATION_STATUS_LABELS: Record<ConsolidationStatus, { label: s
   VERWORPEN: { label: "Verworpen", color: "bg-gray-100 text-gray-600" },
 };
 
+export type ProposalSource = "manual" | "auto";
+
 export interface ConsolidationGroup {
   id: string;
   tenant_id: string;
@@ -15,15 +17,21 @@ export interface ConsolidationGroup {
   planned_date: string;
   status: ConsolidationStatus;
   vehicle_id: string | null;
+  driver_id: string | null;
   total_weight_kg: number | null;
   total_pallets: number | null;
   total_distance_km: number | null;
   estimated_duration_min: number | null;
   utilization_pct: number | null;
+  proposal_source: ProposalSource;
+  capacity_override_reason: string | null;
+  capacity_override_by: string | null;
+  capacity_override_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
   // Joined
+  consolidation_orders?: ConsolidationOrder[];
   orders?: ConsolidationOrder[];
   vehicle?: { name: string; plate: string; capacityKg: number; capacityPallets: number };
 }
