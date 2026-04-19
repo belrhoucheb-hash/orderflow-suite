@@ -69,6 +69,7 @@ Locatie: `supabase/functions/_shared/pricingEngine.ts` en `rateModels.ts` (canon
 - **D3. `migrations_archive/`** bevat 106 bestanden die niet meer draaien. Ooit opruimen na stable-state op alle tenants.
 - **D4. Oude voertuigtypen van Royalty Cargo** (busje, bakwagen, koelwagen, etc. uit pre-sprint-2) staan nog in `vehicle_types` met `max_weight_kg=NULL`. Actie voor Badr: via de nieuwe dialog afmetingen aanvullen of `is_active=false` zetten om ze te deactiveren. Anders blijven ze in de dropdown verschijnen.
 - **D5. Supabase `types.ts` is niet hergegenereerd** na de schema-wijzigingen. Daarom de `as unknown as VehicleType[]` casts in hooks. Oplossen met `supabase gen types typescript` wanneer handig.
+- **D6. CI op main staat al sinds 2026-04-17 op rood.** Niet veroorzaakt door sprint-2 werk (geverifieerd door terug te rollen naar pre-commit staat, zelfde 14 failures). Oorzaken: niet-gemockte `useTenantOptional`/`useWarehouses` in `dashboard-chauffeur-settings.test.tsx`, queries die `undefined` terugsturen (warning als error), i18n-translation-file keys niet in sync tussen NL/EN/DE/FR, ChauffeurApp POD-sync test-mock. Apart refactor-traject, niet blokkerend voor sprint-3 want build + pricing-tests slagen.
 
 ## Commits van deze sprint
 

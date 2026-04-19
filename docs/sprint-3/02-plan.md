@@ -444,6 +444,8 @@ Stap 2, 3, 4 kunnen los van elkaar in commits, maar stap 3 wordt pas zichtbaar i
 
 **R14. Driver_id FK op consolidation_groups breekt bestaande rijen.** Mitigatie: kolom is `NULL`-toestaand. Bestaande rijen hebben `NULL`, geen update nodig.
 
+**R15. CI op main staat rood (pre-bestaand sinds 2026-04-17).** Niet veroorzaakt door sprint-2 of sprint-3 werk (geverifieerd). Oorzaken: niet-gemockte hooks in `dashboard-chauffeur-settings.test.tsx`, i18n-key drift tussen NL/EN/DE/FR, POD-sync test-mocks. Mitigatie: apart fix-traject in sprint-3, één commit `sprint-3(ci): testmocks en i18n-keys herstellen`. Niet blokkerend voor feature-werk omdat `npx vitest run <specifieke file>` en `npx vite build` wel slagen. Pas feature-werk aan als tests dat vereisen, niet omgekeerd.
+
 ## 8. Definitie van klaar
 
 Fase 3 is af als:
