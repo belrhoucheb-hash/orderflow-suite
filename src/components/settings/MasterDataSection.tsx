@@ -15,6 +15,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { useWarehouses, useCreateWarehouse, useUpdateWarehouse, useDeleteWarehouse, type WarehouseInput, type Warehouse as WarehouseType } from "@/hooks/useWarehouses";
+import { VehicleTypeDialog, type VehicleTypeFormValues } from "./VehicleTypeDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Card, 
@@ -41,7 +42,25 @@ export function MasterDataSection() {
   const queryClient = useQueryClient();
 
   // --- Queries ---
-  const { data: vehicleTypes = [], isLoading: loadingVehicles } = useQuery({
+  interface VehicleTypeRow {
+    id: string;
+    tenant_id: string;
+    name: string;
+    code: string;
+    sort_order: number | null;
+    max_length_cm: number | null;
+    max_width_cm: number | null;
+    max_height_cm: number | null;
+    max_weight_kg: number | null;
+    max_volume_m3: number | null;
+    max_pallets: number | null;
+    has_tailgate: boolean | null;
+    has_cooling: boolean | null;
+    adr_capable: boolean | null;
+    is_active: boolean | null;
+  }
+
+  const { data: vehicleTypes = [], isLoading: loadingVehicles } = useQuery<VehicleTypeRow[]>({
     queryKey: ["settings-vehicle-types"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -49,7 +68,7 @@ export function MasterDataSection() {
         .select("*")
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      return data;
+      return (data ?? []) as unknown as VehicleTypeRow[];
     },
   });
 
@@ -92,8 +111,53 @@ export function MasterDataSection() {
     }
   });
 
-  const [isAdding, setIsAdding] = useState<string | null>(null); // 'vehicle', 'unit', 'requirement'
+  const [isAdding, setIsAdding] = useState<string | null>(null); // 'unit', 'requirement'
   const [newData, setNewData] = useState<any>({});
+
+  // Voertuigtype dialog state (los van de inline-forms van unit/requirement).
+  const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
+  const [vehicleDialogInitial, setVehicleDialogInitial] = useState<Partial<VehicleTypeFormValues> | null>(null);
+
+  const upsertVehicleType = useMutation({
+    mutationFn: async (values: VehicleTypeFormValues) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", user?.id).single();
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) throw new Error("Geen tenant gevonden voor huidige gebruiker");
+
+      const payload = {
+        name: values.name.trim(),
+        code: values.code.trim(),
+        sort_order: values.sort_order ?? 0,
+        max_length_cm: values.max_length_cm,
+        max_width_cm: values.max_width_cm,
+        max_height_cm: values.max_height_cm,
+        max_weight_kg: values.max_weight_kg,
+        max_volume_m3: values.max_volume_m3,
+        max_pallets: values.max_pallets,
+        has_tailgate: values.has_tailgate,
+        has_cooling: values.has_cooling,
+        adr_capable: values.adr_capable,
+        default_capacity_kg: values.max_weight_kg, // spiegel, zolang oude kolom nog gebruikt wordt
+        default_capacity_pallets: values.max_pallets,
+      };
+
+      const { error } = await supabase
+        .from("vehicle_types")
+        .upsert({ ...payload, tenant_id: tenantId }, { onConflict: "tenant_id,code" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["settings-vehicle-types"] });
+      setVehicleDialogOpen(false);
+      setVehicleDialogInitial(null);
+      toast.success("Opgeslagen", { description: "Voertuigtype bijgewerkt." });
+    },
+    onError: (err: Error) => {
+      console.error(err);
+      toast.error("Fout", { description: err.message || "Kon voertuigtype niet opslaan." });
+    },
+  });
 
   const addMutation = useMutation({
     mutationFn: async ({ table, payload }: { table: string; payload: any }) => {
@@ -127,7 +191,14 @@ export function MasterDataSection() {
 
   return (
     <div className="space-y-10">
-      
+      <VehicleTypeDialog
+        open={vehicleDialogOpen}
+        onOpenChange={(o) => { setVehicleDialogOpen(o); if (!o) setVehicleDialogInitial(null); }}
+        initial={vehicleDialogInitial}
+        onSubmit={(values) => upsertVehicleType.mutate(values)}
+        submitting={upsertVehicleType.isPending}
+      />
+
       {/* ─── Vehicle Types ─── */}
       <section className="space-y-4">
         <div className="flex items-center justify-between px-1">
@@ -140,7 +211,7 @@ export function MasterDataSection() {
                <p className="text-xs text-muted-foreground">Beschikbare vrachtwagen categorieën voor planning.</p>
              </div>
           </div>
-          <Button size="sm" className="h-8 gap-1.5 rounded-lg" onClick={() => setIsAdding('vehicle')}>
+          <Button size="sm" className="h-8 gap-1.5 rounded-lg" onClick={() => { setVehicleDialogInitial(null); setVehicleDialogOpen(true); }}>
             <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />Toevoegen
           </Button>
         </div>
@@ -150,45 +221,55 @@ export function MasterDataSection() {
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[200px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
+                  <TableHead className="w-[160px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider font-semibold">Code</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider font-semibold">Capaciteit (kg)</TableHead>
-                  <TableHead className="text-xs uppercase tracking-wider font-semibold">Capaciteit (plt)</TableHead>
-                  <TableHead className="w-[100px]"></TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider font-semibold">Afmetingen LxBxH</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider font-semibold">Gewicht</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider font-semibold">Pallets</TableHead>
+                  <TableHead className="text-xs uppercase tracking-wider font-semibold">Opties</TableHead>
+                  <TableHead className="w-[110px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isAdding === 'vehicle' && (
-                  <TableRow className="bg-primary/5 hover:bg-primary/5 border-b-primary/20">
-                    <TableCell><Input className="h-8 text-xs bg-background" placeholder="Bakwagen..." value={newData.name || ""} onChange={e => setNewData({...newData, name: e.target.value})} /></TableCell>
-                    <TableCell><Input className="h-8 text-xs bg-background" placeholder="bakwagen" value={newData.code || ""} onChange={e => setNewData({...newData, code: e.target.value.toLowerCase().replace(/\s/g, '-')})} /></TableCell>
-                    <TableCell><Input type="number" className="h-8 text-xs bg-background" placeholder="12000" value={newData.default_capacity_kg || ""} onChange={e => setNewData({...newData, default_capacity_kg: parseInt(e.target.value)})} /></TableCell>
-                    <TableCell><Input type="number" className="h-8 text-xs bg-background" placeholder="18" value={newData.default_capacity_pallets || ""} onChange={e => setNewData({...newData, default_capacity_pallets: parseInt(e.target.value)})} /></TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => addMutation.mutate({ table: 'vehicle_types', payload: newData })} disabled={!newData.name || !newData.code}>
-                          <Check className="h-3.5 w-3.5" strokeWidth={1.5} />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => setIsAdding(null)}>
-                          <X className="h-3.5 w-3.5" strokeWidth={1.5} />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {vehicleTypes.map((vt) => (
-                  <TableRow key={vt.id} className="group transition-colors">
-                    <TableCell className="font-medium text-xs">{vt.name}</TableCell>
-                    <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{vt.code}</code></TableCell>
-                    <TableCell className="text-xs tabular-nums text-muted-foreground">{vt.default_capacity_kg?.toLocaleString()} kg</TableCell>
-                    <TableCell className="text-xs tabular-nums text-muted-foreground">{vt.default_capacity_pallets} plt</TableCell>
-                    <TableCell>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => deleteMutation.mutate({ table: 'vehicle_types', id: vt.id })}>
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {vehicleTypes.map((vt) => {
+                  const dims = [vt.max_length_cm, vt.max_width_cm, vt.max_height_cm]
+                    .map(n => (n == null ? "?" : String(n)))
+                    .join("x");
+                  const opties: string[] = [];
+                  if (vt.has_tailgate) opties.push("klep");
+                  if (vt.has_cooling) opties.push("koeling");
+                  if (vt.adr_capable) opties.push("ADR");
+                  return (
+                    <TableRow key={vt.id} className="group transition-colors">
+                      <TableCell className="font-medium text-xs">{vt.name}</TableCell>
+                      <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{vt.code}</code></TableCell>
+                      <TableCell className="text-xs tabular-nums text-muted-foreground">{dims !== "?x?x?" ? `${dims} cm` : "—"}</TableCell>
+                      <TableCell className="text-xs tabular-nums text-muted-foreground">{vt.max_weight_kg != null ? `${vt.max_weight_kg.toLocaleString()} kg` : "—"}</TableCell>
+                      <TableCell className="text-xs tabular-nums text-muted-foreground">{vt.max_pallets ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{opties.length > 0 ? opties.join(", ") : "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => { setVehicleDialogInitial(vt as Partial<VehicleTypeFormValues>); setVehicleDialogOpen(true); }}
+                          >
+                            <Edit2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => deleteMutation.mutate({ table: 'vehicle_types', id: vt.id })}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
