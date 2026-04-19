@@ -153,25 +153,25 @@ function PlanningV2() {
 
   if (!v2Enabled) {
     return (
-      <div className="p-8 max-w-2xl mx-auto">
-        <Card className="p-6 border-amber-300 bg-amber-50/40 space-y-3">
+      <div className="p-8 max-w-xl mx-auto">
+        <Card className="p-6 space-y-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-2 min-w-0">
-              <h2 className="font-semibold">Planbord v2 staat uit voor deze tenant</h2>
-              <p className="text-sm text-muted-foreground">Activeer planbord v2 via Stamgegevens of direct in de database:</p>
-              <pre className="text-xs bg-muted p-2 rounded overflow-x-auto">
-{`UPDATE tenant_settings
-SET settings = settings || '{"v2_enabled":true}'::jsonb
-WHERE category='planning' AND tenant_id='${tenant?.id}';`}
-              </pre>
-              <Link to="/planning" className="inline-block">
-                <Button variant="outline" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-1" />
-                  Terug naar oude planbord
-                </Button>
-              </Link>
+              <h2 className="font-semibold">Het nieuwe planbord is nog niet geactiveerd</h2>
+              <p className="text-sm text-muted-foreground">
+                Een beheerder kan het nieuwe planbord inschakelen via Stamgegevens.
+                Intussen blijft het bestaande planbord volledig werken.
+              </p>
             </div>
+          </div>
+          <div className="flex justify-end">
+            <Link to="/planning">
+              <Button variant="default" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Naar het planbord
+              </Button>
+            </Link>
           </div>
         </Card>
       </div>
