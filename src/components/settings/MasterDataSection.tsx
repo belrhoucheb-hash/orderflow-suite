@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useWarehouses, useCreateWarehouse, useUpdateWarehouse, useDeleteWarehouse, type WarehouseInput, type Warehouse as WarehouseType } from "@/hooks/useWarehouses";
 import { VehicleTypeDialog, type VehicleTypeFormValues } from "./VehicleTypeDialog";
+import { PlanningV2Toggle } from "./PlanningV2Toggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Card, 
@@ -198,6 +199,11 @@ export function MasterDataSection() {
         onSubmit={(values) => upsertVehicleType.mutate(values)}
         submitting={upsertVehicleType.isPending}
       />
+
+      {/* Planbord v2 feature-flag */}
+      <section>
+        <PlanningV2Toggle />
+      </section>
 
       {/* ─── Vehicle Types ─── */}
       <section className="space-y-4">

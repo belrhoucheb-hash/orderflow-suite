@@ -195,32 +195,33 @@ function PlanningV2() {
         }
       />
 
-      <Card className="p-4 flex flex-wrap items-center gap-3">
+      <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          <CalendarIcon className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="border rounded-md px-3 py-1.5 text-sm bg-background"
+            className="picker !h-10 !w-auto"
           />
         </div>
-        <Button variant="outline" onClick={() => setDaySetupOpen(true)} className="gap-2">
+        <Button onClick={() => setDaySetupOpen(true)} className="btn-luxe btn-luxe--ghost gap-2">
           <Settings2 className="h-4 w-4" />
           Dagsetup
         </Button>
         <AutoPlanButton date={selectedDate} onUnplacedChange={setUnplacedHints} />
-        <div className="ml-auto text-sm text-muted-foreground">
-          {groups.length} clusters, {openOrders.length} open orders
+        <div className="ml-auto flex items-center gap-3 text-sm">
+          <span className="chiplet">{groups.length} clusters</span>
+          <span className="chiplet chiplet--warn">{openOrders.length} open orders</span>
         </div>
-      </Card>
+      </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-4">
-        <div className="space-y-3">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-5">
+        <div className="space-y-4">
           {activeDrivers.length === 0 && (
-            <Card className="p-8 text-center text-muted-foreground">
+            <div className="card--luxe p-10 text-center text-muted-foreground">
               Geen actieve chauffeurs gevonden. Voeg chauffeurs toe via Stamgegevens.
-            </Card>
+            </div>
           )}
           {activeDrivers.map((driver) => (
             <PlanningDriverLane

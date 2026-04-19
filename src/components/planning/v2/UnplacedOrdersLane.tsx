@@ -1,6 +1,4 @@
-import { AlertTriangle, MapPin } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { AlertTriangle, MapPin, PackageCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getPostcodeRegion } from "@/data/geoData";
 
@@ -47,33 +45,35 @@ export function UnplacedOrdersLane({ orders, hints }: UnplacedOrdersLaneProps) {
 
   if (orders.length === 0) {
     return (
-      <Card className="p-4 bg-muted/20">
-        <div className="text-sm text-muted-foreground italic">
-          Geen open orders. Alle zendingen zijn ingepland of verworpen.
+      <div className="callout--luxe">
+        <PackageCheck className="callout--luxe__icon h-5 w-5" />
+        <div>
+          <div className="callout--luxe__title">Alles is ingepland</div>
+          <div className="callout--luxe__body">
+            Geen open orders meer voor deze dag. Alle zendingen zitten in een cluster of zijn bewust verworpen.
+          </div>
         </div>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card className="p-4 space-y-3 border-orange-200/60">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
+    <div className="card--luxe p-5 space-y-4">
+      <div className="flex items-center justify-between pb-3 hairline border-b-0">
+        <h3 className="section-title flex items-center gap-2 !m-0">
+          <AlertTriangle className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
           Open te plannen
         </h3>
-        <Badge variant="outline" className="bg-amber-100 text-amber-800">
-          {orders.length} orders
-        </Badge>
+        <span className="chiplet chiplet--warn">{orders.length} orders</span>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {regionKeys.map((region) => (
           <div key={region}>
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
+            <div className="section-label mb-2">
               Regio {region}, {groupedByRegion.get(region)!.length} orders
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {groupedByRegion.get(region)!.map((o) => {
                 const hint = hintByOrderId.get(o.id);
                 const hasIssue = !!hint;
@@ -81,26 +81,29 @@ export function UnplacedOrdersLane({ orders, hints }: UnplacedOrdersLaneProps) {
                   <div
                     key={o.id}
                     className={cn(
-                      "rounded-md border p-2 text-sm",
-                      hasIssue ? "border-red-300/70 bg-red-50/40" : "border-border/60 bg-background",
+                      "rounded-lg border p-3 text-sm transition-colors",
+                      hasIssue
+                        ? "border-red-300/70 bg-red-50/40"
+                        : "border-[hsl(var(--gold)/0.15)] bg-[hsl(var(--gold-soft)/0.18)] hover:bg-[hsl(var(--gold-soft)/0.3)]",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="font-medium truncate">
+                        <div className="font-semibold truncate">
                           #{o.order_number} {o.client_name}
                         </div>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
-                          <MapPin className="h-3 w-3 shrink-0" />
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground truncate mt-0.5">
+                          <MapPin className="h-3 w-3 shrink-0 text-[hsl(var(--gold-deep))]" />
                           {o.delivery_address || "Geen adres"}
                         </div>
                       </div>
-                      <div className="text-xs text-muted-foreground shrink-0">
-                        {o.weight_kg ?? 0} kg, {o.quantity ?? 0} pal
+                      <div className="text-xs text-muted-foreground shrink-0 text-right">
+                        {o.weight_kg ?? 0} kg<br />
+                        {o.quantity ?? 0} pal
                       </div>
                     </div>
                     {hint && (
-                      <div className="mt-1 text-xs text-red-700">
+                      <div className="mt-2 text-xs text-red-700">
                         {REASON_LABELS[hint.reason] ?? hint.reason}
                         {hint.detail && <span className="text-muted-foreground"> ({hint.detail})</span>}
                       </div>
@@ -112,6 +115,6 @@ export function UnplacedOrdersLane({ orders, hints }: UnplacedOrdersLaneProps) {
           </div>
         ))}
       </div>
-    </Card>
+    </div>
   );
 }

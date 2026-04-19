@@ -1,6 +1,4 @@
 import { UserCircle, Clock, AlertCircle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { ConsolidationGroup } from "@/types/consolidation";
 import { ClusterProposalCard } from "./ClusterProposalCard";
@@ -19,10 +17,10 @@ interface PlanningDriverLaneProps {
 }
 
 function laneStatusBadge(status?: string) {
-  if (status === "verlof") return { label: "Verlof", className: "bg-amber-100 text-amber-800" };
-  if (status === "ziek") return { label: "Ziek", className: "bg-red-100 text-red-800" };
-  if (status === "rust") return { label: "Rust", className: "bg-blue-100 text-blue-800" };
-  if (status === "afwezig") return { label: "Afwezig", className: "bg-gray-100 text-gray-600" };
+  if (status === "verlof") return { label: "Verlof", className: "chiplet chiplet--warn" };
+  if (status === "ziek") return { label: "Ziek", className: "chiplet chiplet--attn" };
+  if (status === "rust") return { label: "Rust", className: "chiplet" };
+  if (status === "afwezig") return { label: "Afwezig", className: "chiplet" };
   return null;
 }
 
@@ -39,34 +37,41 @@ export function PlanningDriverLane({
   const isNearContract = contractHrs !== null && contractHrs !== undefined && plannedHoursThisWeek > contractHrs * 0.9;
 
   return (
-    <Card className="p-4 space-y-3 bg-card/50">
-      <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/60">
-        <div className="flex items-center gap-2 min-w-0">
-          <UserCircle className="h-5 w-5 text-muted-foreground shrink-0" />
+    <div className="card--luxe p-5 space-y-4">
+      <div className="flex items-center justify-between gap-2 pb-3 hairline border-b-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-10 w-10 rounded-full flex items-center justify-center bg-[hsl(var(--gold-soft)/0.6)] border border-[hsl(var(--gold)/0.3)] shrink-0">
+            <UserCircle className="h-5 w-5 text-[hsl(var(--gold-deep))]" />
+          </div>
           <div className="min-w-0">
-            <h3 className="font-semibold truncate">{driver.name}</h3>
+            <h3 className="font-semibold truncate font-[var(--font-display)]">{driver.name}</h3>
             {statusBadge && (
-              <Badge variant="outline" className={cn("text-xs mt-0.5", statusBadge.className)}>
+              <span className={cn(statusBadge.className, "mt-1 inline-flex")}>
                 {statusBadge.label}
-              </Badge>
+              </span>
             )}
           </div>
         </div>
         <div className="text-right shrink-0">
-          <div className="flex items-center gap-1 text-xs text-muted-foreground justify-end">
+          <div className="flex items-center gap-1 text-[0.6875rem] uppercase tracking-wide text-muted-foreground justify-end">
             <Clock className="h-3 w-3" />
             <span>Deze week</span>
           </div>
-          <div className={cn(
-            "text-sm font-semibold",
-            isOverContract && "text-red-600",
-            !isOverContract && isNearContract && "text-amber-700",
-          )}>
+          <div
+            className={cn(
+              "text-lg font-semibold font-[var(--font-display)]",
+              isOverContract && "text-red-600",
+              !isOverContract && isNearContract && "text-amber-700",
+              !isOverContract && !isNearContract && "text-[hsl(var(--gold-deep))]",
+            )}
+          >
             {plannedHoursThisWeek.toFixed(1)}
             {contractHrs !== null && contractHrs !== undefined && (
               <span className="text-xs text-muted-foreground font-normal"> / {contractHrs} u</span>
             )}
-            {(contractHrs === null || contractHrs === undefined) && <span className="text-xs text-muted-foreground font-normal"> u</span>}
+            {(contractHrs === null || contractHrs === undefined) && (
+              <span className="text-xs text-muted-foreground font-normal"> u</span>
+            )}
           </div>
           {isOverContract && (
             <div className="flex items-center gap-1 text-xs text-red-600 justify-end mt-0.5">
@@ -78,12 +83,12 @@ export function PlanningDriverLane({
       </div>
 
       {groups.length === 0 && (
-        <div className="text-sm text-muted-foreground italic text-center py-4">
-          Geen clusters toegewezen
+        <div className="text-sm text-muted-foreground italic text-center py-6">
+          Geen clusters toegewezen voor deze dag.
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {groups.map((g) => (
           <ClusterProposalCard
             key={g.id}
@@ -93,6 +98,6 @@ export function PlanningDriverLane({
           />
         ))}
       </div>
-    </Card>
+    </div>
   );
 }
