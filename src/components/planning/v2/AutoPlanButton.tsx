@@ -1,5 +1,4 @@
 import { Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useAutoPlan } from "@/hooks/useAutoPlan";
 import type { UnplacedOrderHint } from "./UnplacedOrdersLane";
 
@@ -19,14 +18,14 @@ export function AutoPlanButton({ date, onUnplacedChange }: AutoPlanButtonProps) 
   }
 
   return (
-    <Button
-      variant="default"
+    <button
+      type="button"
       onClick={handleClick}
       disabled={autoPlan.isPending}
-      className="gap-2"
+      className="btn-luxe btn-luxe--primary"
     >
       <Sparkles className="h-4 w-4" />
       {autoPlan.isPending ? "Auto-plannen..." : "Auto-plan"}
-    </Button>
+    </button>
   );
 }

@@ -5,8 +5,6 @@ import { nl } from "date-fns/locale";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ArrowLeft, Calendar as CalendarIcon, Settings2, AlertTriangle } from "lucide-react";
 import { useTenantOptional } from "@/contexts/TenantContext";
@@ -17,6 +15,7 @@ import { DaySetupDialog } from "@/components/planning/v2/DaySetupDialog";
 import { PlanningDriverLane } from "@/components/planning/v2/PlanningDriverLane";
 import { UnplacedOrdersLane, type UnplacedOrderHint } from "@/components/planning/v2/UnplacedOrdersLane";
 import { AutoPlanButton } from "@/components/planning/v2/AutoPlanButton";
+import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import type { ConsolidationGroup } from "@/types/consolidation";
 
 function isoWeekStart(d: Date): string {
@@ -154,26 +153,26 @@ function PlanningV2() {
   if (!v2Enabled) {
     return (
       <div className="p-8 max-w-xl mx-auto">
-        <Card className="p-6 space-y-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="space-y-2 min-w-0">
-              <h2 className="font-semibold">Het nieuwe planbord is nog niet geactiveerd</h2>
-              <p className="text-sm text-muted-foreground">
+        <div className="callout--luxe">
+          <AlertTriangle className="callout--luxe__icon h-5 w-5" />
+          <div className="space-y-3 min-w-0 flex-1">
+            <div>
+              <div className="callout--luxe__title">Het nieuwe planbord is nog niet geactiveerd</div>
+              <div className="callout--luxe__body">
                 Een beheerder kan het nieuwe planbord inschakelen via Stamgegevens.
                 Intussen blijft het bestaande planbord volledig werken.
-              </p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Link to="/planning">
+                <button type="button" className="btn-luxe btn-luxe--primary !h-9">
+                  <ArrowLeft className="h-4 w-4" />
+                  Naar het planbord
+                </button>
+              </Link>
             </div>
           </div>
-          <div className="flex justify-end">
-            <Link to="/planning">
-              <Button variant="default" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Naar het planbord
-              </Button>
-            </Link>
-          </div>
-        </Card>
+        </div>
       </div>
     );
   }
@@ -187,28 +186,27 @@ function PlanningV2() {
         subtitle={`Dagsetup, auto-plan en swim-lanes per chauffeur voor ${prettyDate}`}
         actions={
           <Link to="/planning">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-1" />
+            <button type="button" className="btn-luxe btn-luxe--ghost !h-9">
+              <ArrowLeft className="h-4 w-4" />
               Oude planbord
-            </Button>
+            </button>
           </Link>
         }
       />
 
       <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <CalendarIcon className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="picker !h-10 !w-auto"
-          />
+        <div className="flex items-center gap-2 min-w-[12rem]">
+          <CalendarIcon className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
+          <LuxeDatePicker value={selectedDate} onChange={setSelectedDate} className="flex-1 min-w-[10rem]" />
         </div>
-        <Button onClick={() => setDaySetupOpen(true)} className="btn-luxe btn-luxe--ghost gap-2">
+        <button
+          type="button"
+          onClick={() => setDaySetupOpen(true)}
+          className="btn-luxe"
+        >
           <Settings2 className="h-4 w-4" />
           Dagsetup
-        </Button>
+        </button>
         <AutoPlanButton date={selectedDate} onUnplacedChange={setUnplacedHints} />
         <div className="ml-auto flex items-center gap-3 text-sm">
           <span className="chiplet">{groups.length} clusters</span>

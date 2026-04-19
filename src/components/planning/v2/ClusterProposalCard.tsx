@@ -1,5 +1,4 @@
 import { MapPin, Package, Scale, Timer } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ConsolidationGroup } from "@/types/consolidation";
 
@@ -116,24 +115,24 @@ export function ClusterProposalCard({ group, onConfirm, onReject, disabled }: Cl
       {group.status === "VOORSTEL" && (onConfirm || onReject) && (
         <div className="flex gap-2 pt-3 border-t border-[hsl(var(--gold)/0.2)]">
           {onConfirm && (
-            <Button
-              size="sm"
-              className="btn-luxe btn-luxe--primary flex-1"
+            <button
+              type="button"
+              className="btn-luxe btn-luxe--primary flex-1 !h-9"
               onClick={() => onConfirm(group.id)}
               disabled={disabled}
             >
               Bevestig
-            </Button>
+            </button>
           )}
           {onReject && (
-            <Button
-              size="sm"
-              className="btn-luxe btn-luxe--ghost flex-1"
+            <button
+              type="button"
+              className="btn-luxe flex-1 !h-9"
               onClick={() => onReject(group.id)}
               disabled={disabled}
             >
               Verwerp
-            </Button>
+            </button>
           )}
         </div>
       )}
