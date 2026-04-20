@@ -12,8 +12,7 @@ interface PlanningDriverLaneProps {
   };
   groups: ConsolidationGroup[];
   plannedHoursThisWeek: number;
-  onConfirmGroup?: (groupId: string) => void;
-  onRejectGroup?: (groupId: string) => void;
+  onSelectGroup: (groupId: string) => void;
 }
 
 function laneStatusBadge(status?: string) {
@@ -28,8 +27,7 @@ export function PlanningDriverLane({
   driver,
   groups,
   plannedHoursThisWeek,
-  onConfirmGroup,
-  onRejectGroup,
+  onSelectGroup,
 }: PlanningDriverLaneProps) {
   const statusBadge = laneStatusBadge(driver.status);
   const contractHrs = driver.contract_hours_per_week;
@@ -93,8 +91,7 @@ export function PlanningDriverLane({
           <ClusterProposalCard
             key={g.id}
             group={g}
-            onConfirm={onConfirmGroup}
-            onReject={onRejectGroup}
+            onSelect={onSelectGroup}
           />
         ))}
       </div>

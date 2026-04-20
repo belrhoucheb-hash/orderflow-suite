@@ -4,9 +4,7 @@ import type { ConsolidationGroup } from "@/types/consolidation";
 
 interface ClusterProposalCardProps {
   group: ConsolidationGroup;
-  onConfirm?: (groupId: string) => void;
-  onReject?: (groupId: string) => void;
-  disabled?: boolean;
+  onSelect?: (groupId: string) => void;
 }
 
 function statusStyling(group: ConsolidationGroup) {
@@ -46,15 +44,17 @@ function utilizationBarClass(pct: number | null): string {
   return "bg-[hsl(var(--gold))]";
 }
 
-export function ClusterProposalCard({ group, onConfirm, onReject, disabled }: ClusterProposalCardProps) {
+export function ClusterProposalCard({ group, onSelect }: ClusterProposalCardProps) {
   const styling = statusStyling(group);
   const orderCount = group.consolidation_orders?.length ?? group.orders?.length ?? 0;
   const util = group.utilization_pct;
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => onSelect?.(group.id)}
       className={cn(
-        "card--luxe p-4 space-y-3 transition-all hover:-translate-y-0.5",
+        "card--luxe p-4 space-y-3 transition-all hover:-translate-y-0.5 w-full text-left cursor-pointer",
         styling.dashed && "border-dashed",
       )}
     >
@@ -112,30 +112,11 @@ export function ClusterProposalCard({ group, onConfirm, onReject, disabled }: Cl
         </div>
       </div>
 
-      {group.status === "VOORSTEL" && (onConfirm || onReject) && (
-        <div className="flex gap-2 pt-3 border-t border-[hsl(var(--gold)/0.2)]">
-          {onConfirm && (
-            <button
-              type="button"
-              className="btn-luxe btn-luxe--primary flex-1 !h-9"
-              onClick={() => onConfirm(group.id)}
-              disabled={disabled}
-            >
-              Bevestig
-            </button>
-          )}
-          {onReject && (
-            <button
-              type="button"
-              className="btn-luxe flex-1 !h-9"
-              onClick={() => onReject(group.id)}
-              disabled={disabled}
-            >
-              Verwerp
-            </button>
-          )}
+      {group.status === "VOORSTEL" && (
+        <div className="pt-2 text-xs text-[hsl(var(--gold-deep))] font-medium">
+          Klik voor details en acties
         </div>
       )}
-    </div>
+    </button>
   );
 }

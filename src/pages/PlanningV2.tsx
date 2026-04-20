@@ -2,10 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { nl } from "date-fns/locale";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { toast } from "sonner";
 import { ArrowLeft, Calendar as CalendarIcon, Settings2, AlertTriangle } from "lucide-react";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useDrivers } from "@/hooks/useDrivers";
@@ -15,6 +14,7 @@ import { DaySetupDialog } from "@/components/planning/v2/DaySetupDialog";
 import { PlanningDriverLane } from "@/components/planning/v2/PlanningDriverLane";
 import { UnplacedOrdersLane, type UnplacedOrderHint } from "@/components/planning/v2/UnplacedOrdersLane";
 import { AutoPlanButton } from "@/components/planning/v2/AutoPlanButton";
+import { ClusterDetailPanel } from "@/components/planning/v2/ClusterDetailPanel";
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import type { ConsolidationGroup } from "@/types/consolidation";
 
@@ -24,12 +24,12 @@ function isoWeekStart(d: Date): string {
 
 function PlanningV2() {
   const { tenant } = useTenantOptional();
-  const qc = useQueryClient();
   const { data: v2Enabled, isLoading: flagLoading } = useIsPlanningV2Enabled();
 
   const [selectedDate, setSelectedDate] = useState<string>(format(addDays(new Date(), 1), "yyyy-MM-dd"));
   const [daySetupOpen, setDaySetupOpen] = useState(false);
   const [unplacedHints, setUnplacedHints] = useState<UnplacedOrderHint[]>([]);
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
 
   const { data: drivers = [] } = useDrivers();
   const { data: driverAvailability = [] } = useDriverAvailability(selectedDate);
@@ -126,26 +126,6 @@ function PlanningV2() {
   // Clear hints wanneer datum verandert
   useEffect(() => setUnplacedHints([]), [selectedDate]);
 
-  async function handleConfirm(groupId: string) {
-    const { error } = await (supabase.rpc as any)("confirm_consolidation_group", { p_group_id: groupId });
-    if (error) {
-      toast.error("Bevestigen mislukt", { description: error.message });
-      return;
-    }
-    toast.success("Cluster bevestigd", { description: "Trip en stops zijn aangemaakt." });
-    qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date"] });
-  }
-
-  async function handleReject(groupId: string) {
-    const { error } = await (supabase.rpc as any)("reject_consolidation_group", { p_group_id: groupId, p_reason: null });
-    if (error) {
-      toast.error("Verwerpen mislukt", { description: error.message });
-      return;
-    }
-    toast.info("Cluster verworpen", { description: "Orders staan weer open te plannen." });
-    qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date"] });
-  }
-
   if (flagLoading) {
     return <div className="p-8 text-center text-muted-foreground">Laden...</div>;
   }
@@ -232,8 +212,7 @@ function PlanningV2() {
               }}
               groups={groupsByDriver.get(driver.id) ?? []}
               plannedHoursThisWeek={plannedHoursByDriver.get(driver.id) ?? 0}
-              onConfirmGroup={handleConfirm}
-              onRejectGroup={handleReject}
+              onSelectGroup={setSelectedClusterId}
             />
           ))}
         </div>
@@ -244,6 +223,7 @@ function PlanningV2() {
       </div>
 
       <DaySetupDialog open={daySetupOpen} onOpenChange={setDaySetupOpen} date={selectedDate} />
+      <ClusterDetailPanel groupId={selectedClusterId} onClose={() => setSelectedClusterId(null)} />
     </div>
   );
 }
