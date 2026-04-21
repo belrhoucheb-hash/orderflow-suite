@@ -7,8 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFleetVehicles, useVehicleUtilization, useUpcomingMaintenance, type Vehicle } from "@/hooks/useFleet";
 import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
+import { VehicleTypesSection } from "@/components/fleet/VehicleTypesSection";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -72,20 +74,34 @@ export default function Fleet() {
     return utilization?.[v.id] ?? 0;
   };
 
+  const [activeTab, setActiveTab] = useState("voertuigen");
+
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <div className="px-4 md:px-6 py-6">
         <PageHeader
           title="Vloot"
-          subtitle={`${vehicles?.length ?? 0} voertuigen — ${vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar`}
+          subtitle={`${vehicles?.length ?? 0} voertuigen, ${vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar`}
           actions={
-            <Button onClick={() => setShowNewDialog(true)} className="btn-primary">
-              <Plus className="h-4 w-4" />
-              Voertuig Toevoegen
-            </Button>
+            activeTab === "voertuigen" ? (
+              <Button onClick={() => setShowNewDialog(true)} className="btn-primary">
+                <Plus className="h-4 w-4" />
+                Voertuig Toevoegen
+              </Button>
+            ) : null
           }
         />
       </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+        <div className="px-4 md:px-6">
+          <TabsList>
+            <TabsTrigger value="voertuigen">Voertuigen</TabsTrigger>
+            <TabsTrigger value="types">Types</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="voertuigen" className="flex-1 flex flex-col min-h-0 mt-4">
 
       {/* Overdue maintenance warning */}
       {overdueMaintenance && overdueMaintenance.length > 0 && (
@@ -219,6 +235,13 @@ export default function Fleet() {
           ))
         )}
       </div>
+
+        </TabsContent>
+
+        <TabsContent value="types" className="flex-1 overflow-auto mt-4 px-4 md:px-6 pb-8">
+          <VehicleTypesSection />
+        </TabsContent>
+      </Tabs>
 
       <NewVehicleDialog open={showNewDialog} onOpenChange={setShowNewDialog} />
     </div>

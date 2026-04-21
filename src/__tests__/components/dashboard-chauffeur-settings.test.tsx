@@ -458,7 +458,7 @@ describe("MasterDataSection", () => {
   it("renders section headings", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
-    expect(screen.getByText("Voertuigtypes")).toBeInTheDocument();
+    expect(screen.queryByText("Voertuigtypes")).not.toBeInTheDocument();
     expect(screen.getByText("Ladingeenheden")).toBeInTheDocument();
     expect(screen.getByText("Transportvereisten")).toBeInTheDocument();
   });
@@ -474,50 +474,35 @@ describe("MasterDataSection", () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     const addButtons = screen.getAllByText("Toevoegen");
-    expect(addButtons.length).toBeGreaterThanOrEqual(3);
+    expect(addButtons.length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows loading state while data is fetched", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
-    // While queries are loading, spinner is shown
     const loadingElements = screen.getAllByText("Laden...");
     expect(loadingElements.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("opens vehicle type add form when Toevoegen is clicked", async () => {
+  it("opens loading units add form when first Toevoegen is clicked", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
-      const addButtons = screen.getAllByText("Toevoegen");
-      expect(addButtons.length).toBeGreaterThanOrEqual(3);
+      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(2);
     });
-    const addButtons = screen.getAllByText("Toevoegen");
-    fireEvent.click(addButtons[0]);
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText("Bakwagen...")).toBeInTheDocument();
-    });
-  });
-
-  it("opens loading units add form when second Toevoegen is clicked", async () => {
-    const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
-    render(<Wrapper><MasterDataSection /></Wrapper>);
-    await waitFor(() => {
-      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(3);
-    });
-    fireEvent.click(screen.getAllByText("Toevoegen")[1]);
+    fireEvent.click(screen.getAllByText("Toevoegen")[0]);
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Europallet...")).toBeInTheDocument();
     });
   });
 
-  it("opens requirement types add form when third Toevoegen is clicked", async () => {
+  it("opens requirement types add form when second Toevoegen is clicked", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
-      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(3);
+      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(2);
     });
-    fireEvent.click(screen.getAllByText("Toevoegen")[2]);
+    fireEvent.click(screen.getAllByText("Toevoegen")[1]);
     await waitFor(() => {
       expect(screen.getByPlaceholderText("ADR...")).toBeInTheDocument();
     });
@@ -527,49 +512,26 @@ describe("MasterDataSection", () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
-      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(3);
+      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(2);
     });
     fireEvent.click(screen.getAllByText("Toevoegen")[0]);
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Bakwagen...")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Europallet...")).toBeInTheDocument();
     });
-    // Find and click the cancel (X) button in the add row
     const xButtons = screen.getAllByRole("button").filter((b) =>
       b.querySelector("svg") && b.className.includes("text-muted-foreground")
     );
     if (xButtons.length > 0) fireEvent.click(xButtons[xButtons.length - 1]);
-    expect(screen.queryByPlaceholderText("Bakwagen...")).not.toBeInTheDocument();
-  });
-
-  it("fills in new vehicle type form fields", async () => {
-    const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
-    render(<Wrapper><MasterDataSection /></Wrapper>);
-    await waitFor(() => {
-      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(3);
-    });
-    fireEvent.click(screen.getAllByText("Toevoegen")[0]);
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText("Bakwagen...")).toBeInTheDocument();
-    });
-    const nameInput = screen.getByPlaceholderText("Bakwagen...");
-    const codeInput = screen.getByPlaceholderText("bakwagen");
-    const kgInput = screen.getByPlaceholderText("12000");
-    const pltInput = screen.getByPlaceholderText("18");
-    fireEvent.change(nameInput, { target: { value: "Koelwagen" } });
-    fireEvent.change(codeInput, { target: { value: "koelwagen" } });
-    fireEvent.change(kgInput, { target: { value: "8000" } });
-    fireEvent.change(pltInput, { target: { value: "16" } });
-    expect(nameInput).toHaveValue("Koelwagen");
-    expect(codeInput).toHaveValue("koelwagen");
+    expect(screen.queryByPlaceholderText("Europallet...")).not.toBeInTheDocument();
   });
 
   it("fills in loading unit add form fields", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
-      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(3);
+      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(2);
     });
-    fireEvent.click(screen.getAllByText("Toevoegen")[1]);
+    fireEvent.click(screen.getAllByText("Toevoegen")[0]);
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Europallet...")).toBeInTheDocument();
     });
@@ -588,9 +550,9 @@ describe("MasterDataSection", () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
-      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(3);
+      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(2);
     });
-    fireEvent.click(screen.getAllByText("Toevoegen")[2]);
+    fireEvent.click(screen.getAllByText("Toevoegen")[1]);
     await waitFor(() => {
       expect(screen.getByPlaceholderText("ADR...")).toBeInTheDocument();
     });
@@ -606,7 +568,6 @@ describe("MasterDataSection", () => {
   it("renderLoading function produces loading UI", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
-    // While queries are loading, all 3 sections show Laden...
     const loadingElements = screen.getAllByText("Laden...");
     expect(loadingElements.length).toBeGreaterThanOrEqual(1);
   });
