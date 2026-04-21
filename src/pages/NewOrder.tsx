@@ -38,6 +38,11 @@ interface FreightLine {
   referentie: string;
   contactLocatie: string;
   opmerkingen: string;
+  // Optionele coord-info per leg, voorbereidend voor hub-routing
+  // op afstand en betere Webfleet-export per stop.
+  lat?: number | null;
+  lng?: number | null;
+  coords_manual?: boolean;
 }
 
 interface FreightSummaryItem {
@@ -163,6 +168,7 @@ const NewOrder = () => {
   const addFreightLine = () => {
     setFreightLines(prev => [...prev, {
       id: crypto.randomUUID(), activiteit: "Lossen", locatie: "", datum: "", tijd: "", tijdTot: "", referentie: "", contactLocatie: "", opmerkingen: "",
+      lat: null, lng: null, coords_manual: false,
     }]);
   };
 
@@ -190,10 +196,14 @@ const NewOrder = () => {
     setPickupAddr(v);
     clearError("pickup_address");
     // Sync plain-string locatie zodat trajectRouter-preview, isValidAddress
-    // en afdeling-inferentie blijven werken zonder aanpassingen.
+    // en afdeling-inferentie blijven werken zonder aanpassingen. Daarnaast
+    // ook lat/lng/coords_manual op de leg zetten voor toekomstige hub-routing
+    // en Webfleet-export per stop.
     if (primaryLadenId) {
       const composed = composeAddressString(v, { includeLocality: true });
-      setFreightLines(prev => prev.map(l => l.id === primaryLadenId ? { ...l, locatie: composed } : l));
+      setFreightLines(prev => prev.map(l => l.id === primaryLadenId ? {
+        ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
+      } : l));
     }
   };
 
@@ -202,7 +212,9 @@ const NewOrder = () => {
     clearError("delivery_address");
     if (primaryLossenId) {
       const composed = composeAddressString(v, { includeLocality: true });
-      setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? { ...l, locatie: composed } : l));
+      setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? {
+        ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
+      } : l));
     }
   };
 
