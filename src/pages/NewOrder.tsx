@@ -188,10 +188,16 @@ const NewOrder = () => {
     setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
   };
 
-  // Vind de eerste Laden/Lossen freightLine, deze koppelen we aan het
-  // gestructureerde pickup/delivery-adres (incl. lat/lng, postcode, plaats).
-  const primaryLadenId = freightLines.find(l => l.activiteit === "Laden")?.id ?? null;
-  const primaryLossenId = freightLines.find(l => l.activiteit === "Lossen")?.id ?? null;
+  // Eerste Laden/Lossen freightLine, gekoppeld aan het gestructureerde
+  // pickup/delivery-adres (incl. lat/lng, postcode, plaats).
+  const primaryLadenId = useMemo(
+    () => freightLines.find(l => l.activiteit === "Laden")?.id ?? null,
+    [freightLines],
+  );
+  const primaryLossenId = useMemo(
+    () => freightLines.find(l => l.activiteit === "Lossen")?.id ?? null,
+    [freightLines],
+  );
 
   const handlePickupAddrChange = (v: AddressValue) => {
     setPickupAddr(v);
