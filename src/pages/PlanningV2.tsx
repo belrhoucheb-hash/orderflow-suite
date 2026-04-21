@@ -5,7 +5,7 @@ import { nl } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { ArrowLeft, Calendar as CalendarIcon, Settings2, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, Settings2, AlertTriangle } from "lucide-react";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useIsPlanningV2Enabled } from "@/hooks/useIsPlanningV2Enabled";
@@ -138,17 +138,16 @@ function PlanningV2() {
           <AlertTriangle className="callout--luxe__icon h-5 w-5" />
           <div className="space-y-3 min-w-0 flex-1">
             <div>
-              <div className="callout--luxe__title">Het nieuwe planbord is nog niet geactiveerd</div>
+              <div className="callout--luxe__title">Het planbord is nog niet geactiveerd voor deze tenant</div>
               <div className="callout--luxe__body">
-                Een beheerder kan het nieuwe planbord inschakelen via Stamgegevens.
-                Intussen blijft het bestaande planbord volledig werken.
+                Een beheerder kan het planbord inschakelen via Instellingen, Stamgegevens.
+                Zodra de schakelaar aan staat is de planbord-pagina direct beschikbaar.
               </div>
             </div>
             <div className="flex justify-end">
-              <Link to="/planning">
+              <Link to="/instellingen/stamgegevens">
                 <button type="button" className="btn-luxe btn-luxe--primary !h-9">
-                  <ArrowLeft className="h-4 w-4" />
-                  Naar het planbord
+                  Naar Stamgegevens
                 </button>
               </Link>
             </div>
@@ -163,16 +162,8 @@ function PlanningV2() {
   return (
     <div className="p-6 space-y-4 max-w-[1800px] mx-auto">
       <PageHeader
-        title="Planbord 2.0"
+        title="Planbord"
         subtitle={`Dagsetup, auto-plan en swim-lanes per chauffeur voor ${prettyDate}`}
-        actions={
-          <Link to="/planning">
-            <button type="button" className="btn-luxe btn-luxe--ghost !h-9">
-              <ArrowLeft className="h-4 w-4" />
-              Oude planbord
-            </button>
-          </Link>
-        }
       />
 
       <div className="card--luxe p-4 flex flex-wrap items-center gap-3">

@@ -35,8 +35,7 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Orders = lazy(() => import("@/pages/Orders"));
 const OrderDetail = lazy(() => import("@/pages/OrderDetail"));
 const NewOrder = lazy(() => import("@/pages/NewOrder"));
-const Planning = lazy(() => import("@/pages/Planning"));
-const PlanningV2 = lazy(() => import("@/pages/PlanningV2"));
+const Planning = lazy(() => import("@/pages/PlanningV2"));
 const ChauffeursRit = lazy(() => import("@/pages/ChauffeursRit"));
 const Chauffeurs = lazy(() => import("@/pages/Chauffeurs"));
 const Inbox = lazy(() => import("@/pages/Inbox"));
@@ -116,7 +115,7 @@ const App = () => (
               <Route path="/klanten" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Clients /></Suspense></ErrorBoundary>} />
               <Route path="/orders/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><OrderDetail /></Suspense></ErrorBoundary>} />
               <Route path="/planning" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Planning /></Suspense></ErrorBoundary>} />
-              <Route path="/planning-v2" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><PlanningV2 /></Suspense></ErrorBoundary>} />
+              <Route path="/planning-v2" element={<Navigate to="/planning" replace />} />
               <Route path="/ritten" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><ChauffeursRit /></Suspense></ErrorBoundary>} />
               <Route path="/chauffeurs" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Chauffeurs /></Suspense></ErrorBoundary>} />
               <Route path="/vloot" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Fleet /></Suspense></ErrorBoundary>} />
