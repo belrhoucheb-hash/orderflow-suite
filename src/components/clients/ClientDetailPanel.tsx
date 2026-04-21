@@ -1,9 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { GoogleMap, Marker } from "@react-google-maps/api";
+import { formatDistanceToNow } from "date-fns";
+import { nl } from "date-fns/locale";
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { type Client, useClientLocations, useClientRates, useClientOrders, useUpdateClient } from "@/hooks/useClients";
-import { MapPin, Clock, Truck, FileText, Plus } from "lucide-react";
+import { useClientContacts } from "@/hooks/useClientContacts";
+import { useClientAudit } from "@/hooks/useClientAudit";
+import { useGoogleMaps } from "@/hooks/useGoogleMaps";
+import { MapPin, Clock, Truck, FileText, Plus, Loader2 } from "lucide-react";
 import { ClientPortalTab } from "./ClientPortalTab";
 import { ClientEmballageTab } from "./ClientEmballageTab";
 import { ClientContactsSection } from "./ClientContactsSection";
@@ -47,21 +55,12 @@ export function ClientDetailPanel({ client }: Props) {
       </TabsList>
 
       <TabsContent value="overzicht" className="p-4 space-y-4 mt-0">
-        <Section title="Bedrijf">
-          <Row label="Naam" value={client.name} />
-          <Row label="KvK" value={client.kvk_number} />
-          <Row label="BTW" value={client.btw_number} />
-          <Row
-            label="Betalingstermijn"
-            value={client.payment_terms ? `${client.payment_terms} dagen` : null}
-          />
-        </Section>
+        <StatsStrip client={client} orders={orders} />
+        <LastAuditLine clientId={client.id} />
 
-        <Section title="Contact">
-          <Row label="Persoon" value={client.contact_person} />
-          <Row label="E-mail" value={client.email} />
-          <Row label="Telefoon" value={client.phone} />
-        </Section>
+        <BedrijfSection client={client} />
+
+        <ContactSection client={client} />
 
         <Section title="Adressen">
           <Row
@@ -88,6 +87,8 @@ export function ClientDetailPanel({ client }: Props) {
           />
           <Row label="Factuur e-mail" value={client.billing_email || client.email} />
         </Section>
+
+        <MiniMapSection client={client} />
 
         <NotesSection client={client} />
       </TabsContent>
@@ -330,6 +331,252 @@ function formatAddress(
     .map((p) => (typeof p === "string" ? p.trim() : p))
     .filter(Boolean);
   return parts.length ? parts.join(", ") : "—";
+}
+
+const ACTIVE_ORDER_STATUSES = new Set([
+  "CREATED",
+  "PLANNED",
+  "IN_TRANSIT",
+  "DRAFT",
+  "PENDING",
+  "OPEN",
+  "WAITING",
+  "CONFIRMED",
+]);
+
+function StatsStrip({ client, orders }: { client: Client; orders: any[] | undefined }) {
+  // Actieve orders: gebruik active_order_count uit useClients (reeds geaggregeerd)
+  // als fallback op orders-lijst wanneer count ontbreekt (bv. detail-route).
+  const activeOrders = useMemo(() => {
+    if (typeof client.active_order_count === "number") return client.active_order_count;
+    if (!orders?.length) return 0;
+    return orders.filter((o) => ACTIVE_ORDER_STATUSES.has(o.status)).length;
+  }, [client.active_order_count, orders]);
+
+  // Laatste rit: max(created_at) van orders
+  const lastOrder = useMemo(() => {
+    if (!orders?.length) return null;
+    const dates = orders
+      .map((o) => (o.created_at ? new Date(o.created_at) : null))
+      .filter((d): d is Date => !!d);
+    if (!dates.length) return null;
+    return new Date(Math.max(...dates.map((d) => d.getTime())));
+  }, [orders]);
+
+  const lastOrderLabel = lastOrder
+    ? formatDistanceToNow(lastOrder, { locale: nl, addSuffix: true })
+    : "Nog geen ritten";
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <StatCard label="Actieve orders" value={String(activeOrders)} />
+      {/*
+        Omzet YTD: orders-tabel heeft geen eenduidig prijsveld (calculated_price
+        zit alleen in test-types, niet in de database). Prijzen komen via
+        order_charges / shipments / invoices, niet direct op orders. Daarom
+        tonen we hier "—" zodat we geen verkeerd cijfer laten zien.
+      */}
+      <StatCard
+        label="Omzet YTD"
+        value="—"
+        caption="niet beschikbaar"
+      />
+      <StatCard label="Laatste rit" value={lastOrderLabel} small />
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  caption,
+  small,
+}: {
+  label: string;
+  value: string;
+  caption?: string;
+  small?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-2xl border border-[hsl(var(--gold)/0.2)] px-3 py-2.5"
+      style={{ background: "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.2) 100%)" }}
+    >
+      <div
+        className={`font-display font-semibold tabular-nums leading-tight text-foreground ${
+          small ? "text-sm" : "text-lg"
+        }`}
+        title={value}
+      >
+        {value}
+      </div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">
+        {label}
+      </div>
+      {caption && (
+        <div className="text-[10px] text-muted-foreground italic mt-0.5">{caption}</div>
+      )}
+    </div>
+  );
+}
+
+function LastAuditLine({ clientId }: { clientId: string }) {
+  const { data } = useClientAudit(clientId);
+  const latest = data?.[0];
+  if (!latest) return null;
+
+  const when = (() => {
+    try {
+      return formatDistanceToNow(new Date(latest.created_at), { locale: nl, addSuffix: true });
+    } catch {
+      return latest.created_at;
+    }
+  })();
+
+  return (
+    <p className="text-[11px] text-muted-foreground">
+      Laatst gewijzigd: {when}
+      {latest.user_name ? ` door ${latest.user_name}` : ""}
+    </p>
+  );
+}
+
+function BedrijfSection({ client }: { client: Client }) {
+  const updateClient = useUpdateClient();
+  const [localActive, setLocalActive] = useState<boolean>(client.is_active);
+
+  useEffect(() => {
+    setLocalActive(client.is_active);
+  }, [client.id, client.is_active]);
+
+  const onToggleActive = async (v: boolean) => {
+    setLocalActive(v);
+    try {
+      await updateClient.mutateAsync({ id: client.id, is_active: v });
+      toast.success(v ? "Klant geactiveerd" : "Klant gedeactiveerd");
+    } catch {
+      setLocalActive(!v);
+      toast.error("Kon status niet opslaan");
+    }
+  };
+
+  return (
+    <Section title="Bedrijf">
+      <Row label="Naam" value={client.name} />
+      <Row label="KvK" value={client.kvk_number} />
+      <Row label="BTW" value={client.btw_number} />
+      <Row
+        label="Betalingstermijn"
+        value={client.payment_terms ? `${client.payment_terms} dagen` : null}
+      />
+      <div className="px-3 py-2 space-y-1">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+            Status
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-foreground">
+              {localActive ? "Actief" : "Inactief"}
+            </span>
+            <Switch
+              checked={localActive}
+              onCheckedChange={onToggleActive}
+              aria-label="Klant actief"
+            />
+          </div>
+        </div>
+        <p className="text-[10px] text-muted-foreground italic">
+          Inactieve klanten verschijnen niet in nieuwe-order dropdowns
+        </p>
+      </div>
+    </Section>
+  );
+}
+
+function ContactSection({ client }: { client: Client }) {
+  const { data: contacts } = useClientContacts(client.id);
+  const primary = client.primary_contact_id
+    ? contacts?.find((c) => c.id === client.primary_contact_id)
+    : null;
+
+  const personLabel = primary?.name || client.contact_person;
+
+  return (
+    <Section title="Contact">
+      <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0">
+          Persoon
+        </span>
+        <div className="flex items-center gap-2 min-w-0 justify-end">
+          <span
+            className="text-xs text-right truncate text-foreground"
+            title={personLabel ?? ""}
+          >
+            {personLabel || "—"}
+          </span>
+          {primary && (
+            <span
+              className="text-[10px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 shrink-0"
+              style={{
+                background: "hsl(var(--gold-soft))",
+                color: "hsl(var(--gold-deep))",
+              }}
+            >
+              Primair
+            </span>
+          )}
+        </div>
+      </div>
+      {!primary && client.primary_contact_id == null && (
+        <div className="px-3 py-1.5">
+          <p className="text-[10px] text-muted-foreground italic">
+            Geen primair contact gekoppeld
+          </p>
+        </div>
+      )}
+      <Row label="E-mail" value={primary?.email || client.email} />
+      <Row label="Telefoon" value={primary?.phone || client.phone} />
+    </Section>
+  );
+}
+
+const MINI_MAP_CONTAINER = { width: "100%", height: "180px" };
+
+function MiniMapSection({ client }: { client: Client }) {
+  const { isLoaded, missingKey, loadError } = useGoogleMaps();
+  if (client.lat == null || client.lng == null) return null;
+  if (missingKey || loadError) return null;
+
+  const center = { lat: client.lat, lng: client.lng };
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-[10px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.14em]">
+        Kaart
+      </h3>
+      {!isLoaded ? (
+        <div className="flex items-center justify-center h-[180px] rounded-2xl border border-[hsl(var(--gold)/0.2)]">
+          <Loader2 className="h-4 w-4 animate-spin text-[hsl(var(--gold-deep))]" />
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.2)]">
+          <GoogleMap
+            mapContainerStyle={MINI_MAP_CONTAINER}
+            center={center}
+            zoom={16}
+            options={{
+              streetViewControl: false,
+              mapTypeControl: false,
+              fullscreenControl: false,
+              clickableIcons: false,
+            }}
+          >
+            <Marker position={center} />
+          </GoogleMap>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function rateTypeLabel(type: string) {
