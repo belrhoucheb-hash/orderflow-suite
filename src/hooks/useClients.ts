@@ -164,11 +164,13 @@ export function useClientOrders(clientName: string | null) {
 
 export function useCreateClient() {
   const qc = useQueryClient();
+  const { tenant } = useTenant();
   return useMutation({
     mutationFn: async (client: Partial<Client>) => {
+      if (!tenant?.id) throw new Error("Geen actieve tenant, log opnieuw in");
       const { data, error } = await supabase
         .from("clients")
-        .insert({ name: client.name!, ...client } as any)
+        .insert({ name: client.name!, ...client, tenant_id: tenant.id } as any)
         .select()
         .single();
       if (error) throw error;
