@@ -1,11 +1,8 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Truck, Filter, Search, Loader2, AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Plus, Truck, Search, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFleetVehicles, useVehicleUtilization, useUpcomingMaintenance, type Vehicle } from "@/hooks/useFleet";
@@ -13,6 +10,8 @@ import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
 import { VehicleTypesSection } from "@/components/fleet/VehicleTypesSection";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { QueryError } from "@/components/QueryError";
 
 const TYPE_LABELS: Record<string, string> = {
   busje: "Busje",
@@ -23,11 +22,29 @@ const TYPE_LABELS: Record<string, string> = {
 
 const TYPE_ORDER = ["busje", "bakwagen", "koelwagen", "trekker"];
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  beschikbaar: { label: "Beschikbaar", className: "bg-emerald-500/10 text-emerald-700 border-emerald-200" },
-  onderweg: { label: "Onderweg", className: "bg-blue-500/10 text-blue-700 border-blue-200" },
-  onderhoud: { label: "Onderhoud", className: "bg-amber-500/10 text-amber-700 border-amber-200" },
-  defect: { label: "Defect", className: "bg-destructive/10 text-destructive border-destructive/20" },
+// Dot-kleur per status, past bij het luxe/gold-palet (groen/emerald voor
+// beschikbaar, amber voor onderhoud, rose voor defect, gold-deep voor onderweg).
+const STATUS_CONFIG: Record<string, { label: string; dotClass: string; textClass: string }> = {
+  beschikbaar: {
+    label: "Beschikbaar",
+    dotClass: "bg-emerald-500",
+    textClass: "text-emerald-700",
+  },
+  onderweg: {
+    label: "Onderweg",
+    dotClass: "bg-[hsl(var(--gold-deep))]",
+    textClass: "text-[hsl(var(--gold-deep))]",
+  },
+  onderhoud: {
+    label: "Onderhoud",
+    dotClass: "bg-amber-500",
+    textClass: "text-amber-700",
+  },
+  defect: {
+    label: "Defect",
+    dotClass: "bg-rose-500",
+    textClass: "text-rose-700",
+  },
 };
 
 export default function Fleet() {
@@ -76,171 +93,189 @@ export default function Fleet() {
 
   const [activeTab, setActiveTab] = useState("voertuigen");
 
+  const overdueCount = overdueMaintenance
+    ? new Set(overdueMaintenance.map((m) => m.vehicle_id)).size
+    : 0;
+
   return (
     <div className="flex-1 flex flex-col min-w-0">
-      <div className="px-4 md:px-6 py-6">
-        <PageHeader
-          title="Vloot"
-          subtitle={`${vehicles?.length ?? 0} voertuigen, ${vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar`}
-          actions={
-            activeTab === "voertuigen" ? (
-              <Button onClick={() => setShowNewDialog(true)} className="btn-primary">
-                <Plus className="h-4 w-4" />
-                Voertuig Toevoegen
-              </Button>
-            ) : null
-          }
-        />
-      </div>
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 md:px-6">
+        <div className="p-6 space-y-4 max-w-[1800px] mx-auto w-full">
+          <PageHeader
+            title="Vloot"
+            subtitle={`${vehicles?.length ?? 0} voertuigen, ${vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar`}
+            actions={
+              activeTab === "voertuigen" ? (
+                <button
+                  type="button"
+                  onClick={() => setShowNewDialog(true)}
+                  className="btn-luxe btn-luxe--primary !h-9"
+                >
+                  <Plus className="h-4 w-4" />
+                  Nieuw voertuig
+                </button>
+              ) : null
+            }
+          />
+
           <TabsList>
             <TabsTrigger value="voertuigen">Voertuigen</TabsTrigger>
             <TabsTrigger value="types">Types</TabsTrigger>
           </TabsList>
-        </div>
 
-        <TabsContent value="voertuigen" className="flex-1 flex flex-col min-h-0 mt-4">
-
-      {/* Overdue maintenance warning */}
-      {overdueMaintenance && overdueMaintenance.length > 0 && (
-        <div className="px-4 md:px-6 pb-2">
-          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
-            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-            <p className="text-sm text-destructive font-medium">
-              {new Set(overdueMaintenance.map((m) => m.vehicle_id)).size} voertuig{new Set(overdueMaintenance.map((m) => m.vehicle_id)).size !== 1 ? "en" : ""} {new Set(overdueMaintenance.map((m) => m.vehicle_id)).size !== 1 ? "hebben" : "heeft"} verlopen onderhoud
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="px-4 md:px-6 pb-4 flex flex-wrap items-center gap-3">
-        <div className="relative max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Zoek op naam of kenteken..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-        </div>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[150px]"><Filter className="h-3.5 w-3.5 mr-2 text-muted-foreground" /><SelectValue placeholder="Type" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Alle types</SelectItem>
-            {TYPE_ORDER.map((t) => <SelectItem key={t} value={t}>{TYPE_LABELS[t] || t}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Alle statussen</SelectItem>
-            <SelectItem value="beschikbaar">Beschikbaar</SelectItem>
-            <SelectItem value="onderweg">Onderweg</SelectItem>
-            <SelectItem value="onderhoud">Onderhoud</SelectItem>
-            <SelectItem value="defect">Defect</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={featureFilter} onValueChange={setFeatureFilter}>
-          <SelectTrigger className="w-[170px]"><SelectValue placeholder="Certificering" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Alle cert.</SelectItem>
-            <SelectItem value="adr">ADR</SelectItem>
-            <SelectItem value="koel">Koeling</SelectItem>
-            <SelectItem value="internationaal">Internationaal</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Cards grouped by type */}
-      <div className="px-4 md:px-6 flex-1 overflow-auto pb-8 space-y-8">
-        {isLoading ? (
-          <div className="loading-spinner">
-            <Loader2 className="loading-spinner__icon" />
-          </div>
-        ) : isError ? (
-          <EmptyState
-            title="Kan voertuiggegevens niet laden"
-            description="Controleer je verbinding en probeer opnieuw."
-            action={
-              <button onClick={() => refetch()} className="text-xs text-primary hover:underline">
-                Opnieuw proberen
-              </button>
-            }
-          />
-        ) : Object.keys(grouped).length === 0 ? (
-          <EmptyState
-            icon={Truck}
-            title="Geen voertuigen gevonden"
-            description="Pas je filters aan of voeg een nieuw voertuig toe."
-          />
-        ) : (
-          Object.entries(grouped).map(([type, items]) => (
-            <div key={type}>
-              <h2 className="section-label mb-3 flex items-center gap-2">
-                <Truck className="h-4 w-4" />
-                {TYPE_LABELS[type] || type} <span className="text-xs font-normal">({items.length})</span>
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {items.map((v) => {
-                  const statusCfg = STATUS_CONFIG[v.status] || STATUS_CONFIG.beschikbaar;
-                  const util = getUtilization(v);
-                  return (
-                    <Link key={v.id} to={`/vloot/${v.id}`} className="block">
-                    <Card
-                      className="cursor-pointer hover:shadow-md transition-shadow border-border"
-                    >
-                      <CardContent className="p-5 space-y-3">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-foreground">{v.name}</p>
-                            <p className="text-xs text-muted-foreground font-mono mt-0.5">{v.plate}</p>
-                          </div>
-                          <Badge variant="outline" className={statusCfg.className}>
-                            {statusCfg.label}
-                          </Badge>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{v.capacityKg.toLocaleString()} kg</span>
-                          <span>·</span>
-                          <span>{v.capacityPallets} pallets</span>
-                          {v.features.length > 0 && (
-                            <>
-                              <span>·</span>
-                              {v.features.slice(0, 2).map((f) => (
-                                <Badge key={f} variant="secondary" className="text-xs px-1.5 py-0">
-                                  {f}
-                                </Badge>
-                              ))}
-                            </>
-                          )}
-                        </div>
-
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">Chauffeur</span>
-                            <span className="text-foreground font-medium">{v.assignedDriver || "—"}</span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">Beladingsgraad</span>
-                            <span className="text-foreground font-medium">{util}%</span>
-                          </div>
-                          <Progress value={util} className="h-1.5" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                    </Link>
-                  );
-                })}
+          <TabsContent value="voertuigen" className="space-y-4 mt-0">
+            {overdueCount > 0 && (
+              <div
+                className="card--luxe p-4 flex items-center gap-3"
+                style={{ background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--destructive) / 0.06) 100%)" }}
+              >
+                <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                <p className="text-sm text-destructive font-medium">
+                  {overdueCount} voertuig{overdueCount !== 1 ? "en" : ""} {overdueCount !== 1 ? "hebben" : "heeft"} verlopen onderhoud
+                </p>
               </div>
+            )}
+
+            <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-[220px] max-w-md">
+                <Search className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
+                <Input
+                  placeholder="Zoek op naam of kenteken..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="field-luxe flex-1"
+                />
+              </div>
+
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger
+                  aria-label="Type"
+                  className="h-9 w-[140px] text-sm"
+                  style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+                >
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alle types</SelectItem>
+                  {TYPE_ORDER.map((t) => (
+                    <SelectItem key={t} value={t}>{TYPE_LABELS[t] || t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger
+                  aria-label="Status"
+                  className="h-9 w-[150px] text-sm"
+                  style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+                >
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alle statussen</SelectItem>
+                  <SelectItem value="beschikbaar">Beschikbaar</SelectItem>
+                  <SelectItem value="onderweg">Onderweg</SelectItem>
+                  <SelectItem value="onderhoud">Onderhoud</SelectItem>
+                  <SelectItem value="defect">Defect</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={featureFilter} onValueChange={setFeatureFilter}>
+                <SelectTrigger
+                  aria-label="Certificering"
+                  className="h-9 w-[170px] text-sm"
+                  style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+                >
+                  <SelectValue placeholder="Certificering" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alle certificeringen</SelectItem>
+                  <SelectItem value="adr">ADR</SelectItem>
+                  <SelectItem value="koel">Koeling</SelectItem>
+                  <SelectItem value="internationaal">Internationaal</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          ))
-        )}
-      </div>
 
-        </TabsContent>
+            {isLoading ? (
+              <LoadingState message="Voertuigen laden..." />
+            ) : isError ? (
+              <QueryError message="Kan voertuiggegevens niet laden." onRetry={() => refetch()} />
+            ) : Object.keys(grouped).length === 0 ? (
+              <EmptyState
+                icon={Truck}
+                title="Geen voertuigen gevonden"
+                description="Pas je filters aan of voeg een nieuw voertuig toe."
+              />
+            ) : (
+              <div className="space-y-8">
+                {Object.entries(grouped).map(([type, items]) => (
+                  <div key={type}>
+                    <h2 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                      <Truck className="h-4 w-4" strokeWidth={1.75} />
+                      {TYPE_LABELS[type] || type}
+                      <span className="text-[hsl(var(--gold-deep))/0.6] font-normal normal-case tracking-normal">
+                        ({items.length})
+                      </span>
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {items.map((v) => {
+                        const statusCfg = STATUS_CONFIG[v.status] || STATUS_CONFIG.beschikbaar;
+                        const util = getUtilization(v);
+                        return (
+                          <Link key={v.id} to={`/vloot/${v.id}`} className="block group">
+                            <div className="card--luxe p-5 space-y-3 transition-shadow duration-150 group-hover:shadow-[0_8px_24px_-8px_hsl(var(--gold-deep)/0.18)]">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-foreground truncate">{v.name}</p>
+                                  <p className="text-xs text-muted-foreground font-mono mt-0.5">{v.plate}</p>
+                                </div>
+                                <span className={`inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${statusCfg.textClass}`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dotClass}`} />
+                                  {statusCfg.label}
+                                </span>
+                              </div>
 
-        <TabsContent value="types" className="flex-1 overflow-auto mt-4 px-4 md:px-6 pb-8">
-          <VehicleTypesSection />
-        </TabsContent>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                                <span className="tabular-nums">{v.capacityKg.toLocaleString()} kg</span>
+                                <span className="text-[hsl(var(--gold)/0.5)]">·</span>
+                                <span className="tabular-nums">{v.capacityPallets} pallets</span>
+                                {v.features.slice(0, 2).map((f) => (
+                                  <span
+                                    key={f}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.3)] text-[hsl(var(--gold-deep))] text-[11px]"
+                                  >
+                                    {f}
+                                  </span>
+                                ))}
+                              </div>
+
+                              <div className="space-y-1.5 pt-1">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-muted-foreground">Chauffeur</span>
+                                  <span className="text-foreground font-medium">{v.assignedDriver || "—"}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-muted-foreground">Beladingsgraad</span>
+                                  <span className="text-foreground font-medium tabular-nums">{util}%</span>
+                                </div>
+                                <Progress value={util} className="h-1.5 bg-[hsl(var(--gold-soft)/0.35)] [&>div]:bg-[hsl(var(--gold-deep))]" />
+                              </div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="types" className="mt-0">
+            <VehicleTypesSection />
+          </TabsContent>
+        </div>
       </Tabs>
 
       <NewVehicleDialog open={showNewDialog} onOpenChange={setShowNewDialog} />
