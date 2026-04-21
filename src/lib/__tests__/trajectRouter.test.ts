@@ -487,6 +487,185 @@ describe("createShipmentWithLegs", () => {
     expect(leg2.pickup_address).toBe(leg2.delivery_address);
   });
 
+  // ─── Hub-gating: klant-coordinaten alleen op eerste/laatste leg ─────────
+  //
+  // Kritische business-regel: hub-legs mogen GEEN klant-straatnaam/lat/lng
+  // krijgen, anders navigeert de chauffeur op de hub-leg naar de klant in
+  // plaats van naar de hub. Deze tests borgen `trajectRouter.ts:487-508`.
+
+  it("hub-split route: alleen pickup-leg krijgt klant-pickup-coords, alleen delivery-leg krijgt klant-delivery-coords", async () => {
+    const rule = makeRule({
+      id: "rule-hub-split",
+      name: "Export split via hub",
+      priority: 10,
+      match_conditions: { delivery_address_contains: ["RCS Export"] },
+      legs_template: [
+        { sequence: 1, from: "pickup", to: "hub", department_code: "OPS", leg_role: "OPS_PICKUP" },
+        { sequence: 2, from: "hub", to: "delivery", department_code: "EXPORT", leg_role: "EXPORT_LEG" },
+      ],
+    });
+    setTable("traject_rules", { rows: [rule] });
+    setTable("tenants", {
+      rows: [],
+      singleRow: { settings: { rcs_hub_address: "HUB-ADDR" } },
+    });
+    setTable("departments", {
+      rows: [
+        { id: "dept-ops-id", code: "OPS" },
+        { id: "dept-export-id", code: "EXPORT" },
+      ],
+    });
+
+    const booking: BookingInput = {
+      pickup_address: "Klantlocatie 1, Utrecht",
+      delivery_address: "RCS Export Schiphol",
+      pickup_street: "Klantstraat 1",
+      pickup_house_number: "1",
+      pickup_zipcode: "3500 AB",
+      pickup_city: "Utrecht",
+      pickup_country: "NL",
+      pickup_lat: 52.1,
+      pickup_lng: 5.1,
+      pickup_coords_manual: false,
+      delivery_street: "Exportweg 99",
+      delivery_house_number: "99",
+      delivery_zipcode: "1118 ZZ",
+      delivery_city: "Schiphol",
+      delivery_country: "NL",
+      delivery_lat: 52.3,
+      delivery_lng: 4.76,
+      delivery_coords_manual: false,
+    };
+
+    await createShipmentWithLegs(booking, TENANT);
+
+    const orderInserts = getInserts("orders");
+    expect(orderInserts).toHaveLength(2);
+
+    // Leg 1: pickup -> hub. Pickup-kant MOET klant-coords krijgen,
+    // delivery-kant mag die NIET krijgen (het is de hub).
+    const leg1 = orderInserts[0];
+    expect(leg1.leg_number).toBe(1);
+    expect(leg1.pickup_street).toBe("Klantstraat 1");
+    expect(leg1.pickup_city).toBe("Utrecht");
+    expect(leg1.geocoded_pickup_lat).toBe(52.1);
+    expect(leg1.geocoded_pickup_lng).toBe(5.1);
+    expect(leg1.pickup_coords_manual).toBe(false);
+
+    expect(leg1.delivery_street).toBeUndefined();
+    expect(leg1.delivery_city).toBeUndefined();
+    expect(leg1.geocoded_delivery_lat).toBeUndefined();
+    expect(leg1.geocoded_delivery_lng).toBeUndefined();
+    expect(leg1.delivery_coords_manual).toBeUndefined();
+
+    // Leg 2: hub -> delivery. Pickup-kant (de hub) mag GEEN klant-coords
+    // hebben, delivery-kant MOET ze hebben.
+    const leg2 = orderInserts[1];
+    expect(leg2.leg_number).toBe(2);
+    expect(leg2.pickup_street).toBeUndefined();
+    expect(leg2.pickup_city).toBeUndefined();
+    expect(leg2.geocoded_pickup_lat).toBeUndefined();
+    expect(leg2.geocoded_pickup_lng).toBeUndefined();
+    expect(leg2.pickup_coords_manual).toBeUndefined();
+
+    expect(leg2.delivery_street).toBe("Exportweg 99");
+    expect(leg2.delivery_city).toBe("Schiphol");
+    expect(leg2.geocoded_delivery_lat).toBe(52.3);
+    expect(leg2.geocoded_delivery_lng).toBe(4.76);
+    expect(leg2.delivery_coords_manual).toBe(false);
+  });
+
+  it("direct traject (pickup -> delivery): beide velden op dezelfde leg, klant-coords volledig ingevuld", async () => {
+    const fallback = makeRule({
+      id: "rule-direct",
+      priority: 1000,
+      match_conditions: { default: true },
+      legs_template: [
+        { sequence: 1, from: "pickup", to: "delivery", department_code: "OPS", leg_role: "SINGLE" },
+      ],
+    });
+    setTable("traject_rules", { rows: [fallback] });
+    setTable("departments", { rows: [{ id: "dept-ops-id", code: "OPS" }] });
+
+    const booking: BookingInput = {
+      pickup_address: "Amsterdam",
+      delivery_address: "Rotterdam",
+      pickup_street: "Herengracht 1",
+      pickup_city: "Amsterdam",
+      pickup_lat: 52.37,
+      pickup_lng: 4.89,
+      pickup_coords_manual: false,
+      delivery_street: "Coolsingel 10",
+      delivery_city: "Rotterdam",
+      delivery_lat: 51.92,
+      delivery_lng: 4.48,
+      delivery_coords_manual: false,
+    };
+
+    await createShipmentWithLegs(booking, TENANT);
+
+    const orderInserts = getInserts("orders");
+    expect(orderInserts).toHaveLength(1);
+
+    const leg = orderInserts[0];
+    expect(leg.pickup_street).toBe("Herengracht 1");
+    expect(leg.pickup_city).toBe("Amsterdam");
+    expect(leg.geocoded_pickup_lat).toBe(52.37);
+    expect(leg.geocoded_pickup_lng).toBe(4.89);
+    expect(leg.pickup_coords_manual).toBe(false);
+
+    expect(leg.delivery_street).toBe("Coolsingel 10");
+    expect(leg.delivery_city).toBe("Rotterdam");
+    expect(leg.geocoded_delivery_lat).toBe(51.92);
+    expect(leg.geocoded_delivery_lng).toBe(4.48);
+    expect(leg.delivery_coords_manual).toBe(false);
+  });
+
+  it("pickup_coords_manual=true wordt doorgegeven aan de pickup-leg", async () => {
+    const rule = makeRule({
+      id: "rule-hub-manual",
+      priority: 10,
+      match_conditions: { delivery_address_contains: ["RCS Export"] },
+      legs_template: [
+        { sequence: 1, from: "pickup", to: "hub", department_code: "OPS", leg_role: "OPS_PICKUP" },
+        { sequence: 2, from: "hub", to: "delivery", department_code: "EXPORT", leg_role: "EXPORT_LEG" },
+      ],
+    });
+    setTable("traject_rules", { rows: [rule] });
+    setTable("tenants", {
+      rows: [],
+      singleRow: { settings: { rcs_hub_address: "HUB-ADDR" } },
+    });
+    setTable("departments", {
+      rows: [
+        { id: "dept-ops-id", code: "OPS" },
+        { id: "dept-export-id", code: "EXPORT" },
+      ],
+    });
+
+    const booking: BookingInput = {
+      pickup_address: "Klantlocatie 1, Utrecht",
+      delivery_address: "RCS Export Schiphol",
+      pickup_lat: 52.1,
+      pickup_lng: 5.1,
+      pickup_coords_manual: true,
+      delivery_lat: 52.3,
+      delivery_lng: 4.76,
+      delivery_coords_manual: true,
+    };
+
+    await createShipmentWithLegs(booking, TENANT);
+
+    const orderInserts = getInserts("orders");
+    expect(orderInserts).toHaveLength(2);
+
+    expect(orderInserts[0].pickup_coords_manual).toBe(true);
+    expect(orderInserts[0].delivery_coords_manual).toBeUndefined();
+
+    expect(orderInserts[1].pickup_coords_manual).toBeUndefined();
+    expect(orderInserts[1].delivery_coords_manual).toBe(true);
+  });
+
   it("uses final_delivery_address as leg-2 delivery for EXPORT multi-drop bookings", async () => {
     const rule = makeRule({
       id: "rule-export-multi-drop",
