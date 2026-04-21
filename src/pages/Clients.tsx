@@ -138,7 +138,7 @@ export default function Clients() {
       {selectedClient && (
         <div
           ref={panelRef}
-          className="fixed inset-y-0 right-0 w-full sm:w-96 lg:w-[420px] bg-card border-l border-[hsl(var(--gold)/0.25)] shadow-2xl z-40 overflow-y-auto"
+          className="fixed top-14 bottom-0 right-0 w-full sm:w-96 lg:w-[420px] bg-card border-l border-[hsl(var(--gold)/0.25)] shadow-2xl z-40 overflow-y-auto"
           style={{ boxShadow: "-12px 0 32px -8px hsl(var(--gold-deep)/0.08)" }}
         >
           <div
