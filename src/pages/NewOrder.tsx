@@ -25,19 +25,6 @@ import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { LuxeTimePicker } from "@/components/LuxeTimePicker";
 import { FinancialTab, type FinancialTabPayload, type FinancialTabCargo } from "@/components/orders/FinancialTab";
 
-// Compose een volledige display-string uit een AddressValue, inclusief
-// postcode en plaats. Gebruikt door de order-flow om `pickup_address`
-// (plain string) compat te houden met bestaande downstream code
-// (CMR, facturen, trajectRouter-preview).
-function fullAddressString(a: AddressValue): string {
-  const street = composeAddressString(a);
-  const cityPart = [a.zipcode, a.city].filter(Boolean).join(" ");
-  return [street, cityPart, a.country && a.country !== "NL" ? a.country : null]
-    .filter(Boolean)
-    .join(", ")
-    .trim();
-}
-
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
 
@@ -205,7 +192,7 @@ const NewOrder = () => {
     // Sync plain-string locatie zodat trajectRouter-preview, isValidAddress
     // en afdeling-inferentie blijven werken zonder aanpassingen.
     if (primaryLadenId) {
-      const composed = fullAddressString(v);
+      const composed = composeAddressString(v, { includeLocality: true });
       setFreightLines(prev => prev.map(l => l.id === primaryLadenId ? { ...l, locatie: composed } : l));
     }
   };
@@ -214,7 +201,7 @@ const NewOrder = () => {
     setDeliveryAddr(v);
     clearError("delivery_address");
     if (primaryLossenId) {
-      const composed = fullAddressString(v);
+      const composed = composeAddressString(v, { includeLocality: true });
       setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? { ...l, locatie: composed } : l));
     }
   };

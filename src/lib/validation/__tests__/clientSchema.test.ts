@@ -147,6 +147,27 @@ describe("composeAddressString", () => {
   it("retourneert lege string voor leeg adres", () => {
     expect(composeAddressString(emptyAddress)).toBe("");
   });
+
+  it("includeLocality voegt postcode en plaats toe voor NL zonder country-suffix", () => {
+    expect(composeAddressString(validAddress, { includeLocality: true })).toBe(
+      "Winthontlaan 30 B, 3526 KV Utrecht",
+    );
+  });
+
+  it("includeLocality voegt country toe als adres niet in NL ligt", () => {
+    const beAddress = {
+      ...validAddress,
+      street: "Grote Markt",
+      house_number: "1",
+      house_number_suffix: "",
+      zipcode: "2000",
+      city: "Antwerpen",
+      country: "BE",
+    };
+    expect(composeAddressString(beAddress, { includeLocality: true })).toBe(
+      "Grote Markt 1, 2000 Antwerpen, BE",
+    );
+  });
 });
 
 describe("clientContactInputSchema", () => {

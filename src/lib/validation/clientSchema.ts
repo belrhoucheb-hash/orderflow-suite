@@ -103,6 +103,15 @@ export const clientInputSchema = z
 
 export type ClientInput = z.infer<typeof clientInputSchema>;
 
-export function composeAddressString(a: AddressFields): string {
-  return [a.street, a.house_number, a.house_number_suffix].filter(Boolean).join(" ").trim();
+export function composeAddressString(
+  a: AddressFields,
+  opts?: { includeLocality?: boolean },
+): string {
+  const street = [a.street, a.house_number, a.house_number_suffix].filter(Boolean).join(" ").trim();
+  if (!opts?.includeLocality) return street;
+  const cityPart = [a.zipcode, a.city].filter(Boolean).join(" ");
+  return [street, cityPart, a.country && a.country !== "NL" ? a.country : null]
+    .filter(Boolean)
+    .join(", ")
+    .trim();
 }
