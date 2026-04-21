@@ -5,8 +5,10 @@ import { MemoryRouter } from "react-router-dom";
 
 // ─── Global Mocks ────────────────────────────────────────────
 const mockCreateClient = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
+const mockCreateClientLocation = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 vi.mock("@/hooks/useClients", () => ({
   useCreateClient: () => mockCreateClient,
+  useCreateClientLocation: () => mockCreateClientLocation,
   useClientLocations: () => ({ data: [] }),
   useClientRates: () => ({ data: [] }),
   useClientOrders: () => ({ data: [] }),

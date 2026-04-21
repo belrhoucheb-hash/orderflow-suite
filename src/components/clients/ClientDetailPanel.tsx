@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Client, useClientLocations, useClientRates, useClientOrders } from "@/hooks/useClients";
-import { MapPin, Clock, Truck, FileText } from "lucide-react";
+import { MapPin, Clock, Truck, FileText, Plus } from "lucide-react";
 import { ClientPortalTab } from "./ClientPortalTab";
 import { ClientEmballageTab } from "./ClientEmballageTab";
 import { ClientContactsSection } from "./ClientContactsSection";
+import { NewLocationDialog } from "./NewLocationDialog";
 
 interface Props {
   client: Client;
@@ -25,6 +27,7 @@ export function ClientDetailPanel({ client }: Props) {
   const { data: locations } = useClientLocations(client.id);
   const { data: rates } = useClientRates(client.id);
   const { data: orders } = useClientOrders(client.name);
+  const [newLocationOpen, setNewLocationOpen] = useState(false);
 
   return (
     <Tabs defaultValue="overzicht" className="w-full">
@@ -89,6 +92,16 @@ export function ClientDetailPanel({ client }: Props) {
       </TabsContent>
 
       <TabsContent value="locaties" className="p-4 space-y-2 mt-0">
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={() => setNewLocationOpen(true)}
+            className="btn-luxe btn-luxe--primary !h-8 !text-xs inline-flex items-center gap-1"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Nieuwe locatie
+          </button>
+        </div>
         {!locations?.length ? (
           <EmptyState text="Geen locaties toegevoegd" />
         ) : (
@@ -198,6 +211,12 @@ export function ClientDetailPanel({ client }: Props) {
       <TabsContent value="emballage" className="mt-0 p-0">
         <ClientEmballageTab clientId={client.id} />
       </TabsContent>
+
+      <NewLocationDialog
+        clientId={client.id}
+        open={newLocationOpen}
+        onOpenChange={setNewLocationOpen}
+      />
     </Tabs>
   );
 }

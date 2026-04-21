@@ -67,6 +67,13 @@ export interface ClientLocation {
   max_vehicle_length: string | null;
   notes: string | null;
   created_at: string;
+
+  street: string | null;
+  house_number: string | null;
+  house_number_suffix: string | null;
+  lat: number | null;
+  lng: number | null;
+  coords_manual: boolean;
 }
 
 export interface ClientRate {
@@ -195,6 +202,27 @@ export function useCreateClient() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+  });
+}
+
+export function useCreateClientLocation() {
+  const qc = useQueryClient();
+  const { tenant } = useTenant();
+  return useMutation({
+    mutationFn: async (
+      input: Omit<ClientLocation, "id" | "created_at"> & { tenant_id?: string },
+    ) => {
+      if (!tenant?.id) throw new Error("Geen actieve tenant, log opnieuw in");
+      const { data, error } = await supabase
+        .from("client_locations")
+        .insert({ ...input, tenant_id: tenant.id } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ClientLocation;
+    },
+    onSuccess: (row) =>
+      qc.invalidateQueries({ queryKey: ["client_locations", row.client_id] }),
   });
 }
 
