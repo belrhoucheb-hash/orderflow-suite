@@ -131,13 +131,14 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] rounded-2xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40">
           <DialogTitle className="font-display text-xl">
-            {driver ? "Chauffeur Bewerken" : "Nieuwe Chauffeur"}
+            {driver ? "Chauffeur bewerken" : "Nieuwe chauffeur"}
           </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2 col-span-2">
               <Label htmlFor="name">Naam *</Label>
@@ -289,13 +290,13 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
             </div>
           </div>
 
-          <div className="space-y-3">
-            <Label>Certificeringen</Label>
-            <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-3 pt-2 border-t border-border/40">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Certificeringen</Label>
+            <div className="grid grid-cols-3 gap-2">
               {CERTIFICATION_OPTIONS.map((cert) => (
                 <div key={cert} className="flex items-center space-x-2">
-                  <Checkbox 
-                    id={`cert-${cert}`} 
+                  <Checkbox
+                    id={`cert-${cert}`}
                     checked={selectedCerts.includes(cert)}
                     onCheckedChange={() => toggleCert(cert)}
                   />
@@ -309,8 +310,9 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
               ))}
             </div>
           </div>
+          </div>
 
-          <DialogFooter className="pt-4">
+          <DialogFooter className="px-6 py-4 border-t border-border/40 bg-background/80 backdrop-blur-sm">
             <Button
               type="button"
               variant="outline"
