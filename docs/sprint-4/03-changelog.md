@@ -9,6 +9,18 @@ Opgeleverd van 2026-04-15 tot en met 2026-04-21. Focus deze sprint: adres-autoco
 - **Klantenoverzicht en detailpaneel herzien** met luxe-tokens. Consistent met de designlijn van order en planning (`ba720f6`).
 - **Nieuwe-locatie dialog** in de klantentab, zodat laad- en losadressen zonder omweg via een order aangemaakt kunnen worden (`f3d54d7`).
 - **Google adres-autocomplete plus sleepbare pin** bij het aanmaken van een klant. Pin-positie wordt als `lat`/`lng` opgeslagen en gebruikt bij geocoded routing (`2b45ae2`).
+- **Klant bewerken** via potlood-icoon in panel-header, hergebruikt de bestaande `NewClientDialog` in edit-modus met pre-filled velden (`110646c`).
+- **Paneel sluit op klik-buiten en Escape** op desktop, niet meer alleen via X-knop (`35fd4cb`, `eff8f82`).
+- **Places-suggesties klikbaar in dialogs** door `.pac-container`-clicks door te laten via Radix Dialog (`779c9c0`).
+- **Lijstpagina opgewaardeerd** met paginering van 50 per pagina, sortering op naam/contactpersoon/email/actieve-orders, filters voor status, land en open orders, plus `mailto:` / `tel:` links per cel.
+- **Full-page klantdetail op `/klanten/:id`**, toegankelijk via een uitklap-icoon in de panel-header, naast knoppen voor nieuwe order, bewerken en sluiten.
+- **Duplicaat-check op KvK**, partial unique index op `(tenant_id, kvk_number)` in de DB en een amber waarschuwingsblok in de dialog met bevestig-checkbox.
+- **Primair-contact-relatie** via nieuwe `primary_contact_id`-FK naar `client_contacts`, getoond als badge in Contact-sectie. Back-fill in migratie matcht bestaande `role='primary'`-rijen of oudste contact per klant.
+- **Audit-log** via `AFTER UPDATE`-trigger op `clients` die muterende kolommen schrijft naar `client_audit_log` (select + insert RLS, geen update/delete). Nieuwe tab "Historie" toont verticale tijdlijn met wie, wanneer en welk veld.
+- **Notities op klantniveau** via `clients.notes` en een debounce-saved textarea onderaan Overzicht, plus een veld in de edit-variant van de dialog.
+- **Stats-strip bovenaan Overzicht** met actieve orders, omzet YTD en laatste rit. Omzet YTD toont voorlopig "niet beschikbaar" omdat `orders` geen eenduidig prijsveld heeft (splitsing over `order_charges`, `shipments.price_total_cents`, `invoices`).
+- **Mini-map op Overzicht** toont de hoofdadres-pin read-only via `GoogleMap`, zichtbaar zodra `lat`/`lng` gezet zijn.
+- **`is_active`-toggle** in Bedrijf-sectie van Overzicht, zet klanten op inactief zonder SQL.
 
 ### 1.2 Orders
 
@@ -42,6 +54,8 @@ Opgeleverd van 2026-04-15 tot en met 2026-04-21. Focus deze sprint: adres-autoco
 
 - **`useTenantInsert`-helper** voorkomt dat `tenant_id` vergeten wordt bij inserts. Gebruikt door `useCreateClient`, `createDriver`, `useAddVehicle`, `useCreateMaintenance` en `useCreateDocument`. Drie eerdere silent-RLS-bugs kunnen zo niet meer terugkeren (`33542f3`, `7e922f1`).
 - **`useTenantOptional` mock** toegevoegd in de settings-testsuite, 10 crashende tests weer groen (`ecbda55`, `18f5a47`).
+- **`useFleet`-tests** krijgen nu een volledige TenantContext-mock, `useAddVehicle` / `useCreateMaintenance` / `useCreateDocument` niet meer rood op baseline. Ook widget-heading assertions aangepast zodat ze overeenkomen met componenten.
+- **Automatische reload bij Vite preload-error** in `main.tsx`, zodat gebruikers na een Vercel-deploy niet handmatig hoeven te refreshen om nieuwe chunk-hashes te pakken.
 
 ## 2. Bugfixes
 
@@ -51,7 +65,7 @@ Opgeleverd van 2026-04-15 tot en met 2026-04-21. Focus deze sprint: adres-autoco
 
 ## 3. Databasemigraties
 
-Deze sprint hebben we acht migraties opgeleverd. Ze moeten in deze volgorde draaien:
+Deze sprint hebben we tien migraties opgeleverd. Ze moeten in deze volgorde draaien:
 
 1. `20260421100000_clients_address_geo.sql`, straat/huisnummer/postcode/plaats plus lat/lng op clients.
 2. `20260421110000_driver_personal_fields.sql`, geboortedatum en noodcontact-velden op drivers.
@@ -61,16 +75,18 @@ Deze sprint hebben we acht migraties opgeleverd. Ze moeten in deze volgorde draa
 6. `20260421140000_orders_geo_indexes.sql`, partial indexen op geocoded coordinaten.
 7. `20260421150000_client_locations_address_geo.sql`, adres- en geo-velden op client_locations.
 8. `20260421160000_driver_certifications_master.sql`, master-data tabel plus migratie van bestaande `drivers.certifications[]` labels naar codes.
+9. `20260422000000_clients_primary_contact_and_kvk_unique.sql`, `primary_contact_id`-FK op clients, back-fill van bestaande rijen en partial unique index op `(tenant_id, kvk_number)`.
+10. `20260422001000_clients_notes_and_audit.sql`, `notes`-kolom op clients, `client_audit_log`-tabel met immutabele RLS, `AFTER UPDATE`-trigger `audit_clients_changes()` en helper-functie `log_client_audit()`.
 
-Let op: migratie 8 bevat een UPDATE die de negen bekende certificerings-labels vertaalt naar codes. Custom labels die tenants handmatig in `drivers.certifications[]` hadden staan blijven ongewijzigd en worden niet herkend door het dialoog tot een admin ze als master-data aanmaakt.
+Let op: migratie 8 bevat een UPDATE die de negen bekende certificerings-labels vertaalt naar codes. Custom labels die tenants handmatig in `drivers.certifications[]` hadden staan blijven ongewijzigd en worden niet herkend door het dialoog tot een admin ze als master-data aanmaakt. Migratie 9 backfillt `primary_contact_id` via CTE met ROW_NUMBER, eerst actieve `role='primary'`-contacten, daarna oudste `created_at`.
 
 ## 4. Bekende tech-debt na deze sprint
 
-- **Pre-existing testfalers**, niet door Sprint 4 geintroduceerd, nog niet opgelost:
-    - `FinancialKPIWidget` en `OperationalForecastWidget` renders-heading tests zoeken tekst die niet meer in de componenten staat (`Financieel Rendement` versus `Financieel`).
-    - `useFleet.test.ts` tests op `useAddVehicle`, `useCreateMaintenance` en `useCreateDocument` missen een `TenantProvider` of `useTenant`-mock in de wrapper en crashen.
+- **Omzet YTD op klant-overzicht** staat op "niet beschikbaar" omdat `orders` geen eenduidig prijsveld heeft. Echte omzet zit verspreid over `order_charges`, `shipments.price_total_cents` en `invoices`. Aggregatie in een view of RPC is de volgende stap.
 - **Certificering-aggregaat query** in `DriverCertificationsSection` leest alle drivers en telt client-side. Prima voor huidige schaal, bij groei beter een view of RPC.
-- **Agent-worktrees opruimen**: twaalf worktrees uit de parallel-run staan nog onder `.claude/worktrees/`. Kan weg met `git worktree prune` plus branch-delete na merge.
+- **Deprecated kolommen** `clients.contact_person`, `clients.email`, `clients.phone` blijven voorlopig staan naast `primary_contact_id`. Volledig droppen vereist afpellen van alle consumers en een data-check per tenant.
+- **Audit-log alleen op clients**: de trigger is handmatig opgezet per tabel. Generiek maken (bijv. via `row_audit(table, op, old, new)`) kan later als we het patroon willen uitrollen naar drivers, vehicles en orders.
+- **Agent-worktrees opruimen**: alle Sprint 4 worktrees zijn nu verwijderd na merge, oudere worktrees uit eerdere sessies staan nog onder `.claude/worktrees/`.
 
 ## 5. Nog open uit klant-wensenlijst
 
@@ -78,3 +94,5 @@ Niet gedaan deze sprint, expliciet geparkeerd:
 
 - Extra voertuigtype-specifieke instellingen (merkvariatie DAF/Mercedes) buiten de drie geseede defaults.
 - Real-time updates van certificering-badges op chauffeur-kaarten na mutatie in Types-tab (nu pas na refresh).
+- Bulk-acties op de klantenlijst (bulk archiveren, bulk export naar CSV).
+- Lead- of pipeline-status op klanten (leads, prospects, actieve klanten, inactief), als we CRM-breder willen maken.
