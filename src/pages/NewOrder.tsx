@@ -767,7 +767,7 @@ const NewOrder = () => {
               <div className="mb-6 grid gap-6 md:grid-cols-2">
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
-                    Ophaaladres (Google)
+                    Ophaaladres
                   </div>
                   <AddressAutocomplete
                     value={pickupAddr}
@@ -777,7 +777,7 @@ const NewOrder = () => {
                 </div>
                 <div>
                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
-                    Afleveradres (Google)
+                    Afleveradres
                   </div>
                   <AddressAutocomplete
                     value={deliveryAddr}

@@ -155,16 +155,6 @@ export function AddressAutocomplete({ value, onChange, error }: Props) {
         <ReadField label="Postcode" value={value.zipcode} className="col-span-4" />
         <ReadField label="Plaats" value={value.city} className="col-span-6" />
         <ReadField label="Land" value={value.country} className="col-span-2" />
-        <ReadField
-          label="Latitude"
-          value={value.lat !== null ? value.lat.toFixed(7) : ""}
-          className="col-span-6"
-        />
-        <ReadField
-          label="Longitude"
-          value={value.lng !== null ? value.lng.toFixed(7) : ""}
-          className="col-span-6"
-        />
       </div>
 
       <div className="overflow-hidden rounded border border-border">
