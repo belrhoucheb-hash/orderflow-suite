@@ -27,7 +27,17 @@ interface NewDriverDialogProps {
   driver?: Driver; // If provided, we are in edit mode
 }
 
-const CERTIFICATION_OPTIONS = ["ADR", "Koeling", "Laadklep", "Internationaal", "Douane"];
+const CERTIFICATION_OPTIONS = [
+  "ADR",
+  "Koeling",
+  "Laadklep",
+  "Internationaal",
+  "Douane",
+  "Boxen",
+  "Hoya",
+  "Bakbus",
+  "DAF",
+];
 
 export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogProps) {
   const { createDriver, updateDriver } = useDrivers();
@@ -36,6 +46,10 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [license, setLicense] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [emergencyName, setEmergencyName] = useState("");
+  const [emergencyRelation, setEmergencyRelation] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
   const [status, setStatus] = useState("beschikbaar");
   const [vehicleId, setVehicleId] = useState<string>("none");
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
@@ -48,17 +62,24 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       setEmail(driver.email || "");
       setPhone(driver.phone || "");
       setLicense(driver.license_number || "");
+      setBirthDate(driver.birth_date || "");
+      setEmergencyName(driver.emergency_contact_name || "");
+      setEmergencyRelation(driver.emergency_contact_relation || "");
+      setEmergencyPhone(driver.emergency_contact_phone || "");
       setStatus(driver.status);
       setVehicleId(driver.current_vehicle_id || "none");
       setSelectedCerts(driver.certifications || []);
       setContractHours(driver.contract_hours_per_week?.toString() ?? "");
       setEmploymentType(driver.employment_type ?? "vast");
     } else if (open) {
-      // Reset
       setName("");
       setEmail("");
       setPhone("");
       setLicense("");
+      setBirthDate("");
+      setEmergencyName("");
+      setEmergencyRelation("");
+      setEmergencyPhone("");
       setStatus("beschikbaar");
       setVehicleId("none");
       setSelectedCerts([]);
@@ -77,6 +98,10 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       email: email || null,
       phone: phone || null,
       license_number: license || null,
+      birth_date: birthDate || null,
+      emergency_contact_name: emergencyName.trim() || null,
+      emergency_contact_relation: emergencyRelation.trim() || null,
+      emergency_contact_phone: emergencyPhone.trim() || null,
       status,
       current_vehicle_id: vehicleId === "none" ? null : vehicleId,
       certifications: selectedCerts,
@@ -147,12 +172,22 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="license">Rijbewijsnummer</Label>
+              <Label htmlFor="license">Legitimatienummer</Label>
               <Input
                 id="license"
                 value={license}
                 onChange={(e) => setLicense(e.target.value)}
-                placeholder="NL-..."
+                placeholder="Paspoort, ID-kaart of rijbewijs"
+                className="rounded-xl border-border/50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="birth-date">Geboortedatum</Label>
+              <Input
+                id="birth-date"
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
                 className="rounded-xl border-border/50"
               />
             </div>
@@ -215,6 +250,42 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                   <SelectItem value="ingehuurd">Ingehuurd</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2 border-t border-border/40">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Contact bij nood</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="emergency-name">Naam</Label>
+                <Input
+                  id="emergency-name"
+                  value={emergencyName}
+                  onChange={(e) => setEmergencyName(e.target.value)}
+                  placeholder="Volledige naam"
+                  className="rounded-xl border-border/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="emergency-relation">Relatie</Label>
+                <Input
+                  id="emergency-relation"
+                  value={emergencyRelation}
+                  onChange={(e) => setEmergencyRelation(e.target.value)}
+                  placeholder="Partner, ouder, broer..."
+                  className="rounded-xl border-border/50"
+                />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="emergency-phone">Telefoonnummer</Label>
+                <Input
+                  id="emergency-phone"
+                  value={emergencyPhone}
+                  onChange={(e) => setEmergencyPhone(e.target.value)}
+                  placeholder="+31 6 ..."
+                  className="rounded-xl border-border/50"
+                />
+              </div>
             </div>
           </div>
 

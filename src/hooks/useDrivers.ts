@@ -17,6 +17,10 @@ export interface Driver {
   is_active: boolean;
   contract_hours_per_week: number | null;
   employment_type: EmploymentType;
+  birth_date: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_relation: string | null;
+  emergency_contact_phone: string | null;
   created_at: string;
   updated_at: string;
 }
