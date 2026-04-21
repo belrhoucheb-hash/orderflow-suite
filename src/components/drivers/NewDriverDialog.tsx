@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { format, parseISO } from "date-fns";
+import { nl } from "date-fns/locale";
+import { CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,8 +20,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useDrivers, type Driver, type EmploymentType } from "@/hooks/useDrivers";
+import {
+  useDrivers,
+  type Driver,
+  type EmploymentType,
+  type LegitimationType,
+} from "@/hooks/useDrivers";
 import { useFleetVehicles } from "@/hooks/useFleet";
 
 interface NewDriverDialogProps {
@@ -39,6 +50,22 @@ const CERTIFICATION_OPTIONS = [
   "DAF",
 ];
 
+const LEGITIMATION_LABELS: Record<LegitimationType, string> = {
+  rijbewijs: "Rijbewijs",
+  paspoort: "Paspoort",
+  "id-kaart": "ID-kaart",
+};
+
+function parseBirthDate(value: string | null | undefined): Date | undefined {
+  if (!value) return undefined;
+  try {
+    const d = parseISO(value);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  } catch {
+    return undefined;
+  }
+}
+
 export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogProps) {
   const { createDriver, updateDriver } = useDrivers();
   const { data: vehicles } = useFleetVehicles();
@@ -46,7 +73,9 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [license, setLicense] = useState("");
+  const [legitimationType, setLegitimationType] = useState<LegitimationType | "">("");
   const [birthDate, setBirthDate] = useState("");
+  const [birthDateOpen, setBirthDateOpen] = useState(false);
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyRelation, setEmergencyRelation] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
@@ -62,6 +91,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       setEmail(driver.email || "");
       setPhone(driver.phone || "");
       setLicense(driver.license_number || "");
+      setLegitimationType(driver.legitimation_type ?? "");
       setBirthDate(driver.birth_date || "");
       setEmergencyName(driver.emergency_contact_name || "");
       setEmergencyRelation(driver.emergency_contact_relation || "");
@@ -76,6 +106,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       setEmail("");
       setPhone("");
       setLicense("");
+      setLegitimationType("");
       setBirthDate("");
       setEmergencyName("");
       setEmergencyRelation("");
@@ -98,6 +129,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       email: email || null,
       phone: phone || null,
       license_number: license || null,
+      legitimation_type: legitimationType === "" ? null : legitimationType,
       birth_date: birthDate || null,
       emergency_contact_name: emergencyName.trim() || null,
       emergency_contact_relation: emergencyRelation.trim() || null,
@@ -124,10 +156,12 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   };
 
   const toggleCert = (cert: string) => {
-    setSelectedCerts(prev => 
+    setSelectedCerts(prev =>
       prev.includes(cert) ? prev.filter(c => c !== cert) : [...prev, cert]
     );
   };
+
+  const birthDateParsed = parseBirthDate(birthDate);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -139,177 +173,245 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="name">Naam *</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Volledige naam"
-                required
-                className="rounded-xl border-border/50"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="email@voorbeeld.nl"
-                className="rounded-xl border-border/50"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefoon</Label>
-              <Input
-                id="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+31 6 ..."
-                className="rounded-xl border-border/50"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="license">Legitimatienummer</Label>
-              <Input
-                id="license"
-                value={license}
-                onChange={(e) => setLicense(e.target.value)}
-                placeholder="Paspoort, ID-kaart of rijbewijs"
-                className="rounded-xl border-border/50"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="birth-date">Geboortedatum</Label>
-              <Input
-                id="birth-date"
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                className="rounded-xl border-border/50"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="rounded-xl border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-border/50">
-                  <SelectItem value="beschikbaar">Beschikbaar</SelectItem>
-                  <SelectItem value="onderweg">Onderweg</SelectItem>
-                  <SelectItem value="rust">Rust</SelectItem>
-                  <SelectItem value="ziek">Ziek</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label htmlFor="vehicle">Toegewezen Voertuig</Label>
-              <Select value={vehicleId} onValueChange={setVehicleId}>
-                <SelectTrigger className="rounded-xl border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-border/50">
-                  <SelectItem value="none">Geen voertuig</SelectItem>
-                  {vehicles?.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name} ({v.plate})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contract-hours">Contracturen per week</Label>
-              <Input
-                id="contract-hours"
-                type="number"
-                min={0}
-                max={80}
-                value={contractHours}
-                onChange={(e) => setContractHours(e.target.value)}
-                placeholder="Bijv. 40"
-                className="rounded-xl border-border/50"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Leeg laten betekent geen contracturen-bewaking door auto-plan.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="employment-type">Dienstverband</Label>
-              <Select value={employmentType} onValueChange={(v) => setEmploymentType(v as EmploymentType)}>
-                <SelectTrigger className="rounded-xl border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-border/50">
-                  <SelectItem value="vast">Vast</SelectItem>
-                  <SelectItem value="flex">Flex</SelectItem>
-                  <SelectItem value="ingehuurd">Ingehuurd</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-3 pt-2 border-t border-border/40">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Contact bij nood</Label>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="emergency-name">Naam</Label>
-                <Input
-                  id="emergency-name"
-                  value={emergencyName}
-                  onChange={(e) => setEmergencyName(e.target.value)}
-                  placeholder="Volledige naam"
-                  className="rounded-xl border-border/50"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="emergency-relation">Relatie</Label>
-                <Input
-                  id="emergency-relation"
-                  value={emergencyRelation}
-                  onChange={(e) => setEmergencyRelation(e.target.value)}
-                  placeholder="Partner, ouder, broer..."
-                  className="rounded-xl border-border/50"
-                />
-              </div>
-              <div className="space-y-2 col-span-2">
-                <Label htmlFor="emergency-phone">Telefoonnummer</Label>
-                <Input
-                  id="emergency-phone"
-                  value={emergencyPhone}
-                  onChange={(e) => setEmergencyPhone(e.target.value)}
-                  placeholder="+31 6 ..."
-                  className="rounded-xl border-border/50"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3 pt-2 border-t border-border/40">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Certificeringen</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {CERTIFICATION_OPTIONS.map((cert) => (
-                <div key={cert} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`cert-${cert}`}
-                    checked={selectedCerts.includes(cert)}
-                    onCheckedChange={() => toggleCert(cert)}
+            {/* ── Basis ─────────────────────────────────────── */}
+            <div className="space-y-3">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Basis</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="name">Naam *</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Volledige naam"
+                    required
+                    className="rounded-xl border-border/50"
                   />
-                  <label
-                    htmlFor={`cert-${cert}`}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {cert}
-                  </label>
                 </div>
-              ))}
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="email@voorbeeld.nl"
+                    className="rounded-xl border-border/50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Telefoon</Label>
+                  <Input
+                    id="phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+31 6 ..."
+                    className="rounded-xl border-border/50"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+
+            {/* ── Persoonsgegevens ──────────────────────────── */}
+            <div className="space-y-3 pt-2 border-t border-border/40">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Persoonsgegevens</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="legitimation-type">Type legitimatie</Label>
+                  <Select
+                    value={legitimationType === "" ? "none" : legitimationType}
+                    onValueChange={(v) => setLegitimationType(v === "none" ? "" : (v as LegitimationType))}
+                  >
+                    <SelectTrigger id="legitimation-type" className="rounded-xl border-border/50">
+                      <SelectValue placeholder="Kies..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-border/50">
+                      <SelectItem value="none">Onbekend</SelectItem>
+                      <SelectItem value="rijbewijs">Rijbewijs</SelectItem>
+                      <SelectItem value="paspoort">Paspoort</SelectItem>
+                      <SelectItem value="id-kaart">ID-kaart</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="license">Legitimatienummer</Label>
+                  <Input
+                    id="license"
+                    value={license}
+                    onChange={(e) => setLicense(e.target.value)}
+                    placeholder={
+                      legitimationType
+                        ? `Nummer van ${LEGITIMATION_LABELS[legitimationType as LegitimationType].toLowerCase()}`
+                        : "Documentnummer"
+                    }
+                    className="rounded-xl border-border/50"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="birth-date">Geboortedatum</Label>
+                  <Popover open={birthDateOpen} onOpenChange={setBirthDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="birth-date"
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start rounded-xl border-border/50 font-normal",
+                          !birthDateParsed && "text-muted-foreground",
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {birthDateParsed
+                          ? format(birthDateParsed, "d MMMM yyyy", { locale: nl })
+                          : "Kies een datum"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 rounded-xl" align="start">
+                      <Calendar
+                        mode="single"
+                        locale={nl}
+                        selected={birthDateParsed}
+                        onSelect={(d) => {
+                          setBirthDate(d ? format(d, "yyyy-MM-dd") : "");
+                          setBirthDateOpen(false);
+                        }}
+                        captionLayout="dropdown-buttons"
+                        fromYear={1940}
+                        toYear={new Date().getFullYear()}
+                        defaultMonth={birthDateParsed ?? new Date(1990, 0, 1)}
+                        disabled={(d) => d > new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Werkinformatie ────────────────────────────── */}
+            <div className="space-y-3 pt-2 border-t border-border/40">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Werkinformatie</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger id="status" className="rounded-xl border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-border/50">
+                      <SelectItem value="beschikbaar">Beschikbaar</SelectItem>
+                      <SelectItem value="onderweg">Onderweg</SelectItem>
+                      <SelectItem value="rust">Rust</SelectItem>
+                      <SelectItem value="ziek">Ziek</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vehicle">Toegewezen voertuig</Label>
+                  <Select value={vehicleId} onValueChange={setVehicleId}>
+                    <SelectTrigger id="vehicle" className="rounded-xl border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-border/50">
+                      <SelectItem value="none">Geen voertuig</SelectItem>
+                      {vehicles?.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.name} ({v.plate})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contract-hours">Contracturen per week</Label>
+                  <Input
+                    id="contract-hours"
+                    type="number"
+                    min={0}
+                    max={80}
+                    value={contractHours}
+                    onChange={(e) => setContractHours(e.target.value)}
+                    placeholder="Bijv. 40"
+                    className="rounded-xl border-border/50"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Leeg laten betekent geen contracturen-bewaking door auto-plan.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="employment-type">Dienstverband</Label>
+                  <Select value={employmentType} onValueChange={(v) => setEmploymentType(v as EmploymentType)}>
+                    <SelectTrigger id="employment-type" className="rounded-xl border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl border-border/50">
+                      <SelectItem value="vast">Vast</SelectItem>
+                      <SelectItem value="flex">Flex</SelectItem>
+                      <SelectItem value="ingehuurd">Ingehuurd</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Contact bij nood ──────────────────────────── */}
+            <div className="space-y-3 pt-2 border-t border-border/40">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Contact bij nood</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="emergency-name">Naam</Label>
+                  <Input
+                    id="emergency-name"
+                    value={emergencyName}
+                    onChange={(e) => setEmergencyName(e.target.value)}
+                    placeholder="Volledige naam"
+                    className="rounded-xl border-border/50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="emergency-relation">Relatie</Label>
+                  <Input
+                    id="emergency-relation"
+                    value={emergencyRelation}
+                    onChange={(e) => setEmergencyRelation(e.target.value)}
+                    placeholder="Partner, ouder, broer..."
+                    className="rounded-xl border-border/50"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="emergency-phone">Telefoonnummer</Label>
+                  <Input
+                    id="emergency-phone"
+                    value={emergencyPhone}
+                    onChange={(e) => setEmergencyPhone(e.target.value)}
+                    placeholder="+31 6 ..."
+                    className="rounded-xl border-border/50"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Certificeringen ───────────────────────────── */}
+            <div className="space-y-3 pt-2 border-t border-border/40">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Certificeringen</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {CERTIFICATION_OPTIONS.map((cert) => (
+                  <div key={cert} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`cert-${cert}`}
+                      checked={selectedCerts.includes(cert)}
+                      onCheckedChange={() => toggleCert(cert)}
+                    />
+                    <label
+                      htmlFor={`cert-${cert}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {cert}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="px-6 py-4 border-t border-border/40 bg-background/80 backdrop-blur-sm">

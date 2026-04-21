@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenantInsert } from "@/hooks/useTenantInsert";
 
 export type EmploymentType = "vast" | "flex" | "ingehuurd";
+export type LegitimationType = "rijbewijs" | "paspoort" | "id-kaart";
 
 export interface Driver {
   id: string;
@@ -11,6 +12,7 @@ export interface Driver {
   email: string | null;
   phone: string | null;
   license_number: string | null;
+  legitimation_type: LegitimationType | null;
   certifications: string[];
   status: string;
   current_vehicle_id: string | null;
