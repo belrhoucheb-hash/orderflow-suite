@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useCreateClient, useUpdateClient, type Client } from "@/hooks/useClients";
+import {
+  useCreateClient,
+  useUpdateClient,
+  useClientDuplicateCheck,
+  type Client,
+} from "@/hooks/useClients";
 import { useCreateClientContact } from "@/hooks/useClientContacts";
 import {
   clientInputSchema,
@@ -100,9 +105,14 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
   const updateClient = useUpdateClient();
   const createContact = useCreateClientContact();
 
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
+  const { duplicate } = useClientDuplicateCheck(form.kvk_number, client?.id);
+  const blockedByDuplicate = Boolean(duplicate) && !duplicateAcknowledged;
+
   useEffect(() => {
     if (!open) return;
     setErrors({});
+    setDuplicateAcknowledged(false);
     setForm(client ? formFromClient(client) : INITIAL);
   }, [open, client]);
 
@@ -119,6 +129,11 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (blockedByDuplicate) {
+      toast.error("Bevestig eerst dat je een klant met bestaand KvK-nummer wilt aanmaken");
+      return;
+    }
 
     const parsed = clientInputSchema.safeParse({
       name: form.name,
@@ -208,7 +223,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
 
       if (form.contact_person.trim()) {
         try {
-          await createContact.mutateAsync({
+          const contact = await createContact.mutateAsync({
             client_id: (created as any).id,
             name: form.contact_person.trim(),
             email: form.primary_email.trim() || form.email.trim() || null,
@@ -216,6 +231,10 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
             role: "primary",
             is_active: true,
             notes: null,
+          });
+          await updateClient.mutateAsync({
+            id: (created as any).id,
+            primary_contact_id: contact.id,
           });
         } catch {
           toast.warning("Klant opgeslagen, primair contact kon niet worden toegevoegd");
@@ -277,6 +296,24 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
                   className="field-luxe"
                 />
               </div>
+              {duplicate && (
+                <div
+                  role="alert"
+                  className="col-span-2 rounded-md border border-amber-400/60 bg-amber-50 text-amber-900 px-3 py-2 text-sm space-y-2"
+                >
+                  <p>
+                    Er bestaat al een klant met dit KvK-nummer: <strong>{duplicate.name}</strong>. Weet je zeker dat je doorgaat?
+                  </p>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={duplicateAcknowledged}
+                      onChange={(e) => setDuplicateAcknowledged(e.target.checked)}
+                    />
+                    <span>Ja, toch aanmaken</span>
+                  </label>
+                </div>
+              )}
             </div>
           </Section>
 
@@ -406,7 +443,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
             </button>
             <button
               type="submit"
-              disabled={createClient.isPending || updateClient.isPending}
+              disabled={createClient.isPending || updateClient.isPending || blockedByDuplicate}
               className="btn-luxe btn-luxe--primary !h-9"
             >
               {(createClient.isPending || updateClient.isPending)
