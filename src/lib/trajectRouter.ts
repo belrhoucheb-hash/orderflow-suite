@@ -58,6 +58,25 @@ export interface BookingInput {
   pickup_notes?: string | null;
   delivery_notes?: string | null;
   dimensions?: string | null;
+  // Google adres-autocomplete: gesplitste adresvelden + coordinaten
+  pickup_street?: string | null;
+  pickup_house_number?: string | null;
+  pickup_house_number_suffix?: string | null;
+  pickup_zipcode?: string | null;
+  pickup_city?: string | null;
+  pickup_country?: string | null;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+  pickup_coords_manual?: boolean;
+  delivery_street?: string | null;
+  delivery_house_number?: string | null;
+  delivery_house_number_suffix?: string | null;
+  delivery_zipcode?: string | null;
+  delivery_city?: string | null;
+  delivery_country?: string | null;
+  delivery_lat?: number | null;
+  delivery_lng?: number | null;
+  delivery_coords_manual?: boolean;
   [key: string]: unknown;
 }
 
@@ -460,6 +479,33 @@ export async function createShipmentWithLegs(
         : null,
       dimensions: booking.dimensions ?? null,
     };
+
+    // Google adres-autocomplete: zet gesplitste velden + lat/lng alleen op
+    // legs waar de bron/bestemming daadwerkelijk het klant-adres is. Hub-legs
+    // krijgen geen klant-coordinaten, anders zou de chauffeur naar het
+    // verkeerde punt navigeren.
+    if (leg.from === "pickup") {
+      orderPayload.pickup_street = booking.pickup_street ?? null;
+      orderPayload.pickup_house_number = booking.pickup_house_number ?? null;
+      orderPayload.pickup_house_number_suffix = booking.pickup_house_number_suffix ?? null;
+      orderPayload.pickup_zipcode = booking.pickup_zipcode ?? null;
+      orderPayload.pickup_city = booking.pickup_city ?? null;
+      orderPayload.pickup_country = booking.pickup_country ?? null;
+      orderPayload.geocoded_pickup_lat = booking.pickup_lat ?? null;
+      orderPayload.geocoded_pickup_lng = booking.pickup_lng ?? null;
+      orderPayload.pickup_coords_manual = booking.pickup_coords_manual ?? false;
+    }
+    if (leg.to === "delivery") {
+      orderPayload.delivery_street = booking.delivery_street ?? null;
+      orderPayload.delivery_house_number = booking.delivery_house_number ?? null;
+      orderPayload.delivery_house_number_suffix = booking.delivery_house_number_suffix ?? null;
+      orderPayload.delivery_zipcode = booking.delivery_zipcode ?? null;
+      orderPayload.delivery_city = booking.delivery_city ?? null;
+      orderPayload.delivery_country = booking.delivery_country ?? null;
+      orderPayload.geocoded_delivery_lat = booking.delivery_lat ?? null;
+      orderPayload.geocoded_delivery_lng = booking.delivery_lng ?? null;
+      orderPayload.delivery_coords_manual = booking.delivery_coords_manual ?? false;
+    }
 
     const { data: orderData, error: orderErr } = await (supabase as any)
       .from("orders")

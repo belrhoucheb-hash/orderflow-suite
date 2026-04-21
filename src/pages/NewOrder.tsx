@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route } from "lucide-react";
-import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { AddressAutocomplete as LegacyAddressAutocomplete } from "@/components/AddressAutocomplete";
+import {
+  AddressAutocomplete,
+  EMPTY_ADDRESS,
+  type AddressValue,
+} from "@/components/clients/AddressAutocomplete";
+import { composeAddressString } from "@/lib/validation/clientSchema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +24,19 @@ import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequest
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { LuxeTimePicker } from "@/components/LuxeTimePicker";
 import { FinancialTab, type FinancialTabPayload, type FinancialTabCargo } from "@/components/orders/FinancialTab";
+
+// Compose een volledige display-string uit een AddressValue, inclusief
+// postcode en plaats. Gebruikt door de order-flow om `pickup_address`
+// (plain string) compat te houden met bestaande downstream code
+// (CMR, facturen, trajectRouter-preview).
+function fullAddressString(a: AddressValue): string {
+  const street = composeAddressString(a);
+  const cityPart = [a.zipcode, a.city].filter(Boolean).join(" ");
+  return [street, cityPart, a.country && a.country !== "NL" ? a.country : null]
+    .filter(Boolean)
+    .join(", ")
+    .trim();
+}
 
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
@@ -147,6 +166,13 @@ const NewOrder = () => {
     { id: "2", activiteit: "Lossen", locatie: "", datum: "", tijd: "", tijdTot: "", referentie: "", contactLocatie: "", opmerkingen: "" },
   ]);
 
+  // Gestructureerd pickup- en delivery-adres met Google autocomplete + sleepbare pin.
+  // Deze staan naast `freightLines[n].locatie` (plain string) zodat de bestaande
+  // trajectRouter-preview en validatie blijven werken, terwijl chauffeurs
+  // via lat/lng exact weten waar ze moeten zijn (Jaimy's Webfleet/TomTom-issue).
+  const [pickupAddr, setPickupAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
+  const [deliveryAddr, setDeliveryAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
+
   const addFreightLine = () => {
     setFreightLines(prev => [...prev, {
       id: crypto.randomUUID(), activiteit: "Lossen", locatie: "", datum: "", tijd: "", tijdTot: "", referentie: "", contactLocatie: "", opmerkingen: "",
@@ -160,6 +186,31 @@ const NewOrder = () => {
 
   const updateFreightLine = (id: string, field: keyof FreightLine, value: string) => {
     setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+  };
+
+  // Vind de eerste Laden/Lossen freightLine, deze koppelen we aan het
+  // gestructureerde pickup/delivery-adres (incl. lat/lng, postcode, plaats).
+  const primaryLadenId = freightLines.find(l => l.activiteit === "Laden")?.id ?? null;
+  const primaryLossenId = freightLines.find(l => l.activiteit === "Lossen")?.id ?? null;
+
+  const handlePickupAddrChange = (v: AddressValue) => {
+    setPickupAddr(v);
+    clearError("pickup_address");
+    // Sync plain-string locatie zodat trajectRouter-preview, isValidAddress
+    // en afdeling-inferentie blijven werken zonder aanpassingen.
+    if (primaryLadenId) {
+      const composed = fullAddressString(v);
+      setFreightLines(prev => prev.map(l => l.id === primaryLadenId ? { ...l, locatie: composed } : l));
+    }
+  };
+
+  const handleDeliveryAddrChange = (v: AddressValue) => {
+    setDeliveryAddr(v);
+    clearError("delivery_address");
+    if (primaryLossenId) {
+      const composed = fullAddressString(v);
+      setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? { ...l, locatie: composed } : l));
+    }
   };
 
   const addToFreightSummary = () => {
@@ -361,6 +412,24 @@ const NewOrder = () => {
         pickup_notes: pickupLine?.opmerkingen || null,
         delivery_notes: deliveryLine?.opmerkingen || null,
         dimensions: dimensionsStr,
+        pickup_street: pickupAddr.street || null,
+        pickup_house_number: pickupAddr.house_number || null,
+        pickup_house_number_suffix: pickupAddr.house_number_suffix || null,
+        pickup_zipcode: pickupAddr.zipcode || null,
+        pickup_city: pickupAddr.city || null,
+        pickup_country: pickupAddr.country || null,
+        pickup_lat: pickupAddr.lat,
+        pickup_lng: pickupAddr.lng,
+        pickup_coords_manual: pickupAddr.coords_manual,
+        delivery_street: deliveryAddr.street || null,
+        delivery_house_number: deliveryAddr.house_number || null,
+        delivery_house_number_suffix: deliveryAddr.house_number_suffix || null,
+        delivery_zipcode: deliveryAddr.zipcode || null,
+        delivery_city: deliveryAddr.city || null,
+        delivery_country: deliveryAddr.country || null,
+        delivery_lat: deliveryAddr.lat,
+        delivery_lng: deliveryAddr.lng,
+        delivery_coords_manual: deliveryAddr.coords_manual,
       };
 
       const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);
@@ -689,6 +758,29 @@ const NewOrder = () => {
                 <p className="text-xs text-muted-foreground mt-1">Adres, datum en tijdvenster per stop.</p>
               </div>
 
+              <div className="mb-6 grid gap-6 md:grid-cols-2">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
+                    Ophaaladres (Google)
+                  </div>
+                  <AddressAutocomplete
+                    value={pickupAddr}
+                    onChange={handlePickupAddrChange}
+                    error={errors.pickup_address}
+                  />
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
+                    Afleveradres (Google)
+                  </div>
+                  <AddressAutocomplete
+                    value={deliveryAddr}
+                    onChange={handleDeliveryAddrChange}
+                    error={errors.delivery_address}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-0 divide-y divide-[hsl(var(--border)_/_0.4)]">
                 {freightLines.map((line, idx) => (
                   <div key={line.id} className="py-5 first:pt-0 last:pb-0">
@@ -725,7 +817,7 @@ const NewOrder = () => {
                       <label className="text-xs font-medium text-muted-foreground block mb-1.5">
                         {line.activiteit === "Laden" ? "Ophaaladres" : "Afleveradres"}
                       </label>
-                      <AddressAutocomplete
+                      <LegacyAddressAutocomplete
                         value={line.locatie}
                         onChange={v => {
                           updateFreightLine(line.id, "locatie", v);
