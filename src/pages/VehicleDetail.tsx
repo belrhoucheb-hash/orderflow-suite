@@ -1,12 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTriangle, Plus, CheckCircle2, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useVehicleById, useVehicleDocuments, useVehicleMaintenance, useVehicleAvailability, useCompleteMaintenance } from "@/hooks/useFleet";
 import { useBaselineInfo } from "@/hooks/useVehicleCheck";
@@ -19,11 +14,27 @@ import { nl } from "date-fns/locale";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  beschikbaar: { label: "Beschikbaar", className: "bg-emerald-500/10 text-emerald-700 border-emerald-200" },
-  onderweg: { label: "Onderweg", className: "bg-blue-500/10 text-blue-700 border-blue-200" },
-  onderhoud: { label: "Onderhoud", className: "bg-amber-500/10 text-amber-700 border-amber-200" },
-  defect: { label: "Defect", className: "bg-destructive/10 text-destructive border-destructive/20" },
+const STATUS_CONFIG: Record<string, { label: string; dotClass: string; textClass: string }> = {
+  beschikbaar: {
+    label: "Beschikbaar",
+    dotClass: "bg-emerald-500",
+    textClass: "text-emerald-700",
+  },
+  onderweg: {
+    label: "Onderweg",
+    dotClass: "bg-[hsl(var(--gold-deep))]",
+    textClass: "text-[hsl(var(--gold-deep))]",
+  },
+  onderhoud: {
+    label: "Onderhoud",
+    dotClass: "bg-amber-500",
+    textClass: "text-amber-700",
+  },
+  defect: {
+    label: "Defect",
+    dotClass: "bg-rose-500",
+    textClass: "text-rose-700",
+  },
 };
 
 const DOC_LABELS: Record<string, string> = {
@@ -42,15 +53,17 @@ const MAINTENANCE_LABELS: Record<string, string> = {
   overig: "Overig",
 };
 
+const TAB_TRIGGER_CLASS =
+  "rounded-none border-b-2 border-transparent bg-transparent shadow-none data-[state=active]:border-[hsl(var(--gold-deep))] data-[state=active]:bg-transparent data-[state=active]:text-[hsl(var(--gold-deep))] data-[state=active]:shadow-none px-3 py-2.5 text-[12px] font-medium tracking-tight text-muted-foreground hover:text-[hsl(var(--gold-deep))] transition-colors whitespace-nowrap gap-1.5";
+
 export default function VehicleDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: vehicle, isLoading } = useVehicleById(id);
-  
+
   const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-  const weekEnd = addDays(weekStart, 6);
-  
+
   const { data: documents } = useVehicleDocuments(id);
   const { data: maintenance } = useVehicleMaintenance(id);
   const { data: availability } = useVehicleAvailability(
@@ -96,270 +109,355 @@ export default function VehicleDetail() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4 px-4 md:px-6 py-6 border-b border-border">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/vloot")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <PageHeader
-          title={vehicle.name}
-          subtitle={`${vehicle.plate} \u00B7 ${vehicle.code}`}
-          actions={
+      <div className="p-6 space-y-4 max-w-[1800px] mx-auto w-full">
+        <button
+          type="button"
+          onClick={() => navigate("/vloot")}
+          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[hsl(var(--gold-deep))] hover:text-[hsl(var(--gold))] transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          Terug naar vloot
+        </button>
+
+        <div className="card--luxe p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 space-y-2">
+              <p className="font-mono text-2xl font-semibold tracking-tight text-foreground">
+                {vehicle.plate}
+              </p>
+              <h1 className="text-lg font-semibold text-foreground leading-tight">
+                {vehicle.name}
+              </h1>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                <span>{vehicle.brand || "Onbekend merk"}</span>
+                <span className="text-[hsl(var(--gold)/0.5)]">·</span>
+                <span className="tabular-nums">{vehicle.buildYear || "—"}</span>
+                <span className="text-[hsl(var(--gold)/0.5)]">·</span>
+                <span className="capitalize">{vehicle.type}</span>
+                <span className="text-[hsl(var(--gold)/0.5)]">·</span>
+                <span>{vehicle.code}</span>
+              </div>
+            </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
               {baselineDateLabel && (
-                <Badge
-                  variant="outline"
-                  className="gap-1.5 bg-[hsl(var(--gold-soft))/0.5] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold))/0.4]"
-                >
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold-soft)/0.5)] px-2 py-1 text-[11px] font-medium text-[hsl(var(--gold-deep))]">
                   <ShieldCheck className="h-3 w-3" strokeWidth={1.75} />
                   Baseline gezet op {baselineDateLabel}
-                </Badge>
+                </span>
               )}
               {isAdmin && (
-                <Button
-                  size="sm"
-                  variant="outline"
+                <button
+                  type="button"
                   onClick={() => setBaselineSeedActive(true)}
-                  className="gap-1.5"
+                  className="btn-luxe !h-9"
                 >
                   <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.5} />
                   Baseline instellen
-                </Button>
+                </button>
               )}
-              <Badge variant="outline" className={statusCfg.className}>{statusCfg.label}</Badge>
+              <span className={`inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${statusCfg.textClass}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dotClass}`} />
+                {statusCfg.label}
+              </span>
             </div>
-          }
-          className="flex-1"
-        />
-      </div>
+          </div>
+        </div>
 
-      <div className="px-4 md:px-6 py-6 flex-1">
-        <Tabs defaultValue="specs" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="specs" className="gap-1.5"><Truck className="h-3.5 w-3.5" strokeWidth={1.5} />Specificaties</TabsTrigger>
-            <TabsTrigger value="docs" className="gap-1.5"><FileText className="h-3.5 w-3.5" strokeWidth={1.5} />Documenten</TabsTrigger>
-            <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" strokeWidth={1.5} />Onderhoud</TabsTrigger>
-            <TabsTrigger value="availability" className="gap-1.5"><CalendarDays className="h-3.5 w-3.5" strokeWidth={1.5} />Beschikbaarheid</TabsTrigger>
-            <TabsTrigger value="performance" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" strokeWidth={1.5} />Prestaties</TabsTrigger>
+        <div className="card--luxe p-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            <SpecField label="Max gewicht" value={`${vehicle.capacityKg.toLocaleString()} kg`} />
+            <SpecField label="Palletplaatsen" value={vehicle.capacityPallets.toString()} />
+            <SpecField label="Chauffeur" value={vehicle.assignedDriver || "Niet toegewezen"} />
+            <SpecField label="Verbruik" value={vehicle.fuelConsumption ? `${vehicle.fuelConsumption} L/100km` : "—"} />
+          </div>
+          {vehicle.features.length > 0 && (
+            <div className="mt-5 pt-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] font-semibold mb-2">
+                Uitrusting
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {vehicle.features.map((f) => (
+                  <span
+                    key={f}
+                    className="inline-flex items-center px-2 py-0.5 rounded-md border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.3)] text-[hsl(var(--gold-deep))] text-[11px]"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <Tabs defaultValue="specs" className="space-y-4">
+          <TabsList className="w-full justify-start rounded-none border-b border-[hsl(var(--gold)/0.2)] bg-transparent px-0 h-auto py-0 gap-0 overflow-x-auto">
+            <TabsTrigger value="specs" className={TAB_TRIGGER_CLASS}>
+              <Truck className="h-3.5 w-3.5" strokeWidth={1.5} />Specificaties
+            </TabsTrigger>
+            <TabsTrigger value="docs" className={TAB_TRIGGER_CLASS}>
+              <FileText className="h-3.5 w-3.5" strokeWidth={1.5} />Documenten
+            </TabsTrigger>
+            <TabsTrigger value="maintenance" className={TAB_TRIGGER_CLASS}>
+              <Wrench className="h-3.5 w-3.5" strokeWidth={1.5} />Onderhoud
+            </TabsTrigger>
+            <TabsTrigger value="availability" className={TAB_TRIGGER_CLASS}>
+              <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.5} />Beschikbaarheid
+            </TabsTrigger>
+            <TabsTrigger value="performance" className={TAB_TRIGGER_CLASS}>
+              <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.5} />Prestaties
+            </TabsTrigger>
           </TabsList>
 
           {/* Specificaties */}
-          <TabsContent value="specs">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Voertuiggegevens</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
+          <TabsContent value="specs" className="mt-0">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="card--luxe p-5 space-y-3">
+                <SectionTitle>Voertuiggegevens</SectionTitle>
+                <div className="divide-y divide-[hsl(var(--gold)/0.08)]">
                   <Row label="Type" value={vehicle.type} />
                   <Row label="Merk" value={vehicle.brand || "—"} />
                   <Row label="Bouwjaar" value={vehicle.buildYear?.toString() || "—"} />
                   <Row label="Kenteken" value={vehicle.plate} />
                   <Row label="Chauffeur" value={vehicle.assignedDriver || "Niet toegewezen"} />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Capaciteit & Uitrusting</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
+                </div>
+              </div>
+              <div className="card--luxe p-5 space-y-3">
+                <SectionTitle>Capaciteit en uitrusting</SectionTitle>
+                <div className="divide-y divide-[hsl(var(--gold)/0.08)]">
                   <Row label="Max gewicht" value={`${vehicle.capacityKg.toLocaleString()} kg`} />
                   <Row label="Palletplaatsen" value={vehicle.capacityPallets.toString()} />
-                  <div className="flex items-center justify-between py-1.5">
-                    <span className="text-sm text-muted-foreground">Uitrusting</span>
-                    <div className="flex gap-1.5">
+                  <div className="flex items-center justify-between gap-3 py-2">
+                    <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                      Uitrusting
+                    </span>
+                    <div className="flex flex-wrap gap-1 justify-end">
                       {vehicle.features.length > 0 ? vehicle.features.map((f) => (
-                        <Badge key={f} variant="secondary" className="text-xs">{f}</Badge>
-                      )) : <span className="text-sm text-muted-foreground">—</span>}
+                        <span
+                          key={f}
+                          className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.3)] text-[hsl(var(--gold-deep))] text-[11px]"
+                        >
+                          {f}
+                        </span>
+                      )) : <span className="text-xs text-muted-foreground">—</span>}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </TabsContent>
 
           {/* Documenten */}
-          <TabsContent value="docs">
-            <Card>
-              <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Documenten & Keuringen</CardTitle>
-                <Button size="sm" variant="outline" onClick={() => setShowDocumentDialog(true)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />Document Toevoegen
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {!documents || documents.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4">Geen documenten geregistreerd</p>
-                ) : (
-                  <div className="space-y-3">
-                    {documents.map((doc) => {
-                      const daysLeft = doc.expiry_date ? differenceInDays(new Date(doc.expiry_date), today) : null;
-                      const isWarning = daysLeft !== null && daysLeft < 30 && daysLeft >= 0;
-                      const isExpired = daysLeft !== null && daysLeft < 0;
-                      return (
-                        <div key={doc.id} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
-                          <div className="flex items-center gap-3">
-                            <FileText className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
-                            <div>
-                              <p className="text-sm font-medium text-foreground">{DOC_LABELS[doc.doc_type] || doc.doc_type}</p>
-                              {doc.notes && <p className="text-xs text-muted-foreground">{doc.notes}</p>}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {doc.expiry_date && (
-                              <span className="text-xs text-muted-foreground">
-                                Verloopt {format(new Date(doc.expiry_date), "d MMM yyyy", { locale: nl })}
-                              </span>
-                            )}
-                            {isExpired && (
-                              <Badge variant="destructive" className="text-xs gap-1">
-                                <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />Verlopen
-                              </Badge>
-                            )}
-                            {isWarning && (
-                              <Badge className="bg-amber-500/10 text-amber-700 border-amber-200 text-xs gap-1">
-                                <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />{daysLeft}d
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Onderhoud */}
-          <TabsContent value="maintenance">
-            <Card>
-              <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Onderhoudslogboek</CardTitle>
-                <Button size="sm" variant="outline" onClick={() => setShowMaintenanceDialog(true)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />Onderhoud Plannen
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {!maintenance || maintenance.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4">Geen onderhoud geregistreerd</p>
-                ) : (
-                  <div className="space-y-3">
-                    {maintenance.map((m) => {
-                      const isCompleted = !!m.completed_date;
-                      const isOverdue = !isCompleted && m.scheduled_date && new Date(m.scheduled_date) < today;
-                      const isScheduled = !isCompleted && !isOverdue;
-                      return (
-                        <div key={m.id} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
-                          <div className="flex items-center gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium text-foreground">
-                                  {MAINTENANCE_LABELS[m.maintenance_type] || m.description || m.maintenance_type}
-                                </p>
-                                {isCompleted && (
-                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-200 text-xs">
-                                    Uitgevoerd
-                                  </Badge>
-                                )}
-                                {isScheduled && (
-                                  <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-200 text-xs">
-                                    Gepland
-                                  </Badge>
-                                )}
-                                {isOverdue && (
-                                  <Badge variant="destructive" className="text-xs gap-1">
-                                    <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />VERLOPEN
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                {m.completed_date
-                                  ? `Uitgevoerd ${format(new Date(m.completed_date), "d MMM yyyy", { locale: nl })}`
-                                  : m.scheduled_date
-                                  ? `Gepland ${format(new Date(m.scheduled_date), "d MMM yyyy", { locale: nl })}`
-                                  : "Geen datum"}
-                                {m.mileage_km && ` \u00B7 ${m.mileage_km.toLocaleString()} km`}
-                              </p>
-                              {m.description && m.description !== m.maintenance_type && (
-                                <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {m.cost !== null && m.cost !== undefined && (
-                              <span className="text-sm font-medium text-foreground">{"\u20AC"}{m.cost.toLocaleString()}</span>
-                            )}
-                            {!isCompleted && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                disabled={completeMaintenance.isPending}
-                                onClick={() => {
-                                  completeMaintenance.mutate(
-                                    { id: m.id, vehicleId: m.vehicle_id },
-                                    { onSuccess: () => toast.success("Onderhoud afgerond") }
-                                  );
-                                }}
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-1" />Afronden
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Beschikbaarheid */}
-          <TabsContent value="availability">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Weekoverzicht Beschikbaarheid</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[0, 1, 2, 3].map((weekOffset) => {
-                    const ws = addDays(weekStart, weekOffset * 7);
+          <TabsContent value="docs" className="mt-0">
+            <div className="card--luxe p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <SectionTitle>Documenten en keuringen</SectionTitle>
+                <button
+                  type="button"
+                  onClick={() => setShowDocumentDialog(true)}
+                  className="btn-luxe btn-luxe--primary !h-9"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  Nieuw document
+                </button>
+              </div>
+              {!documents || documents.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-6 text-center">Geen documenten geregistreerd</p>
+              ) : (
+                <div>
+                  {documents.map((doc) => {
+                    const daysLeft = doc.expiry_date ? differenceInDays(new Date(doc.expiry_date), today) : null;
+                    const isWarning = daysLeft !== null && daysLeft < 30 && daysLeft >= 0;
+                    const isExpired = daysLeft !== null && daysLeft < 0;
                     return (
-                      <div key={weekOffset}>
-                        <p className="text-xs text-muted-foreground mb-2 font-medium">
-                          Week {format(ws, "w")} — {format(ws, "d MMM", { locale: nl })}
-                        </p>
-                        <div className="grid grid-cols-7 gap-1.5">
-                          {Array.from({ length: 7 }).map((_, dayIdx) => {
-                            const d = addDays(ws, dayIdx);
-                            const dateStr = format(d, "yyyy-MM-dd");
-                            const dayStatus = availMap[dateStr] || "beschikbaar";
-                            const color = dayStatus === "beschikbaar"
-                              ? "bg-emerald-500/20 border-emerald-300"
-                              : dayStatus === "niet_beschikbaar"
-                              ? "bg-destructive/15 border-destructive/30"
-                              : "bg-muted border-border";
-                            return (
-                              <div key={dayIdx} className={`rounded-lg border p-2 text-center ${color}`}>
-                                <p className="text-xs text-muted-foreground">{format(d, "EEE", { locale: nl })}</p>
-                                <p className="text-sm font-medium text-foreground">{format(d, "d")}</p>
-                              </div>
-                            );
-                          })}
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between gap-3 py-3 border-b border-[hsl(var(--gold)/0.08)] last:border-0"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" strokeWidth={1.5} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {DOC_LABELS[doc.doc_type] || doc.doc_type}
+                            </p>
+                            {doc.notes && <p className="text-[11px] text-muted-foreground truncate">{doc.notes}</p>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {doc.expiry_date && (
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                              Verloopt {format(new Date(doc.expiry_date), "d MMM yyyy", { locale: nl })}
+                            </span>
+                          )}
+                          {isExpired && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-700 text-[11px] font-medium">
+                              <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                              Verlopen
+                            </span>
+                          )}
+                          {isWarning && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 text-[11px] font-medium">
+                              <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                              {daysLeft}d
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-                <div className="flex gap-4 mt-4 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded bg-emerald-500/20 border border-emerald-300" />Beschikbaar</div>
-                  <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded bg-muted border border-border" />Niet ingepland</div>
-                  <div className="flex items-center gap-1.5"><div className="h-3 w-3 rounded bg-destructive/15 border border-destructive/30" />Niet beschikbaar</div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Onderhoud */}
+          <TabsContent value="maintenance" className="mt-0">
+            <div className="card--luxe p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <SectionTitle>Onderhoudslogboek</SectionTitle>
+                <button
+                  type="button"
+                  onClick={() => setShowMaintenanceDialog(true)}
+                  className="btn-luxe btn-luxe--primary !h-9"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  Nieuw onderhoud
+                </button>
+              </div>
+              {!maintenance || maintenance.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-6 text-center">Geen onderhoud geregistreerd</p>
+              ) : (
+                <div>
+                  {maintenance.map((m) => {
+                    const isCompleted = !!m.completed_date;
+                    const isOverdue = !isCompleted && m.scheduled_date && new Date(m.scheduled_date) < today;
+                    const isScheduled = !isCompleted && !isOverdue;
+                    return (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between gap-3 py-3 border-b border-[hsl(var(--gold)/0.08)] last:border-0"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-foreground">
+                              {MAINTENANCE_LABELS[m.maintenance_type] || m.description || m.maintenance_type}
+                            </p>
+                            {isCompleted && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 text-[11px] font-medium">
+                                Uitgevoerd
+                              </span>
+                            )}
+                            {isScheduled && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--gold-soft)/0.3)] text-[hsl(var(--gold-deep))] text-[11px] font-medium">
+                                Gepland
+                              </span>
+                            )}
+                            {isOverdue && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-700 text-[11px] font-medium">
+                                <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                                Verlopen
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {m.completed_date
+                              ? `Uitgevoerd ${format(new Date(m.completed_date), "d MMM yyyy", { locale: nl })}`
+                              : m.scheduled_date
+                              ? `Gepland ${format(new Date(m.scheduled_date), "d MMM yyyy", { locale: nl })}`
+                              : "Geen datum"}
+                            {m.mileage_km && ` \u00B7 ${m.mileage_km.toLocaleString()} km`}
+                          </p>
+                          {m.description && m.description !== m.maintenance_type && (
+                            <p className="text-[11px] text-muted-foreground italic">{m.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          {m.cost !== null && m.cost !== undefined && (
+                            <span className="text-sm font-medium text-foreground tabular-nums">
+                              {"\u20AC"}{m.cost.toLocaleString()}
+                            </span>
+                          )}
+                          {!isCompleted && (
+                            <button
+                              type="button"
+                              disabled={completeMaintenance.isPending}
+                              onClick={() => {
+                                completeMaintenance.mutate(
+                                  { id: m.id, vehicleId: m.vehicle_id },
+                                  { onSuccess: () => toast.success("Onderhoud afgerond") }
+                                );
+                              }}
+                              className="btn-luxe !h-8 !text-xs !px-2.5"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                              Afronden
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Beschikbaarheid */}
+          <TabsContent value="availability" className="mt-0">
+            <div className="card--luxe p-5 space-y-4">
+              <SectionTitle>Weekoverzicht Beschikbaarheid</SectionTitle>
+              <div className="space-y-4">
+                {[0, 1, 2, 3].map((weekOffset) => {
+                  const ws = addDays(weekStart, weekOffset * 7);
+                  return (
+                    <div key={weekOffset}>
+                      <p className="text-[11px] font-medium text-[hsl(var(--gold-deep))] uppercase tracking-[0.12em] mb-2">
+                        Week {format(ws, "w")}, {format(ws, "d MMM", { locale: nl })}
+                      </p>
+                      <div className="grid grid-cols-7 gap-1.5">
+                        {Array.from({ length: 7 }).map((_, dayIdx) => {
+                          const d = addDays(ws, dayIdx);
+                          const dateStr = format(d, "yyyy-MM-dd");
+                          const dayStatus = availMap[dateStr] || "beschikbaar";
+                          const color = dayStatus === "beschikbaar"
+                            ? "bg-emerald-500/15 border-emerald-400/40"
+                            : dayStatus === "niet_beschikbaar"
+                            ? "bg-rose-500/10 border-rose-400/40"
+                            : "bg-[hsl(var(--gold-soft)/0.25)] border-[hsl(var(--gold)/0.2)]";
+                          return (
+                            <div key={dayIdx} className={`rounded-lg border p-2 text-center ${color}`}>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                                {format(d, "EEE", { locale: nl })}
+                              </p>
+                              <p className="text-sm font-semibold text-foreground tabular-nums mt-0.5">
+                                {format(d, "d")}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-4 pt-2 text-[11px] text-muted-foreground border-t border-[hsl(var(--gold)/0.12)]">
+                <div className="flex items-center gap-1.5 pt-2">
+                  <div className="h-3 w-3 rounded bg-emerald-500/15 border border-emerald-400/40" />
+                  Beschikbaar
+                </div>
+                <div className="flex items-center gap-1.5 pt-2">
+                  <div className="h-3 w-3 rounded bg-[hsl(var(--gold-soft)/0.25)] border border-[hsl(var(--gold)/0.2)]" />
+                  Niet ingepland
+                </div>
+                <div className="flex items-center gap-1.5 pt-2">
+                  <div className="h-3 w-3 rounded bg-rose-500/10 border border-rose-400/40" />
+                  Niet beschikbaar
+                </div>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Prestaties */}
-          <TabsContent value="performance">
+          <TabsContent value="performance" className="mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <KPICard title="Kilometers deze maand" value="—" unit="km" />
               <KPICard title="Beladingsgraad" value="—" unit="%" />
@@ -376,25 +474,50 @@ export default function VehicleDetail() {
   );
 }
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+      {children}
+    </h3>
+  );
+}
+
+function SpecField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] font-semibold">
+        {label}
+      </p>
+      <p className="text-base font-semibold text-foreground tabular-nums leading-tight">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground">{value}</span>
+    <div className="flex items-baseline justify-between gap-3 py-2">
+      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0">
+        {label}
+      </span>
+      <span className="text-xs text-right text-foreground truncate" title={value}>
+        {value}
+      </span>
     </div>
   );
 }
 
 function KPICard({ title, value, unit }: { title: string; value: string; unit: string }) {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{title}</p>
-        <div className="flex items-baseline gap-1 mt-2">
-          <span className="text-2xl font-semibold text-foreground">{value}</span>
-          <span className="text-sm text-muted-foreground">{unit}</span>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="card--luxe p-5">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] font-semibold">
+        {title}
+      </p>
+      <div className="flex items-baseline gap-1 mt-2">
+        <span className="text-2xl font-semibold text-foreground tabular-nums">{value}</span>
+        <span className="text-xs text-muted-foreground">{unit}</span>
+      </div>
+    </div>
   );
 }

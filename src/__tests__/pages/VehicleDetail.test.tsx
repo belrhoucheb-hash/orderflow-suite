@@ -236,9 +236,9 @@ describe("VehicleDetail", () => {
     renderVehicleDetail();
     await user.click(screen.getByText("Onderhoud"));
     await waitFor(() => {
-      expect(screen.getByText("Onderhoud Plannen")).toBeInTheDocument();
+      expect(screen.getByText("Nieuw onderhoud")).toBeInTheDocument();
     });
-    await user.click(screen.getByText("Onderhoud Plannen"));
+    await user.click(screen.getByText("Nieuw onderhoud"));
     await waitFor(() => {
       expect(screen.getByTestId("maint-dialog")).toBeInTheDocument();
     });
@@ -249,7 +249,7 @@ describe("VehicleDetail", () => {
     const user = userEvent.setup();
     renderVehicleDetail();
     await user.click(screen.getByText("Onderhoud"));
-    await user.click(screen.getByText("Onderhoud Plannen"));
+    await user.click(screen.getByText("Nieuw onderhoud"));
     await waitFor(() => {
       expect(screen.getByTestId("maint-dialog")).toBeInTheDocument();
     });
@@ -265,9 +265,9 @@ describe("VehicleDetail", () => {
     renderVehicleDetail();
     await user.click(screen.getByText("Documenten"));
     await waitFor(() => {
-      expect(screen.getByText("Document Toevoegen")).toBeInTheDocument();
+      expect(screen.getByText("Nieuw document")).toBeInTheDocument();
     });
-    await user.click(screen.getByText("Document Toevoegen"));
+    await user.click(screen.getByText("Nieuw document"));
     await waitFor(() => {
       expect(screen.getByTestId("doc-dialog")).toBeInTheDocument();
     });
@@ -278,7 +278,7 @@ describe("VehicleDetail", () => {
     const user = userEvent.setup();
     renderVehicleDetail();
     await user.click(screen.getByText("Documenten"));
-    await user.click(screen.getByText("Document Toevoegen"));
+    await user.click(screen.getByText("Nieuw document"));
     await waitFor(() => {
       expect(screen.getByTestId("doc-dialog")).toBeInTheDocument();
     });
@@ -306,32 +306,32 @@ describe("VehicleDetail", () => {
   it("shows capacity info in specs tab", () => {
     renderVehicleDetail();
     // toLocaleString() varieert per locale: NL "1.500", en-US "1,500", raw "1500".
-    expect(screen.getByText(/1[.,]?500/)).toBeInTheDocument();
+    expect(screen.getAllByText(/1[.,]?500/).length).toBeGreaterThanOrEqual(1);
   });
 
   // ── Shows vehicle features ──
   it("shows vehicle features badge", () => {
     renderVehicleDetail();
-    expect(screen.getByText("Laadklep")).toBeInTheDocument();
+    expect(screen.getAllByText("Laadklep").length).toBeGreaterThanOrEqual(1);
   });
 
   // ── Shows brand and build year ──
   it("shows vehicle brand and build year", () => {
     renderVehicleDetail();
-    expect(screen.getByText("Mercedes")).toBeInTheDocument();
-    expect(screen.getByText("2022")).toBeInTheDocument();
+    expect(screen.getAllByText("Mercedes").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("2022").length).toBeGreaterThanOrEqual(1);
   });
 
   // ── Shows pallet capacity ──
   it("shows pallet capacity", () => {
     renderVehicleDetail();
-    expect(screen.getByText("6")).toBeInTheDocument();
+    expect(screen.getAllByText("6").length).toBeGreaterThanOrEqual(1);
   });
 
   // ── Shows assigned driver or not assigned ──
   it("shows Niet toegewezen when no driver", () => {
     renderVehicleDetail();
-    expect(screen.getByText("Niet toegewezen")).toBeInTheDocument();
+    expect(screen.getAllByText("Niet toegewezen").length).toBeGreaterThanOrEqual(1);
   });
 
   // ── Different vehicle status ──
@@ -348,7 +348,7 @@ describe("VehicleDetail", () => {
     renderVehicleDetail();
     // "Onderhoud" appears both as status badge and as tab trigger
     expect(screen.getAllByText("Onderhoud").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("Jan Jansen")).toBeInTheDocument();
+    expect(screen.getAllByText("Jan Jansen").length).toBeGreaterThanOrEqual(1);
   });
 
   // ── No features shows dash ──
@@ -374,7 +374,7 @@ describe("VehicleDetail", () => {
     renderVehicleDetail();
     await user.click(screen.getByText("Onderhoud"));
     await waitFor(() => {
-      expect(screen.getByText(/500/)).toBeInTheDocument();
+      expect(screen.getAllByText(/500/).length).toBeGreaterThanOrEqual(1);
     });
   });
 
