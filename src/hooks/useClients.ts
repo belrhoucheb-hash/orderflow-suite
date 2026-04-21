@@ -207,15 +207,13 @@ export function useCreateClient() {
 
 export function useCreateClientLocation() {
   const qc = useQueryClient();
-  const { tenant } = useTenant();
+  const locationsInsert = useTenantInsert("client_locations");
   return useMutation({
     mutationFn: async (
       input: Omit<ClientLocation, "id" | "created_at"> & { tenant_id?: string },
     ) => {
-      if (!tenant?.id) throw new Error("Geen actieve tenant, log opnieuw in");
-      const { data, error } = await supabase
-        .from("client_locations")
-        .insert({ ...input, tenant_id: tenant.id } as any)
+      const { data, error } = await locationsInsert
+        .insert({ ...input })
         .select()
         .single();
       if (error) throw error;

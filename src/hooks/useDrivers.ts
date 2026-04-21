@@ -48,7 +48,7 @@ export function useDrivers() {
   const createDriver = useMutation({
     mutationFn: async (newDriver: Partial<Driver>) => {
       const { data, error } = await driversInsert
-        .insert([{ ...newDriver }])
+        .insert({ ...newDriver })
         .select()
         .single();
 
