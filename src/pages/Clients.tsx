@@ -18,13 +18,11 @@ export default function Clients() {
 
   useEffect(() => {
     if (!selectedClient) return;
-    function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setSelectedClient(null);
-      }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedClient(null);
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
   }, [selectedClient]);
 
   const count = clients?.length ?? 0;
@@ -130,8 +128,9 @@ export default function Clients() {
 
       {selectedClient && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/40 lg:bg-transparent"
           onClick={() => setSelectedClient(null)}
+          aria-hidden
         />
       )}
 
