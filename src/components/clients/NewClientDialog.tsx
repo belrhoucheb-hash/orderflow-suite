@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { useCreateClient, useUpdateClient, type Client } from "@/hooks/useClients";
 import { useCreateClientContact } from "@/hooks/useClientContacts";
 import {
@@ -40,6 +41,8 @@ interface FormState {
 
   shipping_same_as_main: boolean;
   shipping_address: AddressValue;
+
+  notes: string;
 }
 
 const INITIAL: FormState = {
@@ -57,6 +60,7 @@ const INITIAL: FormState = {
   billing_address: { ...EMPTY_ADDRESS },
   shipping_same_as_main: true,
   shipping_address: { ...EMPTY_ADDRESS },
+  notes: "",
 };
 
 function addressFromClient(c: Client, prefix: "" | "billing_" | "shipping_"): AddressValue {
@@ -88,6 +92,7 @@ function formFromClient(c: Client): FormState {
     billing_address: addressFromClient(c, "billing_"),
     shipping_same_as_main: c.shipping_same_as_main ?? true,
     shipping_address: addressFromClient(c, "shipping_"),
+    notes: c.notes ?? "",
   };
 }
 
@@ -198,7 +203,11 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
       };
 
       if (isEdit && client) {
-        await updateClient.mutateAsync({ id: client.id, ...(payload as Partial<Client>) });
+        await updateClient.mutateAsync({
+          id: client.id,
+          ...(payload as Partial<Client>),
+          notes: form.notes.trim() ? form.notes : null,
+        });
         toast.success("Klant bijgewerkt");
         onOpenChange(false);
         return;
@@ -395,6 +404,20 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
               />
             )}
           </Section>
+
+          {isEdit && (
+            <Section title="Notities">
+              <Textarea
+                value={form.notes}
+                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                placeholder="Vrije notitie over deze klant, afspraken, aandachtspunten..."
+                className="field-luxe min-h-[100px] text-sm"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Wijzigingen aan notities worden geregistreerd in de historie.
+              </p>
+            </Section>
+          )}
 
           <div className="flex justify-end gap-2 pt-3 border-t border-[hsl(var(--gold)/0.2)]">
             <button

@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type Client, useClientLocations, useClientRates, useClientOrders } from "@/hooks/useClients";
+import { Textarea } from "@/components/ui/textarea";
+import { type Client, useClientLocations, useClientRates, useClientOrders, useUpdateClient } from "@/hooks/useClients";
 import { MapPin, Clock, Truck, FileText, Plus } from "lucide-react";
 import { ClientPortalTab } from "./ClientPortalTab";
 import { ClientEmballageTab } from "./ClientEmballageTab";
 import { ClientContactsSection } from "./ClientContactsSection";
+import { ClientHistoryTab } from "./ClientHistoryTab";
 import { NewLocationDialog } from "./NewLocationDialog";
 
 interface Props {
@@ -18,6 +20,7 @@ const TABS = [
   { value: "locaties", label: "Locaties" },
   { value: "tarieven", label: "Tarieven" },
   { value: "orders", label: "Orders" },
+  { value: "historie", label: "Historie" },
   { value: "portaal", label: "Portaal" },
   { value: "emballage", label: "Emballage" },
 ];
@@ -85,6 +88,8 @@ export function ClientDetailPanel({ client }: Props) {
           />
           <Row label="Factuur e-mail" value={client.billing_email || client.email} />
         </Section>
+
+        <NotesSection client={client} />
       </TabsContent>
 
       <TabsContent value="contacten" className="p-4 mt-0">
@@ -177,6 +182,10 @@ export function ClientDetailPanel({ client }: Props) {
         )}
       </TabsContent>
 
+      <TabsContent value="historie" className="p-4 mt-0">
+        <ClientHistoryTab clientId={client.id} />
+      </TabsContent>
+
       <TabsContent value="portaal" className="p-4 mt-0">
         <ClientPortalTab clientId={client.id} clientName={client.name} />
       </TabsContent>
@@ -250,6 +259,65 @@ function Row({ label, value, muted }: { label: string; value: string | null | un
 
 function EmptyState({ text }: { text: string }) {
   return <p className="text-xs text-muted-foreground py-6 text-center">{text}</p>;
+}
+
+type SaveState = "idle" | "saving" | "saved";
+
+function NotesSection({ client }: { client: Client }) {
+  const [value, setValue] = useState<string>(client.notes ?? "");
+  const [state, setState] = useState<SaveState>("idle");
+  const updateClient = useUpdateClient();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSaved = useRef<string>(client.notes ?? "");
+
+  useEffect(() => {
+    setValue(client.notes ?? "");
+    lastSaved.current = client.notes ?? "";
+    setState("idle");
+  }, [client.id, client.notes]);
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
+
+  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const next = e.target.value;
+    setValue(next);
+    if (next === lastSaved.current) return;
+    setState("saving");
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      try {
+        await updateClient.mutateAsync({ id: client.id, notes: next || null });
+        lastSaved.current = next;
+        setState("saved");
+        setTimeout(() => setState("idle"), 1500);
+      } catch {
+        setState("idle");
+      }
+    }, 800);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.14em]">
+          Notities
+        </h3>
+        <span className="text-[10px] text-muted-foreground tabular-nums min-h-[14px]">
+          {state === "saving" ? "Opslaan..." : state === "saved" ? "Opgeslagen" : ""}
+        </span>
+      </div>
+      <Textarea
+        value={value}
+        onChange={onChange}
+        placeholder="Vrije notitie over deze klant, afspraken, aandachtspunten..."
+        className="field-luxe min-h-[120px] text-xs"
+      />
+    </div>
+  );
 }
 
 function formatAddress(
