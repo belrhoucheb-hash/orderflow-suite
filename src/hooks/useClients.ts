@@ -140,6 +140,25 @@ export function useClients(search?: string) {
   });
 }
 
+export function useClient(clientId: string | null | undefined) {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["client", clientId, tenant?.id],
+    enabled: !!clientId && !!tenant?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .eq("id", clientId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data as Client | null;
+    },
+  });
+}
+
 export function useClientLocations(clientId: string | null) {
   return useQuery({
     queryKey: ["client_locations", clientId],

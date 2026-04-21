@@ -1,7 +1,25 @@
-import { useState, useRef, useEffect } from "react";
-import { Search, Plus, Building2, X, ArrowLeft, Pencil } from "lucide-react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Search,
+  Plus,
+  Building2,
+  X,
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  Maximize2,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useClients, type Client } from "@/hooks/useClients";
 import { ClientDetailPanel } from "@/components/clients/ClientDetailPanel";
 import { NewClientDialog } from "@/components/clients/NewClientDialog";
@@ -9,8 +27,20 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { PageHeader } from "@/components/ui/PageHeader";
 
+type SortKey = "name" | "contact_person" | "email" | "active_order_count";
+type SortDir = "asc" | "desc";
+
+const PAGE_SIZE = 50;
+
 export default function Clients() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"alle" | "actief" | "inactief">("alle");
+  const [countryFilter, setCountryFilter] = useState<string>("alle");
+  const [openOrdersFilter, setOpenOrdersFilter] = useState<"alle" | "met" | "zonder">("alle");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [page, setPage] = useState(0);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -26,7 +56,72 @@ export default function Clients() {
     return () => document.removeEventListener("keydown", handleKey);
   }, [selectedClient]);
 
-  const count = clients?.length ?? 0;
+  // Reset pagina als filters of sort wijzigen, zodat dispatchers niet op een
+  // lege pagina 3 blijven staan wanneer de dataset krimpt.
+  useEffect(() => {
+    setPage(0);
+  }, [search, statusFilter, countryFilter, openOrdersFilter, sortKey, sortDir]);
+
+  const countries = useMemo(() => {
+    const set = new Set<string>();
+    clients?.forEach((c) => {
+      if (c.country) set.add(c.country);
+    });
+    return Array.from(set).sort();
+  }, [clients]);
+
+  const filteredSorted = useMemo(() => {
+    if (!clients) return [] as Client[];
+    const filtered = clients.filter((c) => {
+      if (statusFilter === "actief" && !c.is_active) return false;
+      if (statusFilter === "inactief" && c.is_active) return false;
+      if (countryFilter !== "alle" && c.country !== countryFilter) return false;
+      const orders = c.active_order_count ?? 0;
+      if (openOrdersFilter === "met" && orders <= 0) return false;
+      if (openOrdersFilter === "zonder" && orders > 0) return false;
+      return true;
+    });
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortKey === "active_order_count") {
+        return ((a.active_order_count ?? 0) - (b.active_order_count ?? 0)) * dir;
+      }
+      const av = (a[sortKey] ?? "").toString().toLowerCase();
+      const bv = (b[sortKey] ?? "").toString().toLowerCase();
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+    return sorted;
+  }, [clients, statusFilter, countryFilter, openOrdersFilter, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSorted.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages - 1);
+  const pageRows = filteredSorted.slice(
+    currentPage * PAGE_SIZE,
+    currentPage * PAGE_SIZE + PAGE_SIZE,
+  );
+
+  const count = filteredSorted.length;
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return null;
+    return sortDir === "asc" ? (
+      <ArrowUp className="h-3 w-3 inline-block ml-1 text-[hsl(var(--gold-deep))]" strokeWidth={2} />
+    ) : (
+      <ArrowDown className="h-3 w-3 inline-block ml-1 text-[hsl(var(--gold-deep))]" strokeWidth={2} />
+    );
+  }
 
   return (
     <div className="flex h-full">
@@ -47,14 +142,62 @@ export default function Clients() {
             }
           />
 
-          <div className="card--luxe p-4 flex items-center gap-3">
-            <Search className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
-            <Input
-              placeholder="Zoek op naam of email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="field-luxe flex-1 max-w-md"
-            />
+          <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 flex-1 min-w-[220px] max-w-md">
+              <Search className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
+              <Input
+                placeholder="Zoek op naam of email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="field-luxe flex-1"
+              />
+            </div>
+
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+              <SelectTrigger
+                aria-label="Status"
+                className="h-9 w-[140px] text-sm"
+                style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+              >
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="alle">Alle statussen</SelectItem>
+                <SelectItem value="actief">Actief</SelectItem>
+                <SelectItem value="inactief">Inactief</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={countryFilter} onValueChange={setCountryFilter}>
+              <SelectTrigger
+                aria-label="Land"
+                className="h-9 w-[140px] text-sm"
+                style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+              >
+                <SelectValue placeholder="Land" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="alle">Alle landen</SelectItem>
+                {countries.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={openOrdersFilter} onValueChange={(v) => setOpenOrdersFilter(v as typeof openOrdersFilter)}>
+              <SelectTrigger
+                aria-label="Open orders"
+                className="h-9 w-[180px] text-sm"
+                style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+              >
+                <SelectValue placeholder="Open orders" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="alle">Alle open orders</SelectItem>
+                <SelectItem value="met">Met open orders</SelectItem>
+                <SelectItem value="zonder">Zonder open orders</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="card--luxe overflow-hidden">
@@ -65,11 +208,31 @@ export default function Clients() {
                     className="border-b border-[hsl(var(--gold)/0.2)] [&>th]:!font-display [&>th]:!text-[12px] [&>th]:!uppercase [&>th]:!tracking-[0.16em] [&>th]:!text-[hsl(var(--gold-deep))] [&>th]:!font-semibold [&>th]:!py-3.5 [&>th]:!px-5"
                     style={{ background: "linear-gradient(180deg, hsl(var(--gold-soft)/0.4), hsl(var(--gold-soft)/0.15))" }}
                   >
-                    <th className="text-left">Klantnaam</th>
-                    <th className="text-left">Contactpersoon</th>
-                    <th className="text-left">Email</th>
+                    <th
+                      className="text-left cursor-pointer select-none hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("name")}
+                    >
+                      Klantnaam<SortIcon col="name" />
+                    </th>
+                    <th
+                      className="text-left cursor-pointer select-none hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("contact_person")}
+                    >
+                      Contactpersoon<SortIcon col="contact_person" />
+                    </th>
+                    <th
+                      className="text-left cursor-pointer select-none hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("email")}
+                    >
+                      Email<SortIcon col="email" />
+                    </th>
                     <th className="text-left">Telefoon</th>
-                    <th className="text-center">Actieve orders</th>
+                    <th
+                      className="text-center cursor-pointer select-none hover:text-foreground transition-colors"
+                      onClick={() => toggleSort("active_order_count")}
+                    >
+                      Actieve orders<SortIcon col="active_order_count" />
+                    </th>
                     <th className="text-center">Status</th>
                   </tr>
                 </thead>
@@ -80,10 +243,10 @@ export default function Clients() {
                     <tr><td colSpan={6}>
                       <QueryError message="Kan klantgegevens niet laden." onRetry={() => refetch()} />
                     </td></tr>
-                  ) : clients?.length === 0 ? (
+                  ) : pageRows.length === 0 ? (
                     <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Geen klanten gevonden</td></tr>
                   ) : (
-                    clients?.map((client) => {
+                    pageRows.map((client) => {
                       const isSelected = selectedClient?.id === client.id;
                       return (
                         <tr
@@ -105,8 +268,32 @@ export default function Clients() {
                             </div>
                           </td>
                           <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.contact_person || "—"}</td>
-                          <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.email || "—"}</td>
-                          <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.phone || "—"}</td>
+                          <td className="px-5 py-3.5 text-sm text-muted-foreground">
+                            {client.email ? (
+                              <a
+                                href={`mailto:${client.email}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-[hsl(var(--gold-deep))] hover:underline"
+                              >
+                                {client.email}
+                              </a>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-muted-foreground">
+                            {client.phone ? (
+                              <a
+                                href={`tel:${client.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-[hsl(var(--gold-deep))] hover:underline"
+                              >
+                                {client.phone}
+                              </a>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
                           <td className="px-5 py-3.5 text-center">
                             <span className="text-sm font-medium tabular-nums text-foreground">{client.active_order_count}</span>
                           </td>
@@ -123,6 +310,39 @@ export default function Clients() {
                 </tbody>
               </table>
             </div>
+
+            {!isLoading && !isError && filteredSorted.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-5 py-3 border-t border-[hsl(var(--gold)/0.15)] text-xs text-muted-foreground">
+                <span className="tabular-nums">
+                  {currentPage * PAGE_SIZE + 1}
+                  {" tot "}
+                  {Math.min((currentPage + 1) * PAGE_SIZE, filteredSorted.length)}
+                  {" van "}
+                  {filteredSorted.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={currentPage === 0}
+                  >
+                    Vorige
+                  </Button>
+                  <span className="tabular-nums">
+                    {currentPage + 1} / {totalPages}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={currentPage >= totalPages - 1}
+                  >
+                    Volgende
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -157,6 +377,22 @@ export default function Clients() {
               </h2>
             </div>
             <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(`/orders/nieuw?client_id=${selectedClient.id}`)}
+                title="Nieuwe order voor deze klant"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(`/klanten/${selectedClient.id}`)}
+                title="Open volledig detail"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
