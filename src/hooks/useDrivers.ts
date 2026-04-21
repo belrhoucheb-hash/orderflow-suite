@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+export type EmploymentType = "vast" | "flex" | "ingehuurd";
+
 export interface Driver {
   id: string;
   tenant_id: string;
@@ -12,6 +14,8 @@ export interface Driver {
   status: string;
   current_vehicle_id: string | null;
   is_active: boolean;
+  contract_hours_per_week: number | null;
+  employment_type: EmploymentType;
   created_at: string;
   updated_at: string;
 }

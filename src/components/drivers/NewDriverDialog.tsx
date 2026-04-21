@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useDrivers, type Driver } from "@/hooks/useDrivers";
+import { useDrivers, type Driver, type EmploymentType } from "@/hooks/useDrivers";
 import { useFleetVehicles } from "@/hooks/useFleet";
 
 interface NewDriverDialogProps {
@@ -38,6 +38,8 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   const [status, setStatus] = useState("beschikbaar");
   const [vehicleId, setVehicleId] = useState<string>("none");
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
+  const [contractHours, setContractHours] = useState<string>("");
+  const [employmentType, setEmploymentType] = useState<EmploymentType>("vast");
 
   useEffect(() => {
     if (driver && open) {
@@ -48,6 +50,8 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       setStatus(driver.status);
       setVehicleId(driver.current_vehicle_id || "none");
       setSelectedCerts(driver.certifications || []);
+      setContractHours(driver.contract_hours_per_week?.toString() ?? "");
+      setEmploymentType(driver.employment_type ?? "vast");
     } else if (open) {
       // Reset
       setName("");
@@ -57,6 +61,8 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       setStatus("beschikbaar");
       setVehicleId("none");
       setSelectedCerts([]);
+      setContractHours("");
+      setEmploymentType("vast");
     }
   }, [driver, open]);
 
@@ -64,6 +70,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
     e.preventDefault();
     if (!name) return;
 
+    const parsedHours = contractHours.trim() === "" ? null : Number(contractHours);
     const driverData = {
       name,
       email: email || null,
@@ -72,6 +79,8 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       status,
       current_vehicle_id: vehicleId === "none" ? null : vehicleId,
       certifications: selectedCerts,
+      contract_hours_per_week: parsedHours !== null && !Number.isNaN(parsedHours) ? parsedHours : null,
+      employment_type: employmentType,
     };
 
     if (driver) {
@@ -167,6 +176,36 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                       {v.name} ({v.plate})
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="contract-hours">Contracturen per week</Label>
+              <Input
+                id="contract-hours"
+                type="number"
+                min={0}
+                max={80}
+                value={contractHours}
+                onChange={(e) => setContractHours(e.target.value)}
+                placeholder="Bijv. 40"
+                className="rounded-xl border-border/50"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Leeg laten betekent geen contracturen-bewaking door auto-plan.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="employment-type">Dienstverband</Label>
+              <Select value={employmentType} onValueChange={(v) => setEmploymentType(v as EmploymentType)}>
+                <SelectTrigger className="rounded-xl border-border/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/50">
+                  <SelectItem value="vast">Vast</SelectItem>
+                  <SelectItem value="flex">Flex</SelectItem>
+                  <SelectItem value="ingehuurd">Ingehuurd</SelectItem>
                 </SelectContent>
               </Select>
             </div>
