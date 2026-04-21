@@ -15,6 +15,7 @@ import { PlanningDriverLane } from "@/components/planning/v2/PlanningDriverLane"
 import { UnplacedOrdersLane, type UnplacedOrderHint } from "@/components/planning/v2/UnplacedOrdersLane";
 import { AutoPlanButton } from "@/components/planning/v2/AutoPlanButton";
 import { ClusterDetailPanel } from "@/components/planning/v2/ClusterDetailPanel";
+import { DocksheetExportButton } from "@/components/planning/v2/DocksheetExportButton";
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import type { ConsolidationGroup } from "@/types/consolidation";
 
@@ -188,6 +189,7 @@ function PlanningV2() {
           Dagsetup
         </button>
         <AutoPlanButton date={selectedDate} onUnplacedChange={setUnplacedHints} />
+        <DocksheetExportButton date={selectedDate} />
         <div className="ml-auto flex items-center gap-3 text-sm">
           <span className="chiplet">{groups.length} clusters</span>
           <span className="chiplet chiplet--warn">{openOrders.length} open orders</span>
