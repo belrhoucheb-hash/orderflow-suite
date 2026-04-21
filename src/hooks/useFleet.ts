@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface Vehicle {
   id: string;
@@ -156,6 +157,7 @@ export function useVehicleMaintenance(vehicleId: string | undefined) {
 
 export function useCreateMaintenance() {
   const qc = useQueryClient();
+  const { tenant } = useTenant();
   return useMutation({
     mutationFn: async (data: {
       vehicle_id: string;
@@ -164,7 +166,8 @@ export function useCreateMaintenance() {
       cost?: number;
       description?: string;
     }) => {
-      const { error } = await supabase.from("vehicle_maintenance").insert(data);
+      if (!tenant?.id) throw new Error("Geen actieve tenant, log opnieuw in");
+      const { error } = await supabase.from("vehicle_maintenance").insert({ ...data, tenant_id: tenant.id });
       if (error) throw error;
     },
     onSuccess: (_d, vars) => {
@@ -212,6 +215,7 @@ export function useUpcomingMaintenance() {
 
 export function useCreateDocument() {
   const qc = useQueryClient();
+  const { tenant } = useTenant();
   return useMutation({
     mutationFn: async (data: {
       vehicle_id: string;
@@ -219,7 +223,8 @@ export function useCreateDocument() {
       expiry_date?: string;
       notes?: string;
     }) => {
-      const { error } = await supabase.from("vehicle_documents").insert(data);
+      if (!tenant?.id) throw new Error("Geen actieve tenant, log opnieuw in");
+      const { error } = await supabase.from("vehicle_documents").insert({ ...data, tenant_id: tenant.id });
       if (error) throw error;
     },
     onSuccess: (_d, vars) => {
@@ -249,6 +254,7 @@ export function useVehicleAvailability(vehicleId: string | undefined, startDate?
 
 export function useAddVehicle() {
   const qc = useQueryClient();
+  const { tenant } = useTenant();
   return useMutation({
     mutationFn: async (vehicle: {
       code: string; name: string; plate: string; type: string;
@@ -257,7 +263,8 @@ export function useAddVehicle() {
       cargo_length_cm?: number; cargo_width_cm?: number; cargo_height_cm?: number;
       features?: string[]; status?: string; assigned_driver?: string;
     }) => {
-      const { error } = await supabase.from("vehicles").insert(vehicle);
+      if (!tenant?.id) throw new Error("Geen actieve tenant, log opnieuw in");
+      const { error } = await supabase.from("vehicles").insert({ ...vehicle, tenant_id: tenant.id });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["fleet-vehicles"] }),
