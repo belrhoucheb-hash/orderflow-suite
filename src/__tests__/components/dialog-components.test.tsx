@@ -156,7 +156,7 @@ describe("NewDriverDialog", () => {
   it("renders create mode when no driver prop", async () => {
     const { NewDriverDialog } = await import("@/components/drivers/NewDriverDialog");
     render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Nieuwe Chauffeur")).toBeInTheDocument();
+    expect(screen.getByText("Nieuwe chauffeur")).toBeInTheDocument();
     expect(screen.getByText("Toevoegen")).toBeInTheDocument();
   });
 
@@ -197,7 +197,7 @@ describe("NewVehicleDialog", () => {
   it("renders dialog title", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Nieuw Voertuig")).toBeInTheDocument();
+    expect(screen.getByText("Nieuw voertuig")).toBeInTheDocument();
   });
 
   it("shows required form fields", async () => {
