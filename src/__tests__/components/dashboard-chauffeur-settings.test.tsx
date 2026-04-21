@@ -484,7 +484,7 @@ describe("MasterDataSection", () => {
     expect(loadingElements.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("opens loading units add form when first Toevoegen is clicked", async () => {
+  it("opens loading units dialog when first Toevoegen is clicked", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
@@ -492,11 +492,12 @@ describe("MasterDataSection", () => {
     });
     fireEvent.click(screen.getAllByText("Toevoegen")[0]);
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("Europallet...")).toBeInTheDocument();
+      expect(screen.getByText("Nieuwe ladingeenheid")).toBeInTheDocument();
     });
+    expect(screen.getByPlaceholderText("Europallet...")).toBeInTheDocument();
   });
 
-  it("opens requirement types add form when second Toevoegen is clicked", async () => {
+  it("opens requirement types dialog when second Toevoegen is clicked", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
@@ -504,11 +505,12 @@ describe("MasterDataSection", () => {
     });
     fireEvent.click(screen.getAllByText("Toevoegen")[1]);
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("ADR...")).toBeInTheDocument();
+      expect(screen.getByText("Nieuwe transportvereiste")).toBeInTheDocument();
     });
+    expect(screen.getByPlaceholderText("ADR...")).toBeInTheDocument();
   });
 
-  it("cancels add form with X button", async () => {
+  it("cancels loading units dialog with Annuleren button", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
@@ -518,14 +520,13 @@ describe("MasterDataSection", () => {
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Europallet...")).toBeInTheDocument();
     });
-    const xButtons = screen.getAllByRole("button").filter((b) =>
-      b.querySelector("svg") && b.className.includes("text-muted-foreground")
-    );
-    if (xButtons.length > 0) fireEvent.click(xButtons[xButtons.length - 1]);
-    expect(screen.queryByPlaceholderText("Europallet...")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Annuleren"));
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText("Europallet...")).not.toBeInTheDocument();
+    });
   });
 
-  it("fills in loading unit add form fields", async () => {
+  it("fills in loading unit dialog fields and enables Opslaan", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
@@ -544,9 +545,11 @@ describe("MasterDataSection", () => {
     fireEvent.change(weightInput, { target: { value: "200" } });
     fireEvent.change(dimInput, { target: { value: "80x67x175 cm" } });
     expect(nameInput).toHaveValue("Rolcontainer");
+    const saveButton = screen.getByRole("button", { name: /Opslaan/ });
+    expect(saveButton).not.toBeDisabled();
   });
 
-  it("fills in requirement type add form fields", async () => {
+  it("fills in requirement type dialog fields and enables Opslaan", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
     await waitFor(() => {
@@ -563,6 +566,8 @@ describe("MasterDataSection", () => {
     fireEvent.change(codeInput, { target: { value: "koeling" } });
     fireEvent.change(colorInput, { target: { value: "#0000ff" } });
     expect(nameInput).toHaveValue("Koeling");
+    const saveButton = screen.getByRole("button", { name: /Opslaan/ });
+    expect(saveButton).not.toBeDisabled();
   });
 
   it("renderLoading function produces loading UI", async () => {
