@@ -5,10 +5,12 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QueryError } from "@/components/QueryError";
 import { useDrivers, type Driver } from "@/hooks/useDrivers";
+import { useDriverCertifications } from "@/hooks/useDriverCertifications";
 import { NewDriverDialog } from "@/components/drivers/NewDriverDialog";
-import { toast } from "sonner";
+import { DriverCertificationsSection } from "@/components/drivers/DriverCertificationsSection";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,15 +25,26 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   ziek: { label: "Ziek", className: "bg-destructive/10 text-destructive border-destructive/20" },
 };
 
-const CERTIFICATION_OPTIONS = ["ADR", "Koeling", "Laadklep", "Internationaal", "Douane"];
-
 export default function Chauffeurs() {
   const { data: drivers = [], isLoading, isError, refetch, deleteDriver } = useDrivers();
+  const { data: certifications = [] } = useDriverCertifications();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [certFilter, setCertFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState("chauffeurs");
   const [showDialog, setShowDialog] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<Driver | undefined>(undefined);
+
+  const activeCertifications = useMemo(
+    () => certifications.filter((c) => c.is_active),
+    [certifications],
+  );
+
+  const certLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of certifications) map[c.code] = c.name;
+    return map;
+  }, [certifications]);
 
   const filtered = useMemo(() => {
     return drivers.filter((d) => {
@@ -77,17 +90,29 @@ export default function Chauffeurs() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight font-display">Chauffeurs</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {stats.totaal} chauffeurs — {stats.beschikbaar} beschikbaar
+            {stats.totaal} chauffeurs, {stats.beschikbaar} beschikbaar
           </p>
         </div>
-        <Button 
-          onClick={handleAdd}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 rounded-xl shadow-sm"
-        >
-          <Plus className="h-4 w-4" />
-          Chauffeur Toevoegen
-        </Button>
+        {activeTab === "chauffeurs" ? (
+          <Button
+            onClick={handleAdd}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 rounded-xl shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            Chauffeur Toevoegen
+          </Button>
+        ) : null}
       </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+        <div className="px-4 md:px-6">
+          <TabsList>
+            <TabsTrigger value="chauffeurs">Chauffeurs</TabsTrigger>
+            <TabsTrigger value="certificeringen">Certificeringen</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="chauffeurs" className="flex-1 flex flex-col min-h-0 mt-4">
 
       {/* KPI Section */}
       <div className="px-4 md:px-6 pb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -137,8 +162,8 @@ export default function Chauffeurs() {
           </SelectTrigger>
           <SelectContent className="rounded-xl border-border/50">
             <SelectItem value="all">Alle cert.</SelectItem>
-            {CERTIFICATION_OPTIONS.map((c) => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
+            {activeCertifications.map((c) => (
+              <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -229,7 +254,7 @@ export default function Chauffeurs() {
                         {d.certifications.length > 0 ? (
                           d.certifications.map((cert) => (
                             <Badge key={cert} variant="secondary" className="text-xs px-2 py-0 bg-primary/5 text-primary border-none font-medium">
-                              {cert}
+                              {certLabels[cert] ?? cert}
                             </Badge>
                           ))
                         ) : (
@@ -253,10 +278,17 @@ export default function Chauffeurs() {
         )}
       </div>
 
-      <NewDriverDialog 
-        open={showDialog} 
-        onOpenChange={setShowDialog} 
-        driver={selectedDriver} 
+        </TabsContent>
+
+        <TabsContent value="certificeringen" className="flex-1 overflow-auto mt-4 px-4 md:px-6 pb-8">
+          <DriverCertificationsSection />
+        </TabsContent>
+      </Tabs>
+
+      <NewDriverDialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        driver={selectedDriver}
       />
     </div>
   );

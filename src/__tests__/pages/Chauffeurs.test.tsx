@@ -9,13 +9,27 @@ const mockDeleteMutateAsync = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/hooks/useDrivers", () => ({
   useDrivers: () => ({
     data: [
-      { id: "d1", name: "Jan Jansen", email: "jan@test.nl", phone: "0612345678", status: "beschikbaar", license_number: "RB123456", certifications: ["ADR"], avatar_url: null },
-      { id: "d2", name: "Piet Pietersen", email: "piet@test.nl", phone: "0687654321", status: "onderweg", license_number: "RB789012", certifications: ["Koeling"], avatar_url: null },
+      { id: "d1", name: "Jan Jansen", email: "jan@test.nl", phone: "0612345678", status: "beschikbaar", license_number: "RB123456", certifications: ["adr"], avatar_url: null },
+      { id: "d2", name: "Piet Pietersen", email: "piet@test.nl", phone: "0687654321", status: "onderweg", license_number: "RB789012", certifications: ["koeling"], avatar_url: null },
       { id: "d3", name: "Klaas Kansen", email: "klaas@test.nl", phone: null, status: "ziek", license_number: null, certifications: [], avatar_url: null },
     ],
     isLoading: false, isError: false, refetch: vi.fn(),
     deleteDriver: { mutateAsync: mockDeleteMutateAsync },
   }),
+}));
+
+vi.mock("@/hooks/useDriverCertifications", () => ({
+  useDriverCertifications: () => ({
+    data: [
+      { id: "c1", tenant_id: "t1", code: "adr", name: "ADR", description: null, sort_order: 10, is_active: true, created_at: "", updated_at: "" },
+      { id: "c2", tenant_id: "t1", code: "koeling", name: "Koeling", description: null, sort_order: 20, is_active: true, created_at: "", updated_at: "" },
+    ],
+    isLoading: false,
+  }),
+}));
+
+vi.mock("@/components/drivers/DriverCertificationsSection", () => ({
+  DriverCertificationsSection: () => <div data-testid="cert-section">Certificeringen beheer</div>,
 }));
 
 vi.mock("@/components/drivers/NewDriverDialog", () => ({
@@ -45,7 +59,7 @@ describe("Chauffeurs", () => {
 
   it("renders without crashing", () => {
     renderChauffeurs();
-    expect(screen.getByText("Chauffeurs")).toBeInTheDocument();
+    expect(screen.getAllByText("Chauffeurs").length).toBeGreaterThan(0);
   });
 
   it("shows driver stats (stats useMemo)", () => {
