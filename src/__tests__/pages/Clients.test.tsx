@@ -105,19 +105,31 @@ describe("Clients", () => {
     });
   });
 
-  it("closes detail panel when clicking outside (handleClick mousedown)", async () => {
+  it("closes detail panel with Escape", async () => {
     const user = userEvent.setup();
     renderClients();
     await user.click(screen.getByText("Acme BV"));
     await waitFor(() => {
       expect(screen.getByTestId("client-detail")).toBeInTheDocument();
     });
-    // Click outside the panel
-    await user.click(screen.getByText("Klanten"));
+    await user.keyboard("{Escape}");
     await waitFor(() => {
-      // The detail panel should close
       expect(screen.queryByTestId("client-detail")).not.toBeInTheDocument();
     });
+  });
+
+  it("has filter selects for status, land en open orders", () => {
+    renderClients();
+    expect(screen.getByLabelText("Status")).toBeInTheDocument();
+    expect(screen.getByLabelText("Land")).toBeInTheDocument();
+    expect(screen.getByLabelText("Open orders")).toBeInTheDocument();
+  });
+
+  it("has sortable column headers", () => {
+    renderClients();
+    const header = screen.getByText("Klantnaam");
+    expect(header).toBeInTheDocument();
+    expect(header.closest("th")).toHaveClass("cursor-pointer");
   });
 
   it("selects different client", async () => {
