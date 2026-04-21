@@ -52,6 +52,8 @@ export interface Client {
   shipping_lat: number | null;
   shipping_lng: number | null;
   shipping_coords_manual: boolean;
+
+  notes: string | null;
 }
 
 export interface ClientLocation {
