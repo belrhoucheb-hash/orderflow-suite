@@ -1,21 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, Edit2, Truck, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit2, Truck } from "lucide-react";
 import {
   VehicleTypeDialog,
   type VehicleTypeFormValues,
 } from "@/components/settings/VehicleTypeDialog";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { QueryError } from "@/components/QueryError";
 import { toast } from "sonner";
 
 interface VehicleTypeRow {
@@ -41,7 +35,7 @@ export function VehicleTypesSection() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogInitial, setDialogInitial] = useState<Partial<VehicleTypeFormValues> | null>(null);
 
-  const { data: vehicleTypes = [], isLoading } = useQuery<VehicleTypeRow[]>({
+  const { data: vehicleTypes = [], isLoading, isError, refetch } = useQuery<VehicleTypeRow[]>({
     queryKey: ["settings-vehicle-types"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -121,98 +115,139 @@ export function VehicleTypesSection() {
         submitting={upsertVehicleType.isPending}
       />
 
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Truck className="h-4.5 w-4.5 text-primary" strokeWidth={1.5} />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold">Voertuigtypes</h3>
-            <p className="text-xs text-muted-foreground">
-              Categorieën met afmetingen en eigenschappen, gebruikt door planning en tariefmotor.
-            </p>
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] flex items-center gap-2">
+            <Truck className="h-4 w-4" strokeWidth={1.75} />
+            Voertuigtypes
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Categorieën met afmetingen en eigenschappen, gebruikt door planning en tariefmotor.
+          </p>
         </div>
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 rounded-lg"
+        <button
+          type="button"
           onClick={() => { setDialogInitial(null); setDialogOpen(true); }}
+          className="btn-luxe btn-luxe--primary !h-9"
         >
-          <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />Toevoegen
-        </Button>
+          <Plus className="h-4 w-4" />
+          Nieuw type
+        </button>
       </div>
 
-      <Card className="rounded-2xl border-border/40 overflow-hidden shadow-sm">
-        {isLoading ? (
-          <div className="flex items-center justify-center p-12 text-muted-foreground gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-            Laden...
+      {isLoading ? (
+        <LoadingState message="Voertuigtypes laden..." />
+      ) : isError ? (
+        <QueryError message="Kan voertuigtypes niet laden." onRetry={() => refetch()} />
+      ) : vehicleTypes.length === 0 ? (
+        <EmptyState
+          icon={Truck}
+          title="Nog geen voertuigtypes"
+          description="Voeg een type toe om voertuigen te groeperen en tarieven te koppelen."
+        />
+      ) : (
+        <div className="card--luxe overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full data-table">
+              <thead>
+                <tr
+                  className="border-b border-[hsl(var(--gold)/0.2)] [&>th]:!font-display [&>th]:!text-[12px] [&>th]:!uppercase [&>th]:!tracking-[0.16em] [&>th]:!text-[hsl(var(--gold-deep))] [&>th]:!font-semibold [&>th]:!py-3.5 [&>th]:!px-5"
+                  style={{ background: "linear-gradient(180deg, hsl(var(--gold-soft)/0.4), hsl(var(--gold-soft)/0.15))" }}
+                >
+                  <th className="text-left">Naam</th>
+                  <th className="text-left">Code</th>
+                  <th className="text-left">Afmetingen LxBxH</th>
+                  <th className="text-left">Gewicht</th>
+                  <th className="text-center">Pallets</th>
+                  <th className="text-left">Opties</th>
+                  <th className="text-right w-[120px]"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {vehicleTypes.map((vt) => {
+                  const dims = [vt.max_length_cm, vt.max_width_cm, vt.max_height_cm]
+                    .map((n) => (n == null ? "?" : String(n)))
+                    .join("x");
+                  const opties: { label: string; key: string }[] = [];
+                  if (vt.has_tailgate) opties.push({ label: "Klep", key: "klep" });
+                  if (vt.has_cooling) opties.push({ label: "Koeling", key: "koeling" });
+                  if (vt.adr_capable) opties.push({ label: "ADR", key: "adr" });
+                  return (
+                    <tr
+                      key={vt.id}
+                      className="group border-b border-[hsl(var(--gold)/0.08)] last:border-b-0 transition-colors hover:bg-[hsl(var(--gold-soft)/0.3)]"
+                    >
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-8 w-8 rounded-lg flex items-center justify-center border border-[hsl(var(--gold)/0.3)]"
+                            style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.3))" }}
+                          >
+                            <Truck className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+                          </div>
+                          <span className="text-sm font-medium text-foreground">{vt.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <code className="text-xs font-mono bg-[hsl(var(--gold-soft)/0.4)] border border-[hsl(var(--gold)/0.2)] px-1.5 py-0.5 rounded text-[hsl(var(--gold-deep))]">
+                          {vt.code}
+                        </code>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm tabular-nums text-muted-foreground">
+                        {dims !== "?x?x?" ? `${dims} cm` : "—"}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm tabular-nums text-muted-foreground">
+                        {vt.max_weight_kg != null ? `${vt.max_weight_kg.toLocaleString()} kg` : "—"}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm tabular-nums text-center text-foreground">
+                        {vt.max_pallets ?? "—"}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {opties.length > 0 ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {opties.map((opt) => (
+                              <span
+                                key={opt.key}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.3)] text-[hsl(var(--gold-deep))] text-[11px]"
+                              >
+                                {opt.label}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.5)]"
+                            onClick={() => { setDialogInitial(vt as Partial<VehicleTypeFormValues>); setDialogOpen(true); }}
+                            aria-label="Bewerken"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => deleteMutation.mutate(vt.id)}
+                            aria-label="Verwijderen"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          <Table>
-            <TableHeader className="bg-muted/30">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[160px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">Code</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">Afmetingen LxBxH</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">Gewicht</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">Pallets</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">Opties</TableHead>
-                <TableHead className="w-[110px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {vehicleTypes.map((vt) => {
-                const dims = [vt.max_length_cm, vt.max_width_cm, vt.max_height_cm]
-                  .map((n) => (n == null ? "?" : String(n)))
-                  .join("x");
-                const opties: string[] = [];
-                if (vt.has_tailgate) opties.push("klep");
-                if (vt.has_cooling) opties.push("koeling");
-                if (vt.adr_capable) opties.push("ADR");
-                return (
-                  <TableRow key={vt.id} className="group transition-colors">
-                    <TableCell className="font-medium text-xs">{vt.name}</TableCell>
-                    <TableCell>
-                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{vt.code}</code>
-                    </TableCell>
-                    <TableCell className="text-xs tabular-nums text-muted-foreground">
-                      {dims !== "?x?x?" ? `${dims} cm` : "—"}
-                    </TableCell>
-                    <TableCell className="text-xs tabular-nums text-muted-foreground">
-                      {vt.max_weight_kg != null ? `${vt.max_weight_kg.toLocaleString()} kg` : "—"}
-                    </TableCell>
-                    <TableCell className="text-xs tabular-nums text-muted-foreground">{vt.max_pallets ?? "—"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {opties.length > 0 ? opties.join(", ") : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          onClick={() => { setDialogInitial(vt as Partial<VehicleTypeFormValues>); setDialogOpen(true); }}
-                        >
-                          <Edit2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => deleteMutation.mutate(vt.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-        )}
-      </Card>
+        </div>
+      )}
     </section>
   );
 }
