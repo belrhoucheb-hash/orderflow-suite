@@ -161,11 +161,6 @@ export default function VehicleDetail() {
                 <CardContent className="space-y-3">
                   <Row label="Max gewicht" value={`${vehicle.capacityKg.toLocaleString()} kg`} />
                   <Row label="Palletplaatsen" value={vehicle.capacityPallets.toString()} />
-                  <Row label="Laadruimte (LxBxH)" value={
-                    vehicle.cargoLengthCm && vehicle.cargoWidthCm && vehicle.cargoHeightCm
-                      ? `${vehicle.cargoLengthCm} × ${vehicle.cargoWidthCm} × ${vehicle.cargoHeightCm} cm`
-                      : "—"
-                  } />
                   <div className="flex items-center justify-between py-1.5">
                     <span className="text-sm text-muted-foreground">Uitrusting</span>
                     <div className="flex gap-1.5">

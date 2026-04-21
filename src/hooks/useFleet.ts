@@ -12,9 +12,6 @@ export interface Vehicle {
   buildYear: number | null;
   capacityKg: number;
   capacityPallets: number;
-  cargoLengthCm: number | null;
-  cargoWidthCm: number | null;
-  cargoHeightCm: number | null;
   features: string[];
   status: string;
   assignedDriver: string | null;
@@ -72,9 +69,6 @@ export function useFleetVehicles() {
         buildYear: v.build_year,
         capacityKg: v.capacity_kg,
         capacityPallets: v.capacity_pallets,
-        cargoLengthCm: v.cargo_length_cm,
-        cargoWidthCm: v.cargo_width_cm,
-        cargoHeightCm: v.cargo_height_cm,
         features: v.features ?? [],
         status: v.status ?? "beschikbaar",
         assignedDriver: v.assigned_driver,
@@ -108,9 +102,6 @@ export function useVehicleById(id: string | undefined) {
         buildYear: v.build_year,
         capacityKg: v.capacity_kg,
         capacityPallets: v.capacity_pallets,
-        cargoLengthCm: v.cargo_length_cm,
-        cargoWidthCm: v.cargo_width_cm,
-        cargoHeightCm: v.cargo_height_cm,
         features: v.features ?? [],
         status: v.status ?? "beschikbaar",
         assignedDriver: v.assigned_driver,
@@ -258,7 +249,6 @@ export function useAddVehicle() {
       code: string; name: string; plate: string; type: string;
       brand?: string; build_year?: number;
       capacity_kg?: number; capacity_pallets?: number;
-      cargo_length_cm?: number; cargo_width_cm?: number; cargo_height_cm?: number;
       features?: string[]; status?: string; assigned_driver?: string;
     }) => {
       const { error } = await vehiclesInsert.insert({ ...vehicle });
