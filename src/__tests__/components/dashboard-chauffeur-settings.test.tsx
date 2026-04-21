@@ -95,7 +95,7 @@ describe("FinancialKPIWidget", () => {
   it("renders heading", async () => {
     const { FinancialKPIWidget } = await import("@/components/dashboard/FinancialKPIWidget");
     render(<FinancialKPIWidget orders={mockOrders as any} vehicles={mockVehicles as any} />);
-    expect(screen.getByText("Financieel Rendement")).toBeInTheDocument();
+    expect(screen.getByText("Financieel")).toBeInTheDocument();
   });
 
   it("shows estimated revenue", async () => {
@@ -140,7 +140,7 @@ describe("OperationalForecastWidget", () => {
   it("renders heading", async () => {
     const { OperationalForecastWidget } = await import("@/components/dashboard/OperationalForecastWidget");
     render(<OperationalForecastWidget vehicles={mockVehicles as any} orders={mockOrders as any} />);
-    expect(screen.getByText("Operationele Forecast")).toBeInTheDocument();
+    expect(screen.getByText("Operationeel")).toBeInTheDocument();
   });
 
   it("shows capacity stats", async () => {
