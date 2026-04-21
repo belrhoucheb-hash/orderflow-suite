@@ -1886,9 +1886,6 @@ export type Database = {
           build_year: number | null
           capacity_kg: number
           capacity_pallets: number
-          cargo_height_cm: number | null
-          cargo_length_cm: number | null
-          cargo_width_cm: number | null
           code: string
           created_at: string
           features: string[]
@@ -1908,9 +1905,6 @@ export type Database = {
           build_year?: number | null
           capacity_kg?: number
           capacity_pallets?: number
-          cargo_height_cm?: number | null
-          cargo_length_cm?: number | null
-          cargo_width_cm?: number | null
           code: string
           created_at?: string
           features?: string[]
@@ -1930,9 +1924,6 @@ export type Database = {
           build_year?: number | null
           capacity_kg?: number
           capacity_pallets?: number
-          cargo_height_cm?: number | null
-          cargo_length_cm?: number | null
-          cargo_width_cm?: number | null
           code?: string
           created_at?: string
           features?: string[]

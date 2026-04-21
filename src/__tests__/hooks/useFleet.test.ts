@@ -66,7 +66,6 @@ describe("useFleetVehicles", () => {
       id: "uuid1", code: "V01", name: "Sprinter", plate: "AB-12-CD",
       type: "bestelbus", brand: "Mercedes", build_year: 2020,
       capacity_kg: 3000, capacity_pallets: 6,
-      cargo_length_cm: 400, cargo_width_cm: 200, cargo_height_cm: 200,
       features: ["koeling"], status: "beschikbaar",
       assigned_driver: "driver1", fuel_consumption: 12.5, is_active: true,
     }];
@@ -82,7 +81,6 @@ describe("useFleetVehicles", () => {
     expect(v.id).toBe("uuid1");
     expect(v.capacityKg).toBe(3000);
     expect(v.buildYear).toBe(2020);
-    expect(v.cargoLengthCm).toBe(400);
     expect(v.features).toEqual(["koeling"]);
     expect(v.isActive).toBe(true);
   });

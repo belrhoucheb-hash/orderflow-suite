@@ -11,8 +11,7 @@ const { mockUseVehicleById, mockCompleteMaintenance } = vi.hoisted(() => ({
       id: "v1", name: "Sprinter 1", plate: "AB-123-CD", type: "busje",
       status: "beschikbaar", capacityKg: 1500, capacityPallets: 6,
       features: ["Laadklep"], code: "V01", year: 2022, mileageKm: 45000,
-      assignedDriver: null, cargoLengthCm: 400, cargoWidthCm: 200,
-      cargoHeightCm: 200, is_active: true, brand: "Mercedes", buildYear: 2022,
+      assignedDriver: null, is_active: true, brand: "Mercedes", buildYear: 2022,
       fuelConsumption: 8.5,
     },
     isLoading: false,
@@ -323,12 +322,6 @@ describe("VehicleDetail", () => {
     expect(screen.getByText("2022")).toBeInTheDocument();
   });
 
-  // ── Shows cargo dimensions ──
-  it("shows cargo dimensions", () => {
-    renderVehicleDetail();
-    expect(screen.getByText(/400 .* 200 .* 200 cm/)).toBeInTheDocument();
-  });
-
   // ── Shows pallet capacity ──
   it("shows pallet capacity", () => {
     renderVehicleDetail();
@@ -348,8 +341,7 @@ describe("VehicleDetail", () => {
         id: "v1", name: "Truck A", plate: "XY-789-ZZ", type: "vrachtwagen",
         status: "onderhoud", capacityKg: 5000, capacityPallets: 12,
         features: [], code: "T01", brand: null, buildYear: null,
-        assignedDriver: "Jan Jansen", cargoLengthCm: null, cargoWidthCm: null,
-        cargoHeightCm: null, fuelConsumption: null,
+        assignedDriver: "Jan Jansen", fuelConsumption: null,
       },
       isLoading: false,
     });
@@ -366,8 +358,7 @@ describe("VehicleDetail", () => {
         id: "v1", name: "Truck B", plate: "ZZ-000-AA", type: "bus",
         status: "beschikbaar", capacityKg: 3000, capacityPallets: 8,
         features: [], code: "T02", brand: null, buildYear: null,
-        assignedDriver: null, cargoLengthCm: null, cargoWidthCm: null,
-        cargoHeightCm: null, fuelConsumption: null,
+        assignedDriver: null, fuelConsumption: null,
       },
       isLoading: false,
     });
