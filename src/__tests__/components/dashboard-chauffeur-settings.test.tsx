@@ -38,6 +38,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/contexts/TenantContext", () => ({
   useTenant: () => ({ tenant: { id: "t1", name: "Test" }, loading: false }),
+  useTenantOptional: () => ({ tenant: { id: "t1" } }),
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
