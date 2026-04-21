@@ -264,6 +264,107 @@ export function useUpdateVehicle() {
   });
 }
 
+export interface VehicleDriverWarning {
+  warning?: string;
+  tripDriver?: string;
+}
+
+/**
+ * Signaleert per voertuig of de toegewezen chauffeur (vehicles.assigned_driver)
+ * niet matcht met de chauffeur van een actieve trip, of dat dezelfde chauffeur
+ * op meerdere voertuigen tegelijk staat. Leest de vehicles-lijst uit de cache
+ * en doet een enkele trips-query (geen n+1).
+ */
+export function useVehicleDriverConsistency() {
+  const { data: vehicles } = useFleetVehicles();
+  return useQuery({
+    queryKey: ["vehicle-driver-consistency", vehicles?.map((v) => v.id).sort().join(",")],
+    enabled: !!vehicles && vehicles.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const result: Record<string, VehicleDriverWarning> = {};
+      if (!vehicles || vehicles.length === 0) return result;
+
+      const vehicleIds = vehicles.map((v) => v.id);
+
+      const { data: trips, error: tripsError } = await supabase
+        .from("trips")
+        .select("vehicle_id, driver_id")
+        .in("dispatch_status", ["ACTIEF", "VERZONDEN", "ONTVANGEN", "GEACCEPTEERD"])
+        .in("vehicle_id", vehicleIds);
+      if (tripsError) throw tripsError;
+
+      const driverIds = new Set<string>();
+      for (const t of trips ?? []) {
+        if (t.driver_id) driverIds.add(t.driver_id);
+      }
+
+      const driverNames: Record<string, string> = {};
+      if (driverIds.size > 0) {
+        const { data: drivers, error: driversError } = await supabase
+          .from("drivers" as any)
+          .select("id, name")
+          .in("id", [...driverIds]);
+        if (driversError) throw driversError;
+        for (const d of (drivers as any[]) ?? []) {
+          driverNames[d.id] = d.name;
+        }
+      }
+
+      // Actieve trip per voertuig (eerste match volstaat, zelden meer dan één)
+      const tripDriverByVehicle: Record<string, string | null> = {};
+      for (const t of trips ?? []) {
+        if (!t.vehicle_id) continue;
+        if (!(t.vehicle_id in tripDriverByVehicle)) {
+          tripDriverByVehicle[t.vehicle_id] = t.driver_id ?? null;
+        }
+      }
+
+      // Voertuigen gegroepeerd op assigned_driver om dubbele toewijzing te vinden
+      const vehiclesByDriver: Record<string, string[]> = {};
+      for (const v of vehicles) {
+        if (!v.assignedDriver) continue;
+        const key = v.assignedDriver.trim().toLowerCase();
+        if (!vehiclesByDriver[key]) vehiclesByDriver[key] = [];
+        vehiclesByDriver[key].push(v.name);
+      }
+
+      for (const v of vehicles) {
+        const entry: VehicleDriverWarning = {};
+
+        const tripDriverId = tripDriverByVehicle[v.id];
+        if (tripDriverId) {
+          const tripDriverName = driverNames[tripDriverId] || null;
+          if (tripDriverName) entry.tripDriver = tripDriverName;
+          if (v.assignedDriver && tripDriverName) {
+            const a = v.assignedDriver.trim().toLowerCase();
+            const b = tripDriverName.trim().toLowerCase();
+            if (a !== b) {
+              entry.warning = `Voertuig staat op chauffeur ${v.assignedDriver} maar actieve trip is toegewezen aan ${tripDriverName}`;
+            }
+          } else if (!v.assignedDriver && tripDriverName) {
+            entry.warning = `Actieve trip is toegewezen aan ${tripDriverName} maar geen chauffeur gekoppeld aan voertuig`;
+          }
+        }
+
+        if (!entry.warning && v.assignedDriver) {
+          const key = v.assignedDriver.trim().toLowerCase();
+          const others = (vehiclesByDriver[key] || []).filter((n) => n !== v.name);
+          if (others.length > 0) {
+            entry.warning = `Chauffeur ${v.assignedDriver} is ook toegewezen aan voertuig ${others.join(", ")}`;
+          }
+        }
+
+        if (entry.warning || entry.tripDriver) {
+          result[v.id] = entry;
+        }
+      }
+
+      return result;
+    },
+  });
+}
+
 /**
  * Fetches real utilization data per vehicle based on active trips.
  * Calculates: total weight of orders on active trips / vehicle max_weight * 100

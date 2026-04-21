@@ -3,7 +3,7 @@ import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTrian
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useVehicleById, useVehicleDocuments, useVehicleMaintenance, useVehicleAvailability, useCompleteMaintenance } from "@/hooks/useFleet";
+import { useVehicleById, useVehicleDocuments, useVehicleMaintenance, useVehicleAvailability, useCompleteMaintenance, useVehicleDriverConsistency } from "@/hooks/useFleet";
 import { useBaselineInfo } from "@/hooks/useVehicleCheck";
 import { useAuth } from "@/contexts/AuthContext";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
@@ -50,6 +50,7 @@ export default function VehicleDetail() {
     format(addDays(weekStart, 27), "yyyy-MM-dd")
   );
   const completeMaintenance = useCompleteMaintenance();
+  const { data: driverConsistency } = useVehicleDriverConsistency();
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
   const [showDocumentDialog, setShowDocumentDialog] = useState(false);
   const [baselineSeedActive, setBaselineSeedActive] = useState(false);
@@ -67,6 +68,7 @@ export default function VehicleDetail() {
   if (!vehicle) return <EmptyState icon={Truck} title="Voertuig niet gevonden" description="Het gevraagde voertuig bestaat niet of is verwijderd." />;
 
   const statusCfg = STATUS_CONFIG[vehicle.status] || STATUS_CONFIG.beschikbaar;
+  const driverWarning = id ? driverConsistency?.[id]?.warning : undefined;
 
   if (baselineSeedActive && id && baselineInfo?.vehicleTenantId) {
     return (
@@ -140,6 +142,22 @@ export default function VehicleDetail() {
             </div>
           </div>
         </div>
+
+        {driverWarning && (
+          <div
+            className="card--luxe p-4 flex items-start gap-3"
+            style={{ background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(38 92% 50% / 0.08) 100%)" }}
+            role="alert"
+          >
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.75} />
+            <div className="min-w-0 space-y-0.5">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-amber-700 font-semibold">
+                Chauffeurtoewijzing controleren
+              </p>
+              <p className="text-sm text-amber-800">{driverWarning}</p>
+            </div>
+          </div>
+        )}
 
         <div className="card--luxe p-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-5">

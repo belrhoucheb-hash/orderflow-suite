@@ -20,6 +20,7 @@ vi.mock("@/hooks/useFleet", () => ({
   useFleetVehicles: (...args: any[]) => mockUseFleetVehicles(...args),
   useVehicleUtilization: () => ({ data: { v1: 45, v2: 78 } }),
   useUpcomingMaintenance: () => ({ data: [] }),
+  useVehicleDriverConsistency: () => ({ data: {} }),
 }));
 
 vi.mock("@/components/fleet/NewVehicleDialog", () => ({

@@ -51,6 +51,7 @@ vi.mock("@/hooks/useFleet", () => ({
     ],
   }),
   useCompleteMaintenance: () => ({ mutate: mockCompleteMaintenance, isPending: false }),
+  useVehicleDriverConsistency: () => ({ data: {} }),
 }));
 
 vi.mock("@/components/fleet/MaintenanceDialog", () => ({

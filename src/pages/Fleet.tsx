@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useFleetVehicles, useVehicleUtilization, useUpcomingMaintenance, type Vehicle } from "@/hooks/useFleet";
+import { useFleetVehicles, useVehicleUtilization, useUpcomingMaintenance, useVehicleDriverConsistency, type Vehicle } from "@/hooks/useFleet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
 import { VehicleTypesSection } from "@/components/fleet/VehicleTypesSection";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -18,6 +19,7 @@ export default function Fleet() {
   const { data: vehicles, isLoading, isError, refetch } = useFleetVehicles();
   const { data: utilization } = useVehicleUtilization();
   const { data: overdueMaintenance } = useUpcomingMaintenance();
+  const { data: driverConsistency } = useVehicleDriverConsistency();
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -189,6 +191,7 @@ export default function Fleet() {
                       {items.map((v) => {
                         const statusCfg = STATUS_CONFIG[v.status] || STATUS_CONFIG.beschikbaar;
                         const util = getUtilization(v);
+                        const driverWarning = driverConsistency?.[v.id]?.warning;
                         return (
                           <Link key={v.id} to={`/vloot/${v.id}`} className="block group">
                             <div className="card--luxe p-5 space-y-3 transition-shadow duration-150 group-hover:shadow-[0_8px_24px_-8px_hsl(var(--gold-deep)/0.18)]">
@@ -220,7 +223,28 @@ export default function Fleet() {
                               <div className="space-y-1.5 pt-1">
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-muted-foreground">Chauffeur</span>
-                                  <span className="text-foreground font-medium">{v.assignedDriver || "—"}</span>
+                                  <span className="inline-flex items-center gap-1.5 text-foreground font-medium">
+                                    {driverWarning && (
+                                      <TooltipProvider delayDuration={100}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span
+                                              role="img"
+                                              aria-label={driverWarning}
+                                              onClick={(e) => e.preventDefault()}
+                                              className="inline-flex"
+                                            >
+                                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" strokeWidth={1.75} />
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="top" className="max-w-[260px] text-xs">
+                                            {driverWarning}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {v.assignedDriver || "—"}
+                                  </span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-muted-foreground">Beladingsgraad</span>
