@@ -184,7 +184,19 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-3xl max-h-[92vh] overflow-y-auto"
+        onPointerDownOutside={(e) => {
+          if ((e.target as HTMLElement).closest(".pac-container")) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          if ((e.target as HTMLElement).closest(".pac-container")) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="font-display text-lg tracking-tight">Nieuwe klant</DialogTitle>
         </DialogHeader>

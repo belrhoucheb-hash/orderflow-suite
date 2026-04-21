@@ -113,7 +113,19 @@ export function NewLocationDialog({ clientId, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : handleClose())}>
-      <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto">
+      <DialogContent
+        className="sm:max-w-3xl max-h-[92vh] overflow-y-auto"
+        onPointerDownOutside={(e) => {
+          if ((e.target as HTMLElement).closest(".pac-container")) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          if ((e.target as HTMLElement).closest(".pac-container")) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="font-display text-lg tracking-tight">Nieuwe locatie</DialogTitle>
         </DialogHeader>

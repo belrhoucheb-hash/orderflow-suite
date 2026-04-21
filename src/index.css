@@ -1267,6 +1267,11 @@
    Legacy utility aliases (kept for backward compat)
    ═══════════════════════════════════════════════════════════════ */
 
+/* Google Places Autocomplete suggesties boven Radix Dialog overlay (z-50) */
+.pac-container {
+  z-index: 10000 !important;
+}
+
 @layer utilities {
   /* Page header pattern (legacy) */
   .page-header {
