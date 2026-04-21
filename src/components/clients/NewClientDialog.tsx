@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useCreateClient } from "@/hooks/useClients";
+import { useCreateClient, useUpdateClient, type Client } from "@/hooks/useClients";
 import { useCreateClientContact } from "@/hooks/useClientContacts";
 import {
   clientInputSchema,
@@ -19,6 +19,7 @@ import { toast } from "sonner";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  client?: Client;
 }
 
 interface FormState {
@@ -58,12 +59,52 @@ const INITIAL: FormState = {
   shipping_address: { ...EMPTY_ADDRESS },
 };
 
-export function NewClientDialog({ open, onOpenChange }: Props) {
+function addressFromClient(c: Client, prefix: "" | "billing_" | "shipping_"): AddressValue {
+  const street = (c as any)[`${prefix}street`] ?? "";
+  const house_number = (c as any)[`${prefix}house_number`] ?? "";
+  const house_number_suffix = (c as any)[`${prefix}house_number_suffix`] ?? "";
+  const zipcode = (c as any)[`${prefix}zipcode`] ?? "";
+  const city = (c as any)[`${prefix}city`] ?? "";
+  const country = (c as any)[`${prefix}country`] ?? "NL";
+  const lat = (c as any)[`${prefix}lat`] ?? null;
+  const lng = (c as any)[`${prefix}lng`] ?? null;
+  const coords_manual = (c as any)[`${prefix}coords_manual`] ?? false;
+  return { street, house_number, house_number_suffix, zipcode, city, country, lat, lng, coords_manual };
+}
+
+function formFromClient(c: Client): FormState {
+  return {
+    name: c.name ?? "",
+    contact_person: c.contact_person ?? "",
+    primary_email: "",
+    primary_phone: "",
+    email: c.email ?? "",
+    phone: c.phone ?? "",
+    kvk_number: c.kvk_number ?? "",
+    btw_number: c.btw_number ?? "",
+    main_address: addressFromClient(c, ""),
+    billing_same_as_main: c.billing_same_as_main ?? true,
+    billing_email: c.billing_email ?? "",
+    billing_address: addressFromClient(c, "billing_"),
+    shipping_same_as_main: c.shipping_same_as_main ?? true,
+    shipping_address: addressFromClient(c, "shipping_"),
+  };
+}
+
+export function NewClientDialog({ open, onOpenChange, client }: Props) {
+  const isEdit = Boolean(client);
   const [form, setForm] = useState<FormState>(INITIAL);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const createClient = useCreateClient();
+  const updateClient = useUpdateClient();
   const createContact = useCreateClientContact();
+
+  useEffect(() => {
+    if (!open) return;
+    setErrors({});
+    setForm(client ? formFromClient(client) : INITIAL);
+  }, [open, client]);
 
   const setField = <K extends keyof FormState>(key: K) =>
     (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -156,6 +197,13 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
         shipping_coords_manual: shipping.coords_manual,
       };
 
+      if (isEdit && client) {
+        await updateClient.mutateAsync({ id: client.id, ...(payload as Partial<Client>) });
+        toast.success("Klant bijgewerkt");
+        onOpenChange(false);
+        return;
+      }
+
       const created = await createClient.mutateAsync(payload);
 
       if (form.contact_person.trim()) {
@@ -178,7 +226,7 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
       setForm(INITIAL);
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err?.message ?? "Fout bij aanmaken klant");
+      toast.error(err?.message ?? (isEdit ? "Fout bij bijwerken klant" : "Fout bij aanmaken klant"));
     }
   };
 
@@ -198,7 +246,7 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
         }}
       >
         <DialogHeader>
-          <DialogTitle className="font-display text-lg tracking-tight">Nieuwe klant</DialogTitle>
+          <DialogTitle className="font-display text-lg tracking-tight">{isEdit ? "Klant bewerken" : "Nieuwe klant"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Section title="Bedrijfsgegevens">
@@ -240,38 +288,40 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
             />
           </Section>
 
-          <Section title="Primair contact">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label>Naam</Label>
-                <Input
-                  value={form.contact_person}
-                  onChange={setField("contact_person")}
-                  className="field-luxe"
-                />
+          {!isEdit && (
+            <Section title="Primair contact">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label>Naam</Label>
+                  <Input
+                    value={form.contact_person}
+                    onChange={setField("contact_person")}
+                    className="field-luxe"
+                  />
+                </div>
+                <div>
+                  <Label>E-mail</Label>
+                  <Input
+                    type="email"
+                    value={form.primary_email}
+                    onChange={setField("primary_email")}
+                    className="field-luxe"
+                  />
+                </div>
+                <div>
+                  <Label>Telefoon</Label>
+                  <Input
+                    value={form.primary_phone}
+                    onChange={setField("primary_phone")}
+                    className="field-luxe"
+                  />
+                </div>
               </div>
-              <div>
-                <Label>E-mail</Label>
-                <Input
-                  type="email"
-                  value={form.primary_email}
-                  onChange={setField("primary_email")}
-                  className="field-luxe"
-                />
-              </div>
-              <div>
-                <Label>Telefoon</Label>
-                <Input
-                  value={form.primary_phone}
-                  onChange={setField("primary_phone")}
-                  className="field-luxe"
-                />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Wordt automatisch als primair contact geregistreerd bij deze klant.
-            </p>
-          </Section>
+              <p className="text-xs text-muted-foreground mt-2">
+                Wordt automatisch als primair contact geregistreerd bij deze klant. Voor bestaande klanten beheer je contacten via het tabblad Contacten.
+              </p>
+            </Section>
+          )}
 
           <Section title="Algemeen e-mail en telefoon">
             <div className="grid grid-cols-2 gap-3">
@@ -356,10 +406,12 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
             </button>
             <button
               type="submit"
-              disabled={createClient.isPending}
+              disabled={createClient.isPending || updateClient.isPending}
               className="btn-luxe btn-luxe--primary !h-9"
             >
-              {createClient.isPending ? "Opslaan..." : "Klant aanmaken"}
+              {(createClient.isPending || updateClient.isPending)
+                ? "Opslaan..."
+                : isEdit ? "Wijzigingen opslaan" : "Klant aanmaken"}
             </button>
           </div>
         </form>

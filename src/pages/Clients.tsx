@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, Plus, Building2, X, ArrowLeft } from "lucide-react";
+import { Search, Plus, Building2, X, ArrowLeft, Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useClients, type Client } from "@/hooks/useClients";
@@ -13,6 +13,7 @@ export default function Clients() {
   const [search, setSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const { data: clients, isLoading, isError, refetch } = useClients(search);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -155,15 +156,30 @@ export default function Clients() {
                 {selectedClient.name}
               </h2>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setSelectedClient(null)}>
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditingClient(selectedClient)}
+                title="Klant bewerken"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedClient(null)} title="Sluiten">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <ClientDetailPanel client={selectedClient} />
         </div>
       )}
 
       <NewClientDialog open={showNewDialog} onOpenChange={setShowNewDialog} />
+      <NewClientDialog
+        open={editingClient !== null}
+        onOpenChange={(v) => { if (!v) setEditingClient(null); }}
+        client={editingClient ?? undefined}
+      />
     </div>
   );
 }
