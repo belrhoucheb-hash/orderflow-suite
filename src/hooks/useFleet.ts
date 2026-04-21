@@ -1,6 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantInsert } from "@/hooks/useTenantInsert";
+import {
+  vehicleRowSchema,
+  vehicleDocumentRowSchema,
+  vehicleMaintenanceRowSchema,
+  vehicleMaintenanceWithVehicleRowSchema,
+  vehicleAvailabilityRowSchema,
+  parseRow,
+  parseRows,
+  type VehicleRow,
+  type VehicleDocumentRow,
+  type VehicleMaintenanceRow,
+  type VehicleMaintenanceWithVehicleRow,
+  type VehicleAvailabilityRow,
+} from "@/lib/validation/vehicleDbSchema";
 
 export interface Vehicle {
   id: string;
@@ -19,62 +33,47 @@ export interface Vehicle {
   isActive: boolean;
 }
 
-export interface VehicleDocument {
-  id: string;
-  vehicle_id: string;
-  doc_type: string;
-  expiry_date: string | null;
-  file_url: string | null;
-  notes: string | null;
-  created_at: string;
-}
+/**
+ * De interfaces hieronder zijn afgeleid van de DB-rowschemas
+ * zodat schema en type per definitie in sync blijven. De oude
+ * handmatige interfaces worden zo vervangen zonder breaking change:
+ * alle consumers gebruikten dezelfde snake_case velden.
+ */
+export type VehicleDocument = VehicleDocumentRow;
+export type VehicleMaintenance = VehicleMaintenanceRow;
+export type VehicleAvailability = VehicleAvailabilityRow;
 
-export interface VehicleMaintenance {
-  id: string;
-  vehicle_id: string;
-  maintenance_type: string;
-  description: string | null;
-  mileage_km: number | null;
-  scheduled_date: string | null;
-  completed_date: string | null;
-  cost: number | null;
-  created_at: string;
-}
-
-export interface VehicleAvailability {
-  id: string;
-  vehicle_id: string;
-  date: string;
-  status: string;
-  reason: string | null;
+function vehicleRowToVehicle(v: VehicleRow): Vehicle {
+  return {
+    id: v.id,
+    code: v.code,
+    name: v.name,
+    plate: v.plate,
+    type: v.type,
+    brand: v.brand ?? null,
+    buildYear: v.build_year ?? null,
+    capacityKg: v.capacity_kg ?? 0,
+    capacityPallets: v.capacity_pallets ?? 0,
+    features: v.features ?? [],
+    status: v.status ?? "beschikbaar",
+    assignedDriver: v.assigned_driver ?? null,
+    fuelConsumption: v.fuel_consumption ?? null,
+    isActive: v.is_active,
+  };
 }
 
 export function useFleetVehicles() {
   return useQuery({
     queryKey: ["fleet-vehicles"],
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<Vehicle[]> => {
       const { data, error } = await supabase
         .from("vehicles")
         .select("*")
         .order("type", { ascending: true });
       if (error) throw error;
-      return (data ?? []).map((v: any) => ({
-        id: v.id,
-        code: v.code,
-        name: v.name,
-        plate: v.plate,
-        type: v.type,
-        brand: v.brand,
-        buildYear: v.build_year,
-        capacityKg: v.capacity_kg,
-        capacityPallets: v.capacity_pallets,
-        features: v.features ?? [],
-        status: v.status ?? "beschikbaar",
-        assignedDriver: v.assigned_driver,
-        fuelConsumption: v.fuel_consumption,
-        isActive: v.is_active,
-      })) as Vehicle[];
+      const rows = parseRows(vehicleRowSchema, data, "voertuigen ophalen");
+      return rows.map(vehicleRowToVehicle);
     },
   });
 }
@@ -84,30 +83,15 @@ export function useVehicleById(id: string | undefined) {
     queryKey: ["fleet-vehicle", id],
     enabled: !!id,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<Vehicle> => {
       const { data, error } = await supabase
         .from("vehicles")
         .select("*")
         .eq("id", id!)
         .single();
       if (error) throw error;
-      const v = data as any;
-      return {
-        id: v.id,
-        code: v.code,
-        name: v.name,
-        plate: v.plate,
-        type: v.type,
-        brand: v.brand,
-        buildYear: v.build_year,
-        capacityKg: v.capacity_kg,
-        capacityPallets: v.capacity_pallets,
-        features: v.features ?? [],
-        status: v.status ?? "beschikbaar",
-        assignedDriver: v.assigned_driver,
-        fuelConsumption: v.fuel_consumption,
-        isActive: v.is_active,
-      } as Vehicle;
+      const row = parseRow(vehicleRowSchema, data, "voertuig ophalen");
+      return vehicleRowToVehicle(row);
     },
   });
 }
@@ -117,14 +101,14 @@ export function useVehicleDocuments(vehicleId: string | undefined) {
     queryKey: ["vehicle-documents", vehicleId],
     enabled: !!vehicleId,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<VehicleDocument[]> => {
       const { data, error } = await supabase
         .from("vehicle_documents")
         .select("*")
         .eq("vehicle_id", vehicleId!)
         .order("expiry_date", { ascending: true });
       if (error) throw error;
-      return data as VehicleDocument[];
+      return parseRows(vehicleDocumentRowSchema, data, "documenten ophalen");
     },
   });
 }
@@ -134,14 +118,14 @@ export function useVehicleMaintenance(vehicleId: string | undefined) {
     queryKey: ["vehicle-maintenance", vehicleId],
     enabled: !!vehicleId,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<VehicleMaintenance[]> => {
       const { data, error } = await supabase
         .from("vehicle_maintenance")
         .select("*")
         .eq("vehicle_id", vehicleId!)
         .order("scheduled_date", { ascending: false });
       if (error) throw error;
-      return data as VehicleMaintenance[];
+      return parseRows(vehicleMaintenanceRowSchema, data, "onderhoud ophalen");
     },
   });
 }
@@ -189,7 +173,7 @@ export function useUpcomingMaintenance() {
   return useQuery({
     queryKey: ["overdue-maintenance"],
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<VehicleMaintenanceWithVehicleRow[]> => {
       const today = new Date().toISOString().split("T")[0];
       const { data, error } = await supabase
         .from("vehicle_maintenance")
@@ -198,7 +182,11 @@ export function useUpcomingMaintenance() {
         .lte("scheduled_date", today)
         .order("scheduled_date", { ascending: true });
       if (error) throw error;
-      return data as (VehicleMaintenance & { vehicles: { name: string; plate: string } | null })[];
+      return parseRows(
+        vehicleMaintenanceWithVehicleRowSchema,
+        data,
+        "openstaand onderhoud ophalen",
+      );
     },
   });
 }
@@ -227,7 +215,7 @@ export function useVehicleAvailability(vehicleId: string | undefined, startDate?
     queryKey: ["vehicle-availability", vehicleId, startDate, endDate],
     enabled: !!vehicleId,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<VehicleAvailability[]> => {
       let query = supabase
         .from("vehicle_availability")
         .select("*")
@@ -236,7 +224,11 @@ export function useVehicleAvailability(vehicleId: string | undefined, startDate?
       if (endDate) query = query.lte("date", endDate);
       const { data, error } = await query.order("date", { ascending: true });
       if (error) throw error;
-      return data as VehicleAvailability[];
+      return parseRows(
+        vehicleAvailabilityRowSchema,
+        data,
+        "beschikbaarheid ophalen",
+      );
     },
   });
 }
