@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useTenantInsert } from "@/hooks/useTenantInsert";
 
 export interface Client {
   id: string;
@@ -183,13 +184,11 @@ export function useClientOrders(clientName: string | null) {
 
 export function useCreateClient() {
   const qc = useQueryClient();
-  const { tenant } = useTenant();
+  const clientsInsert = useTenantInsert("clients");
   return useMutation({
     mutationFn: async (client: Partial<Client>) => {
-      if (!tenant?.id) throw new Error("Geen actieve tenant, log opnieuw in");
-      const { data, error } = await supabase
-        .from("clients")
-        .insert({ name: client.name!, ...client, tenant_id: tenant.id } as any)
+      const { data, error } = await clientsInsert
+        .insert({ name: client.name!, ...client })
         .select()
         .single();
       if (error) throw error;
