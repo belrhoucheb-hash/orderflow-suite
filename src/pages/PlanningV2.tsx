@@ -1,14 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { nl } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Calendar as CalendarIcon, Settings2, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, Settings2 } from "lucide-react";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useDrivers } from "@/hooks/useDrivers";
-import { useIsPlanningV2Enabled } from "@/hooks/useIsPlanningV2Enabled";
 import { useDriverAvailability } from "@/hooks/useDriverAvailability";
 import { DaySetupDialog } from "@/components/planning/v2/DaySetupDialog";
 import { PlanningDriverLane } from "@/components/planning/v2/PlanningDriverLane";
@@ -25,7 +23,6 @@ function isoWeekStart(d: Date): string {
 
 function PlanningV2() {
   const { tenant } = useTenantOptional();
-  const { data: v2Enabled, isLoading: flagLoading } = useIsPlanningV2Enabled();
 
   const [selectedDate, setSelectedDate] = useState<string>(format(addDays(new Date(), 1), "yyyy-MM-dd"));
   const [daySetupOpen, setDaySetupOpen] = useState(false);
@@ -126,36 +123,6 @@ function PlanningV2() {
 
   // Clear hints wanneer datum verandert
   useEffect(() => setUnplacedHints([]), [selectedDate]);
-
-  if (flagLoading) {
-    return <div className="p-8 text-center text-muted-foreground">Laden...</div>;
-  }
-
-  if (!v2Enabled) {
-    return (
-      <div className="p-8 max-w-xl mx-auto">
-        <div className="callout--luxe">
-          <AlertTriangle className="callout--luxe__icon h-5 w-5" />
-          <div className="space-y-3 min-w-0 flex-1">
-            <div>
-              <div className="callout--luxe__title">Het planbord is nog niet geactiveerd voor deze tenant</div>
-              <div className="callout--luxe__body">
-                Een beheerder kan het planbord inschakelen via Instellingen, Stamgegevens.
-                Zodra de schakelaar aan staat is de planbord-pagina direct beschikbaar.
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Link to="/instellingen/stamgegevens">
-                <button type="button" className="btn-luxe btn-luxe--primary !h-9">
-                  Naar Stamgegevens
-                </button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const prettyDate = format(new Date(selectedDate + "T00:00:00"), "EEEE d MMMM yyyy", { locale: nl });
 

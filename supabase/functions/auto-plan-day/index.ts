@@ -65,11 +65,7 @@ async function handleRequest(supabase: SupabaseClient, body: RequestBody, userId
     return { ok: false as const, error: "tenant_id en date zijn verplicht" };
   }
 
-  // 1. Feature-flag
-  const { data: flag, error: flagErr } = await supabase.rpc("is_planning_v2_enabled", { p_tenant_id: tenant_id });
-  if (flagErr) return { ok: false as const, error: `feature-flag check faalde: ${flagErr.message}` };
-  if (!flag) return { ok: true as const, skipped: true, reason: "planning_v2 is uit voor deze tenant" };
-
+  // 1. Clustergrootte-voorkeur
   const { data: granRow } = await supabase.rpc("get_planning_cluster_granularity", { p_tenant_id: tenant_id });
   const granularity: ClusterGranularity = granRow === "PC3" ? "PC3" : "PC2";
 
