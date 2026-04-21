@@ -19,18 +19,37 @@ export interface Client {
   created_at: string;
   active_order_count?: number;
 
+  street: string | null;
+  house_number: string | null;
+  house_number_suffix: string | null;
+  lat: number | null;
+  lng: number | null;
+  coords_manual: boolean;
+
   billing_email: string | null;
   billing_same_as_main: boolean;
   billing_address: string | null;
   billing_zipcode: string | null;
   billing_city: string | null;
   billing_country: string | null;
+  billing_street: string | null;
+  billing_house_number: string | null;
+  billing_house_number_suffix: string | null;
+  billing_lat: number | null;
+  billing_lng: number | null;
+  billing_coords_manual: boolean;
 
   shipping_same_as_main: boolean;
   shipping_address: string | null;
   shipping_zipcode: string | null;
   shipping_city: string | null;
   shipping_country: string | null;
+  shipping_street: string | null;
+  shipping_house_number: string | null;
+  shipping_house_number_suffix: string | null;
+  shipping_lat: number | null;
+  shipping_lng: number | null;
+  shipping_coords_manual: boolean;
 }
 
 export interface ClientLocation {

@@ -83,12 +83,12 @@ describe("NewClientDialog", () => {
   it("shows all form fields", async () => {
     const { NewClientDialog } = await import("@/components/clients/NewClientDialog");
     render(<Wrapper><NewClientDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Contactpersoon")).toBeInTheDocument();
-    expect(screen.getByText("Telefoon")).toBeInTheDocument();
-    expect(screen.getByText("Email")).toBeInTheDocument();
-    expect(screen.getByText("Adres")).toBeInTheDocument();
-    expect(screen.getByText("Postcode")).toBeInTheDocument();
-    expect(screen.getByText("Plaats")).toBeInTheDocument();
+    expect(screen.getByText("Bedrijfsgegevens")).toBeInTheDocument();
+    expect(screen.getByText("Hoofdadres")).toBeInTheDocument();
+    expect(screen.getByText("Primair contact")).toBeInTheDocument();
+    expect(screen.getByText("Algemeen e-mail en telefoon")).toBeInTheDocument();
+    expect(screen.getByText("Facturatie")).toBeInTheDocument();
+    expect(screen.getByText("Postadres")).toBeInTheDocument();
     expect(screen.getByText("KvK-nummer")).toBeInTheDocument();
     expect(screen.getByText("BTW-nummer")).toBeInTheDocument();
   });

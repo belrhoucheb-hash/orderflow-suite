@@ -1,12 +1,19 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useCreateClient } from "@/hooks/useClients";
 import { useCreateClientContact } from "@/hooks/useClientContacts";
-import { clientInputSchema } from "@/lib/validation/clientSchema";
+import {
+  clientInputSchema,
+  composeAddressString,
+  type AddressFields,
+} from "@/lib/validation/clientSchema";
+import {
+  AddressAutocomplete,
+  EMPTY_ADDRESS,
+  type AddressValue,
+} from "@/components/clients/AddressAutocomplete";
 import { toast } from "sonner";
 
 interface Props {
@@ -14,41 +21,57 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-const INITIAL = {
+interface FormState {
+  name: string;
+  contact_person: string;
+  primary_email: string;
+  primary_phone: string;
+  email: string;
+  phone: string;
+  kvk_number: string;
+  btw_number: string;
+
+  main_address: AddressValue;
+
+  billing_same_as_main: boolean;
+  billing_email: string;
+  billing_address: AddressValue;
+
+  shipping_same_as_main: boolean;
+  shipping_address: AddressValue;
+}
+
+const INITIAL: FormState = {
   name: "",
   contact_person: "",
   primary_email: "",
   primary_phone: "",
   email: "",
   phone: "",
-  address: "",
-  zipcode: "",
-  city: "",
-  country: "NL",
   kvk_number: "",
   btw_number: "",
+  main_address: { ...EMPTY_ADDRESS },
   billing_same_as_main: true,
   billing_email: "",
-  billing_address: "",
-  billing_zipcode: "",
-  billing_city: "",
-  billing_country: "NL",
+  billing_address: { ...EMPTY_ADDRESS },
   shipping_same_as_main: true,
-  shipping_address: "",
-  shipping_zipcode: "",
-  shipping_city: "",
-  shipping_country: "NL",
+  shipping_address: { ...EMPTY_ADDRESS },
 };
 
 export function NewClientDialog({ open, onOpenChange }: Props) {
-  const [form, setForm] = useState(INITIAL);
+  const [form, setForm] = useState<FormState>(INITIAL);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const createClient = useCreateClient();
   const createContact = useCreateClientContact();
 
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  const setField = <K extends keyof FormState>(key: K) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((prev) => ({ ...prev, [key]: e.target.value as FormState[K] }));
+
+  const setAddress = (key: "main_address" | "billing_address" | "shipping_address") =>
+    (v: AddressValue) =>
+      setForm((prev) => ({ ...prev, [key]: v }));
 
   const toggle = (key: "billing_same_as_main" | "shipping_same_as_main") =>
     (value: boolean) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -57,18 +80,35 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
     e.preventDefault();
 
     const parsed = clientInputSchema.safeParse({
-      ...form,
+      name: form.name,
+      contact_person: form.contact_person,
+      email: form.email,
+      phone: form.phone,
+      kvk_number: form.kvk_number,
+      btw_number: form.btw_number,
       payment_terms: 30,
+      main_address: form.main_address,
+      billing_same_as_main: form.billing_same_as_main,
+      billing_email: form.billing_email,
+      billing_address: form.billing_address,
+      shipping_same_as_main: form.shipping_same_as_main,
+      shipping_address: form.shipping_address,
     });
+
     if (!parsed.success) {
       const map: Record<string, string> = {};
       parsed.error.issues.forEach((i) => {
         map[i.path.join(".")] = i.message;
       });
       setErrors(map);
+      toast.error("Controleer de adresvelden, coordinaten zijn verplicht");
       return;
     }
     setErrors({});
+
+    const main = parsed.data.main_address;
+    const billing = parsed.data.billing_same_as_main ? main : parsed.data.billing_address;
+    const shipping = parsed.data.shipping_same_as_main ? main : parsed.data.shipping_address;
 
     try {
       const payload: Record<string, unknown> = {
@@ -76,23 +116,44 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
         contact_person: parsed.data.contact_person || null,
         email: parsed.data.email || null,
         phone: parsed.data.phone || null,
-        address: parsed.data.address || null,
-        zipcode: parsed.data.zipcode || null,
-        city: parsed.data.city || null,
-        country: parsed.data.country || "NL",
         kvk_number: parsed.data.kvk_number || null,
         btw_number: parsed.data.btw_number || null,
+
+        address: composeAddressString(main) || null,
+        zipcode: main.zipcode || null,
+        city: main.city || null,
+        country: main.country || "NL",
+        street: main.street || null,
+        house_number: main.house_number || null,
+        house_number_suffix: main.house_number_suffix || null,
+        lat: main.lat,
+        lng: main.lng,
+        coords_manual: main.coords_manual,
+
         billing_same_as_main: parsed.data.billing_same_as_main,
         billing_email: parsed.data.billing_email || null,
-        billing_address: parsed.data.billing_address || null,
-        billing_zipcode: parsed.data.billing_zipcode || null,
-        billing_city: parsed.data.billing_city || null,
-        billing_country: parsed.data.billing_country || null,
+        billing_address: composeAddressString(billing) || null,
+        billing_zipcode: billing.zipcode || null,
+        billing_city: billing.city || null,
+        billing_country: billing.country || null,
+        billing_street: billing.street || null,
+        billing_house_number: billing.house_number || null,
+        billing_house_number_suffix: billing.house_number_suffix || null,
+        billing_lat: billing.lat,
+        billing_lng: billing.lng,
+        billing_coords_manual: billing.coords_manual,
+
         shipping_same_as_main: parsed.data.shipping_same_as_main,
-        shipping_address: parsed.data.shipping_address || null,
-        shipping_zipcode: parsed.data.shipping_zipcode || null,
-        shipping_city: parsed.data.shipping_city || null,
-        shipping_country: parsed.data.shipping_country || null,
+        shipping_address: composeAddressString(shipping) || null,
+        shipping_zipcode: shipping.zipcode || null,
+        shipping_city: shipping.city || null,
+        shipping_country: shipping.country || null,
+        shipping_street: shipping.street || null,
+        shipping_house_number: shipping.house_number || null,
+        shipping_house_number_suffix: shipping.house_number_suffix || null,
+        shipping_lat: shipping.lat,
+        shipping_lng: shipping.lng,
+        shipping_coords_manual: shipping.coords_manual,
       };
 
       const created = await createClient.mutateAsync(payload);
@@ -109,7 +170,6 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
             notes: null,
           });
         } catch {
-          // client is al aangemaakt; contact-fail mag niet de hele flow stoppen
           toast.warning("Klant opgeslagen, primair contact kon niet worden toegevoegd");
         }
       }
@@ -124,66 +184,79 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nieuwe klant</DialogTitle>
+          <DialogTitle className="font-display text-lg tracking-tight">Nieuwe klant</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Section title="Bedrijfsgegevens">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label>Bedrijfsnaam *</Label>
-                <Input value={form.name} onChange={set("name")} required />
-                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
+                <Input
+                  value={form.name}
+                  onChange={setField("name")}
+                  required
+                  className="field-luxe"
+                />
+                {errors.name && <ErrorText>{errors.name}</ErrorText>}
               </div>
               <div>
                 <Label>KvK-nummer</Label>
-                <Input value={form.kvk_number} onChange={set("kvk_number")} />
+                <Input
+                  value={form.kvk_number}
+                  onChange={setField("kvk_number")}
+                  className="field-luxe"
+                />
               </div>
               <div>
                 <Label>BTW-nummer</Label>
-                <Input value={form.btw_number} onChange={set("btw_number")} />
+                <Input
+                  value={form.btw_number}
+                  onChange={setField("btw_number")}
+                  className="field-luxe"
+                />
               </div>
             </div>
           </Section>
 
           <Section title="Hoofdadres">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label>Adres</Label>
-                <Input value={form.address} onChange={set("address")} />
-              </div>
-              <div>
-                <Label>Postcode</Label>
-                <Input value={form.zipcode} onChange={set("zipcode")} />
-              </div>
-              <div>
-                <Label>Plaats</Label>
-                <Input value={form.city} onChange={set("city")} />
-              </div>
-            </div>
+            <AddressAutocomplete
+              value={form.main_address}
+              onChange={setAddress("main_address")}
+              error={errors["main_address.lat"] || errors["main_address.street"]}
+            />
           </Section>
 
           <Section title="Primair contact">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label>Naam</Label>
-                <Input value={form.contact_person} onChange={set("contact_person")} />
+                <Input
+                  value={form.contact_person}
+                  onChange={setField("contact_person")}
+                  className="field-luxe"
+                />
               </div>
               <div>
                 <Label>E-mail</Label>
                 <Input
                   type="email"
                   value={form.primary_email}
-                  onChange={set("primary_email")}
+                  onChange={setField("primary_email")}
+                  className="field-luxe"
                 />
               </div>
               <div>
                 <Label>Telefoon</Label>
-                <Input value={form.primary_phone} onChange={set("primary_phone")} />
+                <Input
+                  value={form.primary_phone}
+                  onChange={setField("primary_phone")}
+                  className="field-luxe"
+                />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-2">
               Wordt automatisch als primair contact geregistreerd bij deze klant.
             </p>
           </Section>
@@ -192,63 +265,58 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Algemeen e-mail</Label>
-                <Input type="email" value={form.email} onChange={set("email")} />
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={setField("email")}
+                  className="field-luxe"
+                />
               </div>
               <div>
                 <Label>Algemeen telefoon</Label>
-                <Input value={form.phone} onChange={set("phone")} />
+                <Input
+                  value={form.phone}
+                  onChange={setField("phone")}
+                  className="field-luxe"
+                />
               </div>
             </div>
           </Section>
 
           <Section title="Facturatie">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-foreground">Factuuradres = hoofdadres</span>
               <Switch
                 checked={form.billing_same_as_main}
                 onCheckedChange={toggle("billing_same_as_main")}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
+            <div className="space-y-3">
+              <div>
                 <Label>Factuur e-mail</Label>
                 <Input
                   type="email"
                   value={form.billing_email}
-                  onChange={set("billing_email")}
+                  onChange={setField("billing_email")}
                   placeholder="Leeg = gebruik algemeen e-mail"
+                  className="field-luxe"
                 />
-                {errors.billing_email && (
-                  <p className="text-xs text-destructive mt-1">{errors.billing_email}</p>
-                )}
+                {errors.billing_email && <ErrorText>{errors.billing_email}</ErrorText>}
               </div>
               {!form.billing_same_as_main && (
-                <>
-                  <div className="col-span-2">
-                    <Label>Factuuradres</Label>
-                    <Input value={form.billing_address} onChange={set("billing_address")} />
-                    {errors.billing_address && (
-                      <p className="text-xs text-destructive mt-1">{errors.billing_address}</p>
-                    )}
-                  </div>
-                  <div>
-                    <Label>Postcode</Label>
-                    <Input value={form.billing_zipcode} onChange={set("billing_zipcode")} />
-                  </div>
-                  <div>
-                    <Label>Plaats</Label>
-                    <Input value={form.billing_city} onChange={set("billing_city")} />
-                    {errors.billing_city && (
-                      <p className="text-xs text-destructive mt-1">{errors.billing_city}</p>
-                    )}
-                  </div>
-                </>
+                <AddressAutocomplete
+                  value={form.billing_address}
+                  onChange={setAddress("billing_address")}
+                  error={
+                    errors["billing_address.lat"] || errors["billing_address.street"]
+                  }
+                />
               )}
             </div>
           </Section>
 
           <Section title="Postadres">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-foreground">Postadres = hoofdadres</span>
               <Switch
                 checked={form.shipping_same_as_main}
@@ -256,36 +324,31 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
               />
             </div>
             {!form.shipping_same_as_main && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <Label>Postadres</Label>
-                  <Input value={form.shipping_address} onChange={set("shipping_address")} />
-                  {errors.shipping_address && (
-                    <p className="text-xs text-destructive mt-1">{errors.shipping_address}</p>
-                  )}
-                </div>
-                <div>
-                  <Label>Postcode</Label>
-                  <Input value={form.shipping_zipcode} onChange={set("shipping_zipcode")} />
-                </div>
-                <div>
-                  <Label>Plaats</Label>
-                  <Input value={form.shipping_city} onChange={set("shipping_city")} />
-                  {errors.shipping_city && (
-                    <p className="text-xs text-destructive mt-1">{errors.shipping_city}</p>
-                  )}
-                </div>
-              </div>
+              <AddressAutocomplete
+                value={form.shipping_address}
+                onChange={setAddress("shipping_address")}
+                error={
+                  errors["shipping_address.lat"] || errors["shipping_address.street"]
+                }
+              />
             )}
           </Section>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex justify-end gap-2 pt-3 border-t border-[hsl(var(--gold)/0.2)]">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="btn-luxe btn-luxe--ghost !h-9"
+            >
               Annuleren
-            </Button>
-            <Button type="submit" disabled={createClient.isPending}>
+            </button>
+            <button
+              type="submit"
+              disabled={createClient.isPending}
+              className="btn-luxe btn-luxe--primary !h-9"
+            >
               {createClient.isPending ? "Opslaan..." : "Klant aanmaken"}
-            </Button>
+            </button>
           </div>
         </form>
       </DialogContent>
@@ -296,10 +359,18 @@ export function NewClientDialog({ open, onOpenChange }: Props) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+      <h3 className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.14em] mb-3">
         {title}
       </h3>
       <div className="space-y-2">{children}</div>
     </div>
   );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <span className="label-luxe">{children}</span>;
+}
+
+function ErrorText({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-destructive mt-1">{children}</p>;
 }

@@ -9,16 +9,26 @@ const optionalEmail = z
 
 const optionalText = z.string().trim().optional().or(z.literal(""));
 
+const addressSchema = z.object({
+  street: optionalText,
+  house_number: optionalText,
+  house_number_suffix: optionalText,
+  zipcode: optionalText,
+  city: optionalText,
+  country: z.string().trim().min(1).default("NL"),
+  lat: z.number().nullable(),
+  lng: z.number().nullable(),
+  coords_manual: z.boolean().default(false),
+});
+
+export type AddressFields = z.infer<typeof addressSchema>;
+
 export const clientInputSchema = z
   .object({
     name: z.string().trim().min(1, "Bedrijfsnaam is verplicht"),
     contact_person: optionalText,
     email: optionalEmail,
     phone: optionalText,
-    address: optionalText,
-    zipcode: optionalText,
-    city: optionalText,
-    country: z.string().trim().min(1).default("NL"),
     kvk_number: optionalText,
     btw_number: optionalText,
     payment_terms: z
@@ -28,52 +38,71 @@ export const clientInputSchema = z
       .optional()
       .default(30),
 
+    main_address: addressSchema,
+
     billing_same_as_main: z.boolean().default(true),
     billing_email: optionalEmail,
-    billing_address: optionalText,
-    billing_zipcode: optionalText,
-    billing_city: optionalText,
-    billing_country: optionalText,
+    billing_address: addressSchema,
 
     shipping_same_as_main: z.boolean().default(true),
-    shipping_address: optionalText,
-    shipping_zipcode: optionalText,
-    shipping_city: optionalText,
-    shipping_country: optionalText,
+    shipping_address: addressSchema,
   })
   .superRefine((data, ctx) => {
+    const main = data.main_address;
+    if (main.lat === null || main.lng === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["main_address", "lat"],
+        message: "Selecteer een adres uit de suggesties of sleep de pin, zodat coordinaten bekend zijn",
+      });
+    }
+    if (!main.street || !main.city) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["main_address", "street"],
+        message: "Hoofdadres is verplicht",
+      });
+    }
+
     if (!data.billing_same_as_main) {
-      if (!data.billing_address || data.billing_address.trim() === "") {
+      const b = data.billing_address;
+      if (b.lat === null || b.lng === null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["billing_address"],
+          path: ["billing_address", "lat"],
+          message: "Selecteer een factuuradres uit de suggesties of sleep de pin",
+        });
+      }
+      if (!b.street || !b.city) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["billing_address", "street"],
           message: "Factuuradres is verplicht wanneer afwijkend van hoofdadres",
         });
       }
-      if (!data.billing_city || data.billing_city.trim() === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["billing_city"],
-          message: "Factuurplaats is verplicht wanneer afwijkend van hoofdadres",
-        });
-      }
     }
+
     if (!data.shipping_same_as_main) {
-      if (!data.shipping_address || data.shipping_address.trim() === "") {
+      const s = data.shipping_address;
+      if (s.lat === null || s.lng === null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["shipping_address"],
-          message: "Postadres is verplicht wanneer afwijkend van hoofdadres",
+          path: ["shipping_address", "lat"],
+          message: "Selecteer een postadres uit de suggesties of sleep de pin",
         });
       }
-      if (!data.shipping_city || data.shipping_city.trim() === "") {
+      if (!s.street || !s.city) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["shipping_city"],
-          message: "Postplaats is verplicht wanneer afwijkend van hoofdadres",
+          path: ["shipping_address", "street"],
+          message: "Postadres is verplicht wanneer afwijkend van hoofdadres",
         });
       }
     }
   });
 
 export type ClientInput = z.infer<typeof clientInputSchema>;
+
+export function composeAddressString(a: AddressFields): string {
+  return [a.street, a.house_number, a.house_number_suffix].filter(Boolean).join(" ").trim();
+}
