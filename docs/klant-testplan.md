@@ -2,7 +2,7 @@
 
 Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionaliteit wordt opgeleverd. De meest recente toevoegingen staan bovenaan per sectie, en in "Wat is er nieuw sinds de vorige test" hieronder.
 
-**Laatste update**: 2026-04-17, Sprint 1 (data-integriteit: afdeling, traject, stamgegevens)
+**Laatste update**: 2026-04-21, Sprint 3 (planbord 2.0: auto-plan, dagsetup, swim-lanes per chauffeur, laadvermogen-bewaking, docksheet-export)
 
 **Hoe dit document te gebruiken**:
 - Kijk eerst naar "Wat is er nieuw sinds de vorige test" voor een snelle samenvatting.
@@ -18,12 +18,143 @@ Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionalitei
 
 ## Wat is er nieuw sinds de vorige test
 
-**Sprint 1 (2026-04-17), data-integriteit**:
-- Afdeling (Operations of Export) is voortaan verplicht op elke order en wordt automatisch bepaald uit het traject.
-- Orders met ontbrekende informatie krijgen een rode waarschuwingsbadge in de orderlijst, op de detailpagina en op het planbord.
-- Klantgegevens zijn uitgebreid met een apart factuur-e-mailadres, factuuradres, optioneel postadres en een contactpersonen-tabblad met primair- en backup-rol.
+**Sprint 3 (2026-04-21), planbord 2.0**:
+- Naast het bestaande planbord staat er nu een nieuw planbord onder **Planning 2.0**. De oude versie blijft werken, de nieuwe moet eerst geactiveerd worden onder Stamgegevens.
+- De planner zet per dag in de dagsetup welke chauffeurs werken, met verlof zijn, of ziek zijn, en welke voertuigen beschikbaar zijn, onderhoud hebben, of geblokkeerd zijn.
+- Er is een **Auto-plan-knop** die alle orders van die dag automatisch clustert op postcode-regio, een voertuig kiest dat past op gewicht en laadeisen, en een chauffeur toewijst op basis van certificaten en contracturen. Dit is altijd een voorstel, de planner moet bevestigen.
+- Elke chauffeur heeft een eigen **swim-lane** waarin je in één oogopslag ziet hoe zijn dag eruitziet, inclusief hoeveel uur er al gepland is ten opzichte van zijn contract.
+- Klik op een cluster opent een **detailpaneel** aan de rechterkant met voertuig, chauffeur, orderlijst, beladingsgraad en de knoppen Bevestig en Verwerp.
+- Bij een te vol voertuig kan de planner bewust **overschrijven met een verplichte reden**. Die reden wordt gelogd zodat je later kunt uitleggen waarom een voertuig overbelast is gereden.
+- **Docksheet-knop** exporteert alle bevestigde ritten van die dag in één CSV-bestand met chauffeur-kolom, klaar om in Excel te openen.
+- Bij chauffeur-beheer kun je nu **contracturen per week** en **dienstverband** (vast/flex/ingehuurd) invullen. Auto-plan gebruikt deze om niemand structureel over zijn uren heen te plannen.
 
-Alle scenario's in secties 1 tot en met 7 horen bij deze sprint.
+**Sprint 2 (2026-04-19), tariefmotor**:
+- Zie §9 voor de tariefmotor-scenario's.
+
+**Sprint 1 (2026-04-17), data-integriteit**:
+- Zie §1 tot en met §7.
+
+---
+
+## Sprint 3 scenario's
+
+### A. Dagsetup instellen
+
+1. Open **Planning 2.0** via het menu (of ga naar /planning-v2).
+2. Kies morgen als datum.
+3. Klik op **Dagsetup**. De dialog opent.
+4. Zet één chauffeur op **Verlof** en vul een reden in zoals "familieverlof".
+5. Zet één voertuig op **Onderhoud** en vul "APK" in als reden.
+6. Klik **Opslaan**.
+7. Verwacht: melding "Dagsetup opgeslagen" met teller "X chauffeurs werken, Y voertuigen beschikbaar".
+8. Sluit en open de dialog opnieuw. De opgeslagen statussen staan nog.
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+---
+
+### B. Auto-plan uitvoeren
+
+1. Zorg dat er orders zijn voor morgen (status Openstaand, nog geen voertuig).
+2. Op **Planning 2.0**, klik **Auto-plan**.
+3. Verwacht: binnen 2 seconden verschijnt melding "Auto-plan klaar, X voorstellen aangemaakt, Y orders in Open te plannen".
+4. In de chauffeurs-lanes verschijnen cluster-kaartjes met een gouden streepjesrand (voorstel-status).
+5. In de rechterkolom "Open te plannen" staan orders die niet inpasbaar waren, met rode reden ("geen passend voertuig", "geen postcode in adres" enzovoort).
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+---
+
+### C. Cluster-details en bevestigen
+
+1. Klik op een voorstel-cluster in een chauffeur-lane.
+2. Verwacht: paneel schuift open vanaf rechts met voertuig, chauffeur, beladingsgraad-balken, orderlijst.
+3. Controleer of de beladingsgraad klopt (meer dan 80% is oranje, meer dan 100% is rood).
+4. Klik **Bevestig** onderaan het paneel.
+5. Verwacht: melding "Cluster bevestigd, trip en stops zijn aangemaakt". Het cluster krijgt nu status INGEPLAND.
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+---
+
+### D. Laadvermogen-override met reden
+
+1. Open een cluster-detailpaneel met beladingsgraad boven 80%.
+2. Onderaan zie je "Forceer met reden (audit-trail)".
+3. Probeer op **Sla override op** te klikken zonder reden. Verwacht: knop is uitgeschakeld totdat je tekst typt.
+4. Vul in: "Spoedzending, klant betaalt extra toeslag".
+5. Klik **Sla override op**.
+6. Verwacht: melding "Override vastgelegd, reden is opgeslagen in audit-trail". Badge "Override actief" verschijnt in het paneel.
+7. Sluit het paneel en open het opnieuw. De reden staat nog met tijdstip.
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+---
+
+### E. Contracturen-bewaking
+
+1. Ga naar **Chauffeurs**, open een bestaande chauffeur.
+2. Vul **Contracturen per week** in op bijvoorbeeld 32.
+3. Kies **Dienstverband**: vast.
+4. Opslaan.
+5. Ga naar **Planning 2.0**. In de swim-lane van deze chauffeur staat "X / 32 u" bovenin.
+6. Laat auto-plan een week met veel orders plannen en kijk of hij netjes niet boven de 32 uur komt, of dat de orders naar een andere chauffeur schuiven.
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+---
+
+### F. Docksheet-export
+
+1. Zorg dat er minimaal één cluster bevestigd (INGEPLAND) is op een dag.
+2. Selecteer die dag in **Planning 2.0**.
+3. Klik **Docksheet**.
+4. Verwacht: browser downloadt een bestand **docksheet-YYYY-MM-DD.csv**.
+5. Open in Excel. Je ziet kolommen: Ordernr, Klant, Ophaaladres, Losadres, Postcode, Chauffeur, Voertuig, Tijdvenster, Opmerking.
+6. Accenten (é, ö) worden correct getoond.
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+---
+
+### G. Feature-flag aan/uit per tenant
+
+1. Ga naar **Instellingen, Stamgegevens**.
+2. Bovenaan staat "Nieuw planbord (v2)" met een schakelaar.
+3. Zet de schakelaar **uit**.
+4. Bezoek **Planning 2.0**. Verwacht: gele kaart "Het nieuwe planbord is nog niet geactiveerd" en een knop terug naar het bestaande planbord.
+5. Zet de schakelaar weer **aan**. Refresh de pagina. Het planbord is weer zichtbaar.
+6. Verander de clustergrootte naar **PC3**. Draai auto-plan opnieuw en kijk of er nu meer, kleinere clusters ontstaan (Rotterdam-centrum apart van Rotterdam-Zuid).
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
 
 ---
 
