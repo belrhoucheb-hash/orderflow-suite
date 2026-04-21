@@ -12,40 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
-
-const TYPE_LABELS: Record<string, string> = {
-  busje: "Busje",
-  bakwagen: "Bakwagen",
-  koelwagen: "Koelwagen",
-  trekker: "Trekker",
-};
-
-const TYPE_ORDER = ["busje", "bakwagen", "koelwagen", "trekker"];
-
-// Dot-kleur per status, past bij het luxe/gold-palet (groen/emerald voor
-// beschikbaar, amber voor onderhoud, rose voor defect, gold-deep voor onderweg).
-const STATUS_CONFIG: Record<string, { label: string; dotClass: string; textClass: string }> = {
-  beschikbaar: {
-    label: "Beschikbaar",
-    dotClass: "bg-emerald-500",
-    textClass: "text-emerald-700",
-  },
-  onderweg: {
-    label: "Onderweg",
-    dotClass: "bg-[hsl(var(--gold-deep))]",
-    textClass: "text-[hsl(var(--gold-deep))]",
-  },
-  onderhoud: {
-    label: "Onderhoud",
-    dotClass: "bg-amber-500",
-    textClass: "text-amber-700",
-  },
-  defect: {
-    label: "Defect",
-    dotClass: "bg-rose-500",
-    textClass: "text-rose-700",
-  },
-};
+import { TYPE_LABELS, TYPE_ORDER, STATUS_CONFIG } from "@/lib/constants/vehicleConfig";
 
 export default function Fleet() {
   const { data: vehicles, isLoading, isError, refetch } = useFleetVehicles();

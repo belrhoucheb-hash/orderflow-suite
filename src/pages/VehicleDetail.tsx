@@ -13,29 +13,7 @@ import { format, differenceInDays, startOfWeek, addDays } from "date-fns";
 import { nl } from "date-fns/locale";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-
-const STATUS_CONFIG: Record<string, { label: string; dotClass: string; textClass: string }> = {
-  beschikbaar: {
-    label: "Beschikbaar",
-    dotClass: "bg-emerald-500",
-    textClass: "text-emerald-700",
-  },
-  onderweg: {
-    label: "Onderweg",
-    dotClass: "bg-[hsl(var(--gold-deep))]",
-    textClass: "text-[hsl(var(--gold-deep))]",
-  },
-  onderhoud: {
-    label: "Onderhoud",
-    dotClass: "bg-amber-500",
-    textClass: "text-amber-700",
-  },
-  defect: {
-    label: "Defect",
-    dotClass: "bg-rose-500",
-    textClass: "text-rose-700",
-  },
-};
+import { STATUS_CONFIG } from "@/lib/constants/vehicleConfig";
 
 const DOC_LABELS: Record<string, string> = {
   apk: "APK Keuring",
