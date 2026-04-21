@@ -31,24 +31,13 @@ import {
   type LegitimationType,
 } from "@/hooks/useDrivers";
 import { useFleetVehicles } from "@/hooks/useFleet";
+import { useDriverCertifications } from "@/hooks/useDriverCertifications";
 
 interface NewDriverDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   driver?: Driver; // If provided, we are in edit mode
 }
-
-const CERTIFICATION_OPTIONS = [
-  "ADR",
-  "Koeling",
-  "Laadklep",
-  "Internationaal",
-  "Douane",
-  "Boxen",
-  "Hoya",
-  "Bakbus",
-  "DAF",
-];
 
 const LEGITIMATION_LABELS: Record<LegitimationType, string> = {
   rijbewijs: "Rijbewijs",
@@ -69,6 +58,8 @@ function parseBirthDate(value: string | null | undefined): Date | undefined {
 export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogProps) {
   const { createDriver, updateDriver } = useDrivers();
   const { data: vehicles } = useFleetVehicles();
+  const { data: certifications = [] } = useDriverCertifications();
+  const activeCertifications = certifications.filter((c) => c.is_active);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -394,23 +385,29 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
             {/* ── Certificeringen ───────────────────────────── */}
             <div className="space-y-3 pt-2 border-t border-border/40">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">Certificeringen</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {CERTIFICATION_OPTIONS.map((cert) => (
-                  <div key={cert} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`cert-${cert}`}
-                      checked={selectedCerts.includes(cert)}
-                      onCheckedChange={() => toggleCert(cert)}
-                    />
-                    <label
-                      htmlFor={`cert-${cert}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {cert}
-                    </label>
-                  </div>
-                ))}
-              </div>
+              {activeCertifications.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  Nog geen certificeringen ingericht. Beheer ze via tab Certificeringen.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {activeCertifications.map((cert) => (
+                    <div key={cert.code} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`cert-${cert.code}`}
+                        checked={selectedCerts.includes(cert.code)}
+                        onCheckedChange={() => toggleCert(cert.code)}
+                      />
+                      <label
+                        htmlFor={`cert-${cert.code}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        {cert.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
