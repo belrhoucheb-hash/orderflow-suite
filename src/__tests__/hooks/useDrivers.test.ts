@@ -22,6 +22,13 @@ const { mockFrom, mockSupabase } = vi.hoisted(() => {
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 
+vi.mock("@/contexts/TenantContext", () => ({
+  useTenant: () => ({
+    tenant: { id: "00000000-0000-0000-0000-000000000001", name: "Test" },
+    loading: false,
+  }),
+}));
+
 function createWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return ({ children }: { children: ReactNode }) =>

@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 import { useDrivers, type Driver, type EmploymentType } from "@/hooks/useDrivers";
 import { useFleetVehicles } from "@/hooks/useFleet";
 
@@ -83,12 +84,18 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       employment_type: employmentType,
     };
 
-    if (driver) {
-      await updateDriver.mutateAsync({ id: driver.id, ...driverData });
-    } else {
-      await createDriver.mutateAsync(driverData);
+    try {
+      if (driver) {
+        await updateDriver.mutateAsync({ id: driver.id, ...driverData });
+        toast.success("Chauffeur bijgewerkt");
+      } else {
+        await createDriver.mutateAsync(driverData);
+        toast.success("Chauffeur toegevoegd");
+      }
+      onOpenChange(false);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Fout bij opslaan chauffeur");
     }
-    onOpenChange(false);
   };
 
   const toggleCert = (cert: string) => {

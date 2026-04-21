@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 export type EmploymentType = "vast" | "flex" | "ingehuurd";
 
@@ -22,6 +23,7 @@ export interface Driver {
 
 export function useDrivers() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const query = useQuery({
     queryKey: ["drivers"],
@@ -39,9 +41,10 @@ export function useDrivers() {
 
   const createDriver = useMutation({
     mutationFn: async (newDriver: Partial<Driver>) => {
+      if (!tenant?.id) throw new Error("Geen actieve tenant, log opnieuw in");
       const { data, error } = await supabase
         .from("drivers" as any)
-        .insert([newDriver])
+        .insert([{ ...newDriver, tenant_id: tenant.id }])
         .select()
         .single();
 
