@@ -9,9 +9,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
 import { MaintenanceDialog } from "@/components/fleet/MaintenanceDialog";
 import { DocumentDialog } from "@/components/fleet/DocumentDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, differenceInDays, startOfWeek, addDays } from "date-fns";
 import { nl } from "date-fns/locale";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { STATUS_CONFIG } from "@/lib/constants/vehicleConfig";
 
@@ -57,6 +59,59 @@ export default function VehicleDetail() {
   const { effectiveRole } = useAuth();
   const { data: baselineInfo } = useBaselineInfo(id ?? null);
   const isAdmin = effectiveRole === "admin";
+  const queryClient = useQueryClient();
+  const ownUpdateRef = useRef(0);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const isOwnUpdate = () => {
+      if (Date.now() - ownUpdateRef.current < 1500) {
+        ownUpdateRef.current = 0;
+        return true;
+      }
+      return false;
+    };
+
+    const channel = supabase
+      .channel(`vehicle-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "vehicle_availability",
+          filter: `vehicle_id=eq.${id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["vehicle-availability", id] });
+          if (!isOwnUpdate()) {
+            toast.info("Gegevens bijgewerkt door andere gebruiker");
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "vehicle_maintenance",
+          filter: `vehicle_id=eq.${id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["vehicle-maintenance", id] });
+          queryClient.invalidateQueries({ queryKey: ["overdue-maintenance"] });
+          if (!isOwnUpdate()) {
+            toast.info("Gegevens bijgewerkt door andere gebruiker");
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, queryClient]);
 
   const availMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -94,8 +149,9 @@ export default function VehicleDetail() {
           type="button"
           onClick={() => navigate("/vloot")}
           className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[hsl(var(--gold-deep))] hover:text-[hsl(var(--gold))] transition-colors"
+          aria-label="Terug naar vloot"
         >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
           Terug naar vloot
         </button>
 
@@ -121,7 +177,7 @@ export default function VehicleDetail() {
             <div className="flex items-center gap-2 flex-wrap justify-end">
               {baselineDateLabel && (
                 <span className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold-soft)/0.5)] px-2 py-1 text-[11px] font-medium text-[hsl(var(--gold-deep))]">
-                  <ShieldCheck className="h-3 w-3" strokeWidth={1.75} />
+                  <ShieldCheck className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                   Baseline gezet op {baselineDateLabel}
                 </span>
               )}
@@ -131,12 +187,12 @@ export default function VehicleDetail() {
                   onClick={() => setBaselineSeedActive(true)}
                   className="btn-luxe !h-9"
                 >
-                  <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
                   Baseline instellen
                 </button>
               )}
-              <span className={`inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${statusCfg.textClass}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dotClass}`} />
+              <span className={`inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${statusCfg.textClass}`} aria-label={`Status: ${statusCfg.label}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dotClass}`} aria-hidden="true" />
                 {statusCfg.label}
               </span>
             </div>
@@ -187,20 +243,20 @@ export default function VehicleDetail() {
 
         <Tabs defaultValue="specs" className="space-y-4">
           <TabsList className="w-full justify-start rounded-none border-b border-[hsl(var(--gold)/0.2)] bg-transparent px-0 h-auto py-0 gap-0 overflow-x-auto">
-            <TabsTrigger value="specs" className={TAB_TRIGGER_CLASS}>
-              <Truck className="h-3.5 w-3.5" strokeWidth={1.5} />Specificaties
+            <TabsTrigger value="specs" className={TAB_TRIGGER_CLASS} aria-label="Specificaties">
+              <Truck className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />Specificaties
             </TabsTrigger>
-            <TabsTrigger value="docs" className={TAB_TRIGGER_CLASS}>
-              <FileText className="h-3.5 w-3.5" strokeWidth={1.5} />Documenten
+            <TabsTrigger value="docs" className={TAB_TRIGGER_CLASS} aria-label="Documenten">
+              <FileText className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />Documenten
             </TabsTrigger>
-            <TabsTrigger value="maintenance" className={TAB_TRIGGER_CLASS}>
-              <Wrench className="h-3.5 w-3.5" strokeWidth={1.5} />Onderhoud
+            <TabsTrigger value="maintenance" className={TAB_TRIGGER_CLASS} aria-label="Onderhoud">
+              <Wrench className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />Onderhoud
             </TabsTrigger>
-            <TabsTrigger value="availability" className={TAB_TRIGGER_CLASS}>
-              <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.5} />Beschikbaarheid
+            <TabsTrigger value="availability" className={TAB_TRIGGER_CLASS} aria-label="Beschikbaarheid">
+              <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />Beschikbaarheid
             </TabsTrigger>
-            <TabsTrigger value="performance" className={TAB_TRIGGER_CLASS}>
-              <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.5} />Prestaties
+            <TabsTrigger value="performance" className={TAB_TRIGGER_CLASS} aria-label="Prestaties">
+              <BarChart3 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />Prestaties
             </TabsTrigger>
           </TabsList>
 
@@ -252,7 +308,7 @@ export default function VehicleDetail() {
                   onClick={() => setShowDocumentDialog(true)}
                   className="btn-luxe btn-luxe--primary !h-9"
                 >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                   Nieuw document
                 </button>
               </div>
@@ -270,7 +326,7 @@ export default function VehicleDetail() {
                         className="flex items-center justify-between gap-3 py-3 border-b border-[hsl(var(--gold)/0.08)] last:border-0"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <FileText className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" strokeWidth={1.5} />
+                          <FileText className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" strokeWidth={1.5} aria-hidden="true" />
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-foreground truncate">
                               {DOC_LABELS[doc.doc_type] || doc.doc_type}
@@ -286,13 +342,13 @@ export default function VehicleDetail() {
                           )}
                           {isExpired && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-700 text-[11px] font-medium">
-                              <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                              <AlertTriangle className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                               Verlopen
                             </span>
                           )}
                           {isWarning && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 text-[11px] font-medium">
-                              <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                              <AlertTriangle className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                               {daysLeft}d
                             </span>
                           )}
@@ -315,7 +371,7 @@ export default function VehicleDetail() {
                   onClick={() => setShowMaintenanceDialog(true)}
                   className="btn-luxe btn-luxe--primary !h-9"
                 >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                   Nieuw onderhoud
                 </button>
               </div>
@@ -349,7 +405,7 @@ export default function VehicleDetail() {
                             )}
                             {isOverdue && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-700 text-[11px] font-medium">
-                                <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                                <AlertTriangle className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                                 Verlopen
                               </span>
                             )}
@@ -377,6 +433,7 @@ export default function VehicleDetail() {
                               type="button"
                               disabled={completeMaintenance.isPending}
                               onClick={() => {
+                                ownUpdateRef.current = Date.now();
                                 completeMaintenance.mutate(
                                   { id: m.id, vehicleId: m.vehicle_id },
                                   { onSuccess: () => toast.success("Onderhoud afgerond") }
@@ -384,7 +441,7 @@ export default function VehicleDetail() {
                               }}
                               className="btn-luxe !h-8 !text-xs !px-2.5"
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
                               Afronden
                             </button>
                           )}
@@ -419,12 +476,23 @@ export default function VehicleDetail() {
                             : dayStatus === "niet_beschikbaar"
                             ? "bg-rose-500/10 border-rose-400/40"
                             : "bg-[hsl(var(--gold-soft)/0.25)] border-[hsl(var(--gold)/0.2)]";
+                          const statusLabel = dayStatus === "beschikbaar"
+                            ? "beschikbaar"
+                            : dayStatus === "niet_beschikbaar"
+                            ? "niet beschikbaar"
+                            : "niet ingepland";
+                          const dayAriaLabel = `${format(d, "d MMMM yyyy", { locale: nl })}, ${statusLabel}`;
                           return (
-                            <div key={dayIdx} className={`rounded-lg border p-2 text-center ${color}`}>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                            <div
+                              key={dayIdx}
+                              role="group"
+                              aria-label={dayAriaLabel}
+                              className={`rounded-lg border p-2 text-center ${color}`}
+                            >
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide" aria-hidden="true">
                                 {format(d, "EEE", { locale: nl })}
                               </p>
-                              <p className="text-sm font-semibold text-foreground tabular-nums mt-0.5">
+                              <p className="text-sm font-semibold text-foreground tabular-nums mt-0.5" aria-hidden="true">
                                 {format(d, "d")}
                               </p>
                             </div>
@@ -437,15 +505,15 @@ export default function VehicleDetail() {
               </div>
               <div className="flex flex-wrap gap-4 pt-2 text-[11px] text-muted-foreground border-t border-[hsl(var(--gold)/0.12)]">
                 <div className="flex items-center gap-1.5 pt-2">
-                  <div className="h-3 w-3 rounded bg-emerald-500/15 border border-emerald-400/40" />
+                  <div className="h-3 w-3 rounded bg-emerald-500/15 border border-emerald-400/40" aria-hidden="true" />
                   Beschikbaar
                 </div>
                 <div className="flex items-center gap-1.5 pt-2">
-                  <div className="h-3 w-3 rounded bg-[hsl(var(--gold-soft)/0.25)] border border-[hsl(var(--gold)/0.2)]" />
+                  <div className="h-3 w-3 rounded bg-[hsl(var(--gold-soft)/0.25)] border border-[hsl(var(--gold)/0.2)]" aria-hidden="true" />
                   Niet ingepland
                 </div>
                 <div className="flex items-center gap-1.5 pt-2">
-                  <div className="h-3 w-3 rounded bg-rose-500/10 border border-rose-400/40" />
+                  <div className="h-3 w-3 rounded bg-rose-500/10 border border-rose-400/40" aria-hidden="true" />
                   Niet beschikbaar
                 </div>
               </div>
