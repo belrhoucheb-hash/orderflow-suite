@@ -177,10 +177,6 @@ const NewOrder = () => {
     setFreightLines(prev => prev.filter(l => l.id !== id));
   };
 
-  const updateFreightLine = (id: string, field: keyof FreightLine, value: string) => {
-    setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
-  };
-
   // Eerste Laden/Lossen freightLine, gekoppeld aan het gestructureerde
   // pickup/delivery-adres (incl. lat/lng, postcode, plaats).
   const primaryLadenId = useMemo(
@@ -191,6 +187,21 @@ const NewOrder = () => {
     () => freightLines.find(l => l.activiteit === "Lossen")?.id ?? null,
     [freightLines],
   );
+
+  const updateFreightLine = (id: string, field: keyof FreightLine, value: string) => {
+    setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+    // Wanneer iets de locatie-string van de primaire Laden/Lossen-regel wijzigt
+    // buiten de Google-adres-flow om, kunnen adres en lat/lng uiteenlopen.
+    // Markeer coords dan als handmatig zodat chauffeurs geen verouderde
+    // coordinaten krijgen en de planner het verschil ziet.
+    if (field === "locatie") {
+      if (id === primaryLadenId) {
+        setPickupAddr(prev => (prev.coords_manual ? prev : { ...prev, coords_manual: true }));
+      } else if (id === primaryLossenId) {
+        setDeliveryAddr(prev => (prev.coords_manual ? prev : { ...prev, coords_manual: true }));
+      }
+    }
+  };
 
   const handlePickupAddrChange = (v: AddressValue) => {
     setPickupAddr(v);
@@ -216,6 +227,24 @@ const NewOrder = () => {
         ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
       } : l));
     }
+  };
+
+  // Bij blur checken we of de drie kritische velden gevuld zijn. Zo niet,
+  // dan zetten we meteen een error neer zodat de gebruiker niet pas bij
+  // submit ziet dat straat, postcode of plaats ontbreken.
+  const validateStructuredAddress = (addr: AddressValue): string | null => {
+    if (!addr.street.trim() || !addr.zipcode.trim() || !addr.city.trim()) {
+      return "Vul straat, postcode en plaats in";
+    }
+    return null;
+  };
+  const handlePickupAddrBlur = () => {
+    const err = validateStructuredAddress(pickupAddr);
+    if (err) setErrors(prev => ({ ...prev, pickup_address: err }));
+  };
+  const handleDeliveryAddrBlur = () => {
+    const err = validateStructuredAddress(deliveryAddr);
+    if (err) setErrors(prev => ({ ...prev, delivery_address: err }));
   };
 
   const addToFreightSummary = () => {
@@ -312,9 +341,19 @@ const NewOrder = () => {
 
     if (!clientName.trim()) newErrors.client_name = "Klantnaam is verplicht";
     if (!afdeling.trim()) newErrors.afdeling = "Kies een afdeling, wordt normaal automatisch bepaald uit het traject";
-    if (!pickupLine?.locatie?.trim()) newErrors.pickup_address = "Ophaaladres is verplicht";
+    // Valideer eerst op de gestructureerde adresvelden zelf, zodat losse
+    // huisnummers zonder straat of plaats niet stiekem door de composeerde
+    // string-check heen glippen.
+    const pickupStructured =
+      pickupAddr.street.trim() && pickupAddr.zipcode.trim() && pickupAddr.city.trim();
+    if (!pickupStructured) newErrors.pickup_address = "Vul straat, postcode en plaats in";
+    else if (!pickupLine?.locatie?.trim()) newErrors.pickup_address = "Ophaaladres is verplicht";
     else if (!isValidAddress(pickupLine.locatie)) newErrors.pickup_address = "Onvolledig ophaaladres, straat en huisnummer vereist";
-    if (!deliveryLine?.locatie?.trim()) newErrors.delivery_address = "Afleveradres is verplicht";
+
+    const deliveryStructured =
+      deliveryAddr.street.trim() && deliveryAddr.zipcode.trim() && deliveryAddr.city.trim();
+    if (!deliveryStructured) newErrors.delivery_address = "Vul straat, postcode en plaats in";
+    else if (!deliveryLine?.locatie?.trim()) newErrors.delivery_address = "Afleveradres is verplicht";
     else if (!isValidAddress(deliveryLine.locatie)) newErrors.delivery_address = "Onvolledig afleveradres, straat en huisnummer vereist";
     if (!quantity || parseInt(quantity) <= 0) newErrors.quantity = "Aantal moet groter zijn dan 0";
     if (!weightKg || parseFloat(weightKg) <= 0) newErrors.weight_kg = "Gewicht moet groter zijn dan 0";
@@ -771,6 +810,7 @@ const NewOrder = () => {
                   <AddressAutocomplete
                     value={pickupAddr}
                     onChange={handlePickupAddrChange}
+                    onBlur={handlePickupAddrBlur}
                     error={errors.pickup_address}
                   />
                 </div>
@@ -781,6 +821,7 @@ const NewOrder = () => {
                   <AddressAutocomplete
                     value={deliveryAddr}
                     onChange={handleDeliveryAddrChange}
+                    onBlur={handleDeliveryAddrBlur}
                     error={errors.delivery_address}
                   />
                 </div>
@@ -822,21 +863,29 @@ const NewOrder = () => {
                       <label className="text-xs font-medium text-muted-foreground block mb-1.5">
                         {line.activiteit === "Laden" ? "Ophaaladres" : "Afleveradres"}
                       </label>
-                      <LegacyAddressAutocomplete
-                        value={line.locatie}
-                        onChange={v => {
-                          updateFreightLine(line.id, "locatie", v);
-                          if (line.activiteit === "Laden") clearError("pickup_address");
-                          if (line.activiteit === "Lossen") clearError("delivery_address");
-                        }}
-                        className={cn(
-                          "h-10 text-sm",
-                          line.activiteit === "Laden" && errors.pickup_address && "border-[hsl(var(--primary))]",
-                          line.activiteit === "Lossen" && errors.delivery_address && "border-[hsl(var(--primary))]",
-                        )}
-                      />
-                      {line.activiteit === "Laden" && errors.pickup_address && <span className="text-[11px] text-[hsl(var(--primary))] mt-0.5 block">{errors.pickup_address}</span>}
-                      {line.activiteit === "Lossen" && errors.delivery_address && <span className="text-[11px] text-[hsl(var(--primary))] mt-0.5 block">{errors.delivery_address}</span>}
+                      {line.id === primaryLadenId || line.id === primaryLossenId ? (
+                        // De eerste Laden- en Lossen-regel lezen hun adres uit het
+                        // gestructureerde Google-adres hierboven. Een losse input
+                        // zou lat/lng kunnen wegvagen, dus we tonen een readonly
+                        // samenvatting plus een badge.
+                        <div className="space-y-1">
+                          <div className="h-10 text-sm flex items-center rounded-md border border-[hsl(var(--border)_/_0.6)] bg-[hsl(var(--muted)_/_0.4)] px-3 text-foreground">
+                            {line.locatie || <span className="text-muted-foreground">Vul het {line.activiteit === "Laden" ? "ophaaladres" : "afleveradres"} hierboven in</span>}
+                          </div>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase text-[hsl(var(--gold-deep))]">
+                            <span className="w-1 h-1 rounded-full bg-[hsl(var(--gold))]" />
+                            Aangeleverd via Google-adres hierboven
+                          </span>
+                        </div>
+                      ) : (
+                        <LegacyAddressAutocomplete
+                          value={line.locatie}
+                          onChange={v => {
+                            updateFreightLine(line.id, "locatie", v);
+                          }}
+                          className="h-10 text-sm"
+                        />
+                      )}
                     </div>
 
                     {/* Datum + tijdvenster */}

@@ -124,8 +124,10 @@ describe("NewOrder", () => {
 
   it("shows address autocomplete fields", () => {
     renderNewOrder();
-    const addressInputs = document.querySelectorAll('[data-testid^="address-"]');
-    expect(addressInputs.length).toBeGreaterThan(0);
+    // De primaire Laden/Lossen-regels tonen nu geen losse legacy-input maar
+    // een readonly-badge die verwijst naar het Google-adres hierboven.
+    // Dat label is de stabiele anker voor deze test.
+    expect(screen.getAllByText(/Aangeleverd via Google-adres hierboven/i).length).toBeGreaterThan(0);
   });
 
   it("can type in client name field (setClientName)", async () => {

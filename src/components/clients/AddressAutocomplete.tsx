@@ -31,6 +31,7 @@ interface Props {
   value: AddressValue;
   onChange: (v: AddressValue) => void;
   error?: string;
+  onBlur?: () => void;
 }
 
 const NL_CENTER = { lat: 52.1326, lng: 5.2913 };
@@ -58,7 +59,7 @@ function parsePlace(place: google.maps.places.PlaceResult): Partial<AddressValue
   };
 }
 
-export function AddressAutocomplete({ value, onChange, error }: Props) {
+export function AddressAutocomplete({ value, onChange, error, onBlur }: Props) {
   const { isLoaded, loadError, missingKey } = useGoogleMaps();
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const [searchInput, setSearchInput] = useState(() => {
@@ -112,7 +113,7 @@ export function AddressAutocomplete({ value, onChange, error }: Props) {
 
   if (missingKey || loadError) {
     return (
-      <ManualAddressFields value={value} onChange={onChange} error={error} />
+      <ManualAddressFields value={value} onChange={onChange} error={error} onBlur={onBlur} />
     );
   }
 
@@ -141,6 +142,7 @@ export function AddressAutocomplete({ value, onChange, error }: Props) {
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
+            onBlur={onBlur}
             placeholder="Typ straat + huisnummer, bijv. Winthontlaan 30B Utrecht"
             className="field-luxe w-full"
           />
@@ -217,17 +219,19 @@ function ManualAddressFields({
   value,
   onChange,
   error,
+  onBlur,
 }: {
   value: AddressValue;
   onChange: (v: AddressValue) => void;
   error?: string;
+  onBlur?: () => void;
 }) {
   const update = <K extends keyof AddressValue>(key: K, next: AddressValue[K]) => {
     onChange({ ...value, [key]: next, lat: null, lng: null, coords_manual: false });
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" onBlur={onBlur}>
       <div className="rounded border border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold)/0.08)] p-3 text-xs text-[hsl(var(--gold-deep))]">
         Adres-autocomplete is niet beschikbaar. Vul het adres handmatig in, coordinaten worden later bijgewerkt.
       </div>
