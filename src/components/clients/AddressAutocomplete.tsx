@@ -110,19 +110,9 @@ export function AddressAutocomplete({ value, onChange, error }: Props) {
     }
   }, [value.street, value.house_number, value.house_number_suffix]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (missingKey) {
+  if (missingKey || loadError) {
     return (
-      <div className="rounded border border-destructive/50 bg-destructive/5 p-3 text-xs text-destructive">
-        VITE_GOOGLE_MAPS_API_KEY ontbreekt in de env. Neem contact op met de beheerder.
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="rounded border border-destructive/50 bg-destructive/5 p-3 text-xs text-destructive">
-        Google Maps kon niet laden. Controleer je internetverbinding en probeer opnieuw.
-      </div>
+      <ManualAddressFields value={value} onChange={onChange} error={error} />
     );
   }
 
@@ -229,6 +219,93 @@ function ReadField({
       <div className="field-luxe flex min-h-[2.25rem] items-center bg-muted/30 text-sm text-foreground">
         {value || <span className="text-muted-foreground">—</span>}
       </div>
+    </div>
+  );
+}
+
+function ManualAddressFields({
+  value,
+  onChange,
+  error,
+}: {
+  value: AddressValue;
+  onChange: (v: AddressValue) => void;
+  error?: string;
+}) {
+  const update = <K extends keyof AddressValue>(key: K, next: AddressValue[K]) => {
+    onChange({ ...value, [key]: next, lat: null, lng: null, coords_manual: false });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded border border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold)/0.08)] p-3 text-xs text-[hsl(var(--gold-deep))]">
+        Adres-autocomplete is niet beschikbaar. Vul het adres handmatig in, coordinaten worden later bijgewerkt.
+      </div>
+
+      <div className="grid grid-cols-12 gap-2">
+        <InputField
+          label="Straat"
+          value={value.street}
+          onChange={(v) => update("street", v)}
+          className="col-span-8"
+        />
+        <InputField
+          label="Nr."
+          value={value.house_number}
+          onChange={(v) => update("house_number", v)}
+          className="col-span-2"
+        />
+        <InputField
+          label="Bijvoegsel"
+          value={value.house_number_suffix}
+          onChange={(v) => update("house_number_suffix", v)}
+          className="col-span-2"
+        />
+        <InputField
+          label="Postcode"
+          value={value.zipcode}
+          onChange={(v) => update("zipcode", v)}
+          className="col-span-4"
+        />
+        <InputField
+          label="Plaats"
+          value={value.city}
+          onChange={(v) => update("city", v)}
+          className="col-span-6"
+        />
+        <InputField
+          label="Land"
+          value={value.country}
+          onChange={(v) => update("country", v)}
+          className="col-span-2"
+        />
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function InputField({
+  label,
+  value,
+  onChange,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label className="label-luxe">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="field-luxe w-full"
+      />
     </div>
   );
 }
