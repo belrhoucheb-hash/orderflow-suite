@@ -9,6 +9,7 @@ export interface Client {
   contact_person: string | null;
   email: string | null;
   phone: string | null;
+  primary_contact_id: string | null;
   address: string | null;
   zipcode: string | null;
   city: string | null;
@@ -222,6 +223,43 @@ export function useCreateClientLocation() {
     onSuccess: (row) =>
       qc.invalidateQueries({ queryKey: ["client_locations", row.client_id] }),
   });
+}
+
+/**
+ * Zoekt of er al een klant bestaat met hetzelfde KvK-nummer in dezelfde tenant.
+ * Query draait pas als er minstens 4 tekens ingetypt zijn, om overbodige calls
+ * te vermijden tijdens typen. Bij edit kan de eigen id uitgesloten worden.
+ */
+export function useClientDuplicateCheck(kvk: string, excludeId?: string) {
+  const { tenant } = useTenant();
+  const trimmed = kvk.trim();
+
+  const query = useQuery({
+    queryKey: ["clients_duplicate_kvk", tenant?.id, trimmed.toLowerCase(), excludeId ?? null],
+    enabled: !!tenant?.id && trimmed.length >= 4,
+    staleTime: 30_000,
+    queryFn: async () => {
+      let q = supabase
+        .from("clients")
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .ilike("kvk_number", trimmed)
+        .limit(1);
+
+      if (excludeId) {
+        q = q.neq("id", excludeId);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data?.[0] as Client | undefined) ?? null;
+    },
+  });
+
+  return {
+    duplicate: query.data ?? null,
+    isChecking: query.isFetching,
+  };
 }
 
 export function useUpdateClient() {
