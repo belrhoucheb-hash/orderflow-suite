@@ -2,12 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import { Search, Plus, Building2, X, ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useClients, type Client } from "@/hooks/useClients";
 import { ClientDetailPanel } from "@/components/clients/ClientDetailPanel";
 import { NewClientDialog } from "@/components/clients/NewClientDialog";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function Clients() {
   const [search, setSearch] = useState("");
@@ -27,104 +27,107 @@ export default function Clients() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [selectedClient]);
 
+  const count = clients?.length ?? 0;
+
   return (
     <div className="flex h-full">
-      {/* Main table area */}
       <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedClient ? "lg:mr-[420px]" : ""}`}>
-        <div className="flex items-center justify-between px-4 md:px-6 py-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground tracking-tight">Klanten</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {clients?.length ?? 0} klanten in het systeem
-            </p>
-          </div>
-          <Button
-            onClick={() => setShowNewDialog(true)}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Nieuwe Klant
-          </Button>
-        </div>
+        <div className="p-6 space-y-4 max-w-[1800px] mx-auto w-full">
+          <PageHeader
+            title="Klanten"
+            subtitle={`${count} ${count === 1 ? "klant" : "klanten"} in het systeem`}
+            actions={
+              <button
+                type="button"
+                onClick={() => setShowNewDialog(true)}
+                className="btn-luxe btn-luxe--primary !h-9"
+              >
+                <Plus className="h-4 w-4" />
+                Nieuwe klant
+              </button>
+            }
+          />
 
-        <div className="px-4 md:px-6 pb-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="card--luxe p-4 flex items-center gap-3">
+            <Search className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
             <Input
               placeholder="Zoek op naam of email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
+              className="field-luxe flex-1 max-w-md"
             />
           </div>
-        </div>
 
-        <div className="px-4 md:px-6 flex-1 overflow-auto pb-8">
-          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Klantnaam</th>
-                  <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Contactpersoon</th>
-                  <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Email</th>
-                  <th className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Telefoon</th>
-                  <th className="text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Actieve Orders</th>
-                  <th className="text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 px-5 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={6}><LoadingState message="Klanten laden..." /></td></tr>
-                ) : isError ? (
-                  <tr><td colSpan={6}>
-                    <QueryError message="Kan klantgegevens niet laden." onRetry={() => refetch()} />
-                  </td></tr>
-                ) : clients?.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Geen klanten gevonden</td></tr>
-                ) : (
-                  clients?.map((client) => (
-                    <tr
-                      key={client.id}
-                      onClick={() => setSelectedClient(client)}
-                      className={`border-b border-border/50 cursor-pointer transition-colors hover:bg-muted/20 ${
-                        selectedClient?.id === client.id ? "bg-primary/5" : ""
-                      }`}
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <Building2 className="h-4 w-4 text-primary" />
-                          </div>
-                          <span className="text-sm font-medium text-foreground">{client.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.contact_person || "—"}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.email || "—"}</td>
-                      <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.phone || "—"}</td>
-                      <td className="px-5 py-3.5 text-center">
-                        <span className="text-sm font-medium text-foreground">{client.active_order_count}</span>
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <Badge
-                          variant={client.is_active ? "default" : "secondary"}
-                          className={client.is_active
-                            ? "bg-emerald-500/10 text-emerald-700 border-emerald-200 hover:bg-emerald-500/10"
-                            : "bg-muted text-muted-foreground"
-                          }
+          <div className="card--luxe overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full data-table">
+                <thead>
+                  <tr
+                    className="border-b border-[hsl(var(--gold)/0.2)] [&>th]:!font-display [&>th]:!text-[12px] [&>th]:!uppercase [&>th]:!tracking-[0.16em] [&>th]:!text-[hsl(var(--gold-deep))] [&>th]:!font-semibold [&>th]:!py-3.5 [&>th]:!px-5"
+                    style={{ background: "linear-gradient(180deg, hsl(var(--gold-soft)/0.4), hsl(var(--gold-soft)/0.15))" }}
+                  >
+                    <th className="text-left">Klantnaam</th>
+                    <th className="text-left">Contactpersoon</th>
+                    <th className="text-left">Email</th>
+                    <th className="text-left">Telefoon</th>
+                    <th className="text-center">Actieve orders</th>
+                    <th className="text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr><td colSpan={6}><LoadingState message="Klanten laden..." /></td></tr>
+                  ) : isError ? (
+                    <tr><td colSpan={6}>
+                      <QueryError message="Kan klantgegevens niet laden." onRetry={() => refetch()} />
+                    </td></tr>
+                  ) : clients?.length === 0 ? (
+                    <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Geen klanten gevonden</td></tr>
+                  ) : (
+                    clients?.map((client) => {
+                      const isSelected = selectedClient?.id === client.id;
+                      return (
+                        <tr
+                          key={client.id}
+                          onClick={() => setSelectedClient(client)}
+                          className={`border-b border-[hsl(var(--gold)/0.08)] cursor-pointer transition-colors hover:bg-[hsl(var(--gold-soft)/0.3)] ${
+                            isSelected ? "bg-[hsl(var(--gold-soft)/0.5)]" : ""
+                          }`}
                         >
-                          {client.is_active ? "Actief" : "Inactief"}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="h-8 w-8 rounded-lg flex items-center justify-center border border-[hsl(var(--gold)/0.3)]"
+                                style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.3))" }}
+                              >
+                                <Building2 className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+                              </div>
+                              <span className="text-sm font-medium text-foreground">{client.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.contact_person || "—"}</td>
+                          <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.email || "—"}</td>
+                          <td className="px-5 py-3.5 text-sm text-muted-foreground">{client.phone || "—"}</td>
+                          <td className="px-5 py-3.5 text-center">
+                            <span className="text-sm font-medium tabular-nums text-foreground">{client.active_order_count}</span>
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            <span className={`badge-status badge-status--luxe ${client.is_active ? "badge-status--delivered" : "badge-status--cancelled"}`}>
+                              <span className="badge-status__dot" />
+                              {client.is_active ? "Actief" : "Inactief"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Backdrop for mobile */}
       {selectedClient && (
         <div
           className="fixed inset-0 bg-black/40 z-30 lg:hidden"
@@ -132,15 +135,26 @@ export default function Clients() {
         />
       )}
 
-      {/* Detail panel */}
       {selectedClient && (
-        <div ref={panelRef} className="fixed inset-y-0 right-0 w-full sm:w-96 lg:w-[420px] bg-card border-l border-border shadow-xl z-40 overflow-y-auto">
-          <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border sticky top-0 bg-card z-10">
-            <div className="flex items-center gap-2">
+        <div
+          ref={panelRef}
+          className="fixed inset-y-0 right-0 w-full sm:w-96 lg:w-[420px] bg-card border-l border-[hsl(var(--gold)/0.25)] shadow-2xl z-40 overflow-y-auto"
+          style={{ boxShadow: "-12px 0 32px -8px hsl(var(--gold-deep)/0.08)" }}
+        >
+          <div
+            className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--gold)/0.2)] sticky top-0 bg-card z-10"
+            style={{ background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.2) 100%)" }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
               <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSelectedClient(null)}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <h2 className="text-base font-semibold text-foreground">{selectedClient.name}</h2>
+              <h2
+                className="text-base font-semibold text-foreground truncate font-display tracking-tight"
+                title={selectedClient.name}
+              >
+                {selectedClient.name}
+              </h2>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setSelectedClient(null)}>
               <X className="h-4 w-4" />

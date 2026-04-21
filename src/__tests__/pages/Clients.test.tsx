@@ -61,13 +61,13 @@ describe("Clients", () => {
 
   it("has new client button", () => {
     renderClients();
-    expect(screen.getByText("Nieuwe Klant")).toBeInTheDocument();
+    expect(screen.getByText("Nieuwe klant")).toBeInTheDocument();
   });
 
   it("opens new client dialog (setShowNewDialog)", async () => {
     const user = userEvent.setup();
     renderClients();
-    await user.click(screen.getByText("Nieuwe Klant"));
+    await user.click(screen.getByText("Nieuwe klant"));
     expect(screen.getByTestId("new-client-dialog")).toBeInTheDocument();
   });
 

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -76,7 +75,7 @@ export function ClientContactsSection({ clientId }: Props) {
   };
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-8 text-center">Laden...</p>;
+    return <p className="text-sm text-muted-foreground py-10 text-center">Laden...</p>;
   }
 
   const rows = contacts ?? [];
@@ -94,14 +93,14 @@ export function ClientContactsSection({ clientId }: Props) {
             ? "Nog geen contactpersonen"
             : `${rows.length} contactperso${rows.length === 1 ? "on" : "nen"}`}
         </p>
-        <Button size="sm" onClick={openNew}>
-          <Plus className="h-4 w-4 mr-1" strokeWidth={1.5} />
+        <button type="button" onClick={openNew} className="btn-luxe !h-8 !px-3 !text-[12px]">
+          <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
           Toevoegen
-        </Button>
+        </button>
       </div>
 
       {sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">
+        <p className="text-sm text-muted-foreground py-10 text-center">
           Voeg een primair en backup contactpersoon toe.
         </p>
       ) : (
@@ -109,17 +108,18 @@ export function ClientContactsSection({ clientId }: Props) {
           {sorted.map((c) => (
             <div
               key={c.id}
-              className="flex items-start justify-between rounded-lg border border-border p-3 gap-3"
+              className="flex items-start justify-between rounded-xl border border-[hsl(var(--gold)/0.2)] p-3 gap-3"
+              style={{ background: "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.18) 100%)" }}
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-foreground">{c.name}</span>
                   <RoleBadge role={c.role} />
                   {!c.is_active && (
-                    <Badge variant="outline" className="text-xs">Inactief</Badge>
+                    <span className="callout--luxe__tag !py-0.5 !px-2 !text-[10px] !text-muted-foreground">Inactief</span>
                   )}
                 </div>
-                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                   {c.email && (
                     <span className="flex items-center gap-1">
                       <Mail className="h-3 w-3" strokeWidth={1.5} />
@@ -134,12 +134,12 @@ export function ClientContactsSection({ clientId }: Props) {
                   )}
                 </div>
                 {c.notes && (
-                  <p className="text-xs text-muted-foreground italic mt-1">{c.notes}</p>
+                  <p className="text-xs text-muted-foreground italic mt-1.5">{c.notes}</p>
                 )}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-[hsl(var(--gold-deep))]">
                     <MoreVertical className="h-4 w-4" strokeWidth={1.5} />
                   </Button>
                 </DropdownMenuTrigger>
@@ -196,21 +196,28 @@ export function ClientContactsSection({ clientId }: Props) {
 function RoleBadge({ role }: { role: ClientContact["role"] }) {
   if (role === "primary") {
     return (
-      <Badge className="bg-primary/10 text-primary border-primary/20 text-xs font-normal">
+      <span
+        className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-[0.08em] border"
+        style={{
+          background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+          borderColor: "hsl(var(--gold-deep))",
+          color: "hsl(var(--primary-foreground))",
+        }}
+      >
         {CLIENT_CONTACT_ROLE_LABELS.primary}
-      </Badge>
+      </span>
     );
   }
   if (role === "backup") {
     return (
-      <Badge variant="outline" className="text-xs font-normal">
+      <span className="callout--luxe__tag !py-0.5 !px-2 !text-[10px]">
         {CLIENT_CONTACT_ROLE_LABELS.backup}
-      </Badge>
+      </span>
     );
   }
   return (
-    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+    <span className="callout--luxe__tag !py-0.5 !px-2 !text-[10px] !text-muted-foreground">
       {CLIENT_CONTACT_ROLE_LABELS.other}
-    </Badge>
+    </span>
   );
 }

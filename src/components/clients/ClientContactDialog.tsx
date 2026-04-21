@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -116,42 +114,47 @@ export function ClientContactDialog({ open, onOpenChange, clientId, contact }: P
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Contactpersoon bewerken" : "Nieuwe contactpersoon"}</DialogTitle>
+          <DialogTitle className="font-display text-lg tracking-tight">
+            {isEdit ? "Contactpersoon bewerken" : "Nieuwe contactpersoon"}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <Label>Naam *</Label>
+            <span className="label-luxe">Naam *</span>
             <Input
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              className="field-luxe"
             />
             {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>E-mail</Label>
+              <span className="label-luxe">E-mail</span>
               <Input
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                className="field-luxe"
               />
               {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
             </div>
             <div>
-              <Label>Telefoon</Label>
+              <span className="label-luxe">Telefoon</span>
               <Input
                 value={form.phone}
                 onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                className="field-luxe"
               />
             </div>
           </div>
           <div>
-            <Label>Rol *</Label>
+            <span className="label-luxe">Rol *</span>
             <Select
               value={form.role}
               onValueChange={(v) => setForm((f) => ({ ...f, role: v as ClientContactRole }))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="btn-luxe w-full justify-between">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -165,20 +168,29 @@ export function ClientContactDialog({ open, onOpenChange, clientId, contact }: P
             {errors.role && <p className="text-xs text-destructive mt-1">{errors.role}</p>}
           </div>
           <div>
-            <Label>Notities</Label>
+            <span className="label-luxe">Notities</span>
             <Textarea
               rows={2}
               value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              className="field-luxe"
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex justify-end gap-2 pt-3 border-t border-[hsl(var(--gold)/0.2)]">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="btn-luxe btn-luxe--ghost !h-9"
+            >
               Annuleren
-            </Button>
-            <Button type="submit" disabled={saving}>
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-luxe btn-luxe--primary !h-9"
+            >
               {saving ? "Opslaan..." : isEdit ? "Bijwerken" : "Toevoegen"}
-            </Button>
+            </button>
           </div>
         </form>
       </DialogContent>
