@@ -223,12 +223,15 @@ describe("NewVehicleDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it("shows validation error when submitting without required fields", async () => {
-    const { toast } = await import("sonner");
+  it("shows inline validation errors when submitting without required fields", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     fireEvent.click(screen.getByText("Toevoegen"));
-    expect(toast.error).toHaveBeenCalledWith("Vul minimaal code, naam en kenteken in");
+    await waitFor(() => {
+      expect(screen.getByText("Code is verplicht")).toBeInTheDocument();
+      expect(screen.getByText("Naam is verplicht")).toBeInTheDocument();
+      expect(screen.getByText("Kenteken is verplicht")).toBeInTheDocument();
+    });
   });
 
   it("calls addVehicle.mutateAsync on valid submit", async () => {
@@ -425,12 +428,13 @@ describe("MaintenanceDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it("shows error toast when submitting without date", async () => {
-    const { toast } = await import("sonner");
+  it("shows inline error when submitting without date", async () => {
     const { MaintenanceDialog } = await import("@/components/fleet/MaintenanceDialog");
     render(<Wrapper><MaintenanceDialog vehicleId="v1" open={true} onOpenChange={vi.fn()} /></Wrapper>);
     fireEvent.click(screen.getByText("Inplannen"));
-    expect(toast.error).toHaveBeenCalledWith("Selecteer een geplande datum");
+    await waitFor(() => {
+      expect(screen.getByText("Geplande datum is verplicht")).toBeInTheDocument();
+    });
   });
 
   it("calls create.mutateAsync on valid submit with date", async () => {

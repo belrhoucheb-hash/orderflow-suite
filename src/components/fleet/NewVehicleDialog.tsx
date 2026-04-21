@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAddVehicle } from "@/hooks/useFleet";
 import { supabase } from "@/integrations/supabase/client";
+import { vehicleInputSchema } from "@/lib/validation/vehicleSchema";
 import { toast } from "sonner";
 
 interface Props {
@@ -27,6 +28,7 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
   const [brand, setBrand] = useState("");
   const [capacityKg, setCapacityKg] = useState("");
   const [capacityPallets, setCapacityPallets] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const addVehicle = useAddVehicle();
 
   const { data: vehicleTypes = [] } = useQuery<VehicleTypeOption[]>({
@@ -47,24 +49,42 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
     }
   }, [open, type, vehicleTypes]);
 
+  useEffect(() => {
+    if (!open) {
+      setErrors({});
+    }
+  }, [open]);
+
   const handleSubmit = async () => {
-    if (!code || !name || !plate) {
-      toast.error("Vul minimaal code, naam en kenteken in");
+    const parsed = vehicleInputSchema.safeParse({
+      code,
+      name,
+      plate,
+      type,
+      brand: brand || undefined,
+      capacity_kg: capacityKg ? Number(capacityKg) : undefined,
+      capacity_pallets: capacityPallets ? Number(capacityPallets) : undefined,
+    });
+
+    if (!parsed.success) {
+      const map: Record<string, string> = {};
+      parsed.error.issues.forEach((i) => {
+        map[i.path.join(".")] = i.message;
+      });
+      setErrors(map);
       return;
     }
-    if (!type) {
-      toast.error("Kies een voertuigtype, maak er eventueel één aan via het tabblad Types");
-      return;
-    }
+    setErrors({});
+
     try {
       await addVehicle.mutateAsync({
-        code,
-        name,
-        plate,
-        type,
-        brand: brand || undefined,
-        capacity_kg: capacityKg ? parseInt(capacityKg) : undefined,
-        capacity_pallets: capacityPallets ? parseInt(capacityPallets) : undefined,
+        code: parsed.data.code,
+        name: parsed.data.name,
+        plate: parsed.data.plate,
+        type: parsed.data.type,
+        brand: parsed.data.brand || undefined,
+        capacity_kg: parsed.data.capacity_kg,
+        capacity_pallets: parsed.data.capacity_pallets,
       });
       toast.success("Voertuig toegevoegd");
       onOpenChange(false);
@@ -80,32 +100,69 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nieuw voertuig</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs text-muted-foreground">Code</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="VH-04" /></div>
-            <div><Label className="text-xs text-muted-foreground">Kenteken</Label><Input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="XX-123-YY" /></div>
-          </div>
-          <div><Label className="text-xs text-muted-foreground">Naam</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mercedes Sprinter" /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">Type</Label>
-              <Select value={type} onValueChange={setType} disabled={vehicleTypes.length === 0}>
-                <SelectTrigger>
-                  <SelectValue placeholder={vehicleTypes.length === 0 ? "Geen types, beheer via tab Types" : "Kies type"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {vehicleTypes.map((vt) => (
-                    <SelectItem key={vt.code} value={vt.code}>{vt.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="space-y-5 pt-2">
+          <div>
+            <SectionTitle>Voertuiggegevens</SectionTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Code</Label>
+                <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="VH-04" />
+                {errors.code && <ErrorText>{errors.code}</ErrorText>}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Kenteken</Label>
+                <Input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="XX-123-YY" />
+                {errors.plate && <ErrorText>{errors.plate}</ErrorText>}
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs text-muted-foreground">Naam</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mercedes Sprinter" />
+                {errors.name && <ErrorText>{errors.name}</ErrorText>}
+              </div>
             </div>
-            <div><Label className="text-xs text-muted-foreground">Merk</Label><Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Mercedes" /></div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs text-muted-foreground">Max gewicht (kg)</Label><Input type="number" value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} /></div>
-            <div><Label className="text-xs text-muted-foreground">Palletplaatsen</Label><Input type="number" value={capacityPallets} onChange={(e) => setCapacityPallets(e.target.value)} /></div>
+
+          <div>
+            <SectionTitle>Type en merk</SectionTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Type</Label>
+                <Select value={type} onValueChange={setType} disabled={vehicleTypes.length === 0}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={vehicleTypes.length === 0 ? "Geen types, beheer via tab Types" : "Kies type"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehicleTypes.map((vt) => (
+                      <SelectItem key={vt.code} value={vt.code}>{vt.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.type && <ErrorText>{errors.type}</ErrorText>}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Merk</Label>
+                <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Mercedes" />
+                {errors.brand && <ErrorText>{errors.brand}</ErrorText>}
+              </div>
+            </div>
           </div>
+
+          <div>
+            <SectionTitle>Capaciteit</SectionTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Max gewicht (kg)</Label>
+                <Input type="number" value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
+                {errors.capacity_kg && <ErrorText>{errors.capacity_kg}</ErrorText>}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Palletplaatsen</Label>
+                <Input type="number" value={capacityPallets} onChange={(e) => setCapacityPallets(e.target.value)} />
+                {errors.capacity_pallets && <ErrorText>{errors.capacity_pallets}</ErrorText>}
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Annuleren</Button>
             <Button onClick={handleSubmit} disabled={addVehicle.isPending}>Toevoegen</Button>
@@ -114,4 +171,16 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-[11px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] mb-2">
+      {children}
+    </h3>
+  );
+}
+
+function ErrorText({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1 text-xs text-destructive">{children}</p>;
 }

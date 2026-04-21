@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateDocument } from "@/hooks/useFleet";
+import { vehicleDocumentInputSchema } from "@/lib/validation/vehicleSchema";
 import { toast } from "sonner";
 
 const DOC_TYPES = [
@@ -24,15 +25,36 @@ export function DocumentDialog({ vehicleId, open, onOpenChange }: Props) {
   const [docType, setDocType] = useState("apk");
   const [expiryDate, setExpiryDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const create = useCreateDocument();
 
+  useEffect(() => {
+    if (!open) setErrors({});
+  }, [open]);
+
   const handleSubmit = async () => {
+    const parsed = vehicleDocumentInputSchema.safeParse({
+      doc_type: docType,
+      expiry_date: expiryDate,
+      notes,
+    });
+
+    if (!parsed.success) {
+      const map: Record<string, string> = {};
+      parsed.error.issues.forEach((i) => {
+        map[i.path.join(".")] = i.message;
+      });
+      setErrors(map);
+      return;
+    }
+    setErrors({});
+
     try {
       await create.mutateAsync({
         vehicle_id: vehicleId,
-        doc_type: docType,
-        expiry_date: expiryDate || undefined,
-        notes: notes || undefined,
+        doc_type: parsed.data.doc_type,
+        expiry_date: parsed.data.expiry_date || undefined,
+        notes: parsed.data.notes || undefined,
       });
       toast.success("Document toegevoegd");
       onOpenChange(false);
@@ -61,14 +83,17 @@ export function DocumentDialog({ vehicleId, open, onOpenChange }: Props) {
                 ))}
               </SelectContent>
             </Select>
+            {errors.doc_type && <ErrorText>{errors.doc_type}</ErrorText>}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Vervaldatum</Label>
             <Input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+            {errors.expiry_date && <ErrorText>{errors.expiry_date}</ErrorText>}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Notities</Label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optionele notities..." />
+            {errors.notes && <ErrorText>{errors.notes}</ErrorText>}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Annuleren</Button>
@@ -78,4 +103,8 @@ export function DocumentDialog({ vehicleId, open, onOpenChange }: Props) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function ErrorText({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1 text-xs text-destructive">{children}</p>;
 }
