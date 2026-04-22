@@ -37,22 +37,27 @@ CREATE INDEX IF NOT EXISTS idx_driver_availability_driver_date
 
 ALTER TABLE public.driver_availability ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "driver_availability_tenant_select" ON public.driver_availability;
 CREATE POLICY "driver_availability_tenant_select" ON public.driver_availability
   FOR SELECT TO authenticated
   USING (tenant_id = public.get_user_tenant_id());
 
+DROP POLICY IF EXISTS "driver_availability_tenant_insert" ON public.driver_availability;
 CREATE POLICY "driver_availability_tenant_insert" ON public.driver_availability
   FOR INSERT TO authenticated
   WITH CHECK (tenant_id = public.get_user_tenant_id());
 
+DROP POLICY IF EXISTS "driver_availability_tenant_update" ON public.driver_availability;
 CREATE POLICY "driver_availability_tenant_update" ON public.driver_availability
   FOR UPDATE TO authenticated
   USING (tenant_id = public.get_user_tenant_id());
 
+DROP POLICY IF EXISTS "driver_availability_tenant_delete" ON public.driver_availability;
 CREATE POLICY "driver_availability_tenant_delete" ON public.driver_availability
   FOR DELETE TO authenticated
   USING (tenant_id = public.get_user_tenant_id());
 
+DROP POLICY IF EXISTS "driver_availability_service_role" ON public.driver_availability;
 CREATE POLICY "driver_availability_service_role" ON public.driver_availability
   FOR ALL TO service_role
   USING (true) WITH CHECK (true);
