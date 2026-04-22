@@ -44,12 +44,16 @@ function parsePlace(place: google.maps.places.PlaceResult): Partial<AddressValue
     components.find((c) => c.types.includes(type))?.short_name ?? "";
 
   const streetNumber = get("street_number");
+  const subpremise = get("subpremise");
+  // Google kan huisnummer-letter (bv. "19b") op twee manieren teruggeven:
+  // inline in street_number ("19b") of als los subpremise-component ("b").
   const numberMatch = streetNumber.match(/^(\d+)\s*(.*)$/);
+  const inlineSuffix = numberMatch ? numberMatch[2].trim() : "";
 
   return {
     street: get("route"),
     house_number: numberMatch ? numberMatch[1] : streetNumber,
-    house_number_suffix: numberMatch ? numberMatch[2].trim() : "",
+    house_number_suffix: inlineSuffix || subpremise,
     zipcode: get("postal_code"),
     city: get("locality") || get("postal_town") || get("administrative_area_level_2"),
     country: getShort("country") || "NL",
