@@ -17,6 +17,20 @@ vi.mock("@/hooks/useClients", () => ({
     isError: false,
     refetch: vi.fn(),
   }),
+  useClientsList: () => ({
+    data: { clients: mockClients, totalCount: mockClients.length },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+  useClientCountries: () => ({ data: [] }),
+  useClientStats: () => ({
+    data: { total: 2, active: 1, inactive: 1, dormant: 0 },
+  }),
+  useBulkUpdateClientsActive: () => ({
+    mutateAsync: vi.fn().mockResolvedValue({ updated: 0 }),
+    isPending: false,
+  }),
 }));
 
 vi.mock("@/components/clients/ClientDetailPanel", () => ({

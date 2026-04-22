@@ -2,7 +2,7 @@
 
 Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionaliteit wordt opgeleverd. De meest recente toevoegingen staan bovenaan per sectie, en in "Wat is er nieuw sinds de vorige test" hieronder.
 
-**Laatste update**: 2026-04-21, Sprint 3 (planbord 2.0: auto-plan, dagsetup, swim-lanes per chauffeur, laadvermogen-bewaking, docksheet-export)
+**Laatste update**: 2026-04-22, klanten-vervolg (omzet YTD, slapende klanten, bulk-acties)
 
 **Hoe dit document te gebruiken**:
 - Kijk eerst naar "Wat is er nieuw sinds de vorige test" voor een snelle samenvatting.
@@ -17,6 +17,12 @@ Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionalitei
 ---
 
 ## Wat is er nieuw sinds de vorige test
+
+**Klantenlijst (2026-04-22)**:
+- In het klant-detailpaneel op het tabblad **Overzicht** staat nu een echte **"Omzet YTD"** in euro's op basis van je facturen van dit jaar. Eerder stond hier "niet beschikbaar".
+- Bovenaan de **klantenlijst** staat een nieuwe **telling-balk**: totaal aantal klanten, hoeveel actief, hoeveel inactief, en hoeveel **slapend** (geen order in 90 dagen).
+- Nieuw filter **Activiteit** om met één klik **alleen slapende klanten** te tonen, handig om ze te herbenaderen voor je ze wegschrijft.
+- In de klantenlijst kun je nu **meerdere klanten tegelijk selecteren** met een vinkje per rij. Boven de tabel verschijnt dan een balk met twee knoppen: **Zet op inactief** (met bevestiging) en **Exporteer CSV** (Excel-klaar, met naam, KvK, contact, e-mail, telefoon, stad, actieve orders en status).
 
 **Sprint 3 (2026-04-21), planbord 2.0**:
 - Naast het bestaande planbord staat er nu een nieuw planbord onder **Planning 2.0**. De oude versie blijft werken, de nieuwe moet eerst geactiveerd worden onder Stamgegevens.
@@ -33,6 +39,101 @@ Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionalitei
 
 **Sprint 1 (2026-04-17), data-integriteit**:
 - Zie §1 tot en met §7.
+
+---
+
+## Klantenlijst vervolg-scenario's (2026-04-22)
+
+### K1. Omzet YTD per klant
+
+1. Ga naar **Klanten**.
+2. Klik op een klant waarvan je weet dat er dit jaar facturen voor zijn.
+3. Blijf op het tabblad **Overzicht**.
+4. Kijk naar de bovenste balk met drie tegeltjes: **Actieve orders**, **Omzet YTD**, **Laatste rit**.
+
+Verwacht:
+- Bij **Omzet YTD** staat een echt bedrag in euro's, bijvoorbeeld "€ 12.340,00". Geen "—" meer en geen "niet beschikbaar" meer.
+- Het bedrag is de som van alle facturen van deze klant met status Verzonden, Betaald of Vervallen, met een factuurdatum vanaf 1 januari van dit jaar.
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+### K2. Slapende klanten zichtbaar maken
+
+1. Ga naar **Klanten**.
+2. Kijk naar de telling-balk bovenaan. Lees de vier tegeltjes: Totaal, Actief, Inactief, **Slapend**.
+3. Gebruik het filter **Activiteit** en kies "Alleen slapende klanten".
+4. Bekijk de lijst.
+
+Verwacht:
+- De teller **Slapend** toont hetzelfde aantal als het aantal rijen dat je nu in de lijst ziet (mogelijk verdeeld over meerdere pagina's).
+- Elke zichtbare klant heeft geen order gehad in de afgelopen 90 dagen (check voor 1 klant: open het detailpaneel, tab **Orders**, en controleer de datum van de meest recente order).
+- Zet het filter terug op "Alle klanten", dan verschijnt de volledige lijst weer.
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+### K3. Meerdere klanten tegelijk op inactief
+
+1. Ga naar **Klanten**.
+2. Gebruik de vinkjes voor de rijen om 2 of 3 klanten te selecteren.
+3. Bovenaan de tabel verschijnt een balk "X klanten geselecteerd". Klik op **Zet op inactief**.
+4. Er opent een bevestigdialog. Controleer dat, als één van de klanten nog actieve orders heeft, dit expliciet wordt gemeld.
+5. Klik op **Toch deactiveren**.
+
+Verwacht:
+- Groene melding "X klanten op inactief gezet".
+- De rijen in de lijst tonen nu de status "Inactief".
+- De teller **Actief** in de balk bovenaan is met X gezakt, en **Inactief** is met X gestegen.
+- Openstaande orders van deze klanten blijven gewoon in de orderlijst staan (het zijn archiveerde klanten, geen verwijderde).
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+### K4. Selectie alle klanten op een pagina
+
+1. Ga naar **Klanten**.
+2. Vink het vakje in de kolomkop aan (naast "Klantnaam").
+
+Verwacht:
+- Alle zichtbare rijen op deze pagina zijn aangevinkt (25 of 50 afhankelijk van paginagrootte).
+- De telling-balk boven de tabel toont dat aantal.
+- Klik het vakje in de header opnieuw, alles deselecteert.
+- Als je een filter wijzigt of naar de volgende pagina gaat, is de selectie automatisch leeggemaakt (voorkomt dat je per ongeluk onzichtbare klanten bijwerkt).
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+### K5. CSV-export naar Excel
+
+1. Ga naar **Klanten**.
+2. Selecteer 5 à 10 klanten met de vinkjes.
+3. Klik in de balk boven de tabel op **Exporteer CSV**.
+
+Verwacht:
+- Browser downloadt een bestand **klanten-export-YYYY-MM-DD.csv**.
+- Open het in Excel. Je ziet de kolommen: Naam, KvK, Contactpersoon, Email, Telefoon, Stad, Actieve orders, Status.
+- Accenten (é, ö) worden correct getoond (niet als vraagtekens of ??).
+- Alleen de geselecteerde klanten staan in het bestand, niet de volledige lijst.
+- Groene melding "X klanten geëxporteerd".
+
+- [ ] Werkt
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
 
 ---
 
