@@ -9,6 +9,7 @@ export interface Order {
   id: string;
   orderNumber: string;
   customer: string;
+  clientId?: string | null;
   email: string;
   phone: string;
   pickupAddress: string;

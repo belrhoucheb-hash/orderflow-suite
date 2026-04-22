@@ -24,6 +24,7 @@ import { createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
+import { logAudit } from "@/lib/auditLog";
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { LuxeTimePicker } from "@/components/LuxeTimePicker";
 import { FinancialTab, type FinancialTabPayload, type FinancialTabCargo } from "@/components/orders/FinancialTab";
@@ -496,6 +497,20 @@ const NewOrder = () => {
       };
 
       const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);
+
+      // Fire-and-forget audit trail per aangemaakte leg. Mag de save-flow nooit blokkeren.
+      legs.forEach((leg: any) =>
+        logAudit({
+          table_name: "orders",
+          record_id: leg.id,
+          action: "INSERT",
+          new_data: {
+            status: leg.status,
+            client_id: leg.client_id,
+            leg_role: leg.leg_role,
+          },
+        }),
+      );
 
       // §22 Info-tracking: insert info-requests voor elk veld dat "volgt van klant"
       const checkedFields = TRACKABLE_FIELDS.filter(f => infoFollows[f.name]);
