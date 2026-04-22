@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
 import { INFO_STATUS_LABEL, priorityDotColors } from "@/lib/orderDisplay";
-import { useOrders } from "@/hooks/useOrders";
+import { useOrders, useStaleDraftCount } from "@/hooks/useOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUnreadNoteOrderIds } from "@/hooks/useOrderNotesRead";
 import { supabase } from "@/integrations/supabase/client";
@@ -139,6 +139,11 @@ const Orders = () => {
     return departments?.find((d) => d.code === departmentFilter)?.id;
   }, [departmentFilter, departments]);
 
+  // Tenant-gescoped count voor DRAFT > 2u, losstaande query zodat de teller
+  // niet beperkt is tot de huidige pagina. De cutoff-iso wordt hergebruikt
+  // als createdBefore-filter zodra de stale-toggle actief is.
+  const { data: staleDraft } = useStaleDraftCount(2);
+
   const { data, isLoading, isError, refetch } = useOrders({
     page,
     pageSize,
@@ -148,6 +153,7 @@ const Orders = () => {
     search: search || undefined,
     sortField: sortConfig?.field as ("customer" | "totalWeight" | "status" | "createdAt") | undefined,
     sortDirection: sortConfig?.direction,
+    createdBefore: staleDraftOnly ? staleDraft?.cutoffIso : undefined,
   } as any);
   const { unreadOrderIds } = useUnreadNoteOrderIds();
   const rawOrders = data?.orders ?? [];
@@ -161,12 +167,10 @@ const Orders = () => {
     } else if (infoFilter === "open") {
       list = list.filter(o => o.infoStatus === "AWAITING_INFO" || o.infoStatus === "OVERDUE");
     }
-    if (staleDraftOnly) {
-      const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-      list = list.filter(o => o.status === "DRAFT" && new Date(o.createdAt).getTime() < cutoff);
-    }
+    // staleDraftOnly wordt server-side als createdBefore-filter doorgegeven
+    // aan useOrders, dus geen client-side resort nodig.
     return list;
-  }, [rawOrders, infoFilter, staleDraftOnly]);
+  }, [rawOrders, infoFilter]);
 
   // Sorteren gebeurt server-side in useOrders; hier hoeven we alleen de
   // info- en stale-filter toe te passen. Client-side resort was vroeger
@@ -200,17 +204,16 @@ const Orders = () => {
     }, {} as Record<string, number>);
     const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
     const spoedCount = orders.filter((o) => o.priority === "spoed" || o.priority === "hoog").length;
-    // Info- en stale-teller blijven absoluut (vanuit rawOrders), zodat het cijfer
-    // niet leegvalt zodra de gebruiker het eigen filter activeert.
+    // Info-teller blijft absoluut (vanuit rawOrders), zodat het cijfer
+    // niet leegvalt zodra de gebruiker het eigen filter activeert. De
+    // stale-draft-teller komt uit de tenant-gescoped count-query en gaat
+    // dus over de hele tabel, niet alleen de huidige pagina.
     const awaitingInfoCount = rawOrders.filter(
       (o) => o.infoStatus === "AWAITING_INFO" || o.infoStatus === "OVERDUE",
     ).length;
-    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-    const staleDraftCount = rawOrders.filter(
-      (o) => o.status === "DRAFT" && new Date(o.createdAt).getTime() < cutoff,
-    ).length;
+    const staleDraftCount = staleDraft?.count ?? 0;
     return { byStatus, totalWeight, spoedCount, awaitingInfoCount, staleDraftCount };
-  }, [orders, rawOrders]);
+  }, [orders, rawOrders, staleDraft?.count]);
 
   if (isLoading) {
     return (
@@ -413,12 +416,18 @@ const Orders = () => {
                 const next = !active;
                 setStaleDraftOnly(next);
                 if (next) {
+                  // DRAFT > 2u: status op DRAFT + server-side createdBefore
+                  // wordt via staleDraft.cutoffIso gezet in useOrders.
                   setStatusFilter("DRAFT");
                   setOrderTypeFilter("alle");
                   setInfoFilter("alle");
-                  setPage(0);
-                  clearSelection();
+                } else {
+                  // Uitzetten betekent volledige DRAFT-lijst tonen (zonder
+                  // created_at-cutoff), statusFilter laten staan zodat de
+                  // context niet verspringt.
                 }
+                setPage(0);
+                clearSelection();
               } else {
                 setStaleDraftOnly(false);
                 handleStatusFilterChange(active ? "alle" : (s.filter as string));

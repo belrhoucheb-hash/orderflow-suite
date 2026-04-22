@@ -36,6 +36,12 @@ export interface UseOrdersOptions {
   departmentFilter?: string;
   sortField?: OrderListSortField;
   sortDirection?: OrderListSortDirection;
+  /**
+   * Optional upper-bound on created_at as ISO-string. Orders met een
+   * created_at < deze waarde blijven over. Gebruikt voor de "DRAFT > 2u"
+   * snelfilter vanuit de KPI-strip.
+   */
+  createdBefore?: string;
 }
 
 // UI-veldnaam → DB-kolom. Beperkt tot wat de orderlijst kan tonen en
@@ -52,12 +58,12 @@ const SORT_FIELD_TO_DB: Record<OrderListSortField, string> = {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function useOrders(options: UseOrdersOptions = {}) {
-  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection } = options;
+  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, createdBefore } = options;
   const queryClient = useQueryClient();
   const { tenant } = useTenantOptional();
 
   return useQuery({
-    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, tenantId: tenant?.id }],
+    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, createdBefore, tenantId: tenant?.id }],
     staleTime: 5_000,
     queryFn: async () => {
       // Expliciete kolom-set: alleen wat Orders-lijst UI rendert. Scheelt payload
@@ -117,6 +123,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
       if (departmentFilter && UUID_RE.test(departmentFilter)) {
         query = query.eq("department_id", departmentFilter);
+      }
+
+      if (createdBefore) {
+        query = query.lt("created_at", createdBefore);
       }
 
       if (search) {
@@ -211,6 +221,32 @@ export function useOrders(options: UseOrdersOptions = {}) {
       });
 
       return { orders, totalCount: count ?? 0 };
+    },
+  });
+}
+
+/**
+ * Telt DRAFT-orders die langer dan 2 uur open staan, tenant-gescoped via RLS.
+ * Gebruikt een aparte count-query (head: true) zodat de teller over de hele
+ * tabel gaat en niet alleen binnen de huidige 25-rij-pagina. Refresht elke 60s
+ * zodat nieuwe drafts die de drempel passeren vanzelf in de strip verschijnen.
+ */
+export function useStaleDraftCount(thresholdHours: number = 2) {
+  const { tenant } = useTenantOptional();
+  return useQuery({
+    queryKey: ["orders", "stale-draft-count", { thresholdHours, tenantId: tenant?.id }],
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const cutoffIso = new Date(Date.now() - thresholdHours * 60 * 60 * 1000).toISOString();
+      const { count, error } = await supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "DRAFT")
+        .lt("created_at", cutoffIso);
+
+      if (error) throw error;
+      return { count: count ?? 0, cutoffIso };
     },
   });
 }

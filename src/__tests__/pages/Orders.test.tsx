@@ -38,7 +38,10 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-vi.mock("@/hooks/useOrders", () => ({ useOrders: (...args: any[]) => mockUseOrders(...args) }));
+vi.mock("@/hooks/useOrders", () => ({
+  useOrders: (...args: any[]) => mockUseOrders(...args),
+  useStaleDraftCount: () => ({ data: { count: 0, cutoffIso: new Date().toISOString() } }),
+}));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: mockSupabase,

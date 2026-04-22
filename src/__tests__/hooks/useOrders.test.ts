@@ -45,6 +45,7 @@ import {
   useUpdateOrder,
   useDeleteOrder,
   useOrdersSubscription,
+  useStaleDraftCount,
 } from "@/hooks/useOrders";
 
 describe("useOrders", () => {
@@ -450,5 +451,64 @@ describe("useOrdersSubscription", () => {
     expect(mockSupabase.channel).toHaveBeenCalledWith("public:orders");
     unmount();
     expect(mockSupabase.removeChannel).toHaveBeenCalled();
+  });
+});
+
+describe("useStaleDraftCount", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("telt DRAFT-orders met created_at vóór de cutoff en retourneert cutoffIso", async () => {
+    const calls: Array<{ method: string; args: unknown[] }> = [];
+    mockFrom.mockImplementation(() => {
+      const chain: any = {};
+      chain.select = vi.fn((...args: unknown[]) => { calls.push({ method: "select", args }); return chain; });
+      chain.eq = vi.fn((...args: unknown[]) => { calls.push({ method: "eq", args }); return chain; });
+      chain.lt = vi.fn((...args: unknown[]) => {
+        calls.push({ method: "lt", args });
+        return Promise.resolve({ count: 7, error: null });
+      });
+      return chain;
+    });
+
+    const { result } = renderHook(() => useStaleDraftCount(2), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.count).toBe(7);
+    expect(result.current.data!.cutoffIso).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    const selectCall = calls.find(c => c.method === "select");
+    expect(selectCall?.args[1]).toMatchObject({ count: "exact", head: true });
+    const eqCall = calls.find(c => c.method === "eq");
+    expect(eqCall?.args).toEqual(["status", "DRAFT"]);
+    const ltCall = calls.find(c => c.method === "lt");
+    expect(ltCall?.args[0]).toBe("created_at");
+  });
+});
+
+describe("useOrders > createdBefore", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("voegt .lt('created_at', iso) toe wanneer createdBefore is gezet", async () => {
+    const calls: Array<{ method: string; args: unknown[] }> = [];
+    mockFrom.mockImplementation(() => {
+      const chain: any = {};
+      chain.select = vi.fn((...args: unknown[]) => { calls.push({ method: "select", args }); return chain; });
+      chain.order = vi.fn((...args: unknown[]) => { calls.push({ method: "order", args }); return chain; });
+      chain.range = vi.fn((...args: unknown[]) => { calls.push({ method: "range", args }); return chain; });
+      chain.eq = vi.fn((...args: unknown[]) => { calls.push({ method: "eq", args }); return chain; });
+      chain.lt = vi.fn((...args: unknown[]) => {
+        calls.push({ method: "lt", args });
+        return Promise.resolve({ data: [], error: null, count: 0 });
+      });
+      return chain;
+    });
+
+    const cutoff = "2026-04-22T17:00:00.000Z";
+    const { result } = renderHook(
+      () => useOrders({ statusFilter: "DRAFT", createdBefore: cutoff }),
+      { wrapper: createWrapper() }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const ltCall = calls.find(c => c.method === "lt");
+    expect(ltCall?.args).toEqual(["created_at", cutoff]);
   });
 });
