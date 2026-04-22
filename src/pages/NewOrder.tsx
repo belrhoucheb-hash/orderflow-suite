@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route, ChevronDown } from "lucide-react";
 import { AddressAutocomplete as LegacyAddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   AddressAutocomplete,
@@ -12,13 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { isValidAddress } from "@/components/inbox/utils";
 import { useTenantOptional } from "@/contexts/TenantContext";
-import { useClients } from "@/hooks/useClients";
+import { useClient, useClients, useClientOrders } from "@/hooks/useClients";
 import { useClientContacts } from "@/hooks/useClientContacts";
 import { createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
@@ -80,6 +80,8 @@ const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long",
 const NewOrder = () => {
   const navigate = useNavigate();
   const { tenant } = useTenantOptional();
+  const [searchParams] = useSearchParams();
+  const initialClientId = searchParams.get("client_id");
   const [saving, setSaving] = useState(false);
   const [trajectPreview, setTrajectPreview] = useState<TrajectPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -171,6 +173,16 @@ const NewOrder = () => {
   // via lat/lng exact weten waar ze moeten zijn (Jaimy's Webfleet/TomTom-issue).
   const [pickupAddr, setPickupAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
   const [deliveryAddr, setDeliveryAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
+
+  // Prefill vanuit ?client_id=, geïnitieerd vanuit de klantenlijst of
+  // klant-detail ("Nieuwe order voor deze klant"). We fetchen de klant en
+  // zijn laatste order, en vullen daarmee pickup/delivery/unit/afdeling/
+  // vehicle_type/priority/requirements voor. Datum, tijd, gewicht, aantal
+  // en referenties blijven leeg — die zijn per order uniek en prefillen
+  // zou silent errors verbergen.
+  const prefillApplied = useRef(false);
+  const { data: prefillClient } = useClient(initialClientId);
+  const { data: prefillOrders } = useClientOrders(initialClientId);
 
   const addFreightLine = () => {
     setFreightLines(prev => [...prev, {
@@ -570,15 +582,66 @@ const NewOrder = () => {
       toast.success(
         exportRappelCreated ? `${baseMsg} — Rappel voor eindbestemming is aangemaakt` : baseMsg,
       );
+      // Na opslaan altijd wegnavigeren, anders maakt een tweede klik een duplicaat.
+      // Opslaan & sluiten gaat naar de lijst, Opslaan opent de detailpagina zodat
+      // verdere bewerkingen via OrderDetail (update-pad) lopen.
       if (andClose) {
-        // Navigeer naar de eerste leg; OrderDetail toont de shipment-context
-        if (legs[0]?.id) navigate(`/orders/${legs[0].id}`);
-        else navigate("/orders");
+        navigate("/orders");
+      } else if (legs[0]?.id) {
+        navigate(`/orders/${legs[0].id}`);
+      } else {
+        navigate("/orders");
       }
     } catch (e: any) {
       toast.error(e.message || "Fout bij opslaan");
     } finally { setSaving(false); }
   };
+
+  // Prefill-flow: wacht tot klant-data binnen is (orders mag leeg zijn) en
+  // pas eenmalig toe. Client_name/client_id zetten is genoeg — bij ontbreken
+  // van vorige orders blijven alle andere velden leeg.
+  useEffect(() => {
+    if (!initialClientId || prefillApplied.current) return;
+    if (!prefillClient) return;
+
+    prefillApplied.current = true;
+    setClientId(prefillClient.id);
+    setClientName(prefillClient.name);
+    if (prefillClient.contact_person) setContactpersoon(prefillClient.contact_person);
+
+    const last = prefillOrders?.[0] as any;
+    if (!last) return;
+
+    // Map order-record terug naar form-state. Voorzichtig met mapping van
+    // NL-labels uit eerdere form-waarden: de order-record gebruikt database-
+    // waarden die afwijken (bv. transport_type).
+    if (last.transport_type) setTransportType(last.transport_type);
+    if (last.vehicle_type) setVoertuigtype(last.vehicle_type);
+    if (last.priority) setPrioriteit(last.priority);
+    if (last.unit) setTransportEenheid(last.unit);
+    if (Array.isArray(last.requirements) && last.requirements.includes("laadklep")) {
+      setKlepNodig(true);
+    }
+    if (last.pickup_address || last.delivery_address) {
+      setFreightLines((prev) =>
+        prev.map((l) => {
+          if (l.activiteit === "Laden" && last.pickup_address) {
+            return { ...l, locatie: last.pickup_address };
+          }
+          if (l.activiteit === "Lossen" && last.delivery_address) {
+            return { ...l, locatie: last.delivery_address };
+          }
+          return l;
+        }),
+      );
+    }
+    const orderLabel = last.order_number
+      ? `RCS-${new Date(last.created_at).getFullYear()}-${String(last.order_number).padStart(4, "0")}`
+      : "laatste order";
+    toast.success(`Voorgevuld op basis van ${orderLabel}`, {
+      description: "Pas tijden, referenties en lading aan voor deze nieuwe order.",
+    });
+  }, [initialClientId, prefillClient, prefillOrders]);
 
   // Auto-infer afdeling. De inferred-waarde houden we altijd bij, ook als de
   // planner handmatig overrulet, zodat we een "Overschreven door planner"-hint
@@ -748,22 +811,32 @@ const NewOrder = () => {
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Klant <span className="text-red-600">*</span></label>
                   <Popover open={clientOpen && clientSuggestions.length > 0} onOpenChange={setClientOpen}>
-                    <PopoverTrigger asChild>
-                      <Input
-                        value={clientName}
-                        onChange={e => {
-                          setClientName(e.target.value);
-                          if (clientId) setClientId(null);
-                          setContactpersoon("");
-                          setClientOpen(true);
-                          clearError("client_name");
-                        }}
-                        onFocus={() => setClientOpen(true)}
-                        placeholder="Zoek klant of relatie…"
-                        className={cn("h-9 text-sm", errors.client_name && "border-red-500")}
-                        autoComplete="off"
-                      />
-                    </PopoverTrigger>
+                    <PopoverAnchor asChild>
+                      <div className="relative">
+                        <Input
+                          value={clientName}
+                          onChange={e => {
+                            setClientName(e.target.value);
+                            if (clientId) setClientId(null);
+                            setContactpersoon("");
+                            setClientOpen(true);
+                            clearError("client_name");
+                          }}
+                          onFocus={() => setClientOpen(true)}
+                          placeholder="Typ klantnaam of kies uit lijst…"
+                          className={cn("h-9 text-sm pr-8", errors.client_name && "border-red-500")}
+                          autoComplete="off"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Toon klantenlijst"
+                          onClick={() => setClientOpen(v => !v)}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                        >
+                          <ChevronDown className={cn("h-4 w-4 transition-transform", clientOpen && "rotate-180")} />
+                        </button>
+                      </div>
+                    </PopoverAnchor>
                     <PopoverContent
                       align="start"
                       onOpenAutoFocus={e => e.preventDefault()}
