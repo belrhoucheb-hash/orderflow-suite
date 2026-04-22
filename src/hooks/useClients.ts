@@ -605,3 +605,30 @@ export function useUpdateClient() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
   });
 }
+
+/**
+ * Bulk-update `is_active` voor meerdere klanten tegelijk. We blijven bij
+ * het archive-pattern (nooit hard-delete), dus dit is een gewone UPDATE
+ * in één round-trip via `.in('id', ids)`. Query-invalidatie vernieuwt
+ * lijst, stats en KPI's.
+ */
+export function useBulkUpdateClientsActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, isActive }: { ids: string[]; isActive: boolean }) => {
+      if (ids.length === 0) return { updated: 0 };
+      const { data, error } = await supabase
+        .from("clients")
+        .update({ is_active: isActive })
+        .in("id", ids)
+        .select("id");
+      if (error) throw error;
+      return { updated: data?.length ?? 0 };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["clients_list"] });
+      qc.invalidateQueries({ queryKey: ["client_stats"] });
+    },
+  });
+}
