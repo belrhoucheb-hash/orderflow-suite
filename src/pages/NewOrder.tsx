@@ -12,11 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { isValidAddress } from "@/components/inbox/utils";
 import { useTenantOptional } from "@/contexts/TenantContext";
+import { useClients } from "@/hooks/useClients";
+import { useClientContacts } from "@/hooks/useClientContacts";
 import { createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,6 +100,10 @@ const NewOrder = () => {
 
   // Form state
   const [clientName, setClientName] = useState("");
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientOpen, setClientOpen] = useState(false);
+  const { data: clientSuggestions = [] } = useClients(clientName.trim() || undefined);
+  const { data: clientContacts = [] } = useClientContacts(clientId);
   const [contactpersoon, setContactpersoon] = useState("");
   const [prioriteit, setPrioriteit] = useState("Standaard");
   const [klantReferentie, setKlantReferentie] = useState("");
@@ -423,7 +430,7 @@ const NewOrder = () => {
         delivery_address: deliveryLine?.locatie || null,
         final_delivery_address: finalDeliveryAddress,
         client_name: clientName.trim(),
-        client_id: null,
+        client_id: clientId,
         transport_type: transportType || null,
         afdeling: afdeling || null,
         weight_kg: weightKg ? parseInt(weightKg) : null,
@@ -740,21 +747,63 @@ const NewOrder = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Klant <span className="text-red-600">*</span></label>
-                  <Input
-                    value={clientName}
-                    onChange={e => { setClientName(e.target.value); clearError("client_name"); }}
-                    placeholder="Zoek klant of relatie…"
-                    className={cn("h-9 text-sm", errors.client_name && "border-red-500")}
-                  />
+                  <Popover open={clientOpen && clientSuggestions.length > 0} onOpenChange={setClientOpen}>
+                    <PopoverTrigger asChild>
+                      <Input
+                        value={clientName}
+                        onChange={e => {
+                          setClientName(e.target.value);
+                          if (clientId) setClientId(null);
+                          setContactpersoon("");
+                          setClientOpen(true);
+                          clearError("client_name");
+                        }}
+                        onFocus={() => setClientOpen(true)}
+                        placeholder="Zoek klant of relatie…"
+                        className={cn("h-9 text-sm", errors.client_name && "border-red-500")}
+                        autoComplete="off"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="start"
+                      onOpenAutoFocus={e => e.preventDefault()}
+                      className="p-1 w-[--radix-popover-trigger-width] max-h-64 overflow-y-auto"
+                    >
+                      {clientSuggestions.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setClientName(c.name);
+                            setClientId(c.id);
+                            setContactpersoon(c.contact_person ?? "");
+                            setClientOpen(false);
+                            clearError("client_name");
+                          }}
+                          className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-accent focus:bg-accent focus:outline-none"
+                        >
+                          <div className="font-medium">{c.name}</div>
+                          {(c.city || c.email) && (
+                            <div className="text-[11px] text-muted-foreground">
+                              {[c.city, c.email].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
                   {errors.client_name && <span className="text-[11px] text-red-500">{errors.client_name}</span>}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Contactpersoon</label>
-                  <Select value={contactpersoon} onValueChange={setContactpersoon}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+                  <Select value={contactpersoon} onValueChange={setContactpersoon} disabled={!clientId}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={clientId ? "—" : "Kies eerst klant"} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Jan de Vries">Jan de Vries</SelectItem>
-                      <SelectItem value="Piet Jansen">Piet Jansen</SelectItem>
+                      {clientContacts.filter(ct => ct.is_active).map(ct => (
+                        <SelectItem key={ct.id} value={ct.name}>
+                          {ct.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
