@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X } from "lucide-react";
+import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
@@ -724,7 +724,23 @@ const Orders = () => {
                       </div>
                     </td>
                     <td className="table-cell text-foreground/90 font-medium" style={{ fontFamily: "var(--font-display)" }}>
-                      {order.customer}
+                      <div className="flex items-center gap-2">
+                        <span>{order.customer}</span>
+                        {order.clientId && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/orders/nieuw?client_id=${order.clientId}`);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                            title="Nieuwe order zoals deze"
+                            aria-label={`Nieuwe order zoals ${order.orderNumber}`}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="table-cell text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">
                       {order.pickupAddress}

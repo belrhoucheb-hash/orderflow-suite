@@ -52,6 +52,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
         "id",
         "created_at",
         "order_number",
+        "client_id",
         "client_name",
         "source_email_from",
         "pickup_address",
@@ -154,6 +155,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
           id: o.id,
           orderNumber: `RCS-${new Date(o.created_at).getFullYear()}-${String(o.order_number).padStart(4, "0")}`,
           customer: o.client_name || "Onbekend",
+          clientId: (o as any).client_id ?? null,
           email: o.source_email_from || "",
           phone: "",
           pickupAddress: o.pickup_address || "",
@@ -247,6 +249,7 @@ export function useOrder(id: string) {
         id: data.id,
         orderNumber: `RCS-${new Date(data.created_at).getFullYear()}-${String(data.order_number).padStart(4, "0")}`,
         customer: data.client_name || "Onbekend",
+        clientId: (data as any).client_id ?? null,
         email: data.source_email_from || "",
         phone: "",
         pickupAddress: data.pickup_address || "",
@@ -286,8 +289,22 @@ export function useCreateOrder() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+      // Fire-and-forget audit trail voor nieuwe order via deze hook.
+      if (data?.id) {
+        logAudit({
+          table_name: "orders",
+          record_id: data.id,
+          action: "INSERT",
+          new_data: {
+            status: data.status,
+            client_id: data.client_id,
+            leg_role: data.leg_role,
+          },
+        });
+      }
     },
   });
 }
@@ -355,19 +372,26 @@ export function useUpdateOrder() {
 
 export function useDeleteOrder() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from("orders")
         .delete()
         .eq("id", id);
-        
+
       if (error) throw error;
-      return true;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+      // Fire-and-forget audit trail voor harde delete via deze hook.
+      logAudit({
+        table_name: "orders",
+        record_id: id,
+        action: "DELETE",
+      });
     },
   });
 }

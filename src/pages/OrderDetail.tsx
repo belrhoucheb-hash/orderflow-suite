@@ -40,6 +40,7 @@ import { FollowFromClientPopover } from "@/components/orders/FollowFromClientPop
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder } from "@/hooks/useOrders";
+import { logAudit } from "@/lib/auditLog";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useOrderNotesRead } from "@/hooks/useOrderNotesRead";
 import { LuxeDatePicker, LuxeTimeRange } from "@/components/ui/LuxePicker";
@@ -205,11 +206,20 @@ const OrderDetail = () => {
         await supabase.from("orders").update({ vehicle_id: null }).eq("id", orderId);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success("Order geannuleerd", { description: `Order #${order?.order_number} is geannuleerd` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       setShowCancelDialog(false);
+
+      // Fire-and-forget audit-log voor annulering.
+      logAudit({
+        table_name: "orders",
+        record_id: variables.orderId,
+        action: "UPDATE",
+        new_data: { status: "CANCELLED", cancel_reason: variables.reason || null },
+        changed_fields: ["status", "internal_note"],
+      });
     },
     onError: (e: Error) => {
       toast.error("Fout", { description: e.message });
@@ -225,10 +235,19 @@ const OrderDetail = () => {
       }).eq("id", orderId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, orderId) => {
       toast.success("Order heropend", { description: `Order #${order?.order_number} is terug in behandeling` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+      // Fire-and-forget audit-log voor heropenen.
+      logAudit({
+        table_name: "orders",
+        record_id: orderId,
+        action: "UPDATE",
+        new_data: { status: "PENDING" },
+        changed_fields: ["status", "internal_note"],
+      });
     },
   });
 
