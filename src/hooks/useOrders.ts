@@ -19,6 +19,9 @@ import type { OrderStatus } from "@/lib/statusTransitions";
 
 import { normalizeStatus } from "@/lib/orderDisplay";
 
+export type OrderListSortField = "customer" | "totalWeight" | "status" | "createdAt";
+export type OrderListSortDirection = "asc" | "desc";
+
 export interface UseOrdersOptions {
   page?: number;
   pageSize?: number;
@@ -31,18 +34,30 @@ export interface UseOrdersOptions {
    * `useDepartments()` to resolve a code → uuid upstream).
    */
   departmentFilter?: string;
+  sortField?: OrderListSortField;
+  sortDirection?: OrderListSortDirection;
 }
+
+// UI-veldnaam → DB-kolom. Beperkt tot wat de orderlijst kan tonen en
+// waar een index op staat of te verwachten is; andere velden vallen
+// terug op created_at (default).
+const SORT_FIELD_TO_DB: Record<OrderListSortField, string> = {
+  customer: "client_name",
+  totalWeight: "weight_kg",
+  status: "status",
+  createdAt: "created_at",
+};
 
 // RFC4122 v1-v5 UUID validator (simple shape check)
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function useOrders(options: UseOrdersOptions = {}) {
-  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter } = options;
+  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection } = options;
   const queryClient = useQueryClient();
   const { tenant } = useTenantOptional();
 
   return useQuery({
-    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, tenantId: tenant?.id }],
+    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, tenantId: tenant?.id }],
     staleTime: 5_000,
     queryFn: async () => {
       // Expliciete kolom-set: alleen wat Orders-lijst UI rendert. Scheelt payload
@@ -74,11 +89,18 @@ export function useOrders(options: UseOrdersOptions = {}) {
         "time_window_end",
       ].join(",");
 
+      const sortColumn = sortField ? SORT_FIELD_TO_DB[sortField] : "created_at";
+      const sortAscending = sortDirection === "asc";
+
       let query = (supabase as any)
         .from("orders")
         .select(LIST_COLUMNS, { count: "exact" })
-        .order("created_at", { ascending: false })
+        .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
+      // Fallback-tiebreaker zodat paginering stabiel blijft bij gelijke sort-waardes.
+      if (sortColumn !== "created_at") {
+        query = query.order("created_at", { ascending: false });
+      }
 
       if (statusFilter && statusFilter !== "alle") {
         // Account for legacy statuses that map to PENDING
@@ -103,12 +125,20 @@ export function useOrders(options: UseOrdersOptions = {}) {
           `pickup_address.ilike.%${search}%`,
           `delivery_address.ilike.%${search}%`,
         ];
-        // order_number is an integer column — ilike/::text casts are not
-        // supported by PostgREST.  Only add a numeric filter when the user
-        // types a number so the query doesn't break.
-        const asNum = Number(search);
-        if (!Number.isNaN(asNum) && Number.isInteger(asNum)) {
-          parts.push(`order_number.eq.${asNum}`);
+        // order_number is een integer-kolom, PostgREST ondersteunt geen
+        // ilike/::text-cast. Daarom het zoektje normaliseren naar een int:
+        // "RCS-2026-0042" / "2026-0042" / "0042" / "42" → 42. Alles dat
+        // overblijft aan niet-digits betekent dat de intentie geen
+        // ordernummer was (dan alleen tekstzoek gebruiken).
+        const numericFromFormatted = search
+          .replace(/^rcs-/i, "")
+          .replace(/^\d{4}-/, "")
+          .replace(/^0+/, "");
+        if (/^\d+$/.test(numericFromFormatted) && numericFromFormatted.length > 0) {
+          const asNum = Number(numericFromFormatted);
+          if (Number.isSafeInteger(asNum)) {
+            parts.push(`order_number.eq.${asNum}`);
+          }
         }
         query = query.or(parts.join(","));
       }

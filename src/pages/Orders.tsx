@@ -86,6 +86,7 @@ const Orders = () => {
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("alle");
   const [departmentFilter, setDepartmentFilter] = useState<string>("alle");
   const [infoFilter, setInfoFilter] = useState<"alle" | "open" | "overdue">("alle");
+  const [staleDraftOnly, setStaleDraftOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize] = useState(25);
   const [printOrder, setPrintOrder] = useState<any>(null);
@@ -145,6 +146,8 @@ const Orders = () => {
     orderTypeFilter: (orderTypeFilter !== "alle") ? orderTypeFilter : undefined,
     departmentFilter: selectedDepartmentId,
     search: search || undefined,
+    sortField: sortConfig?.field as ("customer" | "totalWeight" | "status" | "createdAt") | undefined,
+    sortDirection: sortConfig?.direction,
   } as any);
   const { unreadOrderIds } = useUnreadNoteOrderIds();
   const rawOrders = data?.orders ?? [];
@@ -152,30 +155,23 @@ const Orders = () => {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const filteredByInfo = useMemo(() => {
-    if (infoFilter === "alle") return rawOrders;
-    if (infoFilter === "overdue") return rawOrders.filter(o => o.infoStatus === "OVERDUE");
-    return rawOrders.filter(o => o.infoStatus === "AWAITING_INFO" || o.infoStatus === "OVERDUE");
-  }, [rawOrders, infoFilter]);
+    let list = rawOrders;
+    if (infoFilter === "overdue") {
+      list = list.filter(o => o.infoStatus === "OVERDUE");
+    } else if (infoFilter === "open") {
+      list = list.filter(o => o.infoStatus === "AWAITING_INFO" || o.infoStatus === "OVERDUE");
+    }
+    if (staleDraftOnly) {
+      const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+      list = list.filter(o => o.status === "DRAFT" && new Date(o.createdAt).getTime() < cutoff);
+    }
+    return list;
+  }, [rawOrders, infoFilter, staleDraftOnly]);
 
-  const orders = useMemo(() => {
-    if (!sortConfig) return filteredByInfo;
-    const { field, direction } = sortConfig;
-    const sorted = [...filteredByInfo].sort((a, b) => {
-      let aVal: string | number = "";
-      let bVal: string | number = "";
-      switch (field) {
-        case "customer": aVal = a.customer.toLowerCase(); bVal = b.customer.toLowerCase(); break;
-        case "totalWeight": aVal = a.totalWeight; bVal = b.totalWeight; break;
-        case "status": aVal = a.status; bVal = b.status; break;
-        case "createdAt": aVal = new Date(a.createdAt).getTime(); bVal = new Date(b.createdAt).getTime(); break;
-        default: return 0;
-      }
-      if (aVal < bVal) return direction === "asc" ? -1 : 1;
-      if (aVal > bVal) return direction === "asc" ? 1 : -1;
-      return 0;
-    });
-    return sorted;
-  }, [filteredByInfo, sortConfig]);
+  // Sorteren gebeurt server-side in useOrders; hier hoeven we alleen de
+  // info- en stale-filter toe te passen. Client-side resort was vroeger
+  // misleidend omdat het alleen binnen de huidige 25-pagina werkte.
+  const orders = filteredByInfo;
 
   const handleQuickPrint = async (orderId: string) => {
     setPrintLoading(orderId);
@@ -204,12 +200,16 @@ const Orders = () => {
     }, {} as Record<string, number>);
     const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
     const spoedCount = orders.filter((o) => o.priority === "spoed" || o.priority === "hoog").length;
-    // Info-teller blijft absoluut (vanuit rawOrders), zodat het cijfer niet leegvalt
-    // zodra de gebruiker het eigen info-filter activeert.
+    // Info- en stale-teller blijven absoluut (vanuit rawOrders), zodat het cijfer
+    // niet leegvalt zodra de gebruiker het eigen filter activeert.
     const awaitingInfoCount = rawOrders.filter(
       (o) => o.infoStatus === "AWAITING_INFO" || o.infoStatus === "OVERDUE",
     ).length;
-    return { byStatus, totalWeight, spoedCount, awaitingInfoCount };
+    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+    const staleDraftCount = rawOrders.filter(
+      (o) => o.status === "DRAFT" && new Date(o.createdAt).getTime() < cutoff,
+    ).length;
+    return { byStatus, totalWeight, spoedCount, awaitingInfoCount, staleDraftCount };
   }, [orders, rawOrders]);
 
   if (isLoading) {
@@ -384,9 +384,10 @@ const Orders = () => {
         </button>
 
         {/* Ticker, statussen als snelfilter */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-[hsl(var(--gold)/0.12)]">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-[hsl(var(--gold)/0.12)]">
           {([
             { label: "Nieuw",          value: stats.byStatus["DRAFT"] || 0,    note: "Te plannen",    filter: "DRAFT" as const,    kind: "status" as const },
+            { label: "Oud concept",    value: stats.staleDraftCount,           note: "DRAFT > 2 uur", filter: "stale" as const,    kind: "stale" as const },
             { label: "In behandeling", value: stats.byStatus["PENDING"] || 0,  note: "Open dossier",  filter: "PENDING" as const,  kind: "status" as const },
             { label: "Wacht op info",  value: stats.awaitingInfoCount,         note: "Dossier incompleet", filter: "open" as const, kind: "info" as const },
             { label: "Afgeleverd",     value: stats.byStatus["DELIVERED"] || 0, note: "POD ontvangen", filter: "DELIVERED" as const, kind: "status" as const },
@@ -395,7 +396,9 @@ const Orders = () => {
             const active =
               s.kind === "info"
                 ? infoFilter === s.filter
-                : s.filter !== null && statusFilter === s.filter;
+                : s.kind === "stale"
+                  ? staleDraftOnly
+                  : s.filter !== null && statusFilter === s.filter;
             const isClickable = s.filter !== null;
             const Cmp: any = isClickable ? "button" : "div";
             const onClickFilter = () => {
@@ -403,9 +406,21 @@ const Orders = () => {
                 setInfoFilter(active ? "alle" : (s.filter as "open"));
                 setStatusFilter("alle");
                 setOrderTypeFilter("alle");
+                setStaleDraftOnly(false);
                 setPage(0);
                 clearSelection();
+              } else if (s.kind === "stale") {
+                const next = !active;
+                setStaleDraftOnly(next);
+                if (next) {
+                  setStatusFilter("DRAFT");
+                  setOrderTypeFilter("alle");
+                  setInfoFilter("alle");
+                  setPage(0);
+                  clearSelection();
+                }
               } else {
+                setStaleDraftOnly(false);
                 handleStatusFilterChange(active ? "alle" : (s.filter as string));
               }
             };
@@ -565,13 +580,14 @@ const Orders = () => {
             </SelectContent>
           </Select>
 
-          {(statusFilter !== "alle" || infoFilter !== "alle" || orderTypeFilter !== "alle" || departmentFilter !== "alle") && (
+          {(statusFilter !== "alle" || infoFilter !== "alle" || orderTypeFilter !== "alle" || departmentFilter !== "alle" || staleDraftOnly) && (
             <button
               onClick={() => {
                 setStatusFilter("alle");
                 setInfoFilter("alle");
                 setOrderTypeFilter("alle");
                 setDepartmentFilter("alle");
+                setStaleDraftOnly(false);
                 setPage(0);
                 clearSelection();
               }}
@@ -783,19 +799,29 @@ const Orders = () => {
                       })()}
                     </td>
                     <td className="table-cell text-center">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleQuickPrint(order.id); }}
-                        disabled={printLoading === order.id}
-                        className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
-                        title="Print label"
-                        aria-label={`Print label voor order ${order.orderNumber}`}
-                      >
-                        {printLoading === order.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Printer className="h-3.5 w-3.5" />
-                        )}
-                      </button>
+                      <div className="inline-flex items-center gap-0.5">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/orders/nieuw?from_order_id=${order.id}`); }}
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                          title="Dupliceer order"
+                          aria-label={`Dupliceer order ${order.orderNumber}`}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleQuickPrint(order.id); }}
+                          disabled={printLoading === order.id}
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+                          title="Print label"
+                          aria-label={`Print label voor order ${order.orderNumber}`}
+                        >
+                          {printLoading === order.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Printer className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </motion.tr>
                 ))}
