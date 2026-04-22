@@ -5,19 +5,57 @@ import { MemoryRouter } from "react-router-dom";
 
 // ─── Global Mocks ────────────────────────────────────────────
 const mockCreateClient = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
+const mockUpdateClient = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 const mockCreateClientLocation = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 vi.mock("@/hooks/useClients", () => ({
   useCreateClient: () => mockCreateClient,
+  useUpdateClient: () => mockUpdateClient,
   useCreateClientLocation: () => mockCreateClientLocation,
   useClientLocations: () => ({ data: [] }),
   useClientRates: () => ({ data: [] }),
   useClientOrders: () => ({ data: [] }),
+  useClientDuplicateCheck: () => ({ duplicate: null }),
+  useClients: () => ({ data: [] }),
+  useClient: () => ({ data: null }),
+}));
+
+vi.mock("@/hooks/useClientContacts", () => ({
+  useClientContacts: () => ({ data: [] }),
+  useCreateClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({ id: "contact-1" }), isPending: false }),
+  useUpdateClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
+  useDeleteClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
+  useAssignContactRole: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
+}));
+
+vi.mock("@/hooks/useClientAudit", () => ({
+  useClientAudit: () => ({ data: [] }),
+}));
+
+vi.mock("@/hooks/useGoogleMaps", () => ({
+  useGoogleMaps: () => ({ isLoaded: false, missingKey: true, loadError: null }),
 }));
 
 const mockCreateDriver = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 const mockUpdateDriver = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
+const mockDeleteDriver = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
+const mockUpsertDriverCertExpiry = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
+const mockDeleteDriverCertExpiry = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 vi.mock("@/hooks/useDrivers", () => ({
-  useDrivers: () => ({ createDriver: mockCreateDriver, updateDriver: mockUpdateDriver }),
+  useDrivers: () => ({
+    createDriver: mockCreateDriver,
+    updateDriver: mockUpdateDriver,
+    deleteDriver: mockDeleteDriver,
+  }),
+  useDriverCertificationExpiry: () => ({
+    data: [],
+    upsertExpiry: mockUpsertDriverCertExpiry,
+    deleteExpiry: mockDeleteDriverCertExpiry,
+  }),
+  useAvailableDrivers: () => ({ data: [] }),
+}));
+
+vi.mock("@/hooks/useDriverCertifications", () => ({
+  useDriverCertifications: () => ({ data: [] }),
 }));
 
 const mockAddVehicle = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
