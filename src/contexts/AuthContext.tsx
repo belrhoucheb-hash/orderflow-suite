@@ -31,7 +31,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [profileRes, rolesRes, driverRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url").eq("user_id", userId).single(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("drivers" as any).select("id").eq("user_id", userId).single(),
+      // Driver-lookup is best-effort. Als drivers.user_id kolom niet
+      // bestaat op de DB (migratie nog niet gedraaid) laten we de error
+      // niet de hele auth-flow blokkeren. isLinkedDriver valt terug op
+      // false, kantoor-gebruikers merken niets.
+      supabase
+        .from("drivers" as any)
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle()
+        .then((res) => res, () => ({ data: null, error: null })),
     ]);
 
     if (profileRes.data) {
