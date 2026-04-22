@@ -30,6 +30,8 @@ import {
   EMPTY_ADDRESS,
   type AddressValue,
 } from "@/components/clients/AddressAutocomplete";
+import { KvkLookupBar } from "@/components/clients/KvkLookupBar";
+import type { KvkCompany } from "@/hooks/useKvkLookup";
 import { toast } from "sonner";
 
 interface Props {
@@ -166,6 +168,85 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
   const setAddress = (key: "main_address" | "billing_address" | "shipping_address") =>
     (v: AddressValue) =>
       setForm((prev) => ({ ...prev, [key]: v }));
+
+  const applyKvkResult = async (r: KvkCompany) => {
+    setForm((prev) => ({
+      ...prev,
+      name: r.name || prev.name,
+      kvk_number: r.kvk || prev.kvk_number,
+    }));
+
+    const addressQuery = [
+      [r.street, r.house_number].filter(Boolean).join(" "),
+      [r.zipcode, r.city].filter(Boolean).join(" "),
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    // Zonder coordinaten faalt de save (zie clientSchema). We proberen
+    // via Google Geocoder lat/lng te resolveren; pattern uit
+    // AddressAutocomplete.onMarkerDragEnd.
+    if (!addressQuery || typeof google === "undefined" || !google.maps?.Geocoder) {
+      setForm((prev) => ({
+        ...prev,
+        main_address: {
+          ...prev.main_address,
+          street: r.street,
+          house_number: r.house_number,
+          zipcode: r.zipcode,
+          city: r.city,
+          country: r.country || "NL",
+        },
+      }));
+      toast.warning("Adres gevonden, bevestig via het adresveld om coordinaten te zetten");
+      return;
+    }
+
+    try {
+      const geocoder = new google.maps.Geocoder();
+      const res = await geocoder.geocode({
+        address: addressQuery,
+        componentRestrictions: { country: r.country || "NL" },
+      });
+      const first = res.results[0];
+      const lat = first?.geometry?.location?.lat() ?? null;
+      const lng = first?.geometry?.location?.lng() ?? null;
+
+      setForm((prev) => ({
+        ...prev,
+        main_address: {
+          street: r.street,
+          house_number: r.house_number,
+          house_number_suffix: "",
+          zipcode: r.zipcode,
+          city: r.city,
+          country: r.country || "NL",
+          lat,
+          lng,
+          coords_manual: false,
+        },
+      }));
+
+      if (lat === null) {
+        toast.warning("Adres uit KvK geladen, coordinaten niet gevonden, sleep pin op kaart");
+      } else {
+        toast.success(`Gegevens van ${r.name} geladen`);
+      }
+    } catch {
+      setForm((prev) => ({
+        ...prev,
+        main_address: {
+          ...prev.main_address,
+          street: r.street,
+          house_number: r.house_number,
+          zipcode: r.zipcode,
+          city: r.city,
+          country: r.country || "NL",
+        },
+      }));
+      toast.warning("Adres uit KvK geladen, coordinaten niet beschikbaar");
+    }
+  };
 
   const toggle = (key: "billing_same_as_main" | "shipping_same_as_main") =>
     (value: boolean) =>
@@ -332,6 +413,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
           <DialogTitle className="font-display text-lg tracking-tight">{isEdit ? "Klant bewerken" : "Nieuwe klant"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {!isEdit && <KvkLookupBar onSelect={applyKvkResult} />}
           <Section title="Bedrijfsgegevens">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
