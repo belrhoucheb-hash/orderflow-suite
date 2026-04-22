@@ -38,6 +38,12 @@ Uit de top-10 geland:
   react-query per combinatie cachet. `created_at DESC` blijft tiebreaker voor
   stabiele paginering. Bij intensief gebruik van `weight_kg DESC` loont een
   `(tenant_id, weight_kg DESC)`-index alsnog, nu nog niet toegevoegd.
+- #8 Order-number zoeken op geformatteerde string: zoekwoord wordt in
+  `useOrders` genormaliseerd (`RCS-` prefix weg, jaar-prefix weg, leading
+  zeros weg) en als `order_number.eq.<int>` aan de `or()`-clause toegevoegd.
+  Tekstzoek op `client_name`, `pickup_address` en `delivery_address` blijft
+  intact. Placeholder in de zoekbalk laat nu expliciet `RCS-2026-0001` zien.
+  Unit-tests dekken de formats `RCS-2026-0042`, `0042` en zuivere tekst.
 
 ## Nog te doen
 
@@ -46,9 +52,6 @@ Uit de top-10 geland:
 - **#7 "Leaving with unsaved changes"-waarschuwing in NewOrder** (S-effort,
   mid-impact), zelfde patroon als het nu in NewClientDialog staat (dirty-check
   + AlertDialog bij Annuleren of outside-click).
-- **#8 Order-number zoeken op formatted string** (S-effort, mid-impact), zodat
-  `"RCS-2026-0042"` of deelfragmenten hits geven. Nu faalt zoeken tenzij de
-  user het rauwe integer-ordernummer intypt.
 - **#9 Handmatige validatie in `NewOrder.handleSave` vervangen door
   `orderInputSchema.parse`** (M-effort, mid-impact), voorkomt drift tussen
   Zod-schema en de duplicate-validatie in de component.

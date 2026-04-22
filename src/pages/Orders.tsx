@@ -465,7 +465,7 @@ const Orders = () => {
         <SearchInput
           value={search}
           onChange={handleSearchChange}
-          placeholder="Zoek op ordernummer of klant..."
+          placeholder="Zoek op ordernummer (bijv. RCS-2026-0001), klant of adres..."
           className="flex-1 min-w-0 sm:max-w-md"
         />
         <div className="flex items-center gap-2 flex-wrap">

@@ -158,7 +158,7 @@ describe("Orders", () => {
   it("types in search to trigger handleSearchChange", async () => {
     const user = userEvent.setup();
     renderOrders();
-    const input = screen.getByPlaceholderText(/Zoek op ordernummer of klant/);
+    const input = screen.getByPlaceholderText(/Zoek op ordernummer/);
     await user.type(input, "Acme");
     expect(mockUseOrders).toHaveBeenCalled();
   });

@@ -182,6 +182,78 @@ describe("useOrders", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
   });
 
+  it("parseert geformatteerd ordernummer RCS-2026-0042 naar integer in de or()-clause", async () => {
+    const orCalls: string[] = [];
+    mockFrom.mockImplementation(() => {
+      const chain: any = {
+        select: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
+        or: vi.fn().mockImplementation((expr: string) => {
+          orCalls.push(expr);
+          return Promise.resolve({ data: [], error: null, count: 0 });
+        }),
+      };
+      return chain;
+    });
+
+    const { result } = renderHook(
+      () => useOrders({ search: "RCS-2026-0042" }),
+      { wrapper: createWrapper() }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(orCalls.length).toBeGreaterThan(0);
+    expect(orCalls[0]).toContain("order_number.eq.42");
+    expect(orCalls[0]).toContain("client_name.ilike.%RCS-2026-0042%");
+  });
+
+  it("parseert kaal ordernummer 0042 naar integer 42", async () => {
+    const orCalls: string[] = [];
+    mockFrom.mockImplementation(() => {
+      const chain: any = {
+        select: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
+        or: vi.fn().mockImplementation((expr: string) => {
+          orCalls.push(expr);
+          return Promise.resolve({ data: [], error: null, count: 0 });
+        }),
+      };
+      return chain;
+    });
+
+    const { result } = renderHook(
+      () => useOrders({ search: "0042" }),
+      { wrapper: createWrapper() }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(orCalls[0]).toContain("order_number.eq.42");
+  });
+
+  it("slaat order_number.eq over voor zuiver tekst-zoektje", async () => {
+    const orCalls: string[] = [];
+    mockFrom.mockImplementation(() => {
+      const chain: any = {
+        select: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
+        or: vi.fn().mockImplementation((expr: string) => {
+          orCalls.push(expr);
+          return Promise.resolve({ data: [], error: null, count: 0 });
+        }),
+      };
+      return chain;
+    });
+
+    const { result } = renderHook(
+      () => useOrders({ search: "Acme" }),
+      { wrapper: createWrapper() }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(orCalls[0]).not.toContain("order_number.eq");
+    expect(orCalls[0]).toContain("client_name.ilike.%Acme%");
+  });
+
   it("skips status filter for 'alle'", async () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
