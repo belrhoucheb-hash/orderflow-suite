@@ -7,6 +7,16 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { type Client, useClientLocations, useClientRates, useClientOrders, useUpdateClient } from "@/hooks/useClients";
 import { useClientContacts } from "@/hooks/useClientContacts";
 import { useClientAudit } from "@/hooks/useClientAudit";
@@ -37,7 +47,7 @@ export function ClientDetailPanel({ client }: Props) {
   const navigate = useNavigate();
   const { data: locations } = useClientLocations(client.id);
   const { data: rates } = useClientRates(client.id);
-  const { data: orders } = useClientOrders(client.name);
+  const { data: orders } = useClientOrders(client.id);
   const [newLocationOpen, setNewLocationOpen] = useState(false);
 
   return (
@@ -444,12 +454,18 @@ function LastAuditLine({ clientId }: { clientId: string }) {
 function BedrijfSection({ client }: { client: Client }) {
   const updateClient = useUpdateClient();
   const [localActive, setLocalActive] = useState<boolean>(client.is_active);
+  // Dispatcher die per ongeluk een klant met lopende orders deactiveert
+  // verliest 'm uit de nieuwe-order-dropdown terwijl lopende legs gewoon
+  // doorlopen — verwarrend. Daarom eerst bevestiging als er actieve
+  // orders hangen.
+  const [pendingDeactivate, setPendingDeactivate] = useState(false);
+  const activeOrderCount = client.active_order_count ?? 0;
 
   useEffect(() => {
     setLocalActive(client.is_active);
   }, [client.id, client.is_active]);
 
-  const onToggleActive = async (v: boolean) => {
+  const persistActive = async (v: boolean) => {
     setLocalActive(v);
     try {
       await updateClient.mutateAsync({ id: client.id, is_active: v });
@@ -458,6 +474,19 @@ function BedrijfSection({ client }: { client: Client }) {
       setLocalActive(!v);
       toast.error("Kon status niet opslaan");
     }
+  };
+
+  const onToggleActive = (v: boolean) => {
+    if (!v && activeOrderCount > 0) {
+      setPendingDeactivate(true);
+      return;
+    }
+    void persistActive(v);
+  };
+
+  const confirmDeactivate = () => {
+    setPendingDeactivate(false);
+    void persistActive(false);
   };
 
   return (
@@ -489,6 +518,28 @@ function BedrijfSection({ client }: { client: Client }) {
           Inactieve klanten verschijnen niet in nieuwe-order dropdowns
         </p>
       </div>
+      <AlertDialog
+        open={pendingDeactivate}
+        onOpenChange={(o) => !o && setPendingDeactivate(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Klant op inactief zetten?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {client.name} heeft {activeOrderCount}{" "}
+              {activeOrderCount === 1 ? "actieve order" : "actieve orders"}. Inactief
+              zetten betekent dat de klant niet meer in nieuwe-order-dropdowns
+              verschijnt. Lopende orders blijven gewoon gekoppeld.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeactivate}>
+              Toch deactiveren
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Section>
   );
 }

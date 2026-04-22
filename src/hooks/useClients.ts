@@ -90,7 +90,29 @@ export interface ClientRate {
   created_at: string;
 }
 
+// Expliciete kolomlijst — houdt de response klein en maakt het duidelijk welke
+// velden de klanten-tab echt nodig heeft. Bij schema-wijzigingen moet deze
+// bewust mee-evolueren, wat drift tussen UI en DB zichtbaarder maakt dan een
+// `select('*')` ooit kan.
+const CLIENT_LIST_COLUMNS = [
+  "id", "name", "contact_person", "email", "phone", "primary_contact_id",
+  "address", "zipcode", "city", "country", "kvk_number", "btw_number",
+  "payment_terms", "is_active", "created_at", "notes",
+  "street", "house_number", "house_number_suffix", "lat", "lng", "coords_manual",
+  "billing_email", "billing_same_as_main",
+  "billing_address", "billing_zipcode", "billing_city", "billing_country",
+  "billing_street", "billing_house_number", "billing_house_number_suffix",
+  "billing_lat", "billing_lng", "billing_coords_manual",
+  "shipping_same_as_main",
+  "shipping_address", "shipping_zipcode", "shipping_city", "shipping_country",
+  "shipping_street", "shipping_house_number", "shipping_house_number_suffix",
+  "shipping_lat", "shipping_lng", "shipping_coords_manual",
+].join(",");
+
 export function useClients(search?: string) {
+  // Lichte klanten-fetch voor autocomplete/dropdowns (NewOrder, Facturatie).
+  // Geeft een platte array terug. Voor paginering/sortering/filters in de
+  // klanten-tab zelf → zie useClientsList.
   const { tenant } = useTenant();
 
   return useQuery({
@@ -98,44 +120,156 @@ export function useClients(search?: string) {
     staleTime: 60_000,
     enabled: !!tenant?.id,
     queryFn: async () => {
-      // 8.10 – Single query: fetch clients and active order counts in parallel
-      // instead of N+1 (one query per client). We fire both requests at once
-      // and join the results in memory by client name.
-      //
-      // Explicitly filter by tenant_id to help Postgres use the right index
-      // and to ensure we get all tenant clients even if RLS relies on
-      // current_tenant_id() which may return NULL for dev users.
-      let clientQuery = supabase
+      let q = supabase
         .from("clients")
-        .select("*")
+        .select(CLIENT_LIST_COLUMNS)
         .eq("tenant_id", tenant!.id)
         .order("name")
         .limit(200);
+      if (search) {
+        const term = search.trim();
+        if (term) {
+          q = q.or(
+            [
+              `name.ilike.%${term}%`,
+              `email.ilike.%${term}%`,
+              `contact_person.ilike.%${term}%`,
+              `kvk_number.ilike.%${term}%`,
+              `phone.ilike.%${term}%`,
+              `city.ilike.%${term}%`,
+            ].join(","),
+          );
+        }
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return ((data as unknown) as Client[]);
+    },
+  });
+}
+
+export type ClientSortKey = "name" | "contact_person" | "email";
+
+export interface UseClientsListOptions {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  isActive?: boolean | null;
+  country?: string | null;
+  sortKey?: ClientSortKey;
+  sortDir?: "asc" | "desc";
+}
+
+export interface UseClientsListResult {
+  clients: Client[];
+  totalCount: number;
+}
+
+export function useClientsList(opts: UseClientsListOptions = {}) {
+  const {
+    search,
+    page = 0,
+    pageSize = 50,
+    isActive = null,
+    country = null,
+    sortKey = "name",
+    sortDir = "asc",
+  } = opts;
+  const { tenant } = useTenant();
+
+  return useQuery<UseClientsListResult>({
+    queryKey: [
+      "clients_list",
+      { search, page, pageSize, isActive, country, sortKey, sortDir, tenantId: tenant?.id },
+    ],
+    staleTime: 60_000,
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      // Server-side paginering + filters + sortering. active_order_count
+      // wordt client-side gejoined via order.client_id (zie countMap
+      // hieronder). Zonder view/rpc is dat nog steeds twee queries, maar
+      // de clients-query haalt nu alleen de ~50 rijen van de huidige
+      // pagina op.
+      let clientQuery = supabase
+        .from("clients")
+        .select(CLIENT_LIST_COLUMNS, { count: "exact" })
+        .eq("tenant_id", tenant!.id)
+        .order(sortKey, { ascending: sortDir === "asc" })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (isActive !== null) {
+        clientQuery = clientQuery.eq("is_active", isActive);
+      }
+      if (country) {
+        clientQuery = clientQuery.eq("country", country);
+      }
 
       if (search) {
-        clientQuery = clientQuery.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+        const term = search.trim();
+        if (term) {
+          clientQuery = clientQuery.or(
+            [
+              `name.ilike.%${term}%`,
+              `email.ilike.%${term}%`,
+              `contact_person.ilike.%${term}%`,
+              `kvk_number.ilike.%${term}%`,
+              `phone.ilike.%${term}%`,
+              `city.ilike.%${term}%`,
+            ].join(","),
+          );
+        }
       }
 
       const [clientsResult, countsResult] = await Promise.all([
         clientQuery,
         supabase
           .from("orders")
-          .select("client_name")
-          .not("status", "in", '("DELIVERED","CANCELLED")'),
+          .select("client_id")
+          .eq("tenant_id", tenant!.id)
+          .not("status", "in", '("DELIVERED","CANCELLED")')
+          .not("client_id", "is", null),
       ]);
 
       if (clientsResult.error) throw clientsResult.error;
 
       const countMap: Record<string, number> = {};
       countsResult.data?.forEach((o) => {
-        const name = o.client_name?.toLowerCase();
-        if (name) countMap[name] = (countMap[name] || 0) + 1;
+        const id = (o as { client_id: string | null }).client_id;
+        if (id) countMap[id] = (countMap[id] || 0) + 1;
       });
 
-      return (clientsResult.data as Client[]).map((c) => ({
+      const clients = ((clientsResult.data as unknown) as Client[]).map((c) => ({
         ...c,
-        active_order_count: countMap[c.name.toLowerCase()] || 0,
+        active_order_count: countMap[c.id] || 0,
       }));
+
+      return { clients, totalCount: clientsResult.count ?? clients.length };
+    },
+  });
+}
+
+// Unieke landen per tenant, apart gecached zodat de dropdown ook bij
+// server-side paginering de volledige set toont (niet alleen landen van
+// de huidige 50 rijen).
+export function useClientCountries() {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["client_countries", tenant?.id],
+    enabled: !!tenant?.id,
+    staleTime: 300_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("country")
+        .eq("tenant_id", tenant!.id)
+        .not("country", "is", null);
+      if (error) throw error;
+      const set = new Set<string>();
+      (data ?? []).forEach((row) => {
+        const c = (row as { country: string | null }).country;
+        if (c) set.add(c);
+      });
+      return Array.from(set).sort();
     },
   });
 }
@@ -193,16 +327,21 @@ export function useClientRates(clientId: string | null) {
   });
 }
 
-export function useClientOrders(clientName: string | null) {
+export function useClientOrders(clientId: string | null) {
   return useQuery({
-    queryKey: ["client_orders", clientName],
-    enabled: !!clientName,
+    queryKey: ["client_orders", clientId],
+    enabled: !!clientId,
     staleTime: 60_000,
     queryFn: async () => {
+      // Filter op client_id, niet op een ilike van client_name. Naam-
+      // varianten en partial matches liepen anders tussen klanten door
+      // (bv. "Heede" matchte ook "Van Heede BV" en omgekeerd).
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
-        .ilike("client_name", `%${clientName}%`)
+        .select(
+          "id, order_number, status, pickup_address, delivery_address, created_at, priority, info_status",
+        )
+        .eq("client_id", clientId!)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;

@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -105,6 +115,9 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
   const isEdit = Boolean(client);
   const [form, setForm] = useState<FormState>(INITIAL);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Snapshot van de initiële waarde voor dirty-check. Bij elke open reset.
+  const [initialForm, setInitialForm] = useState<FormState>(INITIAL);
+  const [pendingClose, setPendingClose] = useState(false);
 
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
@@ -118,8 +131,33 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
     if (!open) return;
     setErrors({});
     setDuplicateAcknowledged(false);
-    setForm(client ? formFromClient(client) : INITIAL);
+    const base = client ? formFromClient(client) : INITIAL;
+    setForm(base);
+    setInitialForm(base);
+    setPendingClose(false);
   }, [open, client]);
+
+  const isDirty = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(initialForm),
+    [form, initialForm],
+  );
+
+  const requestClose = (next: boolean) => {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    if (isDirty) {
+      setPendingClose(true);
+      return;
+    }
+    onOpenChange(false);
+  };
+
+  const confirmDiscard = () => {
+    setPendingClose(false);
+    onOpenChange(false);
+  };
 
   const setField = <K extends keyof FormState>(key: K) =>
     (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -238,6 +276,8 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
           notes: form.notes.trim() ? form.notes : null,
         });
         toast.success("Klant bijgewerkt");
+        // Markeer form als "schoon" zodat requestClose direct sluit.
+        setInitialForm(form);
         onOpenChange(false);
         return;
       }
@@ -266,6 +306,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
 
       toast.success("Klant aangemaakt");
       setForm(INITIAL);
+      setInitialForm(INITIAL);
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err?.message ?? (isEdit ? "Fout bij bijwerken klant" : "Fout bij aanmaken klant"));
@@ -273,7 +314,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent
         className="sm:max-w-3xl max-h-[92vh] overflow-y-auto"
         onPointerDownOutside={(e) => {
@@ -473,7 +514,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
           <div className="flex justify-end gap-2 pt-3 border-t border-[hsl(var(--gold)/0.2)]">
             <button
               type="button"
-              onClick={() => onOpenChange(false)}
+              onClick={() => requestClose(false)}
               className="btn-luxe btn-luxe--ghost !h-9"
             >
               Annuleren
@@ -490,6 +531,26 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
           </div>
         </form>
       </DialogContent>
+      <AlertDialog
+        open={pendingClose}
+        onOpenChange={(o) => !o && setPendingClose(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Wijzigingen weggooien?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Je hebt wijzigingen die nog niet zijn opgeslagen. Sluit je de dialog nu,
+              dan gaan ze verloren.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Doorgaan met bewerken</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscard}>
+              Wijzigingen weggooien
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

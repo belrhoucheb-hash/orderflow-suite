@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +21,8 @@ import { MoreVertical, Plus, Mail, Phone } from "lucide-react";
 import { toast } from "sonner";
 import {
   useClientContacts,
-  useDeleteClientContact,
+  useArchiveClientContact,
+  useReactivateClientContact,
   useAssignContactRole,
   type ClientContact,
 } from "@/hooks/useClientContacts";
@@ -32,13 +34,17 @@ interface Props {
 }
 
 export function ClientContactsSection({ clientId }: Props) {
-  const { data: contacts, isLoading } = useClientContacts(clientId);
-  const remove = useDeleteClientContact();
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: contacts, isLoading } = useClientContacts(clientId, {
+    includeArchived: showArchived,
+  });
+  const archive = useArchiveClientContact();
+  const reactivate = useReactivateClientContact();
   const assign = useAssignContactRole();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ClientContact | undefined>(undefined);
-  const [deleteCandidate, setDeleteCandidate] = useState<ClientContact | null>(null);
+  const [archiveCandidate, setArchiveCandidate] = useState<ClientContact | null>(null);
 
   const openNew = () => {
     setEditing(undefined);
@@ -62,15 +68,24 @@ export function ClientContactsSection({ clientId }: Props) {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteCandidate) return;
+  const handleArchive = async () => {
+    if (!archiveCandidate) return;
     try {
-      await remove.mutateAsync({ id: deleteCandidate.id, clientId });
-      toast.success("Contactpersoon verwijderd");
+      await archive.mutateAsync({ id: archiveCandidate.id, clientId });
+      toast.success("Contactpersoon gearchiveerd");
     } catch (err: any) {
-      toast.error(err?.message ?? "Verwijderen mislukt");
+      toast.error(err?.message ?? "Archiveren mislukt");
     } finally {
-      setDeleteCandidate(null);
+      setArchiveCandidate(null);
+    }
+  };
+
+  const handleReactivate = async (contact: ClientContact) => {
+    try {
+      await reactivate.mutateAsync({ id: contact.id, clientId });
+      toast.success(`${contact.name} is weer actief`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Heractiveren mislukt");
     }
   };
 
@@ -87,16 +102,28 @@ export function ClientContactsSection({ clientId }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-muted-foreground">
           {rows.length === 0
-            ? "Nog geen contactpersonen"
-            : `${rows.length} contactperso${rows.length === 1 ? "on" : "nen"}`}
+            ? showArchived
+              ? "Nog geen contactpersonen"
+              : "Nog geen actieve contactpersonen"
+            : `${rows.length} contactperso${rows.length === 1 ? "on" : "nen"}${showArchived ? " (incl. gearchiveerd)" : ""}`}
         </p>
-        <button type="button" onClick={openNew} className="btn-luxe !h-8 !px-3 !text-[12px]">
-          <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
-          Toevoegen
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-[11px] text-muted-foreground select-none">
+            <Switch
+              checked={showArchived}
+              onCheckedChange={setShowArchived}
+              aria-label="Toon gearchiveerde contacten"
+            />
+            Toon gearchiveerd
+          </label>
+          <button type="button" onClick={openNew} className="btn-luxe !h-8 !px-3 !text-[12px]">
+            <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
+            Toevoegen
+          </button>
+        </div>
       </div>
 
       {sorted.length === 0 ? (
@@ -145,22 +172,28 @@ export function ClientContactsSection({ clientId }: Props) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => openEdit(c)}>Bewerken</DropdownMenuItem>
-                  {c.role !== "primary" && (
+                  {c.is_active && c.role !== "primary" && (
                     <DropdownMenuItem onClick={() => handleAssign(c, "primary")}>
                       Maak primair
                     </DropdownMenuItem>
                   )}
-                  {c.role !== "backup" && (
+                  {c.is_active && c.role !== "backup" && (
                     <DropdownMenuItem onClick={() => handleAssign(c, "backup")}>
                       Maak backup
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem
-                    onClick={() => setDeleteCandidate(c)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    Verwijderen
-                  </DropdownMenuItem>
+                  {c.is_active ? (
+                    <DropdownMenuItem
+                      onClick={() => setArchiveCandidate(c)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      Archiveren
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => handleReactivate(c)}>
+                      Heractiveer
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -175,17 +208,18 @@ export function ClientContactsSection({ clientId }: Props) {
         contact={editing}
       />
 
-      <AlertDialog open={!!deleteCandidate} onOpenChange={(o) => !o && setDeleteCandidate(null)}>
+      <AlertDialog open={!!archiveCandidate} onOpenChange={(o) => !o && setArchiveCandidate(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Contactpersoon verwijderen?</AlertDialogTitle>
+            <AlertDialogTitle>Contactpersoon archiveren?</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteCandidate?.name} wordt definitief verwijderd. Deze actie is niet terug te draaien.
+              {archiveCandidate?.name} wordt gearchiveerd. Het contact blijft in de historie staan
+              en kan later weer geactiveerd worden via de "Toon gearchiveerd"-optie.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuleren</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Verwijderen</AlertDialogAction>
+            <AlertDialogAction onClick={handleArchive}>Archiveren</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

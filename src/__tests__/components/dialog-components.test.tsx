@@ -23,7 +23,8 @@ vi.mock("@/hooks/useClientContacts", () => ({
   useClientContacts: () => ({ data: [] }),
   useCreateClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({ id: "contact-1" }), isPending: false }),
   useUpdateClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
-  useDeleteClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
+  useArchiveClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
+  useReactivateClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
   useAssignContactRole: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
 }));
 

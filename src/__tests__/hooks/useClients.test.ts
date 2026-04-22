@@ -86,6 +86,7 @@ function createWrapper() {
 
 import {
   useClients,
+  useClientsList,
   useClientLocations,
   useClientRates,
   useClientOrders,
@@ -105,40 +106,19 @@ describe("useClients", () => {
     expect(result.current.data).toBeUndefined();
   });
 
-  it("fetches clients and counts active orders", async () => {
+  it("fetches clients without counts in array-mode", async () => {
     const clients = [
       { id: "1", name: "Acme Corp", email: "a@a.com", is_active: true },
       { id: "2", name: "Beta Inc", email: "b@b.com", is_active: true },
     ];
-    const orders = [
-      { client_name: "Acme Corp" },
-      { client_name: "acme corp" },
-    ];
-
-    // Mock Promise.all for the two parallel queries
-    // useClients fires two queries via Promise.all
-    let callCount = 0;
-    mockFrom.mockImplementation((table: string) => {
-      const chain = {
+    mockFrom.mockImplementation(() => {
+      const chain: any = {
         select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        limit: vi.fn().mockReturnThis(),
-        or: vi.fn().mockReturnThis(),
-        not: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        or: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue({ data: clients, error: null }),
       };
-
-      if (table === "clients") {
-        // The chain resolves with client data
-        chain.limit.mockResolvedValue({ data: clients, error: null });
-        chain.or.mockReturnValue({ ...chain, then: undefined });
-        // When limit is the last call, resolve
-        return chain;
-      }
-      if (table === "orders") {
-        chain.not.mockResolvedValue({ data: orders, error: null });
-        return chain;
-      }
       return chain;
     });
 
@@ -146,8 +126,6 @@ describe("useClients", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(2);
-    expect(result.current.data![0].active_order_count).toBe(2);
-    expect(result.current.data![1].active_order_count).toBe(0);
   });
 
   it("applies search filter", async () => {
@@ -196,6 +174,47 @@ describe("useClients", () => {
 
     const { result } = renderHook(() => useClients(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe("useClientsList", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("joins active-order counts via client_id", async () => {
+    const clients = [
+      { id: "1", name: "Acme Corp", is_active: true },
+      { id: "2", name: "Beta Inc", is_active: true },
+    ];
+    const orders = [{ client_id: "1" }, { client_id: "1" }];
+
+    mockFrom.mockImplementation((table: string) => {
+      const chain: any = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        or: vi.fn().mockReturnThis(),
+        not: vi.fn().mockReturnThis(),
+      };
+      if (table === "clients") {
+        chain.range = vi
+          .fn()
+          .mockResolvedValue({ data: clients, count: 2, error: null });
+      } else if (table === "orders") {
+        chain.not
+          .mockReturnValueOnce(chain)
+          .mockResolvedValueOnce({ data: orders, error: null });
+      }
+      return chain;
+    });
+
+    const { result } = renderHook(() => useClientsList(), {
+      wrapper: createWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.clients).toHaveLength(2);
+    expect(result.current.data!.clients[0].active_order_count).toBe(2);
+    expect(result.current.data!.clients[1].active_order_count).toBe(0);
+    expect(result.current.data!.totalCount).toBe(2);
   });
 });
 
@@ -260,21 +279,21 @@ describe("useClientRates", () => {
 describe("useClientOrders", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("is disabled when clientName is null", () => {
+  it("is disabled when clientId is null", () => {
     const { result } = renderHook(() => useClientOrders(null), { wrapper: createWrapper() });
     expect(result.current.fetchStatus).toBe("idle");
   });
 
-  it("fetches orders for a client by name", async () => {
-    const orders = [{ id: "o1", client_name: "Acme" }];
+  it("fetches orders for a client by id", async () => {
+    const orders = [{ id: "o1", order_number: 42, status: "DRAFT" }];
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({ data: orders, error: null }),
     }));
 
-    const { result } = renderHook(() => useClientOrders("Acme"), { wrapper: createWrapper() });
+    const { result } = renderHook(() => useClientOrders("client-1"), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(orders);
   });

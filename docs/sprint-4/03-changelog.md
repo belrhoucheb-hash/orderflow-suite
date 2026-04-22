@@ -62,6 +62,7 @@ Opgeleverd van 2026-04-15 tot en met 2026-04-21. Focus deze sprint: adres-autoco
 - **`tenant_id` meesturen bij aanmaken klant** (`710f058`, uit Sprint 3 nagezonden).
 - **`tenant_id` meesturen bij aanmaken chauffeur**, plus toast-feedback bij fouten zodat stille RLS-blokkades zichtbaar worden (`94f41e9`).
 - **`tenant_id` meesturen bij aanmaken voertuig, onderhoud en document** (`acdc44b`).
+- **Dubbele order bij opeenvolgend "Opslaan" en "Opslaan & sluiten" op nieuwe-order pagina** (`f41f97e`, meegelift met de klant-veld commit). `handleSave` op `NewOrder.tsx` riep elke keer `createShipmentWithLegs` aan zonder de eerste aangemaakte shipment te onthouden, waardoor een tweede klik een identiek shipment + order aanmaakte. Fix: na een succesvolle `handleSave(false)` navigeren we naar de detailpagina van de nieuwe order, zodat verdere bewerkingen via het update-pad in `OrderDetail` lopen. `handleSave(true)` gaat naar de orderlijst. Opruim-SQL voor de geobserveerde duplicaat (order `46c596d0…`, shipment `dfde6a2e…`) handmatig uitgevoerd door Badr op 2026-04-22.
 
 ## 3. Databasemigraties
 

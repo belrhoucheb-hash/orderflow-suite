@@ -45,9 +45,37 @@ export function useOrders(options: UseOrdersOptions = {}) {
     queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, tenantId: tenant?.id }],
     staleTime: 5_000,
     queryFn: async () => {
+      // Expliciete kolom-set: alleen wat Orders-lijst UI rendert. Scheelt payload
+      // (geen pod_signature_url, pod_photos, cmr_*, attachments, anomalies, enz.)
+      // en verlaagt RLS-check-kosten per rij.
+      const LIST_COLUMNS = [
+        "id",
+        "created_at",
+        "order_number",
+        "client_name",
+        "source_email_from",
+        "pickup_address",
+        "delivery_address",
+        "status",
+        "priority",
+        "weight_kg",
+        "vehicle_id",
+        "notes",
+        "internal_note",
+        "order_type",
+        "parent_order_id",
+        "department_id",
+        "shipment_id",
+        "leg_number",
+        "leg_role",
+        "info_status",
+        "missing_fields",
+        "time_window_end",
+      ].join(",");
+
       let query = (supabase as any)
         .from("orders")
-        .select("*", { count: "exact" })
+        .select(LIST_COLUMNS, { count: "exact" })
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 

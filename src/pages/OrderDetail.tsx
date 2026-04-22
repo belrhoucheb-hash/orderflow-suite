@@ -175,18 +175,6 @@ const OrderDetail = () => {
   const { data: order, isLoading } = useQuery({
     queryKey: ["order-detail", id],
     queryFn: async () => {
-      // Check local storage first for test orders
-      const local = localStorage.getItem('local_test_orders');
-      if (local) {
-        try {
-          const orders = JSON.parse(local);
-          const found = orders.find((o: any) => o.id === id);
-          if (found) return found;
-        } catch (e) {
-          console.error("Local order check failed", e);
-        }
-      }
-
       const { data, error } = await supabase
         .from("orders")
         .select("*")
@@ -247,19 +235,6 @@ const OrderDetail = () => {
   // Mark as received in warehouse mutation (for Exports)
   const markAsReceivedMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      if (orderId.startsWith("local-")) {
-        // Update local storage
-        const local = localStorage.getItem('local_test_orders');
-        if (local) {
-          const orders = JSON.parse(local);
-          const updated = orders.map((o: any) => 
-            o.id === orderId ? { ...o, warehouse_received_at: new Date().toISOString() } : o
-          );
-          localStorage.setItem('local_test_orders', JSON.stringify(updated));
-        }
-        return;
-      }
-
       const { error } = await (supabase.from("orders") as any).update({
         warehouse_received_at: new Date().toISOString(),
       }).eq("id", orderId);

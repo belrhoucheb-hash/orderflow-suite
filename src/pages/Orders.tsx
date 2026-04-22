@@ -175,7 +175,7 @@ const Orders = () => {
       return 0;
     });
     return sorted;
-  }, [rawOrders, sortConfig]);
+  }, [filteredByInfo, sortConfig]);
 
   const handleQuickPrint = async (orderId: string) => {
     setPrintLoading(orderId);
@@ -355,9 +355,12 @@ const Orders = () => {
           type="button"
           onClick={() => { handleStatusFilterChange(statusFilter === "IN_TRANSIT" ? "alle" : "IN_TRANSIT"); }}
           aria-pressed={statusFilter === "IN_TRANSIT"}
+          aria-busy={isLoading}
+          disabled={isLoading}
           className={cn(
             "relative px-7 py-7 lg:border-r border-b lg:border-b-0 border-[hsl(var(--gold)/0.18)] text-left transition-colors",
             "hover:bg-[hsl(var(--gold-soft)/0.35)] focus:outline-none focus-visible:bg-[hsl(var(--gold-soft)/0.5)]",
+            "disabled:cursor-wait disabled:opacity-60",
             statusFilter === "IN_TRANSIT" && "bg-[hsl(var(--gold-soft)/0.55)]",
           )}
         >
@@ -407,7 +410,7 @@ const Orders = () => {
               }
             };
             const props = isClickable
-              ? { type: "button" as const, onClick: onClickFilter, "aria-pressed": active }
+              ? { type: "button" as const, onClick: onClickFilter, "aria-pressed": active, "aria-busy": isLoading, disabled: isLoading }
               : {};
             return (
               <Cmp
@@ -416,6 +419,7 @@ const Orders = () => {
                 className={cn(
                   "px-5 py-5 sm:px-6 sm:py-6 flex flex-col text-left transition-colors",
                   s.filter && "hover:bg-[hsl(var(--gold-soft)/0.35)] focus:outline-none focus-visible:bg-[hsl(var(--gold-soft)/0.5)]",
+                  s.filter && "disabled:cursor-wait disabled:opacity-60",
                   active && "bg-[hsl(var(--gold-soft)/0.55)]",
                 )}
               >
@@ -485,7 +489,8 @@ const Orders = () => {
             }}
           >
             <SelectTrigger
-              aria-label="Filter"
+              aria-label="Filters"
+              title="Filters"
               className="relative h-10 w-10 p-0 justify-center border-transparent bg-transparent text-muted-foreground/70 hover:text-[hsl(var(--gold-deep))] focus:outline-none focus-visible:text-[hsl(var(--gold-deep))] data-[state=open]:text-[hsl(var(--gold-deep))] transition-colors shadow-none overflow-hidden [&>span[data-radix-select-value]]:hidden [&>span:not([data-keep])]:hidden [&>svg:last-child]:hidden"
             >
               <SlidersHorizontal className="h-5 w-5" />
@@ -767,6 +772,7 @@ const Orders = () => {
                         disabled={printLoading === order.id}
                         className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
                         title="Print label"
+                        aria-label={`Print label voor order ${order.orderNumber}`}
                       >
                         {printLoading === order.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />

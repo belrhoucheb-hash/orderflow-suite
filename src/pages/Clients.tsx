@@ -20,14 +20,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useClients, type Client } from "@/hooks/useClients";
+import {
+  useClientsList,
+  useClientCountries,
+  type Client,
+  type ClientSortKey,
+} from "@/hooks/useClients";
 import { ClientDetailPanel } from "@/components/clients/ClientDetailPanel";
 import { NewClientDialog } from "@/components/clients/NewClientDialog";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-type SortKey = "name" | "contact_person" | "email" | "active_order_count";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZE = 50;
@@ -38,13 +42,27 @@ export default function Clients() {
   const [statusFilter, setStatusFilter] = useState<"alle" | "actief" | "inactief">("alle");
   const [countryFilter, setCountryFilter] = useState<string>("alle");
   const [openOrdersFilter, setOpenOrdersFilter] = useState<"alle" | "met" | "zonder">("alle");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortKey, setSortKey] = useState<ClientSortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(0);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const { data: clients, isLoading, isError, refetch } = useClients(search);
+
+  const isActive =
+    statusFilter === "actief" ? true : statusFilter === "inactief" ? false : null;
+  const country = countryFilter === "alle" ? null : countryFilter;
+
+  const { data, isLoading, isError, refetch } = useClientsList({
+    search,
+    page,
+    pageSize: PAGE_SIZE,
+    isActive,
+    country,
+    sortKey,
+    sortDir,
+  });
+  const { data: countries = [] } = useClientCountries();
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,50 +80,24 @@ export default function Clients() {
     setPage(0);
   }, [search, statusFilter, countryFilter, openOrdersFilter, sortKey, sortDir]);
 
-  const countries = useMemo(() => {
-    const set = new Set<string>();
-    clients?.forEach((c) => {
-      if (c.country) set.add(c.country);
-    });
-    return Array.from(set).sort();
-  }, [clients]);
+  const serverRows = data?.clients ?? [];
+  const totalCount = data?.totalCount ?? 0;
 
-  const filteredSorted = useMemo(() => {
-    if (!clients) return [] as Client[];
-    const filtered = clients.filter((c) => {
-      if (statusFilter === "actief" && !c.is_active) return false;
-      if (statusFilter === "inactief" && c.is_active) return false;
-      if (countryFilter !== "alle" && c.country !== countryFilter) return false;
+  // Open-orders-filter blijft client-side op de huidige pagina: die count
+  // wordt in de hook zelf aangevuld, niet in de server-query. Bewuste
+  // afweging: filter op count server-side zou een view/rpc vereisen.
+  const pageRows = useMemo(() => {
+    if (openOrdersFilter === "alle") return serverRows;
+    return serverRows.filter((c) => {
       const orders = c.active_order_count ?? 0;
-      if (openOrdersFilter === "met" && orders <= 0) return false;
-      if (openOrdersFilter === "zonder" && orders > 0) return false;
-      return true;
+      return openOrdersFilter === "met" ? orders > 0 : orders === 0;
     });
+  }, [serverRows, openOrdersFilter]);
 
-    const dir = sortDir === "asc" ? 1 : -1;
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortKey === "active_order_count") {
-        return ((a.active_order_count ?? 0) - (b.active_order_count ?? 0)) * dir;
-      }
-      const av = (a[sortKey] ?? "").toString().toLowerCase();
-      const bv = (b[sortKey] ?? "").toString().toLowerCase();
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      return 0;
-    });
-    return sorted;
-  }, [clients, statusFilter, countryFilter, openOrdersFilter, sortKey, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredSorted.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
-  const pageRows = filteredSorted.slice(
-    currentPage * PAGE_SIZE,
-    currentPage * PAGE_SIZE + PAGE_SIZE,
-  );
 
-  const count = filteredSorted.length;
-
-  function toggleSort(key: SortKey) {
+  function toggleSort(key: ClientSortKey) {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -114,7 +106,7 @@ export default function Clients() {
     }
   }
 
-  function SortIcon({ col }: { col: SortKey }) {
+  function SortIcon({ col }: { col: ClientSortKey }) {
     if (sortKey !== col) return null;
     return sortDir === "asc" ? (
       <ArrowUp className="h-3 w-3 inline-block ml-1 text-[hsl(var(--gold-deep))]" strokeWidth={2} />
@@ -129,7 +121,7 @@ export default function Clients() {
         <div className="p-6 space-y-4 max-w-[1800px] mx-auto w-full">
           <PageHeader
             title="Klanten"
-            subtitle={`${count} ${count === 1 ? "klant" : "klanten"} in het systeem`}
+            subtitle={`${totalCount} ${totalCount === 1 ? "klant" : "klanten"} in het systeem`}
             actions={
               <button
                 type="button"
@@ -227,12 +219,7 @@ export default function Clients() {
                       Email<SortIcon col="email" />
                     </th>
                     <th className="text-left">Telefoon</th>
-                    <th
-                      className="text-center cursor-pointer select-none hover:text-foreground transition-colors"
-                      onClick={() => toggleSort("active_order_count")}
-                    >
-                      Actieve orders<SortIcon col="active_order_count" />
-                    </th>
+                    <th className="text-center select-none">Actieve orders</th>
                     <th className="text-center">Status</th>
                   </tr>
                 </thead>
@@ -311,14 +298,14 @@ export default function Clients() {
               </table>
             </div>
 
-            {!isLoading && !isError && filteredSorted.length > PAGE_SIZE && (
+            {!isLoading && !isError && totalCount > PAGE_SIZE && (
               <div className="flex items-center justify-between px-5 py-3 border-t border-[hsl(var(--gold)/0.15)] text-xs text-muted-foreground">
                 <span className="tabular-nums">
                   {currentPage * PAGE_SIZE + 1}
                   {" tot "}
-                  {Math.min((currentPage + 1) * PAGE_SIZE, filteredSorted.length)}
+                  {Math.min((currentPage + 1) * PAGE_SIZE, totalCount)}
                   {" van "}
-                  {filteredSorted.length}
+                  {totalCount}
                 </span>
                 <div className="flex items-center gap-2">
                   <Button
