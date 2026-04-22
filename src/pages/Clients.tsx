@@ -23,6 +23,7 @@ import {
 import {
   useClientsList,
   useClientCountries,
+  useClientStats,
   type Client,
   type ClientSortKey,
 } from "@/hooks/useClients";
@@ -42,6 +43,7 @@ export default function Clients() {
   const [statusFilter, setStatusFilter] = useState<"alle" | "actief" | "inactief">("alle");
   const [countryFilter, setCountryFilter] = useState<string>("alle");
   const [openOrdersFilter, setOpenOrdersFilter] = useState<"alle" | "met" | "zonder">("alle");
+  const [activityFilter, setActivityFilter] = useState<"alle" | "slapend">("alle");
   const [sortKey, setSortKey] = useState<ClientSortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(0);
@@ -61,8 +63,10 @@ export default function Clients() {
     country,
     sortKey,
     sortDir,
+    dormantOnly: activityFilter === "slapend",
   });
   const { data: countries = [] } = useClientCountries();
+  const { data: stats } = useClientStats();
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,7 +82,7 @@ export default function Clients() {
   // lege pagina 3 blijven staan wanneer de dataset krimpt.
   useEffect(() => {
     setPage(0);
-  }, [search, statusFilter, countryFilter, openOrdersFilter, sortKey, sortDir]);
+  }, [search, statusFilter, countryFilter, openOrdersFilter, activityFilter, sortKey, sortDir]);
 
   const serverRows = data?.clients ?? [];
   const totalCount = data?.totalCount ?? 0;
@@ -134,6 +138,17 @@ export default function Clients() {
             }
           />
 
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <StatCard label="Totaal" value={stats?.total ?? null} />
+            <StatCard label="Actief" value={stats?.active ?? null} />
+            <StatCard label="Inactief" value={stats?.inactive ?? null} />
+            <StatCard
+              label="Slapend (> 90 dagen)"
+              value={stats?.dormant ?? null}
+              accent
+            />
+          </div>
+
           <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 flex-1 min-w-[220px] max-w-md">
               <Search className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
@@ -188,6 +203,20 @@ export default function Clients() {
                 <SelectItem value="alle">Alle open orders</SelectItem>
                 <SelectItem value="met">Met open orders</SelectItem>
                 <SelectItem value="zonder">Zonder open orders</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
+              <SelectTrigger
+                aria-label="Activiteit"
+                className="h-9 w-[200px] text-sm"
+                style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+              >
+                <SelectValue placeholder="Activiteit" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="alle">Alle klanten</SelectItem>
+                <SelectItem value="slapend">Alleen slapende klanten</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -403,6 +432,39 @@ export default function Clients() {
         onOpenChange={(v) => { if (!v) setEditingClient(null); }}
         client={editingClient ?? undefined}
       />
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number | null;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-2xl border border-[hsl(var(--gold)/0.2)] px-4 py-3"
+      style={{
+        background: accent
+          ? "linear-gradient(135deg, hsl(var(--gold-soft)/0.55) 0%, hsl(var(--gold-soft)/0.2) 100%)"
+          : "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.18) 100%)",
+      }}
+    >
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        {label}
+      </div>
+      <div
+        className="mt-1 text-2xl font-display font-semibold tabular-nums text-foreground"
+      >
+        {value === null ? "…" : value}
+      </div>
     </div>
   );
 }
