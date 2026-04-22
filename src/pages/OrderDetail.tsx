@@ -39,7 +39,8 @@ import { IncompleteBadge } from "@/components/orders/IncompleteBadge";
 import { FollowFromClientPopover } from "@/components/orders/FollowFromClientPopover";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
-import { useUpdateOrder } from "@/hooks/useOrders";
+import { useUpdateOrder, useDeleteOrder } from "@/hooks/useOrders";
+import { Trash2 } from "lucide-react";
 import { logAudit } from "@/lib/auditLog";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useOrderNotesRead } from "@/hooks/useOrderNotesRead";
@@ -67,6 +68,9 @@ const OrderDetail = () => {
 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const deleteOrderMutation = useDeleteOrder();
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [showModifyMode, setShowModifyMode] = useState(false);
   const [showCmr, setShowCmr] = useState(false);
@@ -217,8 +221,12 @@ const OrderDetail = () => {
         table_name: "orders",
         record_id: variables.orderId,
         action: "UPDATE",
+        tenant_id: tenant?.id,
+        old_data: { status: order?.status ?? null },
         new_data: { status: "CANCELLED", cancel_reason: variables.reason || null },
-        changed_fields: ["status", "internal_note"],
+        changed_fields: order?.vehicle_id
+          ? ["status", "internal_note", "vehicle_id"]
+          : ["status", "internal_note"],
       });
     },
     onError: (e: Error) => {
@@ -245,6 +253,8 @@ const OrderDetail = () => {
         table_name: "orders",
         record_id: orderId,
         action: "UPDATE",
+        tenant_id: tenant?.id,
+        old_data: { status: "CANCELLED" },
         new_data: { status: "PENDING" },
         changed_fields: ["status", "internal_note"],
       });
@@ -626,6 +636,18 @@ const OrderDetail = () => {
                     </DropdownMenuItem>
                   </>
                 )}
+                {!isEditing && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => { setDeleteConfirmText(""); setShowDeleteDialog(true); }}
+                      className="!text-destructive hover:!bg-destructive/10 hover:!text-destructive focus:!bg-destructive/10 focus:!text-destructive [&>svg]:!text-destructive"
+                    >
+                      <Trash2 />
+                      <span>Order verwijderen</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -725,8 +747,9 @@ const OrderDetail = () => {
               <h3 className="section-title">Route & Lading</h3>
             </div>
             <div className="space-y-4">
-              {/* Client name — editable */}
-              {isEditing && (
+              {/* Klantnaam blijft altijd zichtbaar, in read-mode als kop,
+                  in edit-mode als bewerkbaar veld. */}
+              {isEditing ? (
                 <div>
                   <label className="label-luxe">Klantnaam</label>
                   <input
@@ -735,6 +758,13 @@ const OrderDetail = () => {
                     onChange={(e) => updateEditField("client_name", e.target.value)}
                     placeholder="Klantnaam"
                   />
+                </div>
+              ) : (
+                <div>
+                  <label className="label-luxe">Klantnaam</label>
+                  <p className="font-semibold text-base">
+                    {order.client_name || <span className="text-muted-foreground">Onbekend</span>}
+                  </p>
                 </div>
               )}
 
@@ -1270,6 +1300,63 @@ const OrderDetail = () => {
             >
               {cancelMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
               Annuleer Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard-delete Dialog — onomkeerbaar, type-to-confirm */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Order #{order.order_number} verwijderen
+            </DialogTitle>
+            <DialogDescription>
+              Deze actie is onomkeerbaar. De order en alle gekoppelde gegevens worden permanent uit de database verwijderd. Voor annuleren-met-historie kies je beter &quot;Order annuleren&quot;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1">
+              <p><strong>Klant:</strong> {order.client_name || "Onbekend"}</p>
+              <p><strong>Route:</strong> {order.pickup_address || "?"} → {order.delivery_address || "?"}</p>
+              <p><strong>Status:</strong> {statusInfo.label}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Typ <span className="font-mono text-destructive">VERWIJDER</span> om te bevestigen
+              </label>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="VERWIJDER"
+                className="text-sm"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              Terug
+            </Button>
+            <Button
+              variant="destructive"
+              className="gap-1.5"
+              disabled={deleteConfirmText !== "VERWIJDER" || deleteOrderMutation.isPending}
+              onClick={async () => {
+                try {
+                  await deleteOrderMutation.mutateAsync(order.id);
+                  toast.success("Order verwijderd", { description: `Order #${order.order_number} is permanent verwijderd` });
+                  setShowDeleteDialog(false);
+                  navigate("/orders");
+                } catch (e: any) {
+                  toast.error("Verwijderen mislukt", { description: e.message });
+                }
+              }}
+            >
+              {deleteOrderMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Definitief verwijderen
             </Button>
           </DialogFooter>
         </DialogContent>
