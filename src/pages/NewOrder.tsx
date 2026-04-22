@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ import { createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
+import { orderFormSchema } from "@/lib/validation/orderSchema";
 import { logAudit } from "@/lib/auditLog";
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { LuxeTimePicker } from "@/components/LuxeTimePicker";
@@ -83,6 +85,7 @@ const NewOrder = () => {
   const { tenant } = useTenantOptional();
   const [searchParams] = useSearchParams();
   const initialClientId = searchParams.get("client_id");
+  const fromOrderId = searchParams.get("from_order_id");
   const [saving, setSaving] = useState(false);
   const [trajectPreview, setTrajectPreview] = useState<TrajectPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -348,6 +351,65 @@ const NewOrder = () => {
   const financialPickupDate = financialPickupLine?.datum || undefined;
   const financialPickupTime = financialPickupLine?.tijd || undefined;
 
+  // ─── Unsaved-changes-bewaking ────────────────────────────────────────
+  // Baseline wordt gezet zodra prefill klaar is (of meteen als er geen
+  // prefill is). Elke state-wijziging daarna kantelt `dirty`. We gebruiken
+  // een serialized signature zodat nieuwe form-velden geen expliciete
+  // onChange-hook vereisen.
+  const [prefillReady, setPrefillReady] = useState(!initialClientId && !fromOrderId);
+  const [dirty, setDirty] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const baselineSignatureRef = useRef<string | null>(null);
+  const skipDirtyGuardRef = useRef(false);
+
+  const formSignature = useMemo(() => JSON.stringify({
+    clientName, clientId, contactpersoon, prioriteit, klantReferentie,
+    transportType, afdeling, afdelingManual, voertuigtype, chauffeur, mrnDoc, referentie,
+    quantity, transportEenheid, weightKg, afstand, totaleDuur, afmetingen,
+    pickupTimeFrom, pickupTimeTo, deliveryTimeFrom, deliveryTimeTo,
+    freightLines, freightSummary, cargoRows, pickupAddr, deliveryAddr,
+    klepNodig, shipmentSecure, pmtMethode, pmtOperator, pmtReferentie,
+    pmtDatum, pmtLocatie, pmtSeal, pmtByCustomer,
+    infoFollows, infoContactName, infoContactEmail, pricingPayload,
+  }), [
+    clientName, clientId, contactpersoon, prioriteit, klantReferentie,
+    transportType, afdeling, afdelingManual, voertuigtype, chauffeur, mrnDoc, referentie,
+    quantity, transportEenheid, weightKg, afstand, totaleDuur, afmetingen,
+    pickupTimeFrom, pickupTimeTo, deliveryTimeFrom, deliveryTimeTo,
+    freightLines, freightSummary, cargoRows, pickupAddr, deliveryAddr,
+    klepNodig, shipmentSecure, pmtMethode, pmtOperator, pmtReferentie,
+    pmtDatum, pmtLocatie, pmtSeal, pmtByCustomer,
+    infoFollows, infoContactName, infoContactEmail, pricingPayload,
+  ]);
+
+  useEffect(() => {
+    if (!prefillReady) return;
+    if (baselineSignatureRef.current !== null) {
+      setDirty(formSignature !== baselineSignatureRef.current);
+      return;
+    }
+    // Kleine delay zodat alle prefill-setters in dezelfde batch afronden.
+    const t = setTimeout(() => {
+      baselineSignatureRef.current = formSignature;
+    }, 50);
+    return () => clearTimeout(t);
+  }, [prefillReady, formSignature]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  const attemptCancel = () => {
+    if (dirty && !skipDirtyGuardRef.current) {
+      setShowUnsavedDialog(true);
+      return;
+    }
+    navigate("/orders");
+  };
+
   // 8.12 – Save ALL form fields to the database, not just a subset.
   // Fields without a dedicated DB column are stored in the `attachments` JSON
   // column as structured metadata so nothing is lost.
@@ -355,29 +417,47 @@ const NewOrder = () => {
     const pickupLine = freightLines.find(f => f.activiteit === "Laden");
     const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
 
-    // -- Validation --
-    const validUnits = ["Pallets", "Colli", "Box"];
-    const newErrors: Record<string, string> = {};
+    // Centrale validatie via orderFormSchema. Alleen de gestructureerde-
+    // adres-checks (street/zipcode/city + isValidAddress) blijven erbuiten,
+    // die hebben context uit pickupAddr/deliveryAddr die Zod niet bezit.
+    const quantityNum = quantity ? parseInt(quantity) : NaN;
+    const weightNum = weightKg ? parseFloat(weightKg) : NaN;
+    const parsed = orderFormSchema.safeParse({
+      client_name: clientName,
+      pickup_address: pickupLine?.locatie ?? "",
+      delivery_address: deliveryLine?.locatie ?? "",
+      quantity: Number.isFinite(quantityNum) ? quantityNum : undefined,
+      weight_kg: Number.isFinite(weightNum) ? weightNum : undefined,
+      unit: transportEenheid,
+      afdeling: afdeling,
+    });
 
-    if (!clientName.trim()) newErrors.client_name = "Klantnaam is verplicht";
-    if (!afdeling.trim()) newErrors.afdeling = "Kies een afdeling, wordt normaal automatisch bepaald uit het traject";
-    // Valideer eerst op de gestructureerde adresvelden zelf, zodat losse
-    // huisnummers zonder straat of plaats niet stiekem door de composeerde
-    // string-check heen glippen.
+    const newErrors: Record<string, string> = {};
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        const key = issue.path[0]?.toString();
+        if (key && !newErrors[key]) newErrors[key] = issue.message;
+      }
+    }
+
+    // Aanvullende structurele adres-checks: zorg dat losse huisnummers
+    // zonder straat of plaats niet door de composeerde string-check glippen.
     const pickupStructured =
       pickupAddr.street.trim() && pickupAddr.zipcode.trim() && pickupAddr.city.trim();
-    if (!pickupStructured) newErrors.pickup_address = "Vul straat, postcode en plaats in";
-    else if (!pickupLine?.locatie?.trim()) newErrors.pickup_address = "Ophaaladres is verplicht";
-    else if (!isValidAddress(pickupLine.locatie)) newErrors.pickup_address = "Onvolledig ophaaladres, straat en huisnummer vereist";
-
+    if (!newErrors.pickup_address) {
+      if (!pickupStructured) newErrors.pickup_address = "Vul straat, postcode en plaats in";
+      else if (pickupLine?.locatie && !isValidAddress(pickupLine.locatie)) {
+        newErrors.pickup_address = "Onvolledig ophaaladres, straat en huisnummer vereist";
+      }
+    }
     const deliveryStructured =
       deliveryAddr.street.trim() && deliveryAddr.zipcode.trim() && deliveryAddr.city.trim();
-    if (!deliveryStructured) newErrors.delivery_address = "Vul straat, postcode en plaats in";
-    else if (!deliveryLine?.locatie?.trim()) newErrors.delivery_address = "Afleveradres is verplicht";
-    else if (!isValidAddress(deliveryLine.locatie)) newErrors.delivery_address = "Onvolledig afleveradres, straat en huisnummer vereist";
-    if (!quantity || parseInt(quantity) <= 0) newErrors.quantity = "Aantal moet groter zijn dan 0";
-    if (!weightKg || parseFloat(weightKg) <= 0) newErrors.weight_kg = "Gewicht moet groter zijn dan 0";
-    if (!transportEenheid || !validUnits.includes(transportEenheid)) newErrors.unit = `Eenheid moet een van ${validUnits.join(", ")} zijn`;
+    if (!newErrors.delivery_address) {
+      if (!deliveryStructured) newErrors.delivery_address = "Vul straat, postcode en plaats in";
+      else if (deliveryLine?.locatie && !isValidAddress(deliveryLine.locatie)) {
+        newErrors.delivery_address = "Onvolledig afleveradres, straat en huisnummer vereist";
+      }
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -600,6 +680,8 @@ const NewOrder = () => {
       // Na opslaan altijd wegnavigeren, anders maakt een tweede klik een duplicaat.
       // Opslaan & sluiten gaat naar de lijst, Opslaan opent de detailpagina zodat
       // verdere bewerkingen via OrderDetail (update-pad) lopen.
+      skipDirtyGuardRef.current = true;
+      setDirty(false);
       if (andClose) {
         navigate("/orders");
       } else if (legs[0]?.id) {
@@ -656,7 +738,75 @@ const NewOrder = () => {
     toast.success(`Voorgevuld op basis van ${orderLabel}`, {
       description: "Pas tijden, referenties en lading aan voor deze nieuwe order.",
     });
+    setPrefillReady(true);
   }, [initialClientId, prefillClient, prefillOrders]);
+
+  // Als de klant geen vorige order heeft, of als er geen prefillClient is na
+  // een tijdje, moeten we alsnog de baseline vastleggen zodat de unsaved-
+  // warning niet stuk gaat wachten op een prefill die nooit komt.
+  useEffect(() => {
+    if (!initialClientId && !fromOrderId) return;
+    if (prefillReady) return;
+    const t = setTimeout(() => setPrefillReady(true), 1500);
+    return () => clearTimeout(t);
+  }, [initialClientId, fromOrderId, prefillReady]);
+
+  // Prefill vanuit ?from_order_id=: kopieer pickup, delivery, requirements,
+  // afdeling, vehicle_type, order_type en klant-identificatie van een
+  // bestaande order naar dit formulier. Datum, tijden, gewicht, aantal en
+  // referenties blijven leeg, anders zou een tweede identieke order stilzwijgend
+  // worden aangemaakt zonder dat de planner nieuwe tijden ingeeft.
+  const fromOrderApplied = useRef(false);
+  useEffect(() => {
+    if (!fromOrderId || fromOrderApplied.current) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("*")
+        .eq("id", fromOrderId)
+        .single();
+      if (cancelled) return;
+      if (error || !data) {
+        toast.error("Kon bronorder niet laden", { description: error?.message });
+        setPrefillReady(true);
+        return;
+      }
+      fromOrderApplied.current = true;
+      const src: any = data;
+      if (src.client_id) setClientId(src.client_id);
+      if (src.client_name) setClientName(src.client_name);
+      if (src.contact_person) setContactpersoon(src.contact_person);
+      if (src.priority) setPrioriteit(src.priority);
+      if (src.transport_type) setTransportType(src.transport_type);
+      if (src.vehicle_type) setVoertuigtype(src.vehicle_type);
+      if (src.unit) setTransportEenheid(src.unit);
+      if (Array.isArray(src.requirements) && src.requirements.includes("laadklep")) {
+        setKlepNodig(true);
+      }
+      if (src.pickup_address || src.delivery_address) {
+        setFreightLines((prev) =>
+          prev.map((l) => {
+            if (l.activiteit === "Laden" && src.pickup_address) {
+              return { ...l, locatie: src.pickup_address };
+            }
+            if (l.activiteit === "Lossen" && src.delivery_address) {
+              return { ...l, locatie: src.delivery_address };
+            }
+            return l;
+          }),
+        );
+      }
+      const label = src.order_number
+        ? `RCS-${new Date(src.created_at).getFullYear()}-${String(src.order_number).padStart(4, "0")}`
+        : "bronorder";
+      toast.success(`Gedupliceerd van ${label}`, {
+        description: "Vul tijden, gewicht en referenties in voor deze nieuwe order.",
+      });
+      setPrefillReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, [fromOrderId]);
 
   // Auto-infer afdeling. De inferred-waarde houden we altijd bij, ook als de
   // planner handmatig overrulet, zodat we een "Overschreven door planner"-hint
@@ -750,7 +900,7 @@ const NewOrder = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={() => navigate("/orders")}
+              onClick={attemptCancel}
               className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-transparent bg-transparent text-muted-foreground transition-all duration-200 hover:text-foreground hover:bg-[hsl(var(--muted)_/_0.5)]"
             >
               Annuleren
@@ -1652,6 +1802,32 @@ const NewOrder = () => {
         )}
 
       </div>
+
+      <Dialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Niet-opgeslagen wijzigingen</DialogTitle>
+            <DialogDescription>
+              Je hebt deze order nog niet opgeslagen. Als je nu weggaat, verlies je wat je hebt ingevuld.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUnsavedDialog(false)}>
+              Doorgaan met bewerken
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                skipDirtyGuardRef.current = true;
+                setShowUnsavedDialog(false);
+                navigate("/orders");
+              }}
+            >
+              Verlaat zonder opslaan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
