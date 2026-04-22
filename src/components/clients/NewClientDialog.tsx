@@ -130,7 +130,21 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
       setForm((prev) => ({ ...prev, [key]: v }));
 
   const toggle = (key: "billing_same_as_main" | "shipping_same_as_main") =>
-    (value: boolean) => setForm((prev) => ({ ...prev, [key]: value }));
+    (value: boolean) =>
+      setForm((prev) => {
+        const next = { ...prev, [key]: value };
+        if (!value) {
+          // Toggle van AAN naar UIT: reset het losse adres naar leeg.
+          // Zonder reset bleven oude billing_*-velden (vaak een kopie van
+          // hoofdadres uit een eerdere save) staan, waardoor de gebruiker
+          // stilzwijgend een duplicaat opsloeg en het detailpaneel hetzelfde
+          // adres onder Hoofd en Factuur toonde.
+          const addressKey =
+            key === "billing_same_as_main" ? "billing_address" : "shipping_address";
+          next[addressKey] = { ...EMPTY_ADDRESS };
+        }
+        return next;
+      });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
