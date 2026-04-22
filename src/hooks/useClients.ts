@@ -1,7 +1,10 @@
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantInsert } from "@/hooks/useTenantInsert";
+
+export const DORMANT_THRESHOLD_DAYS = 90;
 
 export interface Client {
   id: string;
@@ -20,6 +23,8 @@ export interface Client {
   is_active: boolean;
   created_at: string;
   active_order_count?: number;
+  last_order_at?: string | null;
+  is_dormant?: boolean;
 
   street: string | null;
   house_number: string | null;
@@ -158,6 +163,13 @@ export interface UseClientsListOptions {
   country?: string | null;
   sortKey?: ClientSortKey;
   sortDir?: "asc" | "desc";
+  /**
+   * Wanneer true: alleen klanten zonder order in de afgelopen
+   * DORMANT_THRESHOLD_DAYS dagen. Server-side doorgevoerd via een
+   * `NOT IN`-filter op client_ids met recente orders, zodat `totalCount`
+   * en `pageSize` kloppen op de gefilterde set.
+   */
+  dormantOnly?: boolean;
 }
 
 export interface UseClientsListResult {
@@ -174,22 +186,48 @@ export function useClientsList(opts: UseClientsListOptions = {}) {
     country = null,
     sortKey = "name",
     sortDir = "asc",
+    dormantOnly = false,
   } = opts;
   const { tenant } = useTenant();
 
   return useQuery<UseClientsListResult>({
     queryKey: [
       "clients_list",
-      { search, page, pageSize, isActive, country, sortKey, sortDir, tenantId: tenant?.id },
+      { search, page, pageSize, isActive, country, sortKey, sortDir, dormantOnly, tenantId: tenant?.id },
     ],
     staleTime: 60_000,
     enabled: !!tenant?.id,
     queryFn: async () => {
       // Server-side paginering + filters + sortering. active_order_count
-      // wordt client-side gejoined via order.client_id (zie countMap
-      // hieronder). Zonder view/rpc is dat nog steeds twee queries, maar
-      // de clients-query haalt nu alleen de ~50 rijen van de huidige
-      // pagina op.
+      // en last_order_at worden client-side gejoined via de twee orders-
+      // queries hieronder. Zonder view/rpc is dat nog steeds een paar
+      // extra queries, maar de clients-query haalt alleen de ~50 rijen
+      // van de huidige pagina op.
+      const dormantThresholdIso = new Date(
+        Date.now() - DORMANT_THRESHOLD_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString();
+
+      // Stap 1 (alleen bij dormantOnly): verzamel client_ids die in de
+      // laatste 90 dagen een order hadden. Die set excluden we server-side
+      // via `.not('id','in',...)` zodat paginering over de slapende-set
+      // consistent blijft.
+      let dormantExcludeIds: string[] | null = null;
+      if (dormantOnly) {
+        const recentResult = await supabase
+          .from("orders")
+          .select("client_id")
+          .eq("tenant_id", tenant!.id)
+          .gte("created_at", dormantThresholdIso)
+          .not("client_id", "is", null);
+        if (recentResult.error) throw recentResult.error;
+        const set = new Set<string>();
+        recentResult.data?.forEach((o) => {
+          const id = (o as { client_id: string | null }).client_id;
+          if (id) set.add(id);
+        });
+        dormantExcludeIds = Array.from(set);
+      }
+
       let clientQuery = supabase
         .from("clients")
         .select(CLIENT_LIST_COLUMNS, { count: "exact" })
@@ -202,6 +240,14 @@ export function useClientsList(opts: UseClientsListOptions = {}) {
       }
       if (country) {
         clientQuery = clientQuery.eq("country", country);
+      }
+
+      if (dormantExcludeIds && dormantExcludeIds.length > 0) {
+        // PostgREST `in`-filter serialiseert uuids zonder quotes:
+        // `(uuid1,uuid2,...)`. Lege set kan NIET als `in.()` meegestuurd,
+        // dus we slaan de clause dan over.
+        const list = dormantExcludeIds.join(",");
+        clientQuery = clientQuery.not("id", "in", `(${list})`);
       }
 
       if (search) {
@@ -220,7 +266,7 @@ export function useClientsList(opts: UseClientsListOptions = {}) {
         }
       }
 
-      const [clientsResult, countsResult] = await Promise.all([
+      const [clientsResult, countsResult, lastOrdersResult] = await Promise.all([
         clientQuery,
         supabase
           .from("orders")
@@ -228,6 +274,12 @@ export function useClientsList(opts: UseClientsListOptions = {}) {
           .eq("tenant_id", tenant!.id)
           .not("status", "in", '("DELIVERED","CANCELLED")')
           .not("client_id", "is", null),
+        supabase
+          .from("orders")
+          .select("client_id, created_at")
+          .eq("tenant_id", tenant!.id)
+          .not("client_id", "is", null)
+          .order("created_at", { ascending: false }),
       ]);
 
       if (clientsResult.error) throw clientsResult.error;
@@ -238,12 +290,92 @@ export function useClientsList(opts: UseClientsListOptions = {}) {
         if (id) countMap[id] = (countMap[id] || 0) + 1;
       });
 
-      const clients = ((clientsResult.data as unknown) as Client[]).map((c) => ({
-        ...c,
-        active_order_count: countMap[c.id] || 0,
-      }));
+      // `lastOrdersResult` is gesorteerd op created_at DESC, dus de eerste
+      // rij per client_id is tegelijk de meest recente.
+      const lastOrderMap: Record<string, string> = {};
+      lastOrdersResult.data?.forEach((o) => {
+        const row = o as { client_id: string | null; created_at: string | null };
+        if (!row.client_id || !row.created_at) return;
+        if (!lastOrderMap[row.client_id]) lastOrderMap[row.client_id] = row.created_at;
+      });
+
+      const dormantSince = new Date(dormantThresholdIso);
+      const clients = ((clientsResult.data as unknown) as Client[]).map((c) => {
+        const lastOrderAt = lastOrderMap[c.id] ?? null;
+        const isDormant = !lastOrderAt || new Date(lastOrderAt) < dormantSince;
+        return {
+          ...c,
+          active_order_count: countMap[c.id] || 0,
+          last_order_at: lastOrderAt,
+          is_dormant: isDormant,
+        };
+      });
 
       return { clients, totalCount: clientsResult.count ?? clients.length };
+    },
+  });
+}
+
+export interface ClientStats {
+  total: number;
+  active: number;
+  inactive: number;
+  dormant: number;
+}
+
+/**
+ * KPI-strip voor de klantenlijst: totale klant-aantallen en slapende-
+ * klant-telling voor de hele tenant, los van de huidige paginering of
+ * filters. Slapend = actieve klant zonder order in de laatste
+ * DORMANT_THRESHOLD_DAYS dagen (inclusief klanten die nog nooit een
+ * order hebben gehad).
+ */
+export function useClientStats() {
+  const { tenant } = useTenant();
+  return useQuery<ClientStats>({
+    queryKey: ["client_stats", tenant?.id],
+    enabled: !!tenant?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const dormantThresholdIso = new Date(
+        Date.now() - DORMANT_THRESHOLD_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString();
+
+      const [clientsResult, recentResult] = await Promise.all([
+        supabase
+          .from("clients")
+          .select("id, is_active")
+          .eq("tenant_id", tenant!.id),
+        supabase
+          .from("orders")
+          .select("client_id")
+          .eq("tenant_id", tenant!.id)
+          .gte("created_at", dormantThresholdIso)
+          .not("client_id", "is", null),
+      ]);
+
+      if (clientsResult.error) throw clientsResult.error;
+      if (recentResult.error) throw recentResult.error;
+
+      const recentSet = new Set<string>();
+      recentResult.data?.forEach((o) => {
+        const id = (o as { client_id: string | null }).client_id;
+        if (id) recentSet.add(id);
+      });
+
+      const rows = (clientsResult.data ?? []) as Array<{ id: string; is_active: boolean }>;
+      let active = 0;
+      let inactive = 0;
+      let dormant = 0;
+      for (const c of rows) {
+        if (c.is_active) {
+          active += 1;
+          if (!recentSet.has(c.id)) dormant += 1;
+        } else {
+          inactive += 1;
+        }
+      }
+      return { total: rows.length, active, inactive, dormant };
     },
   });
 }
@@ -350,6 +482,41 @@ export function useClientOrders(clientId: string | null) {
   });
 }
 
+/**
+ * Omzet year-to-date per klant, gebaseerd op `invoices.total` (euro's).
+ * Statussen `verzonden`, `betaald` en `vervallen` tellen als geboekte omzet,
+ * `concept` blijft buiten de telling zodat niet-verstuurde concepten geen
+ * vals-hoog cijfer opleveren. Peildatum: 1 januari van het huidige jaar.
+ */
+export function useRevenueYtd(clientId: string | null | undefined) {
+  const { tenant } = useTenant();
+  const yearStart = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0];
+  }, []);
+
+  return useQuery({
+    queryKey: ["client_revenue_ytd", clientId, tenant?.id, yearStart],
+    enabled: !!clientId && !!tenant?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("total")
+        .eq("tenant_id", tenant!.id)
+        .eq("client_id", clientId!)
+        .in("status", ["verzonden", "betaald", "vervallen"])
+        .gte("invoice_date", yearStart);
+      if (error) throw error;
+      const total = (data ?? []).reduce(
+        (sum, row) => sum + Number((row as { total: number | null }).total ?? 0),
+        0,
+      );
+      return total;
+    },
+  });
+}
+
 export function useCreateClient() {
   const qc = useQueryClient();
   const clientsInsert = useTenantInsert("clients");
@@ -436,5 +603,32 @@ export function useUpdateClient() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+  });
+}
+
+/**
+ * Bulk-update `is_active` voor meerdere klanten tegelijk. We blijven bij
+ * het archive-pattern (nooit hard-delete), dus dit is een gewone UPDATE
+ * in één round-trip via `.in('id', ids)`. Query-invalidatie vernieuwt
+ * lijst, stats en KPI's.
+ */
+export function useBulkUpdateClientsActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, isActive }: { ids: string[]; isActive: boolean }) => {
+      if (ids.length === 0) return { updated: 0 };
+      const { data, error } = await supabase
+        .from("clients")
+        .update({ is_active: isActive })
+        .in("id", ids)
+        .select("id");
+      if (error) throw error;
+      return { updated: data?.length ?? 0 };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["clients_list"] });
+      qc.invalidateQueries({ queryKey: ["client_stats"] });
+    },
   });
 }

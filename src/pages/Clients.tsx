@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   Search,
   Plus,
@@ -10,9 +11,12 @@ import {
   ArrowDown,
   Pencil,
   Maximize2,
+  Download,
+  UserX,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -21,8 +25,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   useClientsList,
   useClientCountries,
+  useClientStats,
+  useBulkUpdateClientsActive,
   type Client,
   type ClientSortKey,
 } from "@/hooks/useClients";
@@ -31,6 +47,7 @@ import { NewClientDialog } from "@/components/clients/NewClientDialog";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { toCsv, downloadCsv } from "@/lib/csv";
 
 type SortDir = "asc" | "desc";
 
@@ -42,12 +59,16 @@ export default function Clients() {
   const [statusFilter, setStatusFilter] = useState<"alle" | "actief" | "inactief">("alle");
   const [countryFilter, setCountryFilter] = useState<string>("alle");
   const [openOrdersFilter, setOpenOrdersFilter] = useState<"alle" | "met" | "zonder">("alle");
+  const [activityFilter, setActivityFilter] = useState<"alle" | "slapend">("alle");
   const [sortKey, setSortKey] = useState<ClientSortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(0);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pendingBulkDeactivate, setPendingBulkDeactivate] = useState(false);
+  const bulkUpdateActive = useBulkUpdateClientsActive();
 
   const isActive =
     statusFilter === "actief" ? true : statusFilter === "inactief" ? false : null;
@@ -61,8 +82,10 @@ export default function Clients() {
     country,
     sortKey,
     sortDir,
+    dormantOnly: activityFilter === "slapend",
   });
   const { data: countries = [] } = useClientCountries();
+  const { data: stats } = useClientStats();
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,7 +101,13 @@ export default function Clients() {
   // lege pagina 3 blijven staan wanneer de dataset krimpt.
   useEffect(() => {
     setPage(0);
-  }, [search, statusFilter, countryFilter, openOrdersFilter, sortKey, sortDir]);
+  }, [search, statusFilter, countryFilter, openOrdersFilter, activityFilter, sortKey, sortDir]);
+
+  // Selectie resetten bij filter- of paginawissel, anders blijft een id
+  // geselecteerd van een rij die niet meer zichtbaar is.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [search, statusFilter, countryFilter, openOrdersFilter, activityFilter, page]);
 
   const serverRows = data?.clients ?? [];
   const totalCount = data?.totalCount ?? 0;
@@ -115,6 +144,89 @@ export default function Clients() {
     );
   }
 
+  function toggleRow(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const pageRowIds = pageRows.map((c) => c.id);
+  const selectedOnPage = pageRowIds.filter((id) => selectedIds.has(id)).length;
+  const allPageSelected = pageRows.length > 0 && selectedOnPage === pageRows.length;
+  const somePageSelected = selectedOnPage > 0 && !allPageSelected;
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pageRowIds.forEach((id) => next.delete(id));
+      } else {
+        pageRowIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  const selectedRows = useMemo(
+    () => serverRows.filter((c) => selectedIds.has(c.id)),
+    [serverRows, selectedIds],
+  );
+
+  function handleExportCsv() {
+    if (selectedRows.length === 0) return;
+    const headers = [
+      "Naam",
+      "KvK",
+      "Contactpersoon",
+      "Email",
+      "Telefoon",
+      "Stad",
+      "Actieve orders",
+      "Status",
+    ];
+    const rows = selectedRows.map((c) => [
+      c.name,
+      c.kvk_number ?? "",
+      c.contact_person ?? "",
+      c.email ?? "",
+      c.phone ?? "",
+      c.city ?? "",
+      c.active_order_count ?? 0,
+      c.is_active ? "Actief" : "Inactief",
+    ]);
+    const csv = toCsv(headers, rows);
+    const date = new Date().toISOString().split("T")[0];
+    downloadCsv(`klanten-export-${date}.csv`, csv);
+    toast.success(
+      `${selectedRows.length} ${selectedRows.length === 1 ? "klant" : "klanten"} geëxporteerd`,
+    );
+  }
+
+  const bulkActiveOrderCount = selectedRows.reduce(
+    (sum, c) => sum + (c.active_order_count ?? 0),
+    0,
+  );
+  const bulkActiveWithOrders = selectedRows.filter(
+    (c) => (c.active_order_count ?? 0) > 0,
+  ).length;
+
+  async function confirmBulkDeactivate() {
+    setPendingBulkDeactivate(false);
+    const ids = Array.from(selectedIds);
+    try {
+      const res = await bulkUpdateActive.mutateAsync({ ids, isActive: false });
+      toast.success(
+        `${res.updated} ${res.updated === 1 ? "klant" : "klanten"} op inactief gezet`,
+      );
+      setSelectedIds(new Set());
+    } catch (e) {
+      toast.error("Kon klanten niet bijwerken");
+    }
+  }
+
   return (
     <div className="flex h-full">
       <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedClient ? "lg:mr-[420px]" : ""}`}>
@@ -133,6 +245,17 @@ export default function Clients() {
               </button>
             }
           />
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <StatCard label="Totaal" value={stats?.total ?? null} />
+            <StatCard label="Actief" value={stats?.active ?? null} />
+            <StatCard label="Inactief" value={stats?.inactive ?? null} />
+            <StatCard
+              label="Slapend (> 90 dagen)"
+              value={stats?.dormant ?? null}
+              accent
+            />
+          </div>
 
           <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 flex-1 min-w-[220px] max-w-md">
@@ -190,7 +313,62 @@ export default function Clients() {
                 <SelectItem value="zonder">Zonder open orders</SelectItem>
               </SelectContent>
             </Select>
+
+            <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
+              <SelectTrigger
+                aria-label="Activiteit"
+                className="h-9 w-[200px] text-sm"
+                style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+              >
+                <SelectValue placeholder="Activiteit" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="alle">Alle klanten</SelectItem>
+                <SelectItem value="slapend">Alleen slapende klanten</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {selectedIds.size > 0 && (
+            <div
+              className="card--luxe px-4 py-3 flex flex-wrap items-center gap-3"
+              role="toolbar"
+              aria-label="Bulk-acties"
+            >
+              <span className="text-sm text-foreground">
+                <strong className="tabular-nums">{selectedIds.size}</strong>{" "}
+                {selectedIds.size === 1 ? "klant geselecteerd" : "klanten geselecteerd"}
+              </span>
+              <div className="flex-1" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCsv}
+                className="h-8"
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+                Exporteer CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingBulkDeactivate(true)}
+                disabled={bulkUpdateActive.isPending}
+                className="h-8"
+              >
+                <UserX className="h-3.5 w-3.5 mr-1.5" />
+                Zet op inactief
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+                className="h-8"
+              >
+                Selectie wissen
+              </Button>
+            </div>
+          )}
 
           <div className="card--luxe overflow-hidden">
             <div className="overflow-x-auto">
@@ -200,6 +378,13 @@ export default function Clients() {
                     className="border-b border-[hsl(var(--gold)/0.2)] [&>th]:!font-display [&>th]:!text-[12px] [&>th]:!uppercase [&>th]:!tracking-[0.16em] [&>th]:!text-[hsl(var(--gold-deep))] [&>th]:!font-semibold [&>th]:!py-3.5 [&>th]:!px-5"
                     style={{ background: "linear-gradient(180deg, hsl(var(--gold-soft)/0.4), hsl(var(--gold-soft)/0.15))" }}
                   >
+                    <th className="!w-10 !px-3">
+                      <Checkbox
+                        aria-label="Selecteer alle klanten op deze pagina"
+                        checked={allPageSelected ? true : somePageSelected ? "indeterminate" : false}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </th>
                     <th
                       className="text-left cursor-pointer select-none hover:text-foreground transition-colors"
                       onClick={() => toggleSort("name")}
@@ -225,24 +410,35 @@ export default function Clients() {
                 </thead>
                 <tbody>
                   {isLoading ? (
-                    <tr><td colSpan={6}><LoadingState message="Klanten laden..." /></td></tr>
+                    <tr><td colSpan={7}><LoadingState message="Klanten laden..." /></td></tr>
                   ) : isError ? (
-                    <tr><td colSpan={6}>
+                    <tr><td colSpan={7}>
                       <QueryError message="Kan klantgegevens niet laden." onRetry={() => refetch()} />
                     </td></tr>
                   ) : pageRows.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">Geen klanten gevonden</td></tr>
+                    <tr><td colSpan={7} className="text-center py-12 text-muted-foreground text-sm">Geen klanten gevonden</td></tr>
                   ) : (
                     pageRows.map((client) => {
                       const isSelected = selectedClient?.id === client.id;
+                      const isChecked = selectedIds.has(client.id);
                       return (
                         <tr
                           key={client.id}
                           onClick={() => setSelectedClient(client)}
                           className={`border-b border-[hsl(var(--gold)/0.08)] cursor-pointer transition-colors hover:bg-[hsl(var(--gold-soft)/0.3)] ${
                             isSelected ? "bg-[hsl(var(--gold-soft)/0.5)]" : ""
-                          }`}
+                          } ${isChecked ? "bg-[hsl(var(--gold-soft)/0.35)]" : ""}`}
                         >
+                          <td
+                            className="px-3 py-3.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Checkbox
+                              aria-label={`Selecteer ${client.name}`}
+                              checked={isChecked}
+                              onCheckedChange={() => toggleRow(client.id)}
+                            />
+                          </td>
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div
@@ -403,6 +599,74 @@ export default function Clients() {
         onOpenChange={(v) => { if (!v) setEditingClient(null); }}
         client={editingClient ?? undefined}
       />
+
+      <AlertDialog
+        open={pendingBulkDeactivate}
+        onOpenChange={(o) => !o && setPendingBulkDeactivate(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {selectedIds.size} {selectedIds.size === 1 ? "klant" : "klanten"} op inactief zetten?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {bulkActiveWithOrders > 0 ? (
+                <>
+                  <strong>{bulkActiveWithOrders}</strong>{" "}
+                  {bulkActiveWithOrders === 1
+                    ? "geselecteerde klant heeft nog"
+                    : "geselecteerde klanten hebben nog"}{" "}
+                  <strong>{bulkActiveOrderCount}</strong>{" "}
+                  {bulkActiveOrderCount === 1 ? "actieve order" : "actieve orders"}.
+                  Inactief zetten betekent dat ze niet meer in nieuwe-order-dropdowns
+                  verschijnen. Lopende orders blijven gewoon gekoppeld.
+                </>
+              ) : (
+                "Inactieve klanten verschijnen niet meer in nieuwe-order-dropdowns. Dit is niet permanent; je kunt ze altijd weer activeren via het klant-detailpaneel."
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkDeactivate}>
+              Toch deactiveren
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number | null;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-2xl border border-[hsl(var(--gold)/0.2)] px-4 py-3"
+      style={{
+        background: accent
+          ? "linear-gradient(135deg, hsl(var(--gold-soft)/0.55) 0%, hsl(var(--gold-soft)/0.2) 100%)"
+          : "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.18) 100%)",
+      }}
+    >
+      <div
+        className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        {label}
+      </div>
+      <div
+        className="mt-1 text-2xl font-display font-semibold tabular-nums text-foreground"
+      >
+        {value === null ? "…" : value}
+      </div>
     </div>
   );
 }
