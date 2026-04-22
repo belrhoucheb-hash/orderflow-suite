@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeAll } from "vitest";
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -147,16 +147,6 @@ describe("NewClientDialog", () => {
 // ClientDetailPanel
 // ═══════════════════════════════════════════════════════════════
 describe("ClientDetailPanel", () => {
-  // Module-load gebeurt één keer in beforeAll zodat de kosten van de
-  // transitive dependency graph (o.a. @react-google-maps/api) buiten het
-  // time-budget van de eerste it() vallen. Voorheen tikte de eerste test
-  // regelmatig tegen de 5000ms-timeout door deze cold-import.
-  let ClientDetailPanel: typeof import("@/components/clients/ClientDetailPanel").ClientDetailPanel;
-
-  beforeAll(async () => {
-    ({ ClientDetailPanel } = await import("@/components/clients/ClientDetailPanel"));
-  });
-
   const mockClient = {
     id: "c1",
     name: "ACME Corp",
@@ -172,7 +162,8 @@ describe("ClientDetailPanel", () => {
     payment_terms: 30,
   };
 
-  it("renders tabs", () => {
+  it("renders tabs", async () => {
+    const { ClientDetailPanel } = await import("@/components/clients/ClientDetailPanel");
     render(<Wrapper><ClientDetailPanel client={mockClient as any} /></Wrapper>);
     expect(screen.getByText("Overzicht")).toBeInTheDocument();
     expect(screen.getByText("Locaties")).toBeInTheDocument();
@@ -180,7 +171,8 @@ describe("ClientDetailPanel", () => {
     expect(screen.getByText("Orders")).toBeInTheDocument();
   });
 
-  it("renders client info in overview tab", () => {
+  it("renders client info in overview tab", async () => {
+    const { ClientDetailPanel } = await import("@/components/clients/ClientDetailPanel");
     render(<Wrapper><ClientDetailPanel client={mockClient as any} /></Wrapper>);
     expect(screen.getByText("ACME Corp")).toBeInTheDocument();
     expect(screen.getByText("Jan")).toBeInTheDocument();
@@ -191,7 +183,8 @@ describe("ClientDetailPanel", () => {
     expect(screen.getByText("30 dagen")).toBeInTheDocument();
   });
 
-  it("renders address in facturatieadres section", () => {
+  it("renders address in facturatieadres section", async () => {
+    const { ClientDetailPanel } = await import("@/components/clients/ClientDetailPanel");
     render(<Wrapper><ClientDetailPanel client={mockClient as any} /></Wrapper>);
     // formatAddress combineert zipcode en city met een spatie (niet een komma),
     // zoals adressen in NL gewoonlijk geschreven worden.
@@ -203,23 +196,15 @@ describe("ClientDetailPanel", () => {
 // NewDriverDialog
 // ═══════════════════════════════════════════════════════════════
 describe("NewDriverDialog", () => {
-  // Zelfde patroon als ClientDetailPanel: module-load één keer in beforeAll
-  // zodat de cold-import-kosten (react-day-picker, radix-popover, zod) niet
-  // in het time-budget van de eerste it() vallen.
-  let NewDriverDialog: typeof import("@/components/drivers/NewDriverDialog").NewDriverDialog;
-
-  beforeAll(async () => {
-    const mod = await import("@/components/drivers/NewDriverDialog");
-    NewDriverDialog = mod.NewDriverDialog;
-  });
-
-  it("renders create mode when no driver prop", () => {
+  it("renders create mode when no driver prop", async () => {
+    const { NewDriverDialog } = await import("@/components/drivers/NewDriverDialog");
     render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     expect(screen.getByText("Nieuwe chauffeur")).toBeInTheDocument();
     expect(screen.getByText("Toevoegen")).toBeInTheDocument();
   });
 
-  it("renders edit mode when driver prop provided", () => {
+  it("renders edit mode when driver prop provided", async () => {
+    const { NewDriverDialog } = await import("@/components/drivers/NewDriverDialog");
     const driver = {
       id: "d1", name: "Piet", email: "piet@test.nl", phone: "06123",
       license_number: "NL-123", status: "beschikbaar",
@@ -230,7 +215,8 @@ describe("NewDriverDialog", () => {
     expect(screen.getByText("Opslaan")).toBeInTheDocument();
   });
 
-  it("shows certification checkboxes", () => {
+  it("shows certification checkboxes", async () => {
+    const { NewDriverDialog } = await import("@/components/drivers/NewDriverDialog");
     render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     expect(screen.getByText("Certificeringen")).toBeInTheDocument();
     expect(screen.getByText("ADR")).toBeInTheDocument();
@@ -240,7 +226,8 @@ describe("NewDriverDialog", () => {
     expect(screen.getByText("Douane")).toBeInTheDocument();
   });
 
-  it("shows vehicle select with loaded vehicles", () => {
+  it("shows vehicle select with loaded vehicles", async () => {
+    const { NewDriverDialog } = await import("@/components/drivers/NewDriverDialog");
     render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     expect(screen.getByText("Toegewezen Voertuig")).toBeInTheDocument();
   });
