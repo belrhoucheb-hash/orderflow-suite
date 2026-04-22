@@ -91,6 +91,7 @@ import {
   useClientRates,
   useClientOrders,
   useCreateClient,
+  useRevenueYtd,
 } from "@/hooks/useClients";
 
 describe("useClients", () => {
@@ -296,6 +297,48 @@ describe("useClientOrders", () => {
     const { result } = renderHook(() => useClientOrders("client-1"), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(orders);
+  });
+});
+
+describe("useRevenueYtd", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("is disabled when clientId is null", () => {
+    const { result } = renderHook(() => useRevenueYtd(null), { wrapper: createWrapper() });
+    expect(result.current.fetchStatus).toBe("idle");
+  });
+
+  it("sums invoices.total voor de lopende jaar-periode", async () => {
+    const rows = [{ total: 125.5 }, { total: 74.5 }, { total: 0 }];
+    mockFrom.mockImplementation(() => {
+      const chain: any = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockResolvedValue({ data: rows, error: null }),
+      };
+      return chain;
+    });
+
+    const { result } = renderHook(() => useRevenueYtd("c1"), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBe(200);
+  });
+
+  it("geeft 0 terug als er geen facturen zijn", async () => {
+    mockFrom.mockImplementation(() => {
+      const chain: any = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        in: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockResolvedValue({ data: [], error: null }),
+      };
+      return chain;
+    });
+
+    const { result } = renderHook(() => useRevenueYtd("c1"), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBe(0);
   });
 });
 

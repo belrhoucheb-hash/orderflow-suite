@@ -17,7 +17,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { type Client, useClientLocations, useClientRates, useClientOrders, useUpdateClient } from "@/hooks/useClients";
+import {
+  type Client,
+  useClientLocations,
+  useClientRates,
+  useClientOrders,
+  useRevenueYtd,
+  useUpdateClient,
+} from "@/hooks/useClients";
+import { formatCurrency } from "@/lib/invoiceUtils";
 import { useClientContacts } from "@/hooks/useClientContacts";
 import { useClientAudit } from "@/hooks/useClientAudit";
 import { useGoogleMaps } from "@/hooks/useGoogleMaps";
@@ -377,20 +385,19 @@ function StatsStrip({ client, orders }: { client: Client; orders: any[] | undefi
     ? formatDistanceToNow(lastOrder, { locale: nl, addSuffix: true })
     : "Nog geen ritten";
 
+  // Omzet year-to-date: aggregatie van `invoices.total` voor deze klant
+  // met status verzonden/betaald/vervallen in het lopende kalenderjaar.
+  const { data: revenueYtd, isLoading: revenueLoading } = useRevenueYtd(client.id);
+  const revenueLabel = revenueLoading
+    ? "…"
+    : typeof revenueYtd === "number"
+      ? formatCurrency(revenueYtd)
+      : "€ 0,00";
+
   return (
     <div className="grid grid-cols-3 gap-2">
       <StatCard label="Actieve orders" value={String(activeOrders)} />
-      {/*
-        Omzet YTD: orders-tabel heeft geen eenduidig prijsveld (calculated_price
-        zit alleen in test-types, niet in de database). Prijzen komen via
-        order_charges / shipments / invoices, niet direct op orders. Daarom
-        tonen we hier "—" zodat we geen verkeerd cijfer laten zien.
-      */}
-      <StatCard
-        label="Omzet YTD"
-        value="—"
-        caption="niet beschikbaar"
-      />
+      <StatCard label="Omzet YTD" value={revenueLabel} small />
       <StatCard label="Laatste rit" value={lastOrderLabel} small />
     </div>
   );

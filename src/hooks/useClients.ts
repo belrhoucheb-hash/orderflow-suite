@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -346,6 +347,41 @@ export function useClientOrders(clientId: string | null) {
         .limit(50);
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+/**
+ * Omzet year-to-date per klant, gebaseerd op `invoices.total` (euro's).
+ * Statussen `verzonden`, `betaald` en `vervallen` tellen als geboekte omzet,
+ * `concept` blijft buiten de telling zodat niet-verstuurde concepten geen
+ * vals-hoog cijfer opleveren. Peildatum: 1 januari van het huidige jaar.
+ */
+export function useRevenueYtd(clientId: string | null | undefined) {
+  const { tenant } = useTenant();
+  const yearStart = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0];
+  }, []);
+
+  return useQuery({
+    queryKey: ["client_revenue_ytd", clientId, tenant?.id, yearStart],
+    enabled: !!clientId && !!tenant?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("total")
+        .eq("tenant_id", tenant!.id)
+        .eq("client_id", clientId!)
+        .in("status", ["verzonden", "betaald", "vervallen"])
+        .gte("invoice_date", yearStart);
+      if (error) throw error;
+      const total = (data ?? []).reduce(
+        (sum, row) => sum + Number((row as { total: number | null }).total ?? 0),
+        0,
+      );
+      return total;
     },
   });
 }
