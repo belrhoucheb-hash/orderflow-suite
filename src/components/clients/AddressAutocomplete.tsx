@@ -151,12 +151,42 @@ export function AddressAutocomplete({ value, onChange, error, onBlur }: Props) {
       </div>
 
       <div className="grid grid-cols-12 gap-2">
-        <ReadField label="Straat" value={value.street} className="col-span-8" />
-        <ReadField label="Nr." value={value.house_number} className="col-span-2" />
-        <ReadField label="Bijvoegsel" value={value.house_number_suffix} className="col-span-2" />
-        <ReadField label="Postcode" value={value.zipcode} className="col-span-4" />
-        <ReadField label="Plaats" value={value.city} className="col-span-6" />
-        <ReadField label="Land" value={value.country} className="col-span-2" />
+        <InputField
+          label="Straat"
+          value={value.street}
+          onChange={(v) => onChange({ ...value, street: v })}
+          className="col-span-8"
+        />
+        <InputField
+          label="Nr."
+          value={value.house_number}
+          onChange={(v) => onChange({ ...value, house_number: v })}
+          className="col-span-2"
+        />
+        <InputField
+          label="Bijvoegsel"
+          value={value.house_number_suffix}
+          onChange={(v) => onChange({ ...value, house_number_suffix: v })}
+          className="col-span-2"
+        />
+        <InputField
+          label="Postcode"
+          value={value.zipcode}
+          onChange={(v) => onChange({ ...value, zipcode: v })}
+          className="col-span-4"
+        />
+        <InputField
+          label="Plaats"
+          value={value.city}
+          onChange={(v) => onChange({ ...value, city: v })}
+          className="col-span-6"
+        />
+        <InputField
+          label="Land"
+          value={value.country}
+          onChange={(v) => onChange({ ...value, country: v })}
+          className="col-span-2"
+        />
       </div>
 
       <div className="overflow-hidden rounded border border-border">
@@ -192,25 +222,6 @@ export function AddressAutocomplete({ value, onChange, error, onBlur }: Props) {
           Coordinaten handmatig aangepast. Chauffeurs navigeren naar deze exacte locatie.
         </p>
       )}
-    </div>
-  );
-}
-
-function ReadField({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: string;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      <label className="label-luxe">{label}</label>
-      <div className="field-luxe flex min-h-[2.25rem] items-center bg-muted/30 text-sm text-foreground">
-        {value || <span className="text-muted-foreground">—</span>}
-      </div>
     </div>
   );
 }
