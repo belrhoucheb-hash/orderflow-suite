@@ -58,8 +58,22 @@ export function isValidIban(iban: string): boolean {
   return remainder === 1;
 }
 
+// Parse yyyy-mm-dd als lokale midnight, NIET als UTC. Voorkomt off-by-one
+// bij tijdzones >UTC of DST-overgangen.
+function parseIsoDateLocal(iso: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  if (!y || !m || !d) return null;
+  const date = new Date(y, m - 1, d);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function ageInYears(isoDate: string): number {
-  const birth = new Date(isoDate);
+  const birth = parseIsoDateLocal(isoDate);
+  if (!birth) return 0;
   const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
   const m = today.getMonth() - birth.getMonth();
@@ -189,10 +203,9 @@ export function maskBsn(bsn: string | null | undefined): string {
 /** Aantal dagen tot een datum vanaf vandaag. Negatief = al verlopen. */
 export function daysUntil(isoDate: string | null | undefined): number | null {
   if (!isoDate) return null;
-  const d = new Date(isoDate);
-  if (Number.isNaN(d.getTime())) return null;
+  const d = parseIsoDateLocal(isoDate);
+  if (!d) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  d.setHours(0, 0, 0, 0);
   return Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }

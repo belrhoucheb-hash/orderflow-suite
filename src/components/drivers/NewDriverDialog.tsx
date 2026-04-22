@@ -35,6 +35,7 @@ import {
 } from "@/hooks/useDrivers";
 import { useFleetVehicles } from "@/hooks/useFleet";
 import { useDriverCertifications } from "@/hooks/useDriverCertifications";
+import { DriverCertificateRecordsSection } from "@/components/drivers/DriverCertificateRecordsSection";
 import { driverSchema, daysUntil } from "@/lib/validation/driverSchema";
 
 interface NewDriverDialogProps {
@@ -169,7 +170,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   const { data: certifications = [] } = useDriverCertifications();
   const activeCertifications = certifications.filter((c) => c.is_active);
 
-  const { data: certExpiries, upsertExpiry } = useDriverCertificationExpiry(
+  const { data: certExpiries, upsertExpiry, deleteExpiry } = useDriverCertificationExpiry(
     driver?.id ?? null,
   );
 
@@ -295,7 +296,14 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
         toast.success("Chauffeur toegevoegd");
       }
 
-      // Cert-vervaldata opslaan voor de aangevinkte certs, alleen als een datum is gezet
+      // Cert-vervaldata synchroniseren met de aangevinkte certs:
+      // 1) upsert voor aangevinkte certs met een ingevulde vervaldatum,
+      // 2) delete expiry-rijen die horen bij certs die NIET meer zijn aangevinkt,
+      //    zodat uitgevinkte certificeringen niet blijven meetellen in
+      //    "Verlopend 60d"-kaart.
+      const selected = new Set(form.selectedCerts);
+      const expiryFailures: string[] = [];
+
       for (const code of form.selectedCerts) {
         const expiry = certExpiryDates[code];
         if (expiry && expiry.trim() !== "") {
@@ -306,9 +314,27 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
               expiry_date: expiry,
             });
           } catch {
-            // per cert best-effort; we breken niet de hele flow
+            expiryFailures.push(code);
           }
         }
+      }
+
+      if (certExpiries) {
+        for (const row of certExpiries) {
+          if (!selected.has(row.certification_code)) {
+            try {
+              await deleteExpiry.mutateAsync(row.id);
+            } catch {
+              expiryFailures.push(row.certification_code);
+            }
+          }
+        }
+      }
+
+      if (expiryFailures.length > 0) {
+        toast.warning(
+          `Chauffeur opgeslagen, vervaldata van ${expiryFailures.length} certificering(en) konden niet worden bijgewerkt`,
+        );
       }
 
       onOpenChange(false);
@@ -363,7 +389,9 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                 <TabsTrigger value="werk">Werk</TabsTrigger>
                 <TabsTrigger value="administratie">Administratie</TabsTrigger>
                 <TabsTrigger value="nood">Nood</TabsTrigger>
-                <TabsTrigger value="certs">Certs</TabsTrigger>
+                <TabsTrigger value="certificaten" disabled={!driver}>
+                  Certificaten
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -761,55 +789,14 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                 </div>
               </TabsContent>
 
-              {/* ────── Certs ────── */}
-              <TabsContent value="certs" className="mt-0 space-y-4">
-                {activeCertifications.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">
-                    Nog geen certificeringen ingericht. Beheer ze via tab Certificeringen.
-                  </p>
+              {/* ────── Certificaten ────── */}
+              <TabsContent value="certificaten" className="mt-0 space-y-4">
+                {driver ? (
+                  <DriverCertificateRecordsSection driverId={driver.id} />
                 ) : (
-                  <div className="space-y-3">
-                    {activeCertifications.map((cert) => {
-                      const checked = form.selectedCerts.includes(cert.code);
-                      return (
-                        <div
-                          key={cert.code}
-                          className="flex items-center gap-4 rounded-xl border border-border/40 bg-card/50 px-3 py-2"
-                        >
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <Checkbox
-                              id={`cert-${cert.code}`}
-                              checked={checked}
-                              onCheckedChange={() => toggleCert(cert.code)}
-                            />
-                            <label
-                              htmlFor={`cert-${cert.code}`}
-                              className="text-sm font-medium truncate"
-                            >
-                              {cert.name}
-                            </label>
-                          </div>
-                          {checked && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-muted-foreground">Geldig tot</span>
-                              <Input
-                                type="date"
-                                value={certExpiryDates[cert.code] ?? ""}
-                                onChange={(e) =>
-                                  setCertExpiryDates((prev) => ({
-                                    ...prev,
-                                    [cert.code]: e.target.value,
-                                  }))
-                                }
-                                className="h-8 w-40 rounded-lg border-border/50 text-xs"
-                              />
-                              <ExpiryBadge isoDate={certExpiryDates[cert.code]} />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <p className="text-xs text-muted-foreground italic">
+                    Sla eerst de chauffeur op, daarna kun je certificaten met datums en documenten vastleggen.
+                  </p>
                 )}
               </TabsContent>
             </div>
@@ -907,20 +894,29 @@ function DatePickerButton({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <Button
+        <button
           id={id}
           type="button"
-          variant="outline"
           className={cn(
-            "w-full justify-start rounded-xl border-border/50 font-normal",
+            // Zelfde look als field-luxe inputs: lichte achtergrond met
+            // subtiele gold border, geen accent-fill op hover of open.
+            "flex h-10 w-full items-center gap-2 rounded-xl border px-3 py-2 text-sm",
+            "border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--card))] text-foreground",
+            "hover:border-[hsl(var(--gold)/0.5)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gold)/0.4)]",
+            "data-[state=open]:border-[hsl(var(--gold)/0.6)]",
             !value && "text-muted-foreground",
           )}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {value ? format(value, "d MMMM yyyy", { locale: nl }) : "Kies een datum"}
-        </Button>
+          <CalendarIcon className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+          <span className="truncate">
+            {value ? format(value, "d MMMM yyyy", { locale: nl }) : "Kies een datum"}
+          </span>
+        </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 rounded-xl" align="start">
+      <PopoverContent
+        className="w-auto p-0 rounded-xl border-[hsl(var(--gold)/0.25)] shadow-lg"
+        align="start"
+      >
         <Calendar
           mode="single"
           locale={nl}
