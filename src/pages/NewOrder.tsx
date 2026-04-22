@@ -8,16 +8,24 @@ import {
   type AddressValue,
 } from "@/components/clients/AddressAutocomplete";
 import { composeAddressString } from "@/lib/validation/clientSchema";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover";
 import { toast } from "sonner";
+import { ZodError } from "zod";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { isValidAddress } from "@/components/inbox/utils";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useClient, useClients, useClientOrders } from "@/hooks/useClients";
 import { useClientContacts } from "@/hooks/useClientContacts";
@@ -417,55 +425,47 @@ const NewOrder = () => {
     const pickupLine = freightLines.find(f => f.activiteit === "Laden");
     const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
 
-    // Centrale validatie via orderFormSchema. Alleen de gestructureerde-
-    // adres-checks (street/zipcode/city + isValidAddress) blijven erbuiten,
-    // die hebben context uit pickupAddr/deliveryAddr die Zod niet bezit.
+    // Centrale validatie via orderFormSchema.parse. De schema dekt nu ook de
+    // gestructureerde adres-checks (street/zipcode/city plus de "is geen losse
+    // plaatsnaam"-regel) via superRefine, dus elke ZodError vertaalt direct
+    // naar een UI-veldfout zonder parallelle if/else-ketens.
     const quantityNum = quantity ? parseInt(quantity) : NaN;
     const weightNum = weightKg ? parseFloat(weightKg) : NaN;
-    const parsed = orderFormSchema.safeParse({
-      client_name: clientName,
-      pickup_address: pickupLine?.locatie ?? "",
-      delivery_address: deliveryLine?.locatie ?? "",
-      quantity: Number.isFinite(quantityNum) ? quantityNum : undefined,
-      weight_kg: Number.isFinite(weightNum) ? weightNum : undefined,
-      unit: transportEenheid,
-      afdeling: afdeling,
-    });
-
-    const newErrors: Record<string, string> = {};
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0]?.toString();
-        if (key && !newErrors[key]) newErrors[key] = issue.message;
-      }
-    }
-
-    // Aanvullende structurele adres-checks: zorg dat losse huisnummers
-    // zonder straat of plaats niet door de composeerde string-check glippen.
-    const pickupStructured =
-      pickupAddr.street.trim() && pickupAddr.zipcode.trim() && pickupAddr.city.trim();
-    if (!newErrors.pickup_address) {
-      if (!pickupStructured) newErrors.pickup_address = "Vul straat, postcode en plaats in";
-      else if (pickupLine?.locatie && !isValidAddress(pickupLine.locatie)) {
-        newErrors.pickup_address = "Onvolledig ophaaladres, straat en huisnummer vereist";
-      }
-    }
-    const deliveryStructured =
-      deliveryAddr.street.trim() && deliveryAddr.zipcode.trim() && deliveryAddr.city.trim();
-    if (!newErrors.delivery_address) {
-      if (!deliveryStructured) newErrors.delivery_address = "Vul straat, postcode en plaats in";
-      else if (deliveryLine?.locatie && !isValidAddress(deliveryLine.locatie)) {
-        newErrors.delivery_address = "Onvolledig afleveradres, straat en huisnummer vereist";
-      }
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      const count = Object.keys(newErrors).length;
-      toast.error(`Formulier bevat ${count} validatiefout${count > 1 ? "en" : ""}`, {
-        description: Object.values(newErrors).join(" | "),
+    try {
+      orderFormSchema.parse({
+        client_name: clientName,
+        pickup_address: pickupLine?.locatie ?? "",
+        delivery_address: deliveryLine?.locatie ?? "",
+        quantity: Number.isFinite(quantityNum) ? quantityNum : undefined,
+        weight_kg: Number.isFinite(weightNum) ? weightNum : undefined,
+        unit: transportEenheid,
+        afdeling: afdeling,
+        pickup_structured: {
+          street: pickupAddr.street,
+          zipcode: pickupAddr.zipcode,
+          city: pickupAddr.city,
+        },
+        delivery_structured: {
+          street: deliveryAddr.street,
+          zipcode: deliveryAddr.zipcode,
+          city: deliveryAddr.city,
+        },
       });
-      return;
+    } catch (err) {
+      if (err instanceof ZodError) {
+        const newErrors: Record<string, string> = {};
+        for (const issue of err.issues) {
+          const key = issue.path[0]?.toString();
+          if (key && !newErrors[key]) newErrors[key] = issue.message;
+        }
+        setErrors(newErrors);
+        const count = Object.keys(newErrors).length;
+        toast.error(`Formulier bevat ${count} validatiefout${count > 1 ? "en" : ""}`, {
+          description: Object.values(newErrors).join(" | "),
+        });
+        return;
+      }
+      throw err;
     }
 
     setErrors({});
@@ -1803,31 +1803,32 @@ const NewOrder = () => {
 
       </div>
 
-      <Dialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Niet-opgeslagen wijzigingen</DialogTitle>
-            <DialogDescription>
-              Je hebt deze order nog niet opgeslagen. Als je nu weggaat, verlies je wat je hebt ingevuld.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUnsavedDialog(false)}>
-              Doorgaan met bewerken
-            </Button>
-            <Button
-              variant="destructive"
+      <AlertDialog
+        open={showUnsavedDialog}
+        onOpenChange={(o) => !o && setShowUnsavedDialog(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Wijzigingen weggooien?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Je hebt wijzigingen die nog niet zijn opgeslagen. Verlaat je de pagina nu,
+              dan gaan ze verloren.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Doorgaan met bewerken</AlertDialogCancel>
+            <AlertDialogAction
               onClick={() => {
                 skipDirtyGuardRef.current = true;
                 setShowUnsavedDialog(false);
                 navigate("/orders");
               }}
             >
-              Verlaat zonder opslaan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              Wijzigingen weggooien
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
