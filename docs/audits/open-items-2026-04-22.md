@@ -32,21 +32,26 @@ Uit de top-10 geland:
 - #5 Dupliceer-order: hover-knop op klant-cel in orderlijst, navigeert naar
   `/orders/nieuw?client_id=...` die de prefill-flow triggert
 - #6 Expliciete `.select()`-kolommen in `useOrders` i.p.v. `select('*')`
+- #2 Server-side sorteren via `useOrders`-opties `sortField` en `sortDirection`,
+  UI-veldnaam mapt in `SORT_FIELD_TO_DB` naar de DB-kolom (`client_name`,
+  `weight_kg`, `status`, `created_at`). Sort-keys zitten in de query-key zodat
+  react-query per combinatie cachet. `created_at DESC` blijft tiebreaker voor
+  stabiele paginering. Bij intensief gebruik van `weight_kg DESC` loont een
+  `(tenant_id, weight_kg DESC)`-index alsnog, nu nog niet toegevoegd.
+- #8 Order-number zoeken op geformatteerde string: zoekwoord wordt in
+  `useOrders` genormaliseerd (`RCS-` prefix weg, jaar-prefix weg, leading
+  zeros weg) en als `order_number.eq.<int>` aan de `or()`-clause toegevoegd.
+  Tekstzoek op `client_name`, `pickup_address` en `delivery_address` blijft
+  intact. Placeholder in de zoekbalk laat nu expliciet `RCS-2026-0001` zien.
+  Unit-tests dekken de formats `RCS-2026-0042`, `0042` en zuivere tekst.
 
 ## Nog te doen
 
 ### Orders-tab
 
-- **#2 Server-side sorteren** (M-effort, hoog-impact), sortering werkt nu nog
-  client-side binnen de huidige 25-rij-pagina. Server-side `order(...)` plus
-  de sort-kolom via de query-key; payload voor `weight_kg DESC` vereist wellicht
-  een nieuwe index.
 - **#7 "Leaving with unsaved changes"-waarschuwing in NewOrder** (S-effort,
   mid-impact), zelfde patroon als het nu in NewClientDialog staat (dirty-check
   + AlertDialog bij Annuleren of outside-click).
-- **#8 Order-number zoeken op formatted string** (S-effort, mid-impact), zodat
-  `"RCS-2026-0042"` of deelfragmenten hits geven. Nu faalt zoeken tenzij de
-  user het rauwe integer-ordernummer intypt.
 - **#9 Handmatige validatie in `NewOrder.handleSave` vervangen door
   `orderInputSchema.parse`** (M-effort, mid-impact), voorkomt drift tussen
   Zod-schema en de duplicate-validatie in de component.

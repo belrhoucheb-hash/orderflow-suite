@@ -38,7 +38,10 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-vi.mock("@/hooks/useOrders", () => ({ useOrders: (...args: any[]) => mockUseOrders(...args) }));
+vi.mock("@/hooks/useOrders", () => ({
+  useOrders: (...args: any[]) => mockUseOrders(...args),
+  useStaleDraftCount: () => ({ data: { count: 0, cutoffIso: new Date().toISOString() } }),
+}));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: mockSupabase,
@@ -158,7 +161,7 @@ describe("Orders", () => {
   it("types in search to trigger handleSearchChange", async () => {
     const user = userEvent.setup();
     renderOrders();
-    const input = screen.getByPlaceholderText(/Zoek op ordernummer of klant/);
+    const input = screen.getByPlaceholderText(/Zoek op ordernummer/);
     await user.type(input, "Acme");
     expect(mockUseOrders).toHaveBeenCalled();
   });
