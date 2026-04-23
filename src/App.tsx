@@ -39,7 +39,6 @@ const Planning = lazy(() => import("@/pages/PlanningV2"));
 const ChauffeursRit = lazy(() => import("@/pages/ChauffeursRit"));
 const Chauffeurs = lazy(() => import("@/pages/Chauffeurs"));
 const Inbox = lazy(() => import("@/pages/Inbox"));
-const Mail = lazy(() => import("@/pages/Mail"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const Clients = lazy(() => import("@/pages/Clients"));
 const ClientDetail = lazy(() => import("@/pages/ClientDetail"));
@@ -110,7 +109,7 @@ const App = () => (
             >
               <Route path="/" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Dashboard /></Suspense></ErrorBoundary>} />
               <Route path="/inbox" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Inbox /></Suspense></ErrorBoundary>} />
-              <Route path="/mail" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Mail /></Suspense></ErrorBoundary>} />
+              <Route path="/mail" element={<Navigate to="/inbox" replace />} />
               <Route path="/orders" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Orders /></Suspense></ErrorBoundary>} />
               <Route path="/orders/nieuw" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><NewOrder /></Suspense></ErrorBoundary>} />
               <Route path="/klanten" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Clients /></Suspense></ErrorBoundary>} />

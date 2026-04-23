@@ -1,10 +1,8 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Shield, Send, Brain, Radar } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/integrations/supabase/client";
 import defaultLogo from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,15 +29,10 @@ const mainItemsDef = [
   { titleKey: "nav.clients", url: "/klanten", icon: Building2 },
   { titleKey: "nav.planning", url: "/planning", icon: Truck },
   { titleKey: "nav.dispatch", url: "/dispatch", icon: Send },
-  { titleKey: "nav.tracking", url: "/tracking", icon: Radar },
-  { titleKey: "nav.trips", url: "/ritten", icon: Route },
   { titleKey: "nav.drivers", url: "/chauffeurs", icon: Users },
   { titleKey: "nav.fleet", url: "/vloot", icon: Container },
-  { titleKey: "nav.vehicleCheck", titleFallback: "Voertuigcheck", url: "/voertuigcheck", icon: Shield },
-  { titleKey: "nav.reporting", url: "/rapportage", icon: BarChart3 },
-  { titleKey: "nav.exceptions", url: "/exceptions", icon: Shield },
-  { titleKey: "nav.autonomy", url: "/autonomie", icon: Brain },
   { titleKey: "nav.invoicing", url: "/facturatie", icon: Receipt },
+  { titleKey: "nav.reporting", url: "/rapportage", icon: BarChart3 },
 ];
 
 const adminItemsDef = [
@@ -51,39 +44,6 @@ const chauffeurItemsDef = [
   { titleKey: "nav.myTrips", url: "/chauffeur", icon: Route },
 ];
 
-function useExceptionCount() {
-  return useQuery({
-    queryKey: ["exception-count"],
-    queryFn: async () => {
-      // Count DRAFT orders with missing fields
-      const { count: missingCount } = await supabase
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "DRAFT")
-        .not("missing_fields", "eq", "{}");
-
-      // Count DRAFT orders older than 3 hours (SLA risk)
-      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-      const { count: slaCount } = await supabase
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "DRAFT")
-        .lt("created_at", threeHoursAgo);
-
-      // Count IN_TRANSIT orders older than 24h (delays)
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { count: delayCount } = await supabase
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "IN_TRANSIT")
-        .lt("created_at", oneDayAgo);
-
-      return (missingCount || 0) + (slaCount || 0) + (delayCount || 0);
-    },
-    refetchInterval: 60_000,
-  });
-}
-
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -92,7 +52,6 @@ export function AppSidebar() {
   const { t, i18n } = useTranslation();
   const { profile, user, signOut, isAdmin, effectiveRole } = useAuth();
   const { tenant } = useTenant();
-  const { data: exceptionCount = 0 } = useExceptionCount();
 
   const toItems = (defs: typeof mainItemsDef) =>
     defs.map((d: any) => {
@@ -175,11 +134,6 @@ export function AppSidebar() {
                       >
                         <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
                         <span>{item.title}</span>
-                        {item.titleKey === "nav.exceptions" && exceptionCount > 0 && !collapsed && (
-                          <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none font-medium">
-                            {exceptionCount}
-                          </span>
-                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
