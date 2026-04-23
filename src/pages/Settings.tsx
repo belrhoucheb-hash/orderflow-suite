@@ -29,6 +29,7 @@ import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
 import { PricingPreview } from "@/components/settings/PricingPreview";
 import { SettingsCommandPalette } from "@/components/settings/SettingsCommandPalette";
+import { StickySaveBar } from "@/components/settings/StickySaveBar";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
 import { InboxSettings } from "@/components/settings/InboxSettings";
@@ -118,14 +119,36 @@ const Settings = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const updateBranding = useUpdateTenantBranding();
 
+  const [brandingBaseline, setBrandingBaseline] = useState<string>("");
+
   useEffect(() => {
     if (tenant) {
       setCompanyName(tenant.name || "");
       setPrimaryColor(tenant.primaryColor || "#3b82f6");
       setLogoPreview(tenant.logoUrl || null);
       setPendingLogoFile(null);
+      setBrandingBaseline(JSON.stringify({
+        name: tenant.name || "",
+        color: tenant.primaryColor || "#3b82f6",
+        logoUrl: tenant.logoUrl || null,
+      }));
     }
   }, [tenant]);
+
+  const brandingCurrent = JSON.stringify({
+    name: companyName,
+    color: primaryColor,
+    // pending-file markeert dirty, ongeacht preview-url
+    logoUrl: pendingLogoFile ? "__pending__" : logoPreview,
+  });
+  const brandingDirty = brandingBaseline !== "" && brandingCurrent !== brandingBaseline;
+  const revertBranding = () => {
+    if (!tenant) return;
+    setCompanyName(tenant.name || "");
+    setPrimaryColor(tenant.primaryColor || "#3b82f6");
+    setLogoPreview(tenant.logoUrl || null);
+    setPendingLogoFile(null);
+  };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -197,16 +220,34 @@ const Settings = () => {
   const saveNotifications = useSaveSettings("notifications");
   const saveSms = useSaveSettings("sms");
 
+  // Baseline-state voor dirty-detectie per tab. Wordt gezet na load-
+  // succes en na save-succes, dan is de huidige state "schoon".
+  const [notificationsBaseline, setNotificationsBaseline] = useState<string>("");
+  const [smsBaseline, setSmsBaseline] = useState<string>("");
+  const [integrationsBaseline, setIntegrationsBaseline] = useState<string>("");
+
   // Load saved settings into state when fetched
   useEffect(() => {
     if (savedIntegrations && Object.keys(savedIntegrations).length > 0) {
-      setIntegrations(prev => ({ ...prev, ...savedIntegrations }));
+      setIntegrations(prev => {
+        const merged = { ...prev, ...savedIntegrations };
+        setIntegrationsBaseline(JSON.stringify(merged));
+        return merged;
+      });
+    } else if (savedIntegrations !== undefined) {
+      setIntegrationsBaseline((prev) => prev || JSON.stringify(integrations));
     }
   }, [savedIntegrations]);
 
   useEffect(() => {
     if (savedNotifications && Object.keys(savedNotifications).length > 0) {
-      setNotifications(prev => ({ ...prev, ...savedNotifications }));
+      setNotifications(prev => {
+        const merged = { ...prev, ...savedNotifications };
+        setNotificationsBaseline(JSON.stringify(merged));
+        return merged;
+      });
+    } else if (savedNotifications !== undefined) {
+      setNotificationsBaseline((prev) => prev || JSON.stringify(notifications));
     }
   }, [savedNotifications]);
 
@@ -220,12 +261,62 @@ const Settings = () => {
       if (savedSms.messageBirdOriginator) setMessageBirdOriginator(savedSms.messageBirdOriginator);
       if (savedSms.smsEvents) setSmsEvents(prev => ({ ...prev, ...savedSms.smsEvents }));
       if (savedSms.smsTemplate) setSmsTemplate(savedSms.smsTemplate);
+      setSmsBaseline(JSON.stringify({
+        smsProvider: savedSms.smsProvider ?? "twilio",
+        twilioAccountSid: savedSms.twilioAccountSid ?? "",
+        twilioAuthToken: savedSms.twilioAuthToken ?? "",
+        twilioFromNumber: savedSms.twilioFromNumber ?? "",
+        messageBirdApiKey: savedSms.messageBirdApiKey ?? "",
+        messageBirdOriginator: savedSms.messageBirdOriginator ?? "",
+        smsEvents: { onderweg: true, afgeleverd: true, vertraging: false, ...(savedSms.smsEvents ?? {}) },
+        smsTemplate: savedSms.smsTemplate ?? "",
+      }));
+    } else if (savedSms !== undefined) {
+      setSmsBaseline((prev) => prev || JSON.stringify({
+        smsProvider, twilioAccountSid, twilioAuthToken, twilioFromNumber,
+        messageBirdApiKey, messageBirdOriginator, smsEvents, smsTemplate,
+      }));
     }
   }, [savedSms]);
+
+  const notificationsCurrent = JSON.stringify(notifications);
+  const notificationsDirty = notificationsBaseline !== "" && notificationsCurrent !== notificationsBaseline;
+  const revertNotifications = () => {
+    if (!notificationsBaseline) return;
+    try { setNotifications(JSON.parse(notificationsBaseline)); } catch { /* noop */ }
+  };
+
+  const integrationsCurrent = JSON.stringify(integrations);
+  const integrationsDirty = integrationsBaseline !== "" && integrationsCurrent !== integrationsBaseline;
+  const revertIntegrations = () => {
+    if (!integrationsBaseline) return;
+    try { setIntegrations(JSON.parse(integrationsBaseline)); } catch { /* noop */ }
+  };
+
+  const smsCurrent = JSON.stringify({
+    smsProvider, twilioAccountSid, twilioAuthToken, twilioFromNumber,
+    messageBirdApiKey, messageBirdOriginator, smsEvents, smsTemplate,
+  });
+  const smsDirty = smsBaseline !== "" && smsCurrent !== smsBaseline;
+  const revertSms = () => {
+    if (!smsBaseline) return;
+    try {
+      const b = JSON.parse(smsBaseline);
+      setSmsProvider(b.smsProvider ?? "twilio");
+      setTwilioAccountSid(b.twilioAccountSid ?? "");
+      setTwilioAuthToken(b.twilioAuthToken ?? "");
+      setTwilioFromNumber(b.twilioFromNumber ?? "");
+      setMessageBirdApiKey(b.messageBirdApiKey ?? "");
+      setMessageBirdOriginator(b.messageBirdOriginator ?? "");
+      setSmsEvents(b.smsEvents ?? { onderweg: true, afgeleverd: true, vertraging: false });
+      setSmsTemplate(b.smsTemplate ?? "");
+    } catch { /* noop */ }
+  };
 
   const handleSaveIntegrations = async () => {
     try {
       await saveIntegrations.mutateAsync(integrations as any);
+      setIntegrationsBaseline(JSON.stringify(integrations));
       toast.success("Integratie-instellingen opgeslagen");
     } catch {
       toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
@@ -235,6 +326,7 @@ const Settings = () => {
   const handleSaveNotifications = async () => {
     try {
       await saveNotifications.mutateAsync(notifications as any);
+      setNotificationsBaseline(JSON.stringify(notifications));
       toast.success("Notificatie-instellingen opgeslagen");
     } catch {
       toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
@@ -243,10 +335,12 @@ const Settings = () => {
 
   const handleSaveSms = async () => {
     try {
-      await saveSms.mutateAsync({
+      const payload = {
         smsProvider, twilioAccountSid, twilioAuthToken, twilioFromNumber,
         messageBirdApiKey, messageBirdOriginator, smsEvents, smsTemplate,
-      });
+      };
+      await saveSms.mutateAsync(payload);
+      setSmsBaseline(JSON.stringify(payload));
       toast.success("SMS instellingen opgeslagen");
     } catch {
       toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
@@ -864,6 +958,44 @@ const Settings = () => {
         </TabsContent>
         </div>
       </Tabs>
+
+      {/* Actieve tab bepaalt welke save-bar zichtbaar is. Slechts één tegelijk. */}
+      {getActiveTab() === "branding" && (
+        <StickySaveBar
+          dirty={brandingDirty}
+          saving={updateBranding.isPending}
+          onSave={handleSaveBranding}
+          onRevert={revertBranding}
+          label="Branding heeft niet-opgeslagen wijzigingen"
+        />
+      )}
+      {getActiveTab() === "notificaties" && (
+        <StickySaveBar
+          dirty={notificationsDirty}
+          saving={saveNotifications.isPending}
+          onSave={handleSaveNotifications}
+          onRevert={revertNotifications}
+          label="Notificaties hebben niet-opgeslagen wijzigingen"
+        />
+      )}
+      {getActiveTab() === "sms" && (
+        <StickySaveBar
+          dirty={smsDirty}
+          saving={saveSms.isPending}
+          onSave={handleSaveSms}
+          onRevert={revertSms}
+          label="SMS-instellingen hebben niet-opgeslagen wijzigingen"
+        />
+      )}
+      {getActiveTab() === "integraties" && (
+        <StickySaveBar
+          dirty={integrationsDirty}
+          saving={saveIntegrations.isPending}
+          onSave={handleSaveIntegrations}
+          onRevert={revertIntegrations}
+          label="Integraties hebben niet-opgeslagen wijzigingen"
+        />
+      )}
     </div>
   );
 };
