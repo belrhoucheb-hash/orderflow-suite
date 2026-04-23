@@ -1,9 +1,29 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTriangle, Plus, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Truck, FileText, Wrench, CalendarDays, BarChart3, AlertTriangle, Plus, CheckCircle2, ShieldCheck, Trash2 } from "lucide-react";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useVehicleById, useVehicleDocuments, useVehicleMaintenance, useVehicleAvailability, useCompleteMaintenance, useVehicleDriverConsistency } from "@/hooks/useFleet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  useVehicleById,
+  useVehicleDocuments,
+  useVehicleMaintenance,
+  useVehicleAvailability,
+  useCompleteMaintenance,
+  useVehicleDriverConsistency,
+  useDeleteVehicle,
+  useDeleteMaintenance,
+  type VehicleMaintenance,
+} from "@/hooks/useFleet";
 import { useBaselineInfo } from "@/hooks/useVehicleCheck";
 import { useAuth } from "@/contexts/AuthContext";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
@@ -52,9 +72,13 @@ export default function VehicleDetail() {
     format(addDays(weekStart, 27), "yyyy-MM-dd")
   );
   const completeMaintenance = useCompleteMaintenance();
+  const deleteMaintenance = useDeleteMaintenance();
+  const deleteVehicle = useDeleteVehicle();
   const { data: driverConsistency } = useVehicleDriverConsistency();
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
   const [showDocumentDialog, setShowDocumentDialog] = useState(false);
+  const [pendingMaintenanceDelete, setPendingMaintenanceDelete] = useState<VehicleMaintenance | null>(null);
+  const [showVehicleDelete, setShowVehicleDelete] = useState(false);
   const [baselineSeedActive, setBaselineSeedActive] = useState(false);
   const { effectiveRole } = useAuth();
   const { data: baselineInfo } = useBaselineInfo(id ?? null);
@@ -189,6 +213,17 @@ export default function VehicleDetail() {
                 >
                   <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
                   Baseline instellen
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowVehicleDelete(true)}
+                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-destructive/30 text-destructive text-[12px] font-medium hover:bg-destructive/10 transition-colors"
+                  aria-label="Voertuig verwijderen"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+                  Verwijderen
                 </button>
               )}
               <span className={`inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${statusCfg.textClass}`} aria-label={`Status: ${statusCfg.label}`}>
@@ -445,6 +480,16 @@ export default function VehicleDetail() {
                               Afronden
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setPendingMaintenanceDelete(m)}
+                            disabled={deleteMaintenance.isPending}
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            aria-label="Onderhoud verwijderen"
+                            title="Verwijderen"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+                          </button>
                         </div>
                       </div>
                     );
@@ -534,6 +579,77 @@ export default function VehicleDetail() {
 
       {id && <MaintenanceDialog vehicleId={id} open={showMaintenanceDialog} onOpenChange={setShowMaintenanceDialog} />}
       {id && <DocumentDialog vehicleId={id} open={showDocumentDialog} onOpenChange={setShowDocumentDialog} />}
+
+      <AlertDialog open={showVehicleDelete} onOpenChange={setShowVehicleDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Voertuig verwijderen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Het voertuig {vehicle.plate}, {vehicle.name} verdwijnt uit de app.
+              Historische ritten, facturen, documenten en onderhoud blijven bewaard
+              in de database voor de fiscale bewaarplicht (7 jaar). Deze actie is
+              niet direct ongedaan te maken vanuit de UI.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!id) return;
+                deleteVehicle.mutate(id, {
+                  onSuccess: () => {
+                    toast.success("Voertuig verwijderd");
+                    navigate("/vloot");
+                  },
+                  onError: (err: any) => {
+                    toast.error(err?.message ?? "Verwijderen mislukt");
+                  },
+                });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingMaintenanceDelete !== null}
+        onOpenChange={(o) => { if (!o) setPendingMaintenanceDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Onderhoud verwijderen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingMaintenanceDelete
+                ? `De regel "${MAINTENANCE_LABELS[pendingMaintenanceDelete.maintenance_type ?? ""] ?? pendingMaintenanceDelete.maintenance_type ?? "onderhoud"}" verdwijnt uit de app, maar blijft bewaard voor de 7-jaar bewaarplicht op onderhoudsfacturen.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const m = pendingMaintenanceDelete;
+                if (!m) return;
+                setPendingMaintenanceDelete(null);
+                ownUpdateRef.current = Date.now();
+                deleteMaintenance.mutate(
+                  { id: m.id, vehicleId: m.vehicle_id ?? id! },
+                  {
+                    onSuccess: () => toast.success("Onderhoud verwijderd"),
+                    onError: (err: any) => toast.error(err?.message ?? "Verwijderen mislukt"),
+                  }
+                );
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

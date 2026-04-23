@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 import { useTenantInsert } from "@/hooks/useTenantInsert";
 import {
   vehicleRowSchema,
@@ -70,6 +71,7 @@ export function useFleetVehicles() {
       const { data, error } = await supabase
         .from("vehicles")
         .select("*")
+        .is("deleted_at", null)
         .order("type", { ascending: true });
       if (error) throw error;
       const rows = parseRows(vehicleRowSchema, data, "voertuigen ophalen");
@@ -88,6 +90,7 @@ export function useVehicleById(id: string | undefined) {
         .from("vehicles")
         .select("*")
         .eq("id", id!)
+        .is("deleted_at", null)
         .single();
       if (error) throw error;
       const row = parseRow(vehicleRowSchema, data, "voertuig ophalen");
@@ -106,6 +109,7 @@ export function useVehicleDocuments(vehicleId: string | undefined) {
         .from("vehicle_documents")
         .select("*")
         .eq("vehicle_id", vehicleId!)
+        .is("deleted_at", null)
         .order("expiry_date", { ascending: true });
       if (error) throw error;
       return parseRows(vehicleDocumentRowSchema, data, "documenten ophalen");
@@ -123,6 +127,7 @@ export function useVehicleMaintenance(vehicleId: string | undefined) {
         .from("vehicle_maintenance")
         .select("*")
         .eq("vehicle_id", vehicleId!)
+        .is("deleted_at", null)
         .order("scheduled_date", { ascending: false });
       if (error) throw error;
       return parseRows(vehicleMaintenanceRowSchema, data, "onderhoud ophalen");
@@ -179,6 +184,7 @@ export function useUpcomingMaintenance() {
         .from("vehicle_maintenance")
         .select("*, vehicles(name, plate)")
         .is("completed_date", null)
+        .is("deleted_at", null)
         .lte("scheduled_date", today)
         .order("scheduled_date", { ascending: true });
       if (error) throw error;
@@ -191,23 +197,158 @@ export function useUpcomingMaintenance() {
   });
 }
 
+const VEHICLE_DOCUMENTS_BUCKET = "vehicle-documents";
+
+async function uploadVehicleDocumentFile(
+  file: File,
+  tenantId: string,
+  vehicleId: string,
+): Promise<{ path: string; name: string }> {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
+  const uuid = crypto.randomUUID();
+  const path = `${tenantId}/${vehicleId}/${uuid}.${ext}`;
+  const { error } = await supabase.storage.from(VEHICLE_DOCUMENTS_BUCKET).upload(path, file, {
+    contentType: file.type || undefined,
+    upsert: false,
+  });
+  if (error) throw error;
+  return { path, name: file.name };
+}
+
+async function removeVehicleDocumentFile(path: string | null) {
+  if (!path) return;
+  // Legacy file_url kan een externe URL zijn in plaats van een bucket-pad.
+  // Alleen wissen als het het {uuid}-bucketformaat lijkt te zijn.
+  if (/^https?:\/\//i.test(path)) return;
+  const { error } = await supabase.storage.from(VEHICLE_DOCUMENTS_BUCKET).remove([path]);
+  if (error) throw error;
+}
+
 export function useCreateDocument() {
   const qc = useQueryClient();
+  const { tenant } = useTenant();
   const documentInsert = useTenantInsert("vehicle_documents");
   return useMutation({
     mutationFn: async (data: {
       vehicle_id: string;
       doc_type: string;
-      expiry_date?: string;
-      notes?: string;
+      issued_date?: string | null;
+      expiry_date?: string | null;
+      notes?: string | null;
+      file: File | null;
     }) => {
-      const { error } = await documentInsert.insert({ ...data });
+      if (!tenant?.id) throw new Error("Geen actieve tenant");
+
+      let filePath: string | null = null;
+      let fileName: string | null = null;
+      if (data.file) {
+        const uploaded = await uploadVehicleDocumentFile(data.file, tenant.id, data.vehicle_id);
+        filePath = uploaded.path;
+        fileName = uploaded.name;
+      }
+
+      const payload: Record<string, unknown> = {
+        vehicle_id: data.vehicle_id,
+        doc_type: data.doc_type,
+        issued_date: data.issued_date || null,
+        expiry_date: data.expiry_date || null,
+        notes: data.notes?.trim() || null,
+      };
+      if (filePath) payload.file_url = filePath;
+      if (fileName) payload.document_name = fileName;
+
+      const { error } = await documentInsert.insert(payload);
+      if (error) {
+        if (filePath) await removeVehicleDocumentFile(filePath).catch(() => undefined);
+        throw error;
+      }
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["vehicle-documents", vars.vehicle_id] });
+    },
+  });
+}
+
+export function useUpdateDocument() {
+  const qc = useQueryClient();
+  const { tenant } = useTenant();
+  return useMutation({
+    mutationFn: async (data: {
+      id: string;
+      vehicle_id: string;
+      previous_document_url: string | null;
+      issued_date?: string | null;
+      expiry_date?: string | null;
+      notes?: string | null;
+      file: File | null;
+    }) => {
+      if (!tenant?.id) throw new Error("Geen actieve tenant");
+      const patch: Record<string, unknown> = {};
+      if (data.issued_date !== undefined) patch.issued_date = data.issued_date || null;
+      if (data.expiry_date !== undefined) patch.expiry_date = data.expiry_date || null;
+      if (data.notes !== undefined) patch.notes = data.notes?.trim() || null;
+
+      if (data.file) {
+        const uploaded = await uploadVehicleDocumentFile(data.file, tenant.id, data.vehicle_id);
+        patch.file_url = uploaded.path;
+        patch.document_name = uploaded.name;
+      }
+
+      const { error } = await supabase
+        .from("vehicle_documents")
+        .update(patch)
+        .eq("id", data.id);
+      if (error) throw error;
+
+      if (data.file && data.previous_document_url) {
+        await removeVehicleDocumentFile(data.previous_document_url).catch(() => undefined);
+      }
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["vehicle-documents", vars.vehicle_id] });
+    },
+  });
+}
+
+export function useDeleteDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      id: string;
+      vehicle_id: string;
+      document_url: string | null;
+    }) => {
+      // Soft-delete: rij blijft bewaard voor fiscale bewaarplicht (7 jaar),
+      // inclusief het bestand in Supabase Storage. Alleen onzichtbaar in de UI.
+      const { error } = await supabase
+        .from("vehicle_documents")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", data.id);
       if (error) throw error;
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["vehicle-documents", vars.vehicle_id] });
     },
   });
+}
+
+/**
+ * Genereer een signed URL (5 minuten geldig) voor het downloaden van
+ * een voertuig-document. Signed omdat de bucket privé is en we niet
+ * willen dat links persistent bruikbaar zijn als ze uitlekken.
+ */
+export async function getVehicleDocumentDownloadUrl(path: string): Promise<string> {
+  // Legacy rows kunnen een externe URL bevatten in plaats van een bucket-path.
+  if (/^https?:\/\//i.test(path)) return path;
+  const { data, error } = await supabase.storage
+    .from(VEHICLE_DOCUMENTS_BUCKET)
+    .createSignedUrl(path, 300);
+  if (error || !data?.signedUrl) {
+    throw new Error(
+      `Kon geen download-link maken voor het document: ${error?.message ?? "onbekende fout"}`,
+    );
+  }
+  return data.signedUrl;
 }
 
 export function useVehicleAvailability(vehicleId: string | undefined, startDate?: string, endDate?: string) {
@@ -261,6 +402,51 @@ export function useUpdateVehicle() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fleet-vehicles"] });
       qc.invalidateQueries({ queryKey: ["fleet-vehicle"] });
+    },
+  });
+}
+
+/**
+ * Soft-delete van een voertuig. Rij blijft in de DB met deleted_at gezet,
+ * zodat historische trips, orders en facturen bereikbaar blijven voor de
+ * fiscale bewaarplicht (7 jaar, art. 52 AWR). De UI filtert deleted_at IS NULL.
+ */
+export function useDeleteVehicle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("vehicles")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ["fleet-vehicles"] });
+      qc.invalidateQueries({ queryKey: ["fleet-vehicle", id] });
+      qc.invalidateQueries({ queryKey: ["vehicle-utilization"] });
+      qc.invalidateQueries({ queryKey: ["overdue-maintenance"] });
+    },
+  });
+}
+
+/**
+ * Soft-delete van een onderhoudsregel. Blijft bewaard voor de 7-jaar
+ * bewaarplicht op onderhoudsfacturen.
+ */
+export function useDeleteMaintenance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; vehicleId: string }) => {
+      const { error } = await supabase
+        .from("vehicle_maintenance")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["vehicle-maintenance", vars.vehicleId] });
+      qc.invalidateQueries({ queryKey: ["overdue-maintenance"] });
     },
   });
 }

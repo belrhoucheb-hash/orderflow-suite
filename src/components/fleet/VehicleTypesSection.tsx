@@ -10,6 +10,16 @@ import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { QueryError } from "@/components/QueryError";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 interface VehicleTypeRow {
@@ -34,6 +44,7 @@ export function VehicleTypesSection() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogInitial, setDialogInitial] = useState<Partial<VehicleTypeFormValues> | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<VehicleTypeRow | null>(null);
 
   const { data: vehicleTypes = [], isLoading, isError, refetch } = useQuery<VehicleTypeRow[]>({
     queryKey: ["settings-vehicle-types"],
@@ -100,8 +111,11 @@ export function VehicleTypesSection() {
       queryClient.invalidateQueries({ queryKey: ["settings-vehicle-types"] });
       toast.success("Verwijderd", { description: "Voertuigtype succesvol verwijderd." });
     },
-    onError: () => {
-      toast.error("Fout", { description: "Kon voertuigtype niet verwijderen." });
+    onError: (err: Error) => {
+      const msg = err.message?.toLowerCase().includes("foreign key") || err.message?.toLowerCase().includes("violates")
+        ? "Dit type is nog gekoppeld aan voertuigen of tarieven en kan niet verwijderd worden."
+        : err.message || "Kon voertuigtype niet verwijderen.";
+      toast.error("Fout", { description: msg });
     },
   });
 
@@ -233,7 +247,7 @@ export function VehicleTypesSection() {
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => deleteMutation.mutate(vt.id)}
+                            onClick={() => setPendingDelete(vt)}
                             aria-label="Verwijderen"
                           >
                             <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -248,6 +262,36 @@ export function VehicleTypesSection() {
           </div>
         </div>
       )}
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Voertuigtype verwijderen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete
+                ? `Type "${pendingDelete.name}" wordt permanent verwijderd. Dit kan alleen als er geen voertuigen en tarieven aan dit type hangen.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const vt = pendingDelete;
+                if (!vt) return;
+                setPendingDelete(null);
+                deleteMutation.mutate(vt.id);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }
