@@ -99,7 +99,18 @@ interface FormState {
   personnelNumber: string;
   // Certs
   selectedCerts: string[];
+  // Werkzaamheden (vrije tags: klant, voertuig, certificering)
+  workTypes: string[];
 }
+
+const WORK_TYPE_OPTIONS: string[] = [
+  "Boxen",
+  "Hoya",
+  "ADR",
+  "Kleine bus",
+  "Bakbus",
+  "DAF",
+];
 
 const INITIAL: FormState = {
   name: "",
@@ -129,6 +140,7 @@ const INITIAL: FormState = {
   iban: "",
   personnelNumber: "",
   selectedCerts: [],
+  workTypes: [],
 };
 
 function parseDate(value: string | null | undefined): Date | undefined {
@@ -170,6 +182,7 @@ function toFormState(driver: Driver): FormState {
     iban: driver.iban ?? "",
     personnelNumber: driver.personnel_number ?? "",
     selectedCerts: driver.certifications ?? [],
+    workTypes: driver.work_types ?? [],
   };
 }
 
@@ -309,6 +322,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       contract_hours_per_week: parsed.data.contract_hours_per_week ?? null,
       employment_type: parsed.data.employment_type,
       certifications: parsed.data.certifications,
+      work_types: form.workTypes,
       emergency_contact_name: parsed.data.emergency_contact_name || null,
       emergency_contact_relation:
         (parsed.data.emergency_contact_relation as string | null) || null,
@@ -738,6 +752,38 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                     </div>
                   </div>
                 )}
+
+                <div className="pt-3 border-t border-border/40 space-y-2">
+                  <Label>Werkzaamheden</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Vink aan wat deze chauffeur mag of kan uitvoeren.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {WORK_TYPE_OPTIONS.map((wt) => {
+                      const checked = form.workTypes.includes(wt);
+                      return (
+                        <label
+                          key={wt}
+                          className="flex items-center gap-2 rounded-xl border border-border/40 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) => {
+                              const on = v === true;
+                              setField(
+                                "workTypes",
+                                on
+                                  ? [...form.workTypes, wt]
+                                  : form.workTypes.filter((x) => x !== wt),
+                              );
+                            }}
+                          />
+                          <span>{wt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </TabsContent>
 
               {/* ────── Administratie ────── */}

@@ -17,6 +17,7 @@ export interface Driver {
   legitimation_expiry_date: string | null;
   code95_expiry_date: string | null;
   certifications: string[];
+  work_types: string[];
   status: string;
   current_vehicle_id: string | null;
   is_active: boolean;
