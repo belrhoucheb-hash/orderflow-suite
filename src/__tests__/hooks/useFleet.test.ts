@@ -81,6 +81,7 @@ describe("useFleetVehicles", () => {
     }];
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: dbData, error: null }),
     }));
 
@@ -99,6 +100,7 @@ describe("useFleetVehicles", () => {
     const dbData = [{ id: "uuid2", code: "V02", name: "T", plate: "X", type: "t", features: null, status: null, is_active: true }];
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: dbData, error: null }),
     }));
 
@@ -125,6 +127,7 @@ describe("useVehicleById", () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: dbVehicle, error: null }),
     }));
 
@@ -148,6 +151,7 @@ describe("useVehicleDocuments", () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: docs, error: null }),
     }));
 
@@ -170,6 +174,7 @@ describe("useVehicleMaintenance", () => {
     mockFrom.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: records, error: null }),
     }));
 
