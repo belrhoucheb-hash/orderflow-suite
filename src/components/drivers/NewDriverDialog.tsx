@@ -987,64 +987,75 @@ function DatePickerButton({
   defaultMonth?: Date;
 }) {
   const [text, setText] = useState(value ? format(value, "dd-MM-yyyy") : "");
+  const [parseError, setParseError] = useState(false);
 
   // Houd de tekst in sync als de waarde van buiten verandert (bijv. via
   // de kalenderselectie of als het formulier herlaadt).
   useEffect(() => {
     setText(value ? format(value, "dd-MM-yyyy") : "");
+    setParseError(false);
   }, [value]);
 
   const commit = () => {
     const trimmed = text.trim();
     if (trimmed === "") {
+      setParseError(false);
       onSelect(undefined);
       return;
     }
     const parsed = parseDutchDate(trimmed);
     if (parsed) {
+      setParseError(false);
       onSelect(parsed);
     } else {
-      // Ongeldige invoer, zet terug naar de laatst geldige waarde.
-      setText(value ? format(value, "dd-MM-yyyy") : "");
+      // Ongeldige invoer: melden en tekst behouden zodat de gebruiker
+      // kan corrigeren.
+      setParseError(true);
     }
   };
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <div
-        className={cn(
-          "flex h-10 w-full items-center gap-2 rounded-xl border px-3 py-2 text-sm",
-          "border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--card))] text-foreground",
-          "focus-within:border-[hsl(var(--gold)/0.6)] focus-within:ring-2 focus-within:ring-[hsl(var(--gold)/0.4)]",
-        )}
-      >
-        <input
-          id={id}
-          type="text"
-          inputMode="numeric"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commit();
-              (e.currentTarget as HTMLInputElement).blur();
-            }
-          }}
-          placeholder="dd-mm-jjjj"
-          className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
-        />
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-label="Open kalender"
-            className="text-[hsl(var(--gold-deep))] hover:text-[hsl(var(--gold-deep))]"
-          >
-            <CalendarIcon className="h-4 w-4" />
-          </button>
-        </PopoverTrigger>
-      </div>
+    <div className="space-y-1">
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <div
+          className={cn(
+            "flex h-10 w-full items-center gap-2 rounded-xl border px-3 py-2 text-sm",
+            "bg-[hsl(var(--card))] text-foreground",
+            parseError
+              ? "border-destructive focus-within:border-destructive focus-within:ring-2 focus-within:ring-destructive/40"
+              : "border-[hsl(var(--gold)/0.25)] focus-within:border-[hsl(var(--gold)/0.6)] focus-within:ring-2 focus-within:ring-[hsl(var(--gold)/0.4)]",
+          )}
+        >
+          <input
+            id={id}
+            type="text"
+            inputMode="numeric"
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (parseError) setParseError(false);
+            }}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+                (e.currentTarget as HTMLInputElement).blur();
+              }
+            }}
+            placeholder="dd-mm-jjjj"
+            className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+          />
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="Open kalender"
+              className="text-[hsl(var(--gold-deep))] hover:text-[hsl(var(--gold-deep))]"
+            >
+              <CalendarIcon className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+        </div>
       <PopoverContent
         className="w-auto p-0 rounded-xl border-[hsl(var(--gold)/0.25)] shadow-lg"
         align="start"
@@ -1064,7 +1075,13 @@ function DatePickerButton({
           initialFocus
         />
       </PopoverContent>
-    </Popover>
+      </Popover>
+      {parseError && (
+        <p className="text-xs text-destructive">
+          Ongeldige datum, gebruik dd-mm-jjjj (bijv. 19-03-1994).
+        </p>
+      )}
+    </div>
   );
 }
 
