@@ -4,7 +4,7 @@ import { Plus, Truck, Search, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useFleetVehicles, useVehicleUtilization, useUpcomingMaintenance, useVehicleDriverConsistency, type Vehicle } from "@/hooks/useFleet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
@@ -63,7 +63,6 @@ export default function Fleet() {
   };
 
   const [activeTab, setActiveTab] = useState("voertuigen");
-  const [section, setSection] = useState<"lijst" | "voertuigcheck">("lijst");
 
   const overdueCount = overdueMaintenance
     ? new Set(overdueMaintenance.map((m) => m.vehicle_id)).size
@@ -77,7 +76,7 @@ export default function Fleet() {
             title="Vloot"
             subtitle={`${vehicles?.length ?? 0} voertuigen, ${vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar`}
             actions={
-              section === "lijst" && activeTab === "voertuigen" ? (
+              activeTab === "voertuigen" ? (
                 <button
                   type="button"
                   onClick={() => setShowNewDialog(true)}
@@ -92,17 +91,18 @@ export default function Fleet() {
 
           <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
             {[
-              { value: "lijst" as const, label: "Lijst" },
-              { value: "voertuigcheck" as const, label: "Voertuigcheck" },
+              { value: "voertuigen", label: "Voertuigen" },
+              { value: "types", label: "Types" },
+              { value: "voertuigcheck", label: "Voertuigcheck" },
             ].map((t) => (
               <button
                 key={t.value}
                 type="button"
-                onClick={() => setSection(t.value)}
-                aria-pressed={section === t.value}
+                onClick={() => setActiveTab(t.value)}
+                aria-pressed={activeTab === t.value}
                 className={cn(
                   "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
-                  section === t.value
+                  activeTab === t.value
                     ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
                     : "text-muted-foreground/70 hover:text-foreground",
                 )}
@@ -113,16 +113,10 @@ export default function Fleet() {
             ))}
           </div>
 
-          {section === "lijst" && (
-          <TabsList>
-            <TabsTrigger value="voertuigen">Voertuigen</TabsTrigger>
-            <TabsTrigger value="types">Types</TabsTrigger>
-          </TabsList>
-          )}
+          <TabsContent value="voertuigcheck" className="mt-0">
+            <VoertuigcheckHistorie />
+          </TabsContent>
 
-          {section === "voertuigcheck" && <VoertuigcheckHistorie />}
-
-          {section === "lijst" && (
           <>
           <TabsContent value="voertuigen" className="space-y-4 mt-0">
             {overdueCount > 0 && (
@@ -299,7 +293,6 @@ export default function Fleet() {
             <VehicleTypesSection />
           </TabsContent>
           </>
-          )}
         </div>
       </Tabs>
 
