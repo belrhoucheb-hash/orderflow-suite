@@ -39,14 +39,50 @@ const LANGUAGE_OPTIONS = [
   { value: "fr", label: "Français" },
 ];
 
-const TAB_TRIGGER_CLASS =
-  "rounded-none border-b-2 border-transparent bg-transparent shadow-none data-[state=active]:border-[hsl(var(--gold-deep))] data-[state=active]:bg-transparent data-[state=active]:text-[hsl(var(--gold-deep))] data-[state=active]:shadow-none px-3 py-2.5 text-[12px] font-medium tracking-tight text-muted-foreground hover:text-[hsl(var(--gold-deep))] transition-colors whitespace-nowrap";
-
 const LUXE_ICON_TILE =
   "h-10 w-10 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.3)]";
 const LUXE_ICON_TILE_STYLE = {
   background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.25))",
 } as const;
+
+interface NavItem {
+  value: string;
+  label: string;
+}
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: "Basis",
+    items: [
+      { value: "algemeen", label: "Algemeen" },
+      { value: "branding", label: "Branding" },
+      { value: "notificaties", label: "Notificaties" },
+    ],
+  },
+  {
+    title: "Communicatie",
+    items: [
+      { value: "sms", label: "SMS" },
+      { value: "inboxen", label: "Inboxen" },
+      { value: "integraties", label: "Integraties" },
+    ],
+  },
+  {
+    title: "Prijzen",
+    items: [
+      { value: "tarieven", label: "Tarieven" },
+      { value: "kosten", label: "Kosten" },
+    ],
+  },
+  {
+    title: "Data",
+    items: [{ value: "stamgegevens", label: "Stamgegevens" }],
+  },
+];
 
 const Settings = () => {
   const location = useLocation();
@@ -239,66 +275,53 @@ const Settings = () => {
       <Tabs
         value={getActiveTab()}
         onValueChange={handleTabChange}
-        className="space-y-6"
+        className="flex-1 flex gap-6 min-h-0"
       >
-        <div className="border-b border-[hsl(var(--gold)/0.2)] pb-px overflow-x-auto">
-          <TabsList className="bg-transparent h-auto w-full justify-start gap-0 p-0">
-            <TabsTrigger
-              value="algemeen"
-              className={TAB_TRIGGER_CLASS}
-            >
-              {t('pages.settings.tabs.general')}
-            </TabsTrigger>
-            <TabsTrigger
-              value="stamgegevens"
-              className={TAB_TRIGGER_CLASS}
-            >
-              {t('pages.settings.tabs.masterData')}
-            </TabsTrigger>
-            <TabsTrigger
-              value="branding"
-              className={TAB_TRIGGER_CLASS}
-            >
-              {t('pages.settings.tabs.branding')}
-            </TabsTrigger>
-            <TabsTrigger
-              value="notificaties"
-              className={TAB_TRIGGER_CLASS}
-            >
-              {t('pages.settings.tabs.notifications')}
-            </TabsTrigger>
-            <TabsTrigger
-              value="sms"
-              className={TAB_TRIGGER_CLASS}
-            >
-              {t('pages.settings.tabs.sms')}
-            </TabsTrigger>
-            <TabsTrigger
-              value="integraties"
-              className={TAB_TRIGGER_CLASS}
-            >
-              {t('pages.settings.tabs.integrations')}
-            </TabsTrigger>
-            <TabsTrigger
-              value="inboxen"
-              className={TAB_TRIGGER_CLASS}
-            >
-              Inboxen
-            </TabsTrigger>
-            <TabsTrigger
-              value="tarieven"
-              className={TAB_TRIGGER_CLASS}
-            >
-              Tarieven
-            </TabsTrigger>
-            <TabsTrigger
-              value="kosten"
-              className={TAB_TRIGGER_CLASS}
-            >
-              Kosten
-            </TabsTrigger>
-          </TabsList>
-        </div>
+        {/* Verborgen TabsList is nodig zodat Radix de controlled value + TabsContent correct orchestreert. */}
+        <TabsList className="sr-only" aria-hidden="true">
+          {NAV_GROUPS.flatMap((g) => g.items).map((item) => (
+            <TabsTrigger key={item.value} value={item.value}>{item.label}</TabsTrigger>
+          ))}
+        </TabsList>
+
+        {/* Sidebar-navigatie */}
+        <aside className="w-56 shrink-0 border-r border-[hsl(var(--gold)/0.15)] pr-4 py-1 overflow-y-auto">
+          <nav className="space-y-5">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.title}>
+                <p className="text-[10px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.18em] mb-2 px-3">
+                  {group.title}
+                </p>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const active = getActiveTab() === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => handleTabChange(item.value)}
+                        className={cn(
+                          "w-full text-left px-3 py-1.5 rounded-md text-[13px] transition-colors relative",
+                          active
+                            ? "bg-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))] font-medium"
+                            : "text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.25)] hover:text-foreground"
+                        )}
+                      >
+                        {active && (
+                          <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-[hsl(var(--gold-deep))]" aria-hidden="true" />
+                        )}
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+        </aside>
+
+        {/* Content-area */}
+        <div className="flex-1 min-w-0 pb-6">
 
         <TabsContent value="algemeen" className="space-y-6 outline-none">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -826,6 +849,7 @@ const Settings = () => {
           <FuelPriceSettings />
           <CostTypeSettings />
         </TabsContent>
+        </div>
       </Tabs>
     </div>
   );

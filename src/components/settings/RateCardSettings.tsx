@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Save, ChevronDown, ChevronUp, Settings2 } from "lucide-react";
+import { Plus, Trash2, Save, ChevronDown, ChevronUp, Settings2, HelpCircle, Coins } from "lucide-react";
 import { useRateCards, useCreateRateCard, useUpdateRateCard, useDeleteRateCard, useUpsertRateRules } from "@/hooks/useRateCards";
 import { useTenant } from "@/contexts/TenantContext";
 import type { RuleType } from "@/types/rateModels";
@@ -268,18 +269,23 @@ export function RateCardSettings() {
                         value={rule.amount}
                         onChange={(e) => handleRuleChange(card.id, idx, "amount", e.target.value)}
                         placeholder="0,00"
-                        className="h-9"
+                        className="h-9 tabular-nums text-right"
                       />
                     </div>
                     <div className="col-span-2">
-                      {idx === 0 && <Label className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5 block">Min. bedrag</Label>}
+                      {idx === 0 && (
+                        <LabelWithHelp
+                          label="Min. bedrag"
+                          help="Minimum tariefbedrag per rit. Als het berekende bedrag lager uitkomt, wordt dit minimum in rekening gebracht."
+                        />
+                      )}
                       <Input
                         type="number"
                         step="0.01"
                         value={rule.min_amount}
                         onChange={(e) => handleRuleChange(card.id, idx, "min_amount", e.target.value)}
                         placeholder="Geen"
-                        className="h-9"
+                        className="h-9 tabular-nums text-right"
                       />
                     </div>
                     <div className="col-span-2">
@@ -292,7 +298,12 @@ export function RateCardSettings() {
                       />
                     </div>
                     <div className="col-span-2">
-                      {idx === 0 && <Label className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5 block">Condities</Label>}
+                      {idx === 0 && (
+                        <LabelWithHelp
+                          label="Condities"
+                          help="Extra filters die bepalen wanneer deze regel van toepassing is (bv. wel/geen diesel inbegrepen, bepaald doel). Klik om te bewerken."
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() => setConditionsEdit({ cardId: card.id, index: idx })}
@@ -351,9 +362,18 @@ export function RateCardSettings() {
         ))}
 
         {defaultCards.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            Geen standaard tariefkaarten. Maak er een aan met het formulier hierboven.
-          </p>
+          <div className="flex flex-col items-center justify-center text-center py-12 px-4 rounded-lg border border-dashed border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--gold-soft)/0.12)]">
+            <div
+              className="h-12 w-12 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.3)] mb-3"
+              style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.25))" }}
+            >
+              <Coins className="h-5 w-5 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+            </div>
+            <p className="text-sm font-semibold text-foreground">Nog geen standaard-tariefkaart</p>
+            <p className="mt-1 text-xs text-muted-foreground max-w-sm">
+              Een standaard-tariefkaart gebruiken we als er geen klant-specifiek tarief is. Geef hem een naam hierboven en voeg de eerste regel toe.
+            </p>
+          </div>
         )}
       </div>
 
@@ -503,6 +523,26 @@ function ConditionsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function LabelWithHelp({ label, help }: { label: string; help: string }) {
+  return (
+    <div className="flex items-center gap-1 mb-1.5">
+      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</Label>
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" aria-label={`Uitleg over ${label}`} className="text-muted-foreground hover:text-[hsl(var(--gold-deep))] transition-colors">
+              <HelpCircle className="h-3 w-3" strokeWidth={1.5} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+            {help}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
   );
 }
 
