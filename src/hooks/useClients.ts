@@ -20,6 +20,7 @@ export interface Client {
   kvk_number: string | null;
   btw_number: string | null;
   debtor_number: string | null;
+  default_vat_rate: number;
   payment_terms: number | null;
   is_active: boolean;
   created_at: string;

@@ -14,6 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useCreateClient,
   useUpdateClient,
   useClientDuplicateCheck,
@@ -50,6 +57,8 @@ interface FormState {
   kvk_number: string;
   btw_number: string;
   debtor_number: string;
+  default_vat_rate: number;
+  payment_terms: number;
 
   main_address: AddressValue;
 
@@ -73,6 +82,8 @@ const INITIAL: FormState = {
   kvk_number: "",
   btw_number: "",
   debtor_number: "",
+  default_vat_rate: 21,
+  payment_terms: 30,
   main_address: { ...EMPTY_ADDRESS },
   billing_same_as_main: true,
   billing_email: "",
@@ -106,6 +117,8 @@ function formFromClient(c: Client): FormState {
     kvk_number: c.kvk_number ?? "",
     btw_number: c.btw_number ?? "",
     debtor_number: c.debtor_number ?? "",
+    default_vat_rate: c.default_vat_rate ?? 21,
+    payment_terms: c.payment_terms ?? 30,
     main_address: addressFromClient(c, ""),
     billing_same_as_main: c.billing_same_as_main ?? true,
     billing_email: c.billing_email ?? "",
@@ -286,7 +299,8 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
       kvk_number: form.kvk_number,
       btw_number: form.btw_number,
       debtor_number: form.debtor_number,
-      payment_terms: 30,
+      default_vat_rate: form.default_vat_rate,
+      payment_terms: form.payment_terms,
       main_address: form.main_address,
       billing_same_as_main: form.billing_same_as_main,
       billing_email: form.billing_email,
@@ -319,6 +333,8 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
         kvk_number: parsed.data.kvk_number || null,
         btw_number: parsed.data.btw_number || null,
         debtor_number: parsed.data.debtor_number || null,
+        default_vat_rate: parsed.data.default_vat_rate,
+        payment_terms: parsed.data.payment_terms,
 
         address: composeAddressString(main) || null,
         zipcode: main.zipcode || null,
@@ -504,6 +520,40 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
           )}
 
           <Section title="Facturatie">
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <Label>Standaard BTW</Label>
+                <Select
+                  value={String(form.default_vat_rate)}
+                  onValueChange={(v) =>
+                    setForm((prev) => ({ ...prev, default_vat_rate: Number(v) }))
+                  }
+                >
+                  <SelectTrigger className="field-luxe">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0% (verlegd / intracommunautair)</SelectItem>
+                    <SelectItem value="21">21% (standaard)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Betalingstermijn (dagen)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.payment_terms}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      payment_terms: e.target.value === "" ? 0 : Number(e.target.value),
+                    }))
+                  }
+                  className="field-luxe"
+                />
+              </div>
+            </div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-foreground">Factuuradres = hoofdadres</span>
               <Switch

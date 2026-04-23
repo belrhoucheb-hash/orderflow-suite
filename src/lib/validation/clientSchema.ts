@@ -32,6 +32,11 @@ export const clientInputSchema = z
     kvk_number: optionalText,
     btw_number: optionalText,
     debtor_number: optionalText,
+    default_vat_rate: z
+      .number()
+      .min(0, "BTW kan niet negatief zijn")
+      .max(100, "BTW kan niet boven 100% liggen")
+      .default(21),
     payment_terms: z
       .number()
       .int()
