@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { nl } from "date-fns/locale";
-import { CalendarIcon, AlertTriangle } from "lucide-react";
+import { CalendarIcon, AlertTriangle, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -195,6 +195,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   const [hireDateOpen, setHireDateOpen] = useState(false);
   const [terminationDateOpen, setTerminationDateOpen] = useState(false);
   const [certExpiryDates, setCertExpiryDates] = useState<Record<string, string>>({});
+  const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -398,11 +399,35 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
 
   return (
     <Dialog open={open} onOpenChange={requestClose}>
-      <DialogContent className="sm:max-w-[720px] max-h-[92vh] flex flex-col rounded-2xl p-0 gap-0">
+      <DialogContent
+        className={cn(
+          "flex flex-col rounded-2xl p-0 gap-0",
+          maximized
+            ? "sm:max-w-[min(1400px,96vw)] w-[96vw] h-[94vh] max-h-[94vh]"
+            : "sm:max-w-[720px] max-h-[92vh]",
+        )}
+      >
         <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/40">
-          <DialogTitle className="font-display text-xl">
-            {driver ? "Chauffeur bewerken" : "Nieuwe chauffeur"}
-          </DialogTitle>
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle className="font-display text-xl">
+              {driver ? "Chauffeur bewerken" : "Nieuwe chauffeur"}
+            </DialogTitle>
+            <button
+              type="button"
+              onClick={() => setMaximized((v) => !v)}
+              aria-label={maximized ? "Scherm verkleinen" : "Groot scherm"}
+              title={maximized ? "Verkleinen" : "Vergroten"}
+              // Zit naast de ingebouwde sluit-X (absolute top-4 right-4),
+              // daarom mr-8 zodat ze elkaar niet overlappen.
+              className="mr-8 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              {maximized ? (
+                <Minimize2 className="h-4 w-4" strokeWidth={1.5} />
+              ) : (
+                <Maximize2 className="h-4 w-4" strokeWidth={1.5} />
+              )}
+            </button>
+          </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
