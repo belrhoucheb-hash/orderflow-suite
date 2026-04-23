@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { nl } from "date-fns/locale";
-import { CalendarIcon, AlertTriangle, Maximize2, Minimize2 } from "lucide-react";
+import { CalendarIcon, AlertTriangle, Maximize2, Minimize2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,7 +46,7 @@ import {
 import { useFleetVehicles } from "@/hooks/useFleet";
 import { useDriverCertifications } from "@/hooks/useDriverCertifications";
 import { DriverCertificateRecordsSection } from "@/components/drivers/DriverCertificateRecordsSection";
-import { driverSchema, daysUntil } from "@/lib/validation/driverSchema";
+import { driverSchema, daysUntil, maskBsn } from "@/lib/validation/driverSchema";
 
 interface NewDriverDialogProps {
   open: boolean;
@@ -209,6 +209,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   const [terminationDateOpen, setTerminationDateOpen] = useState(false);
   const [certExpiryDates, setCertExpiryDates] = useState<Record<string, string>>({});
   const [maximized, setMaximized] = useState(false);
+  const [showBsn, setShowBsn] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -218,6 +219,9 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
     setErrors({});
     setTab("basis");
     setPendingClose(false);
+    // Gemaskeerd starten wanneer een bestaande driver opengeklapt wordt,
+    // zichtbaar bij aanmaken zodat de gebruiker kan typen.
+    setShowBsn(!driver);
   }, [driver, open]);
 
   const isDirty = useMemo(
@@ -806,15 +810,37 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                     />
                   </FieldWithError>
                   <FieldWithError label="BSN" id="bsn" error={errors.bsn}>
-                    <Input
-                      id="bsn"
-                      inputMode="numeric"
-                      value={form.bsn}
-                      onChange={(e) => setField("bsn", e.target.value)}
-                      placeholder="9 cijfers"
-                      maxLength={11}
-                      className="rounded-xl border-border/50 font-mono"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="bsn"
+                        inputMode="numeric"
+                        value={showBsn ? form.bsn : maskBsn(form.bsn)}
+                        onChange={(e) => {
+                          if (!showBsn) setShowBsn(true);
+                          setField("bsn", e.target.value);
+                        }}
+                        onFocus={() => {
+                          if (isEdit && form.bsn && !showBsn) setShowBsn(true);
+                        }}
+                        placeholder="9 cijfers"
+                        maxLength={11}
+                        className="rounded-xl border-border/50 font-mono pr-10"
+                      />
+                      {isEdit && form.bsn && (
+                        <button
+                          type="button"
+                          onClick={() => setShowBsn((v) => !v)}
+                          aria-label={showBsn ? "BSN verbergen" : "BSN tonen"}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {showBsn ? (
+                            <EyeOff className="h-4 w-4" strokeWidth={1.5} />
+                          ) : (
+                            <Eye className="h-4 w-4" strokeWidth={1.5} />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </FieldWithError>
                   <div className="col-span-2">
                     <FieldWithError label="IBAN" id="iban" error={errors.iban}>

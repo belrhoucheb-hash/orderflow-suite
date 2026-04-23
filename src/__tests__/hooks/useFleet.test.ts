@@ -259,7 +259,7 @@ describe("useUpcomingMaintenance", () => {
 describe("useCreateDocument", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("inserts a document", async () => {
+  it("inserts a document without file", async () => {
     mockFrom.mockImplementation(() => ({
       insert: vi.fn().mockResolvedValue({ error: null }),
     }));
@@ -267,7 +267,7 @@ describe("useCreateDocument", () => {
     const { result } = renderHook(() => useCreateDocument(), { wrapper: createWrapper() });
 
     await act(async () => {
-      result.current.mutate({ vehicle_id: "v1", doc_type: "APK" });
+      result.current.mutate({ vehicle_id: "v1", doc_type: "APK", file: null });
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));

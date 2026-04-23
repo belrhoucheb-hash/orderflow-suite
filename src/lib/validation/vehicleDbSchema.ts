@@ -39,6 +39,8 @@ export const vehicleDocumentRowSchema = z.object({
   id: z.string(),
   vehicle_id: z.string().nullish(),
   doc_type: z.string(),
+  document_name: z.string().nullish(),
+  issued_date: isoDate.nullish(),
   expiry_date: isoDate.nullish(),
   file_url: z.string().nullish(),
   notes: z.string().nullish(),

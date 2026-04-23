@@ -4,17 +4,21 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
-const mockDeleteMutateAsync = vi.fn().mockResolvedValue(undefined);
+const mockDeleteMutateAsync = vi.fn().mockResolvedValue({ removedFiles: 0 });
+const mockArchiveMutateAsync = vi.fn().mockResolvedValue(undefined);
+const mockReactivateMutateAsync = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@/hooks/useDrivers", () => ({
   useDrivers: () => ({
     data: [
-      { id: "d1", name: "Jan Jansen", email: "jan@test.nl", phone: "0612345678", status: "beschikbaar", license_number: "RB123456", certifications: ["adr"], avatar_url: null },
-      { id: "d2", name: "Piet Pietersen", email: "piet@test.nl", phone: "0687654321", status: "onderweg", license_number: "RB789012", certifications: ["koeling"], avatar_url: null },
-      { id: "d3", name: "Klaas Kansen", email: "klaas@test.nl", phone: null, status: "ziek", license_number: null, certifications: [], avatar_url: null },
+      { id: "d1", name: "Jan Jansen", email: "jan@test.nl", phone: "0612345678", status: "beschikbaar", license_number: "RB123456", certifications: ["adr"], avatar_url: null, is_active: true },
+      { id: "d2", name: "Piet Pietersen", email: "piet@test.nl", phone: "0687654321", status: "onderweg", license_number: "RB789012", certifications: ["koeling"], avatar_url: null, is_active: true },
+      { id: "d3", name: "Klaas Kansen", email: "klaas@test.nl", phone: null, status: "ziek", license_number: null, certifications: [], avatar_url: null, is_active: true },
     ],
     isLoading: false, isError: false, refetch: vi.fn(),
     deleteDriver: { mutateAsync: mockDeleteMutateAsync },
+    archiveDriver: { mutateAsync: mockArchiveMutateAsync },
+    reactivateDriver: { mutateAsync: mockReactivateMutateAsync },
   }),
 }));
 
@@ -64,7 +68,7 @@ describe("Chauffeurs", () => {
 
   it("shows driver stats (stats useMemo)", () => {
     renderChauffeurs();
-    expect(screen.getByText(/3 chauffeurs/)).toBeInTheDocument();
+    expect(screen.getByText(/3 actief/)).toBeInTheDocument();
   });
 
   it("displays driver names", () => {
@@ -154,39 +158,55 @@ describe("Chauffeurs", () => {
     expect(document.body.textContent).toBeTruthy();
   });
 
-  it("triggers delete confirmation (handleDelete)", async () => {
+  it("archiveert chauffeur via dropdown + dialogbevestiging", async () => {
     const user = userEvent.setup();
     renderChauffeurs();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const dropdownTriggers = screen.getAllByRole("button");
     const moreBtn = dropdownTriggers.find(btn => btn.querySelector('.lucide-more-horizontal'));
     if (moreBtn) {
       await user.click(moreBtn);
-      const deleteOption = await screen.findByText(/Verwijderen|Delete/i);
-      if (deleteOption) {
-        await user.click(deleteOption);
-        await waitFor(() => {
-          expect(mockDeleteMutateAsync).toHaveBeenCalled();
-        });
-      }
+      const archiveOption = await screen.findByText(/^Archiveren$/);
+      await user.click(archiveOption);
+      const confirmBtn = await screen.findByRole("button", { name: /^Archiveren$/ });
+      await user.click(confirmBtn);
+      await waitFor(() => {
+        expect(mockArchiveMutateAsync).toHaveBeenCalled();
+      });
+      expect(mockDeleteMutateAsync).not.toHaveBeenCalled();
     }
     expect(document.body.textContent).toBeTruthy();
   });
 
-  // ── handleDelete with cancel ──
-  it("cancels delete when user declines confirm (handleDelete)", async () => {
+  it("annuleert archiveer-dialog zonder mutation", async () => {
     const user = userEvent.setup();
     renderChauffeurs();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     const dropdownTriggers = screen.getAllByRole("button");
     const moreBtn = dropdownTriggers.find(btn => btn.querySelector('.lucide-more-horizontal'));
     if (moreBtn) {
       await user.click(moreBtn);
-      const deleteOption = await screen.findByText(/Verwijderen|Delete/i);
-      if (deleteOption) {
-        await user.click(deleteOption);
-        expect(mockDeleteMutateAsync).not.toHaveBeenCalled();
-      }
+      const archiveOption = await screen.findByText(/^Archiveren$/);
+      await user.click(archiveOption);
+      const cancelBtn = await screen.findByRole("button", { name: /Annuleren/i });
+      await user.click(cancelBtn);
+      expect(mockArchiveMutateAsync).not.toHaveBeenCalled();
+    }
+    expect(document.body.textContent).toBeTruthy();
+  });
+
+  it("hard-delete via dropdown + dialogbevestiging", async () => {
+    const user = userEvent.setup();
+    renderChauffeurs();
+    const dropdownTriggers = screen.getAllByRole("button");
+    const moreBtn = dropdownTriggers.find(btn => btn.querySelector('.lucide-more-horizontal'));
+    if (moreBtn) {
+      await user.click(moreBtn);
+      const deleteOption = await screen.findByText(/Hard verwijderen/i);
+      await user.click(deleteOption);
+      const confirmBtn = await screen.findByRole("button", { name: /Permanent verwijderen/i });
+      await user.click(confirmBtn);
+      await waitFor(() => {
+        expect(mockDeleteMutateAsync).toHaveBeenCalled();
+      });
     }
     expect(document.body.textContent).toBeTruthy();
   });
@@ -207,6 +227,15 @@ describe("Chauffeurs", () => {
   it("shows correct beschikbaar count in stats", () => {
     renderChauffeurs();
     expect(screen.getByText(/1 beschikbaar/)).toBeInTheDocument();
+  });
+
+  // ── is_active filter default ──
+  it("toont default alleen actieve chauffeurs", () => {
+    renderChauffeurs();
+    // Alle 3 mock-drivers staan op is_active: true, dus zichtbaar.
+    expect(screen.getByText("Jan Jansen")).toBeInTheDocument();
+    expect(screen.getByText("Piet Pietersen")).toBeInTheDocument();
+    expect(screen.getByText("Klaas Kansen")).toBeInTheDocument();
   });
 
   // ── close dialog callback ──

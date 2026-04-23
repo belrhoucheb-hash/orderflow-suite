@@ -16,6 +16,8 @@ import {
   Table as TableIcon,
   Download,
   AlertTriangle,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/SearchInput";
@@ -82,6 +84,12 @@ const STATUS_CONFIG: Record<
 
 type ViewMode = "cards" | "table";
 type SortKey = "name" | "status" | "hours" | "expiry";
+type ActiveFilter = "active" | "archived" | "all";
+type PendingAction = { driver: Driver; action: "archive" | "delete" };
+
+function isArchived(d: Driver): boolean {
+  return d.is_active === false;
+}
 
 function initialsOf(name: string): string {
   const clean = name.trim().split(/\s+/);
@@ -104,19 +112,28 @@ function nextExpiry(d: Driver): { iso: string; days: number } | null {
 }
 
 export default function Chauffeurs() {
-  const { data: drivers = [], isLoading, isError, refetch, deleteDriver } = useDrivers();
+  const {
+    data: drivers = [],
+    isLoading,
+    isError,
+    refetch,
+    deleteDriver,
+    archiveDriver,
+    reactivateDriver,
+  } = useDrivers();
   const { data: certifications = [] } = useDriverCertifications();
   const { data: vehicles = [] } = useFleetVehicles();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [certFilter, setCertFilter] = useState("all");
   const [vehicleFilter, setVehicleFilter] = useState("all");
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("active");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [activeTab, setActiveTab] = useState("chauffeurs");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [showDialog, setShowDialog] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<Driver | undefined>(undefined);
-  const [deleteTarget, setDeleteTarget] = useState<Driver | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   const vehicleMap = useMemo(() => {
     const m: Record<string, { name: string; plate: string }> = {};
@@ -152,8 +169,12 @@ export default function Chauffeurs() {
         vehicleFilter === "all" ||
         (vehicleFilter === "none" && !d.current_vehicle_id) ||
         (vehicleFilter === "any" && d.current_vehicle_id);
+      const matchesActive =
+        activeFilter === "all" ||
+        (activeFilter === "active" && !isArchived(d)) ||
+        (activeFilter === "archived" && isArchived(d));
 
-      return matchesSearch && matchesStatus && matchesCert && matchesVehicle;
+      return matchesSearch && matchesStatus && matchesCert && matchesVehicle && matchesActive;
     });
 
     list = [...list].sort((a, b) => {
@@ -177,15 +198,17 @@ export default function Chauffeurs() {
 
   const stats = useMemo(() => {
     let expiring = 0;
-    for (const d of drivers) {
+    const actieven = drivers.filter((d) => !isArchived(d));
+    for (const d of actieven) {
       const e = nextExpiry(d);
       if (e && e.days <= 60) expiring++;
     }
     return {
-      totaal: drivers.length,
-      beschikbaar: drivers.filter((d) => d.status === "beschikbaar").length,
-      onderweg: drivers.filter((d) => d.status === "onderweg").length,
-      afwezig: drivers.filter((d) => d.status === "ziek" || d.status === "rust").length,
+      actief: actieven.length,
+      gearchiveerd: drivers.length - actieven.length,
+      beschikbaar: actieven.filter((d) => d.status === "beschikbaar").length,
+      onderweg: actieven.filter((d) => d.status === "onderweg").length,
+      afwezig: actieven.filter((d) => d.status === "ziek" || d.status === "rust").length,
       verlopend: expiring,
     };
   }, [drivers]);
@@ -200,14 +223,34 @@ export default function Chauffeurs() {
     setShowDialog(true);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
+  const handleReactivate = async (driver: Driver) => {
     try {
-      await deleteDriver.mutateAsync(deleteTarget.id);
-      toast.success(`Chauffeur ${deleteTarget.name} verwijderd`);
-      setDeleteTarget(null);
+      await reactivateDriver.mutateAsync(driver.id);
+      toast.success(`Chauffeur ${driver.name} geheractiveerd`);
     } catch (err: any) {
-      toast.error(err?.message ?? "Fout bij verwijderen");
+      toast.error(err?.message ?? "Fout bij heractiveren");
+    }
+  };
+
+  const confirmAction = async () => {
+    if (!pendingAction) return;
+    const { driver, action } = pendingAction;
+    try {
+      if (action === "archive") {
+        await archiveDriver.mutateAsync(driver.id);
+        toast.success(`Chauffeur ${driver.name} gearchiveerd`);
+      } else {
+        const res = await deleteDriver.mutateAsync(driver.id);
+        const removed = (res as { removedFiles?: number } | undefined)?.removedFiles ?? 0;
+        toast.success(
+          removed > 0
+            ? `Chauffeur ${driver.name} permanent verwijderd, ${removed} bestand${removed === 1 ? "" : "en"} opgeruimd`
+            : `Chauffeur ${driver.name} permanent verwijderd`,
+        );
+      }
+      setPendingAction(null);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Fout bij opslaan");
     }
   };
 
@@ -218,6 +261,7 @@ export default function Chauffeurs() {
       "email",
       "telefoon",
       "status",
+      "actief",
       "voertuig",
       "dienstverband",
       "contracturen",
@@ -231,6 +275,7 @@ export default function Chauffeurs() {
       d.email ?? "",
       d.phone ?? "",
       d.status,
+      isArchived(d) ? "nee" : "ja",
       d.current_vehicle_id ? vehicleMap[d.current_vehicle_id]?.plate ?? "" : "",
       d.employment_type,
       d.contract_hours_per_week?.toString() ?? "",
@@ -260,7 +305,8 @@ export default function Chauffeurs() {
             Chauffeurs
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {stats.totaal} chauffeurs, {stats.beschikbaar} beschikbaar
+            {stats.actief} actief, {stats.beschikbaar} beschikbaar
+            {stats.gearchiveerd > 0 ? `, ${stats.gearchiveerd} gearchiveerd` : ""}
           </p>
         </div>
         {activeTab === "chauffeurs" ? (
@@ -289,7 +335,7 @@ export default function Chauffeurs() {
         <TabsContent value="chauffeurs" className="flex-1 flex flex-col min-h-0 mt-4">
           {/* KPI */}
           <div className="px-4 md:px-6 pb-6 grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <KpiCard label="Totaal" value={stats.totaal} color="text-blue-600" bg="bg-blue-500/8" Icon={Users} />
+            <KpiCard label="Actief" value={stats.actief} color="text-blue-600" bg="bg-blue-500/8" Icon={Users} />
             <KpiCard label="Beschikbaar" value={stats.beschikbaar} color="text-emerald-600" bg="bg-emerald-500/8" Icon={UserCheck} />
             <KpiCard label="Onderweg" value={stats.onderweg} color="text-blue-500" bg="bg-blue-500/8" Icon={Truck} />
             <KpiCard label="Rust of ziek" value={stats.afwezig} color="text-amber-600" bg="bg-amber-500/8" Icon={Bed} />
@@ -344,6 +390,19 @@ export default function Chauffeurs() {
                 <SelectItem value="all">Alle voertuigen</SelectItem>
                 <SelectItem value="any">Met voertuig</SelectItem>
                 <SelectItem value="none">Zonder voertuig</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={activeFilter}
+              onValueChange={(v) => setActiveFilter(v as ActiveFilter)}
+            >
+              <SelectTrigger className="w-[170px] h-10 rounded-xl border-border/50 bg-card/30">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-border/50">
+                <SelectItem value="active">Alleen actief</SelectItem>
+                <SelectItem value="archived">Alleen gearchiveerd</SelectItem>
+                <SelectItem value="all">Actief en gearchiveerd</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
@@ -427,7 +486,9 @@ export default function Chauffeurs() {
                 vehicleMap={vehicleMap}
                 certLabels={certLabels}
                 onEdit={handleEdit}
-                onDelete={(d) => setDeleteTarget(d)}
+                onArchive={(d) => setPendingAction({ driver: d, action: "archive" })}
+                onReactivate={handleReactivate}
+                onDelete={(d) => setPendingAction({ driver: d, action: "delete" })}
               />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -438,7 +499,9 @@ export default function Chauffeurs() {
                     vehicleMap={vehicleMap}
                     certLabels={certLabels}
                     onEdit={() => handleEdit(d)}
-                    onDelete={() => setDeleteTarget(d)}
+                    onArchive={() => setPendingAction({ driver: d, action: "archive" })}
+                    onReactivate={() => handleReactivate(d)}
+                    onDelete={() => setPendingAction({ driver: d, action: "delete" })}
                   />
                 ))}
               </div>
@@ -457,21 +520,35 @@ export default function Chauffeurs() {
       <NewDriverDialog open={showDialog} onOpenChange={setShowDialog} driver={selectedDriver} />
 
       <AlertDialog
-        open={!!deleteTarget}
+        open={!!pendingAction}
         onOpenChange={(o) => {
-          if (!o) setDeleteTarget(null);
+          if (!o) setPendingAction(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Chauffeur verwijderen?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pendingAction?.action === "archive"
+                ? "Chauffeur archiveren?"
+                : "Chauffeur permanent verwijderen?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget ? (
-                <>
-                  <span className="font-medium">{deleteTarget.name}</span> wordt uit het systeem
-                  verwijderd. Gekoppelde uren en historie blijven bestaan, maar toekomstige
-                  koppelingen en rapportages worden beïnvloed. Wil je doorgaan?
-                </>
+              {pendingAction ? (
+                pendingAction.action === "archive" ? (
+                  <>
+                    <span className="font-medium">{pendingAction.driver.name}</span> wordt op
+                    inactief gezet, het voertuig wordt ontkoppeld en de chauffeur verdwijnt uit
+                    de standaard lijst. Historie, uren en certificaten blijven bewaard en de
+                    chauffeur kan later heractiveerd worden.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium">{pendingAction.driver.name}</span> wordt
+                    definitief verwijderd. Voertuigchecks, beschikbaarheid, certificaat-records
+                    en alle ge&uuml;ploade documenten worden vernietigd. Dit kan niet ongedaan
+                    gemaakt worden. Overweeg eerst archiveren.
+                  </>
+                )
               ) : (
                 "Weet je het zeker?"
               )}
@@ -480,10 +557,14 @@ export default function Chauffeurs() {
           <AlertDialogFooter>
             <AlertDialogCancel>Annuleren</AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmAction}
+              className={
+                pendingAction?.action === "delete"
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : undefined
+              }
             >
-              Verwijderen
+              {pendingAction?.action === "archive" ? "Archiveren" : "Permanent verwijderen"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -548,17 +629,32 @@ interface DriverCardProps {
   vehicleMap: Record<string, { name: string; plate: string }>;
   certLabels: Record<string, string>;
   onEdit: () => void;
+  onArchive: () => void;
+  onReactivate: () => void;
   onDelete: () => void;
 }
 
-function DriverCard({ driver: d, vehicleMap, certLabels, onEdit, onDelete }: DriverCardProps) {
+function DriverCard({
+  driver: d,
+  vehicleMap,
+  certLabels,
+  onEdit,
+  onArchive,
+  onReactivate,
+  onDelete,
+}: DriverCardProps) {
   const statusCfg = STATUS_CONFIG[d.status] || STATUS_CONFIG.beschikbaar;
   const StatusIcon = statusCfg.Icon;
   const vehicle = d.current_vehicle_id ? vehicleMap[d.current_vehicle_id] : null;
   const expiry = nextExpiry(d);
+  const archived = isArchived(d);
 
   return (
-    <Card className="group hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 border-border/40 overflow-hidden bg-card/50">
+    <Card
+      className={`group hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 border-border/40 overflow-hidden bg-card/50 ${
+        archived ? "opacity-60" : ""
+      }`}
+    >
       <CardContent className="p-0">
         <div className="p-5 space-y-4">
           <div className="flex items-start justify-between">
@@ -568,13 +664,24 @@ function DriverCard({ driver: d, vehicleMap, certLabels, onEdit, onDelete }: Dri
               </div>
               <div>
                 <h3 className="font-semibold text-foreground line-clamp-1">{d.name}</h3>
-                <Badge
-                  variant="outline"
-                  className={`mt-1 h-5 text-xs px-1.5 font-bold uppercase tracking-wider border-none ${statusCfg.className}`}
-                >
-                  <StatusIcon className="h-3 w-3 mr-1" />
-                  {statusCfg.label}
-                </Badge>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  <Badge
+                    variant="outline"
+                    className={`h-5 text-xs px-1.5 font-bold uppercase tracking-wider border-none ${statusCfg.className}`}
+                  >
+                    <StatusIcon className="h-3 w-3 mr-1" />
+                    {statusCfg.label}
+                  </Badge>
+                  {archived && (
+                    <Badge
+                      variant="outline"
+                      className="h-5 text-xs px-1.5 font-bold uppercase tracking-wider border-none bg-muted text-muted-foreground"
+                    >
+                      <Archive className="h-3 w-3 mr-1" />
+                      Gearchiveerd
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
             <DropdownMenu>
@@ -594,11 +701,26 @@ function DriverCard({ driver: d, vehicleMap, certLabels, onEdit, onDelete }: Dri
                 >
                   <Edit2 className="h-3.5 w-3.5" /> Bewerken
                 </DropdownMenuItem>
+                {archived ? (
+                  <DropdownMenuItem
+                    className="gap-2 focus:bg-primary/5 cursor-pointer"
+                    onClick={onReactivate}
+                  >
+                    <ArchiveRestore className="h-3.5 w-3.5" /> Heractiveren
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    className="gap-2 focus:bg-primary/5 cursor-pointer"
+                    onClick={onArchive}
+                  >
+                    <Archive className="h-3.5 w-3.5" /> Archiveren
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   className="gap-2 text-destructive focus:bg-destructive/5 focus:text-destructive cursor-pointer"
                   onClick={onDelete}
                 >
-                  <Trash2 className="h-3.5 w-3.5" /> Verwijderen
+                  <Trash2 className="h-3.5 w-3.5" /> Hard verwijderen
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -673,12 +795,16 @@ function DriversTable({
   vehicleMap,
   certLabels,
   onEdit,
+  onArchive,
+  onReactivate,
   onDelete,
 }: {
   drivers: Driver[];
   vehicleMap: Record<string, { name: string; plate: string }>;
   certLabels: Record<string, string>;
   onEdit: (d: Driver) => void;
+  onArchive: (d: Driver) => void;
+  onReactivate: (d: Driver) => void;
   onDelete: (d: Driver) => void;
 }) {
   return (
@@ -689,6 +815,7 @@ function DriversTable({
             <Th>Naam</Th>
             <Th>Personeelsnr</Th>
             <Th>Status</Th>
+            <Th>Actief</Th>
             <Th>Voertuig</Th>
             <Th>Dienstverband</Th>
             <Th>Uren</Th>
@@ -702,8 +829,9 @@ function DriversTable({
             const statusCfg = STATUS_CONFIG[d.status] ?? STATUS_CONFIG.beschikbaar;
             const vehicle = d.current_vehicle_id ? vehicleMap[d.current_vehicle_id] : null;
             const expiry = nextExpiry(d);
+            const archived = isArchived(d);
             return (
-              <tr key={d.id} className="hover:bg-muted/20">
+              <tr key={d.id} className={`hover:bg-muted/20 ${archived ? "opacity-60" : ""}`}>
                 <Td>
                   <div className="flex items-center gap-2">
                     <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[11px]">
@@ -724,6 +852,15 @@ function DriversTable({
                   >
                     {statusCfg.label}
                   </Badge>
+                </Td>
+                <Td>
+                  {archived ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-wider font-semibold">
+                      Gearchiveerd
+                    </span>
+                  ) : (
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-label="Actief" />
+                  )}
                 </Td>
                 <Td>
                   <span className="font-mono text-xs">{vehicle ? vehicle.plate : "—"}</span>
@@ -781,12 +918,33 @@ function DriversTable({
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
+                    {archived ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => onReactivate(d)}
+                        aria-label={`${d.name} heractiveren`}
+                      >
+                        <ArchiveRestore className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => onArchive(d)}
+                        aria-label={`${d.name} archiveren`}
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/5"
                       onClick={() => onDelete(d)}
-                      aria-label={`${d.name} verwijderen`}
+                      aria-label={`${d.name} hard verwijderen`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

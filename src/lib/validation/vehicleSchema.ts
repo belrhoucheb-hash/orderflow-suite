@@ -55,11 +55,23 @@ export const vehicleInputSchema = z.object({
 
 export type VehicleInput = z.infer<typeof vehicleInputSchema>;
 
-export const vehicleDocumentInputSchema = z.object({
-  doc_type: z.string().trim().min(1, "Type document is verplicht"),
-  expiry_date: optionalDate,
-  notes: optionalText,
-});
+export const vehicleDocumentInputSchema = z
+  .object({
+    doc_type: z.string().trim().min(1, "Type document is verplicht"),
+    issued_date: optionalDate,
+    expiry_date: optionalDate,
+    notes: optionalText,
+  })
+  .refine(
+    (val) => {
+      if (!val.issued_date || !val.expiry_date) return true;
+      return val.expiry_date >= val.issued_date;
+    },
+    {
+      message: "Vervaldatum kan niet voor de uitgiftedatum liggen",
+      path: ["expiry_date"],
+    },
+  );
 
 export type VehicleDocumentInput = z.infer<typeof vehicleDocumentInputSchema>;
 

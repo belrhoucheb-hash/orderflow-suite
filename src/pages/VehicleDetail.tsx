@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   useVehicleById,
-  useVehicleDocuments,
   useVehicleMaintenance,
   useVehicleAvailability,
   useCompleteMaintenance,
@@ -28,21 +27,14 @@ import { useBaselineInfo } from "@/hooks/useVehicleCheck";
 import { useAuth } from "@/contexts/AuthContext";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
 import { MaintenanceDialog } from "@/components/fleet/MaintenanceDialog";
-import { DocumentDialog } from "@/components/fleet/DocumentDialog";
+import { VehicleDocumentsSection } from "@/components/fleet/VehicleDocumentsSection";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, differenceInDays, startOfWeek, addDays } from "date-fns";
+import { format, startOfWeek, addDays } from "date-fns";
 import { nl } from "date-fns/locale";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { STATUS_CONFIG } from "@/lib/constants/vehicleConfig";
-
-const DOC_LABELS: Record<string, string> = {
-  apk: "APK Keuring",
-  verzekering: "Verzekeringsbewijs",
-  adr: "ADR-keuring",
-  tachograaf: "Tachograaf IJking",
-};
 
 const MAINTENANCE_LABELS: Record<string, string> = {
   apk: "APK",
@@ -64,7 +56,6 @@ export default function VehicleDetail() {
   const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
 
-  const { data: documents } = useVehicleDocuments(id);
   const { data: maintenance } = useVehicleMaintenance(id);
   const { data: availability } = useVehicleAvailability(
     id,
@@ -76,7 +67,6 @@ export default function VehicleDetail() {
   const deleteVehicle = useDeleteVehicle();
   const { data: driverConsistency } = useVehicleDriverConsistency();
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
-  const [showDocumentDialog, setShowDocumentDialog] = useState(false);
   const [pendingMaintenanceDelete, setPendingMaintenanceDelete] = useState<VehicleMaintenance | null>(null);
   const [showVehicleDelete, setShowVehicleDelete] = useState(false);
   const [baselineSeedActive, setBaselineSeedActive] = useState(false);
@@ -336,63 +326,7 @@ export default function VehicleDetail() {
           {/* Documenten */}
           <TabsContent value="docs" className="mt-0">
             <div className="card--luxe p-5">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <SectionTitle>Documenten en keuringen</SectionTitle>
-                <button
-                  type="button"
-                  onClick={() => setShowDocumentDialog(true)}
-                  className="btn-luxe btn-luxe--primary !h-9"
-                >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                  Nieuw document
-                </button>
-              </div>
-              {!documents || documents.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-6 text-center">Geen documenten geregistreerd</p>
-              ) : (
-                <div>
-                  {documents.map((doc) => {
-                    const daysLeft = doc.expiry_date ? differenceInDays(new Date(doc.expiry_date), today) : null;
-                    const isWarning = daysLeft !== null && daysLeft < 30 && daysLeft >= 0;
-                    const isExpired = daysLeft !== null && daysLeft < 0;
-                    return (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between gap-3 py-3 border-b border-[hsl(var(--gold)/0.08)] last:border-0"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <FileText className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" strokeWidth={1.5} aria-hidden="true" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">
-                              {DOC_LABELS[doc.doc_type] || doc.doc_type}
-                            </p>
-                            {doc.notes && <p className="text-[11px] text-muted-foreground truncate">{doc.notes}</p>}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {doc.expiry_date && (
-                            <span className="text-[11px] text-muted-foreground tabular-nums">
-                              Verloopt {format(new Date(doc.expiry_date), "d MMM yyyy", { locale: nl })}
-                            </span>
-                          )}
-                          {isExpired && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-700 text-[11px] font-medium">
-                              <AlertTriangle className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
-                              Verlopen
-                            </span>
-                          )}
-                          {isWarning && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-700 text-[11px] font-medium">
-                              <AlertTriangle className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
-                              {daysLeft}d
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              {id && <VehicleDocumentsSection vehicleId={id} />}
             </div>
           </TabsContent>
 
@@ -578,7 +512,6 @@ export default function VehicleDetail() {
       </div>
 
       {id && <MaintenanceDialog vehicleId={id} open={showMaintenanceDialog} onOpenChange={setShowMaintenanceDialog} />}
-      {id && <DocumentDialog vehicleId={id} open={showDocumentDialog} onOpenChange={setShowDocumentDialog} />}
 
       <AlertDialog open={showVehicleDelete} onOpenChange={setShowVehicleDelete}>
         <AlertDialogContent>

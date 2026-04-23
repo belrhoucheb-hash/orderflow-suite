@@ -32,12 +32,6 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("@/hooks/useFleet", () => ({
   useVehicleById: (...args: any[]) => mockUseVehicleById(...args),
-  useVehicleDocuments: () => ({
-    data: [
-      { id: "doc1", doc_type: "apk", description: "APK 2024", expiry_date: "2025-06-01", file_url: null, notes: "test notes" },
-      { id: "doc2", doc_type: "verzekering", description: "Verzekering", expiry_date: "2024-12-01", file_url: null, notes: null },
-    ],
-  }),
   useVehicleMaintenance: () => ({
     data: [
       { id: "m1", vehicle_id: "v1", maintenance_type: "grote_beurt", description: "Grote beurt", scheduled_date: "2025-03-01", completed_date: null, cost: 500, notes: "Test", mileage_km: 45000 },
@@ -52,6 +46,8 @@ vi.mock("@/hooks/useFleet", () => ({
   }),
   useCompleteMaintenance: () => ({ mutate: mockCompleteMaintenance, isPending: false }),
   useVehicleDriverConsistency: () => ({ data: {} }),
+  useDeleteMaintenance: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  useDeleteVehicle: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/components/fleet/MaintenanceDialog", () => ({
@@ -61,12 +57,18 @@ vi.mock("@/components/fleet/MaintenanceDialog", () => ({
     </div>
   ) : null,
 }));
-vi.mock("@/components/fleet/DocumentDialog", () => ({
-  DocumentDialog: ({ open, onOpenChange }: any) => open ? (
-    <div data-testid="doc-dialog">
-      <button data-testid="close-doc" onClick={() => onOpenChange(false)}>Close</button>
+vi.mock("@/components/fleet/VehicleDocumentsSection", () => ({
+  VehicleDocumentsSection: ({ vehicleId }: any) => (
+    <div data-testid="doc-section" data-vehicle-id={vehicleId}>
+      <h3>Documenten en keuringen</h3>
+      <div>
+        <p>APK Keuring</p>
+        <span>Verlopen</span>
+        <p>test notes</p>
+      </div>
+      <button>Nieuw document</button>
     </div>
-  ) : null,
+  ),
 }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ effectiveRole: "admin", session: { user: { id: "test-user" } }, loading: false }),
@@ -260,32 +262,24 @@ describe("VehicleDetail", () => {
     });
   });
 
-  // ── setShowDocumentDialog ──
-  it("opens document dialog (setShowDocumentDialog)", async () => {
+  // ── VehicleDocumentsSection inbed ──
+  it("embeds the VehicleDocumentsSection on the Documenten tab", async () => {
+    const user = userEvent.setup();
+    renderVehicleDetail();
+    await user.click(screen.getByText("Documenten"));
+    await waitFor(() => {
+      expect(screen.getByTestId("doc-section")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("doc-section")).toHaveAttribute("data-vehicle-id", "v1");
+  });
+
+  // ── Sectie toont toevoeg-knop ──
+  it("shows the new document trigger inside the section", async () => {
     const user = userEvent.setup();
     renderVehicleDetail();
     await user.click(screen.getByText("Documenten"));
     await waitFor(() => {
       expect(screen.getByText("Nieuw document")).toBeInTheDocument();
-    });
-    await user.click(screen.getByText("Nieuw document"));
-    await waitFor(() => {
-      expect(screen.getByTestId("doc-dialog")).toBeInTheDocument();
-    });
-  });
-
-  // ── Close document dialog ──
-  it("closes document dialog via onOpenChange", async () => {
-    const user = userEvent.setup();
-    renderVehicleDetail();
-    await user.click(screen.getByText("Documenten"));
-    await user.click(screen.getByText("Nieuw document"));
-    await waitFor(() => {
-      expect(screen.getByTestId("doc-dialog")).toBeInTheDocument();
-    });
-    await user.click(screen.getByTestId("close-doc"));
-    await waitFor(() => {
-      expect(screen.queryByTestId("doc-dialog")).not.toBeInTheDocument();
     });
   });
 

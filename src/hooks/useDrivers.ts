@@ -110,8 +110,61 @@ export function useDrivers() {
 
   const deleteDriver = useMutation({
     mutationFn: async (id: string) => {
+      // Eerst uploads uit bucket halen, postgres cascade ruimt alleen DB-rijen op,
+      // bestanden in driver-certificates blijven anders als weesbestand staan.
+      let removedFiles = 0;
+      const { data: records } = await supabase
+        .from("driver_certification_expiry" as any)
+        .select("document_url")
+        .eq("driver_id", id);
+
+      const paths =
+        ((records as any[]) ?? [])
+          .map((r) => r?.document_url as string | null)
+          .filter((p): p is string => !!p && !/^https?:\/\//i.test(p));
+
+      if (paths.length > 0) {
+        const { error: storageErr } = await supabase.storage
+          .from("driver-certificates")
+          .remove(paths);
+        if (!storageErr) removedFiles = paths.length;
+      }
+
       const { error } = await supabase.from("drivers" as any).delete().eq("id", id);
       if (error) throw error;
+      return { removedFiles };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["drivers"] });
+    },
+  });
+
+  const archiveDriver = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from("drivers" as any)
+        .update({ is_active: false, current_vehicle_id: null })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["drivers"] });
+    },
+  });
+
+  const reactivateDriver = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from("drivers" as any)
+        .update({ is_active: true })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["drivers"] });
@@ -123,6 +176,8 @@ export function useDrivers() {
     createDriver,
     updateDriver,
     deleteDriver,
+    archiveDriver,
+    reactivateDriver,
   };
 }
 

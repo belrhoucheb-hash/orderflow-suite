@@ -28,6 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MasterDataSection } from "@/components/settings/MasterDataSection";
+import { VehicleDocumentTypesSection } from "@/components/fleet/VehicleDocumentTypesSection";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
@@ -387,8 +388,9 @@ const Settings = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="stamgegevens" className="outline-none">
+        <TabsContent value="stamgegevens" className="outline-none space-y-8">
           <MasterDataSection />
+          <VehicleDocumentTypesSection />
         </TabsContent>
 
         <TabsContent value="branding" className="outline-none">
