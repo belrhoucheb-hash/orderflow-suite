@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { ProfitabilityReport } from "@/components/rapportage/ProfitabilityReport";
+import Autonomie from "@/pages/Autonomie";
 import { supabase } from "@/integrations/supabase/client";
 import {
   exportOrderReport,
@@ -214,6 +215,7 @@ const Rapportage = () => {
   });
   const [endDate, setEndDate] = useState<string>(() => toDateStr(new Date()));
   const [compareEnabled, setCompareEnabled] = useState(false);
+  const [section, setSection] = useState<"rapportage" | "autonomie">("rapportage");
 
   const datePresets = useMemo(() => getDatePresets(), []);
 
@@ -469,30 +471,41 @@ const Rapportage = () => {
     exportOrdersExcel(reportOrders);
   };
 
-  if (isLoading) {
-    return <LoadingState message="Rapportage laden..." />;
-  }
-
-  if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
-        <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
-        <button onClick={() => refetchOrders()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
-        <PageHeader
-          title="Rapportage"
-          subtitle="Overzicht van prestaties, kosten en klantactiviteit"
-        />
+        <div className="flex-1 min-w-0">
+          <PageHeader
+            title="Rapportage"
+            subtitle="Overzicht van prestaties, kosten en klantactiviteit"
+          />
+          <div className="mt-3 inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
+            {[
+              { value: "rapportage" as const, label: "Rapportage" },
+              { value: "autonomie" as const, label: "Autonomie" },
+            ].map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setSection(t.value)}
+                aria-pressed={section === t.value}
+                className={cn(
+                  "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
+                  section === t.value
+                    ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
+                    : "text-muted-foreground/70 hover:text-foreground",
+                )}
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Date range picker + Export */}
+        {section === "rapportage" && (
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <label className="text-xs text-muted-foreground font-medium">Van</label>
@@ -567,8 +580,25 @@ const Rapportage = () => {
             <span className="text-xs text-muted-foreground">Vergelijk met vorige periode</span>
           </label>
         </div>
+        )}
       </div>
 
+      {section === "autonomie" && <Autonomie />}
+
+      {section === "rapportage" && isLoading && (
+        <LoadingState message="Rapportage laden..." />
+      )}
+
+      {section === "rapportage" && isError && (
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
+          <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
+          <button onClick={() => refetchOrders()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
+        </div>
+      )}
+
+      {section === "rapportage" && !isLoading && !isError && (
+      <>
       {/* KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -858,6 +888,8 @@ const Rapportage = () => {
 
       {/* Profitability report */}
       <ProfitabilityReport />
+      </>
+      )}
     </div>
   );
 };

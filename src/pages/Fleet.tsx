@@ -14,6 +14,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { TYPE_LABELS, TYPE_ORDER, STATUS_CONFIG } from "@/lib/constants/vehicleConfig";
+import { cn } from "@/lib/utils";
+import VoertuigcheckHistorie from "@/pages/VoertuigcheckHistorie";
 
 export default function Fleet() {
   const { data: vehicles, isLoading, isError, refetch } = useFleetVehicles();
@@ -61,6 +63,7 @@ export default function Fleet() {
   };
 
   const [activeTab, setActiveTab] = useState("voertuigen");
+  const [section, setSection] = useState<"lijst" | "voertuigcheck">("lijst");
 
   const overdueCount = overdueMaintenance
     ? new Set(overdueMaintenance.map((m) => m.vehicle_id)).size
@@ -74,7 +77,7 @@ export default function Fleet() {
             title="Vloot"
             subtitle={`${vehicles?.length ?? 0} voertuigen, ${vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar`}
             actions={
-              activeTab === "voertuigen" ? (
+              section === "lijst" && activeTab === "voertuigen" ? (
                 <button
                   type="button"
                   onClick={() => setShowNewDialog(true)}
@@ -87,11 +90,40 @@ export default function Fleet() {
             }
           />
 
+          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
+            {[
+              { value: "lijst" as const, label: "Lijst" },
+              { value: "voertuigcheck" as const, label: "Voertuigcheck" },
+            ].map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setSection(t.value)}
+                aria-pressed={section === t.value}
+                className={cn(
+                  "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
+                  section === t.value
+                    ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
+                    : "text-muted-foreground/70 hover:text-foreground",
+                )}
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {section === "lijst" && (
           <TabsList>
             <TabsTrigger value="voertuigen">Voertuigen</TabsTrigger>
             <TabsTrigger value="types">Types</TabsTrigger>
           </TabsList>
+          )}
 
+          {section === "voertuigcheck" && <VoertuigcheckHistorie />}
+
+          {section === "lijst" && (
+          <>
           <TabsContent value="voertuigen" className="space-y-4 mt-0">
             {overdueCount > 0 && (
               <div
@@ -266,6 +298,8 @@ export default function Fleet() {
           <TabsContent value="types" className="mt-0">
             <VehicleTypesSection />
           </TabsContent>
+          </>
+          )}
         </div>
       </Tabs>
 
