@@ -6,9 +6,7 @@ import {
   Palette,
   ChevronRight,
   Upload,
-  MessageSquare,
   Smartphone,
-  Link,
   BookOpen,
   Truck,
   FileText,
@@ -129,12 +127,9 @@ const Settings = () => {
 
   // Integrations state
   const [integrations, setIntegrations] = useState({
-    slack: { enabled: false, webhookUrl: "" },
-    teams: { enabled: false, webhookUrl: "" },
     exactOnline: { enabled: false, apiKey: "" },
     twinfield: { enabled: false, username: "", password: "" },
     samsara: { enabled: false, apiKey: "" },
-    transfollow: { enabled: false, apiKey: "" },
   });
 
   // -- Settings persistence hooks --
@@ -219,8 +214,8 @@ const Settings = () => {
   // Determine active tab based on URL
   const getActiveTab = () => {
     if (location.pathname.includes("/stamgegevens")) return "stamgegevens";
-    if (location.pathname.includes("/gebruikers")) return "gebruikers";
     if (location.pathname.includes("/branding")) return "branding";
+    if (location.pathname.includes("/notificaties")) return "notificaties";
     if (location.pathname.includes("/sms")) return "sms";
     if (location.pathname.includes("/integraties")) return "integraties";
     if (location.pathname.includes("/inboxen")) return "inboxen";
@@ -301,18 +296,6 @@ const Settings = () => {
               className={TAB_TRIGGER_CLASS}
             >
               Kosten
-            </TabsTrigger>
-            <TabsTrigger
-              value="webhooks"
-              className={TAB_TRIGGER_CLASS}
-            >
-              Webhooks
-            </TabsTrigger>
-            <TabsTrigger
-              value="api"
-              className={TAB_TRIGGER_CLASS}
-            >
-              API
             </TabsTrigger>
           </TabsList>
         </div>
@@ -737,48 +720,6 @@ const Settings = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <IntegrationCard
-                title="Slack"
-                description="Meldingen in Slack-kanalen."
-                icon={MessageSquare}
-                enabled={integrations.slack.enabled}
-                onToggle={() => toggleIntegration("slack")}
-              >
-                {integrations.slack.enabled && (
-                  <div className="space-y-2">
-                    <Label htmlFor="slackWebhook" className="text-xs">Webhook-URL</Label>
-                    <Input
-                      id="slackWebhook"
-                      value={integrations.slack.webhookUrl}
-                      onChange={(e) => updateIntegration("slack", "webhookUrl", e.target.value)}
-                      placeholder="https://hooks.slack.com/services/..."
-                      className="text-xs"
-                    />
-                  </div>
-                )}
-              </IntegrationCard>
-
-              <IntegrationCard
-                title="Teams"
-                description="Microsoft Teams-notificaties."
-                icon={Users}
-                enabled={integrations.teams.enabled}
-                onToggle={() => toggleIntegration("teams")}
-              >
-                {integrations.teams.enabled && (
-                  <div className="space-y-2">
-                    <Label htmlFor="teamsWebhook" className="text-xs">Webhook-URL</Label>
-                    <Input
-                      id="teamsWebhook"
-                      value={integrations.teams.webhookUrl}
-                      onChange={(e) => updateIntegration("teams", "webhookUrl", e.target.value)}
-                      placeholder="https://outlook.office.com/webhook/..."
-                      className="text-xs"
-                    />
-                  </div>
-                )}
-              </IntegrationCard>
-
-              <IntegrationCard
                 title="Exact Online"
                 description="Boekhouding-synchronisatie."
                 icon={BookOpen}
@@ -856,27 +797,6 @@ const Settings = () => {
                 )}
               </IntegrationCard>
 
-              <IntegrationCard
-                title="TransFollow"
-                description="Digitale vrachtbrieven."
-                icon={Link}
-                enabled={integrations.transfollow.enabled}
-                onToggle={() => toggleIntegration("transfollow")}
-              >
-                {integrations.transfollow.enabled && (
-                  <div className="space-y-2">
-                    <Label htmlFor="transfollowApiKey" className="text-xs">API-key</Label>
-                    <Input
-                      id="transfollowApiKey"
-                      type="password"
-                      value={integrations.transfollow.apiKey}
-                      onChange={(e) => updateIntegration("transfollow", "apiKey", e.target.value)}
-                      placeholder="TransFollow API-key"
-                      className="text-xs"
-                    />
-                  </div>
-                )}
-              </IntegrationCard>
             </div>
 
             <div className="pt-6 border-t border-[hsl(var(--gold)/0.12)] mt-6">
@@ -895,141 +815,6 @@ const Settings = () => {
         {/* Inboxen Tab */}
         <TabsContent value="inboxen" className="outline-none">
           <InboxSettings />
-        </TabsContent>
-
-        {/* Webhooks Tab */}
-        <TabsContent value="webhooks" className="outline-none">
-          <div className="card--luxe p-6 space-y-6">
-            <div>
-              <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
-                Outbound webhooks
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">Stuur automatisch meldingen naar externe systemen bij statuswijzigingen.</p>
-            </div>
-
-            <div className="rounded-lg border border-[hsl(var(--gold)/0.2)] divide-y divide-[hsl(var(--gold)/0.12)]">
-              {[
-                { event: "order.created", label: "Order aangemaakt", desc: "Wanneer een nieuwe order wordt aangemaakt." },
-                { event: "order.status_changed", label: "Status gewijzigd", desc: "Bij elke statuswijziging (PENDING, PLANNED, IN_TRANSIT, DELIVERED)." },
-                { event: "order.cancelled", label: "Order geannuleerd", desc: "Wanneer een order wordt geannuleerd." },
-                { event: "delivery.completed", label: "Levering voltooid", desc: "Wanneer een chauffeur de levering bevestigt met handtekening." },
-                { event: "invoice.created", label: "Factuur aangemaakt", desc: "Wanneer een nieuwe factuur wordt gegenereerd." },
-              ].map((wh) => (
-                <div key={wh.event} className="flex items-center justify-between p-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">{wh.label}</p>
-                    <p className="text-xs text-muted-foreground">{wh.desc}</p>
-                    <code className="text-xs font-mono text-[hsl(var(--gold-deep))]">{wh.event}</code>
-                  </div>
-                  <Switch />
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">Webhook-URL</Label>
-              <div className="flex gap-2">
-                <Input placeholder="https://jouw-systeem.nl/webhook" className="flex-1" />
-                <button
-                  type="button"
-                  onClick={() => toast.success("Webhook-URL opgeslagen")}
-                  className="btn-luxe btn-luxe--primary !h-9"
-                >
-                  Opslaan
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">Alle geselecteerde events worden als POST-request naar deze URL gestuurd met een JSON-payload.</p>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">Webhook-secret</Label>
-              <div className="flex gap-2">
-                <Input type="password" placeholder="whsec_..." className="flex-1 font-mono" />
-                <button
-                  type="button"
-                  onClick={() => toast.success("Webhook-secret gegenereerd", { description: "whsec_" + Math.random().toString(36).slice(2, 18) })}
-                  className="btn-luxe !h-9"
-                >
-                  Genereer
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">Optioneel. Wordt meegestuurd als X-Webhook-Secret-header voor verificatie.</p>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* API Tab */}
-        <TabsContent value="api" className="outline-none">
-          <div className="card--luxe p-6 space-y-6">
-            <div>
-              <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
-                API-toegang
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">Beheer API-keys voor externe integraties met je TMS.</p>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">API-key</Label>
-              <div className="flex gap-2">
-                <Input type="password" value="sk_live_••••••••••••••••••••••" readOnly className="flex-1 font-mono text-sm" />
-                <button
-                  type="button"
-                  onClick={() => { navigator.clipboard.writeText("sk_live_demo_key_placeholder"); toast.success("API-key gekopieerd"); }}
-                  className="btn-luxe !h-9"
-                >
-                  Kopieer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => toast.success("API-key hernieuwd", { description: "De oude key is ongeldig gemaakt." })}
-                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-destructive/30 text-destructive text-[12px] font-medium hover:bg-destructive/10 transition-colors"
-                >
-                  Hernieuw
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">Gebruik deze key in de Authorization-header: <code className="bg-[hsl(var(--gold-soft)/0.4)] border border-[hsl(var(--gold)/0.2)] px-1 rounded">Bearer sk_live_...</code></p>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold">API-endpoints</Label>
-              <div className="rounded-lg border border-[hsl(var(--gold)/0.2)] divide-y divide-[hsl(var(--gold)/0.12)] font-mono text-sm">
-                {[
-                  { method: "POST", path: "/api/orders", desc: "Order aanmaken" },
-                  { method: "GET", path: "/api/orders/:id", desc: "Order ophalen" },
-                  { method: "PATCH", path: "/api/orders/:id/status", desc: "Status wijzigen" },
-                  { method: "GET", path: "/api/track/:order_number", desc: "Track en trace (publiek)" },
-                  { method: "GET", path: "/api/vehicles", desc: "Voertuigen ophalen" },
-                  { method: "GET", path: "/api/drivers", desc: "Chauffeurs ophalen" },
-                ].map((ep) => (
-                  <div key={ep.path} className="flex items-center gap-3 p-3">
-                    <span className={cn(
-                      "text-xs font-bold px-2 py-0.5 rounded uppercase border",
-                      ep.method === "POST" ? "bg-[hsl(var(--gold-soft)/0.6)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.3)]" :
-                      ep.method === "PATCH" ? "bg-amber-100 text-amber-700 border-amber-200" :
-                      "bg-[hsl(var(--gold-soft)/0.4)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.2)]"
-                    )}>{ep.method}</span>
-                    <span className="text-xs flex-1">{ep.path}</span>
-                    <span className="text-xs text-muted-foreground">{ep.desc}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-[hsl(var(--gold-soft)/0.25)] border border-[hsl(var(--gold)/0.2)] p-4">
-              <p className="text-sm font-semibold mb-2 text-[hsl(var(--gold-deep))]">Voorbeeldrequest</p>
-              <pre className="text-xs text-muted-foreground bg-background border border-[hsl(var(--gold)/0.12)] rounded p-3 overflow-x-auto">{`curl -X POST https://api.royaltycargo.nl/orders \\
-  -H "Authorization: Bearer sk_live_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "client_name": "Van der Berg Logistics",
-    "pickup_address": "Transportweg 12, Rotterdam",
-    "delivery_address": "Industrieweg 50, Nieuwegein",
-    "quantity": 10,
-    "unit": "Pallets",
-    "weight_kg": 4000
-  }'`}</pre>
-            </div>
-          </div>
         </TabsContent>
 
         <TabsContent value="tarieven" className="space-y-6">
