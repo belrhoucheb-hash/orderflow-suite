@@ -16,6 +16,8 @@ import { ClusterDetailPanel } from "@/components/planning/v2/ClusterDetailPanel"
 import { DocksheetExportButton } from "@/components/planning/v2/DocksheetExportButton";
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import type { ConsolidationGroup } from "@/types/consolidation";
+import ChauffeursRit from "@/pages/ChauffeursRit";
+import { cn } from "@/lib/utils";
 
 function isoWeekStart(d: Date): string {
   return format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -28,6 +30,7 @@ function PlanningV2() {
   const [daySetupOpen, setDaySetupOpen] = useState(false);
   const [unplacedHints, setUnplacedHints] = useState<UnplacedOrderHint[]>([]);
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
+  const [section, setSection] = useState<"planning" | "ritten">("planning");
 
   const { data: drivers = [] } = useDrivers();
   const { data: driverAvailability = [] } = useDriverAvailability(selectedDate);
@@ -130,60 +133,93 @@ function PlanningV2() {
     <div className="p-6 space-y-4 max-w-[1800px] mx-auto">
       <PageHeader
         title="Planbord"
-        subtitle={`Dagsetup, auto-plan en swim-lanes per chauffeur voor ${prettyDate}`}
+        subtitle={
+          section === "planning"
+            ? `Dagsetup, auto-plan en swim-lanes per chauffeur voor ${prettyDate}`
+            : "Ritten per chauffeur, samenstellen en dispatchen"
+        }
       />
 
-      <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 min-w-[12rem]">
-          <CalendarIcon className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
-          <LuxeDatePicker value={selectedDate} onChange={setSelectedDate} className="flex-1 min-w-[10rem]" />
-        </div>
-        <button
-          type="button"
-          onClick={() => setDaySetupOpen(true)}
-          className="btn-luxe"
-        >
-          <Settings2 className="h-4 w-4" />
-          Dagsetup
-        </button>
-        <AutoPlanButton date={selectedDate} onUnplacedChange={setUnplacedHints} />
-        <DocksheetExportButton date={selectedDate} />
-        <div className="ml-auto flex items-center gap-3 text-sm">
-          <span className="chiplet">{groups.length} clusters</span>
-          <span className="chiplet chiplet--warn">{openOrders.length} open orders</span>
-        </div>
+      <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
+        {[
+          { value: "planning" as const, label: "Planning" },
+          { value: "ritten" as const, label: "Ritten" },
+        ].map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setSection(t.value)}
+            aria-pressed={section === t.value}
+            className={cn(
+              "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
+              section === t.value
+                ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
+                : "text-muted-foreground/70 hover:text-foreground",
+            )}
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-5">
-        <div className="space-y-4">
-          {activeDrivers.length === 0 && (
-            <div className="card--luxe p-10 text-center text-muted-foreground">
-              Geen actieve chauffeurs gevonden. Voeg chauffeurs toe via Stamgegevens.
+      {section === "planning" && (
+        <>
+          <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 min-w-[12rem]">
+              <CalendarIcon className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
+              <LuxeDatePicker value={selectedDate} onChange={setSelectedDate} className="flex-1 min-w-[10rem]" />
             </div>
-          )}
-          {activeDrivers.map((driver) => (
-            <PlanningDriverLane
-              key={driver.id}
-              driver={{
-                id: driver.id,
-                name: driver.name,
-                status: availabilityByDriver.get(driver.id),
-                contract_hours_per_week: (driver as any).contract_hours_per_week ?? null,
-              }}
-              groups={groupsByDriver.get(driver.id) ?? []}
-              plannedHoursThisWeek={plannedHoursByDriver.get(driver.id) ?? 0}
-              onSelectGroup={setSelectedClusterId}
-            />
-          ))}
-        </div>
+            <button
+              type="button"
+              onClick={() => setDaySetupOpen(true)}
+              className="btn-luxe"
+            >
+              <Settings2 className="h-4 w-4" />
+              Dagsetup
+            </button>
+            <AutoPlanButton date={selectedDate} onUnplacedChange={setUnplacedHints} />
+            <DocksheetExportButton date={selectedDate} />
+            <div className="ml-auto flex items-center gap-3 text-sm">
+              <span className="chiplet">{groups.length} clusters</span>
+              <span className="chiplet chiplet--warn">{openOrders.length} open orders</span>
+            </div>
+          </div>
 
-        <div className="space-y-3">
-          <UnplacedOrdersLane orders={openOrders} hints={unplacedHints} />
-        </div>
-      </div>
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-5">
+            <div className="space-y-4">
+              {activeDrivers.length === 0 && (
+                <div className="card--luxe p-10 text-center text-muted-foreground">
+                  Geen actieve chauffeurs gevonden. Voeg chauffeurs toe via Stamgegevens.
+                </div>
+              )}
+              {activeDrivers.map((driver) => (
+                <PlanningDriverLane
+                  key={driver.id}
+                  driver={{
+                    id: driver.id,
+                    name: driver.name,
+                    status: availabilityByDriver.get(driver.id),
+                    contract_hours_per_week: (driver as any).contract_hours_per_week ?? null,
+                  }}
+                  groups={groupsByDriver.get(driver.id) ?? []}
+                  plannedHoursThisWeek={plannedHoursByDriver.get(driver.id) ?? 0}
+                  onSelectGroup={setSelectedClusterId}
+                />
+              ))}
+            </div>
 
-      <DaySetupDialog open={daySetupOpen} onOpenChange={setDaySetupOpen} date={selectedDate} />
-      <ClusterDetailPanel groupId={selectedClusterId} onClose={() => setSelectedClusterId(null)} />
+            <div className="space-y-3">
+              <UnplacedOrdersLane orders={openOrders} hints={unplacedHints} />
+            </div>
+          </div>
+
+          <DaySetupDialog open={daySetupOpen} onOpenChange={setDaySetupOpen} date={selectedDate} />
+          <ClusterDetailPanel groupId={selectedClusterId} onClose={() => setSelectedClusterId(null)} />
+        </>
+      )}
+
+      {section === "ritten" && <ChauffeursRit />}
     </div>
   );
 }

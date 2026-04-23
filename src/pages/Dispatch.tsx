@@ -30,6 +30,8 @@ import {
   type Trip, type TripStop, type TripStatus,
   canTransitionTrip, TRIP_TRANSITIONS
 } from "@/types/dispatch";
+import LiveTracking from "@/pages/LiveTracking";
+import Exceptions from "@/pages/Exceptions";
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -69,6 +71,7 @@ const FILTER_TABS = [
 // ─── Component ──────────────────────────────────────────────
 
 const Dispatch = () => {
+  const [section, setSection] = useState<"dispatch" | "live" | "exceptions">("dispatch");
   const [selectedDate, setSelectedDate] = useState(getTodayISO());
   const [statusFilter, setStatusFilter] = useState<string>("alle");
   const [search, setSearch] = useState("");
@@ -232,44 +235,77 @@ const Dispatch = () => {
     }
   };
 
-  if (isLoading) {
-    return <LoadingState message="Ritten laden..." />;
-  }
-
-  if (isError) {
-    return <QueryError message="Kan ritten niet laden. Probeer het opnieuw." onRetry={() => refetch()} />;
-  }
-
   return (
     <div className="space-y-5">
       {/* Header */}
       <PageHeader
         title="Dispatch"
-        subtitle="Ritten beheren en dispatchen naar chauffeurs"
+        subtitle={
+          section === "dispatch"
+            ? "Ritten beheren en dispatchen naar chauffeurs"
+            : section === "live"
+              ? "Live-posities en voortgang per rit"
+              : "Afwijkingen en interventies"
+        }
         actions={
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" className="h-10 w-10" onClick={goToPrevDay}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-2 bg-card border border-border/50 rounded-xl px-3 h-10">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent text-sm font-medium border-none outline-none"
-              />
+          section === "dispatch" ? (
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="icon" className="h-10 w-10" onClick={goToPrevDay}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-2 bg-card border border-border/50 rounded-xl px-3 h-10">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-transparent text-sm font-medium border-none outline-none"
+                />
+              </div>
+              <Button variant="outline" size="icon" className="h-10 w-10" onClick={goToNextDay}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setSelectedDate(getTodayISO())}>
+                Vandaag
+              </Button>
             </div>
-            <Button variant="outline" size="icon" className="h-10 w-10" onClick={goToNextDay}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setSelectedDate(getTodayISO())}>
-              Vandaag
-            </Button>
-          </div>
+          ) : null
         }
       />
 
+      <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
+        {[
+          { value: "dispatch" as const, label: "Dispatch" },
+          { value: "live" as const, label: "Live-kaart" },
+          { value: "exceptions" as const, label: "Exceptions" },
+        ].map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setSection(t.value)}
+            aria-pressed={section === t.value}
+            className={cn(
+              "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
+              section === t.value
+                ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
+                : "text-muted-foreground/70 hover:text-foreground",
+            )}
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {section === "live" && <LiveTracking />}
+      {section === "exceptions" && <Exceptions />}
+
+      {section === "dispatch" && (isLoading ? (
+        <LoadingState message="Ritten laden..." />
+      ) : isError ? (
+        <QueryError message="Kan ritten niet laden. Probeer het opnieuw." onRetry={() => refetch()} />
+      ) : (
+        <>
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         {[
@@ -594,6 +630,8 @@ const Dispatch = () => {
           )}
         </AnimatePresence>
       </div>
+        </>
+      ))}
 
       {/* Dispatch confirmation dialog */}
       <Dialog open={!!confirmDispatch} onOpenChange={(open) => !open && setConfirmDispatch(null)}>
