@@ -1,11 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { ImapFlow } from "npm:imapflow@1.0.171";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "https://orderflow-suite.vercel.app",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+const CORS_OPTIONS = {
+  extraHeaders: [
+    "x-supabase-client-platform",
+    "x-supabase-client-platform-version",
+    "x-supabase-client-runtime",
+    "x-supabase-client-runtime-version",
+  ],
 };
 
 interface TestRequest {
@@ -20,7 +24,7 @@ interface TestRequest {
   folder?: string;
 }
 
-function json(status: number, body: unknown): Response {
+function jsonWith(corsHeaders: Record<string, string>, status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -60,7 +64,10 @@ async function tryImapLogin(
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const preflight = handleOptions(req, CORS_OPTIONS);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req, CORS_OPTIONS);
+  const json = (status: number, body: unknown) => jsonWith(corsHeaders, status, body);
 
   try {
     const authHeader = req.headers.get("Authorization");

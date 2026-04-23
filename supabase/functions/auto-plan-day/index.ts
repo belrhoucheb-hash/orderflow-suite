@@ -32,11 +32,7 @@ import {
   type PlannerDriver,
   type ClusterGranularity,
 } from "../_shared/autoPlanner.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
 interface RequestBody {
   tenant_id: string;
@@ -44,7 +40,7 @@ interface RequestBody {
   dry_run?: boolean;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -249,13 +245,15 @@ async function handleRequest(supabase: SupabaseClient, body: RequestBody, userId
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !serviceKey) {
-      return jsonResponse({ ok: false, error: "Supabase env ontbreekt" }, 500);
+      return jsonResponse({ ok: false, error: "Supabase env ontbreekt" }, 500, corsHeaders);
     }
 
     const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
@@ -273,12 +271,12 @@ serve(async (req) => {
 
     const body = (await req.json()) as RequestBody;
     if (jwtTenantId && body.tenant_id && body.tenant_id !== jwtTenantId) {
-      return jsonResponse({ ok: false, error: "Geen toegang tot deze tenant" }, 403);
+      return jsonResponse({ ok: false, error: "Geen toegang tot deze tenant" }, 403, corsHeaders);
     }
 
     const result = await handleRequest(supabase, body, userId);
-    return jsonResponse(result, (result as any).ok === false ? 400 : 200);
+    return jsonResponse(result, (result as any).ok === false ? 400 : 200, corsHeaders);
   } catch (err) {
-    return jsonResponse({ ok: false, error: String(err) }, 500);
+    return jsonResponse({ ok: false, error: String(err) }, 500, corsHeaders);
   }
 });

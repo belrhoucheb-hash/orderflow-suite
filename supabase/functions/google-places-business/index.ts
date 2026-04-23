@@ -13,27 +13,7 @@
 // Zonder dat geeft Google 403 REQUEST_DENIED terug.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const ALLOWED_ORIGINS = new Set([
-  "https://orderflow-suite.vercel.app",
-  "http://localhost:8080",
-  "http://localhost:8081",
-  "http://localhost:5173",
-  "http://127.0.0.1:8080",
-]);
-
-function corsFor(req: Request): Record<string, string> {
-  const origin = req.headers.get("origin") ?? "";
-  const allow = ALLOWED_ORIGINS.has(origin)
-    ? origin
-    : "https://orderflow-suite.vercel.app";
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
-    Vary: "Origin",
-  };
-}
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
 interface AddressComponent {
   long_name: string;
@@ -75,8 +55,9 @@ function normalizeDetails(data: any) {
 }
 
 serve(async (req) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
   const cors = corsFor(req);
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: cors });
   }

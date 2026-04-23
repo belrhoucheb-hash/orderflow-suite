@@ -1,16 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "https://orderflow-suite.vercel.app",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-api-key, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+const CORS_OPTIONS = {
+  extraHeaders: [
+    "x-api-key",
+    "x-supabase-client-platform",
+    "x-supabase-client-platform-version",
+    "x-supabase-client-runtime",
+    "x-supabase-client-runtime-version",
+  ],
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const preflight = handleOptions(req, CORS_OPTIONS);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req, CORS_OPTIONS);
 
   try {
     // API key check

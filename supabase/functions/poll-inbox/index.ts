@@ -1,11 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { ImapFlow } from "npm:imapflow@1.0.171";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "https://orderflow-suite.vercel.app",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+const CORS_OPTIONS = {
+  extraHeaders: [
+    "x-supabase-client-platform",
+    "x-supabase-client-platform-version",
+    "x-supabase-client-runtime",
+    "x-supabase-client-runtime-version",
+  ],
 };
 
 // ── EML parsing helpers (shared with import-email) ──
@@ -709,7 +713,7 @@ async function pollOneInboxWithTimeout(config: InboxConfig, supabase: any): Prom
 
 // ── Main handler ──
 
-async function pollAllInboxes(): Promise<Response> {
+async function pollAllInboxes(corsHeaders: Record<string, string>): Promise<Response> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -761,7 +765,9 @@ async function pollAllInboxes(): Promise<Response> {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const preflight = handleOptions(req, CORS_OPTIONS);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req, CORS_OPTIONS);
 
   const timeout = new Promise<Response>((resolve) =>
     setTimeout(() => resolve(new Response(
@@ -771,7 +777,7 @@ serve(async (req) => {
   );
 
   try {
-    return await Promise.race([pollAllInboxes(), timeout]);
+    return await Promise.race([pollAllInboxes(corsHeaders), timeout]);
   } catch (e) {
     console.error("poll-inbox fatal:", e instanceof Error ? e.message : "unknown");
     return new Response(

@@ -12,27 +12,7 @@
 // dienst stilzet.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-// Dev + prod whitelist. Echo de request-origin terug als hij matcht,
-// anders val terug op de prod-origin.
-const ALLOWED_ORIGINS = new Set([
-  "https://orderflow-suite.vercel.app",
-  "http://localhost:8080",
-  "http://localhost:8081",
-  "http://localhost:5173",
-  "http://127.0.0.1:8080",
-]);
-
-function corsFor(req: Request): Record<string, string> {
-  const origin = req.headers.get("origin") ?? "";
-  const allow = ALLOWED_ORIGINS.has(origin) ? origin : "https://orderflow-suite.vercel.app";
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
-    "Vary": "Origin",
-  };
-}
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
 // Retry helper met exponential backoff voor 429 en netwerk-errors.
 async function fetchWithRetry(
@@ -103,7 +83,8 @@ Geef ook een confidence (0..1) die aangeeft hoe zeker je bent van de analyse. Ge
 Antwoord ALLEEN als JSON: {"description": "...", "diff_vs_baseline": "..." of null, "severity": "none"|"minor"|"blocking", "confidence": 0.0..1.0}`;
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsFor(req) });
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
   try {
     const { photo_url, side, baseline_photo_url, baseline_description } = await req.json();
