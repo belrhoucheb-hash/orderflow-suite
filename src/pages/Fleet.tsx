@@ -9,7 +9,6 @@ import { useFleetVehicles, useVehicleUtilization, useUpcomingMaintenance, useVeh
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
 import { VehicleTypesSection } from "@/components/fleet/VehicleTypesSection";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
@@ -68,49 +67,106 @@ export default function Fleet() {
     ? new Set(overdueMaintenance.map((m) => m.vehicle_id)).size
     : 0;
 
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 6) return "Nacht";
+    if (h < 12) return "Goedemorgen";
+    if (h < 18) return "Goedemiddag";
+    return "Goedenavond";
+  }, []);
+
+  const totalVehicles = vehicles?.length ?? 0;
+  const availableVehicles = vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0;
+  const archivedVehicles = vehicles?.filter((v) => (v as any).is_active === false).length ?? 0;
+
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
         <div className="p-6 space-y-4 max-w-[1800px] mx-auto w-full">
-          <PageHeader
-            title="Vloot"
-            subtitle={`${vehicles?.length ?? 0} voertuigen, ${vehicles?.filter((v) => v.status === "beschikbaar").length ?? 0} beschikbaar`}
-            actions={
-              activeTab === "voertuigen" ? (
-                <button
-                  type="button"
-                  onClick={() => setShowNewDialog(true)}
-                  className="btn-luxe btn-luxe--primary !h-9"
+          <div className="relative pb-3 pt-2">
+            <div
+              aria-hidden
+              className="absolute -top-6 -left-8 w-64 h-32 pointer-events-none"
+              style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)" }}
+            />
+            <div className="relative flex items-end justify-between gap-5 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <div
+                  className="flex items-center gap-2.5 mb-3 flex-wrap"
+                  style={{ fontFamily: "var(--font-display)" }}
                 >
-                  <Plus className="h-4 w-4" />
-                  Nieuw voertuig
-                </button>
-              ) : null
-            }
-          />
-
-          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
-            {[
-              { value: "voertuigen", label: "Voertuigen" },
-              { value: "types", label: "Types" },
-              { value: "voertuigcheck", label: "Voertuigcheck" },
-            ].map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => setActiveTab(t.value)}
-                aria-pressed={activeTab === t.value}
-                className={cn(
-                  "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
-                  activeTab === t.value
-                    ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
-                    : "text-muted-foreground/70 hover:text-foreground",
-                )}
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                {t.label}
-              </button>
-            ))}
+                  <span
+                    aria-hidden
+                    className="inline-block h-[1px] w-8"
+                    style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold)/0.7))" }}
+                  />
+                  <span className="text-[10px] uppercase tracking-[0.3em] text-[hsl(var(--gold-deep))] font-semibold">
+                    {greeting}
+                  </span>
+                  <span
+                    aria-hidden
+                    className="inline-block h-[3px] w-[3px] rounded-full"
+                    style={{ background: "hsl(var(--gold) / 0.5)" }}
+                  />
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80 tabular-nums font-medium">
+                    {totalVehicles} voertuigen, {availableVehicles} beschikbaar
+                    {archivedVehicles > 0 ? `, ${archivedVehicles} archief` : ""}
+                  </span>
+                  {overdueCount > 0 && (
+                    <>
+                      <span
+                        aria-hidden
+                        className="inline-block h-[3px] w-[3px] rounded-full"
+                        style={{ background: "hsl(var(--gold) / 0.5)" }}
+                      />
+                      <span className="text-[10px] uppercase tracking-[0.22em] text-amber-700 font-semibold tabular-nums">
+                        {overdueCount} onderhoud
+                      </span>
+                    </>
+                  )}
+                </div>
+                <h1
+                  className="text-[2.25rem] leading-[1.05] font-semibold tracking-tight text-foreground"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  Vloot
+                </h1>
+                <div className="mt-3 inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
+                  {[
+                    { value: "voertuigen", label: "Voertuigen" },
+                    { value: "types", label: "Types" },
+                    { value: "voertuigcheck", label: "Voertuigcheck" },
+                  ].map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setActiveTab(t.value)}
+                      aria-pressed={activeTab === t.value}
+                      className={cn(
+                        "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
+                        activeTab === t.value
+                          ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
+                          : "text-muted-foreground/70 hover:text-foreground",
+                      )}
+                      style={{ fontFamily: "var(--font-display)" }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {activeTab === "voertuigen" && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewDialog(true)}
+                    className="btn-luxe btn-luxe--primary"
+                  >
+                    <Plus className="h-4 w-4" /> Nieuw voertuig
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <TabsContent value="voertuigcheck" className="mt-0">
