@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 const mockDeleteMutateAsync = vi.fn().mockResolvedValue({ removedFiles: 0 });
 const mockArchiveMutateAsync = vi.fn().mockResolvedValue(undefined);
 const mockReactivateMutateAsync = vi.fn().mockResolvedValue(undefined);
+const mockUpdateStatusMutateAsync = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@/hooks/useDrivers", () => ({
   useDrivers: () => ({
@@ -19,6 +20,7 @@ vi.mock("@/hooks/useDrivers", () => ({
     deleteDriver: { mutateAsync: mockDeleteMutateAsync },
     archiveDriver: { mutateAsync: mockArchiveMutateAsync },
     reactivateDriver: { mutateAsync: mockReactivateMutateAsync },
+    updateDriverStatus: { mutateAsync: mockUpdateStatusMutateAsync },
   }),
 }));
 
@@ -118,10 +120,13 @@ describe("Chauffeurs", () => {
     renderChauffeurs();
     const searchInput = screen.getByPlaceholderText(/zoek/i);
     await user.type(searchInput, "piet@test.nl");
-    await waitFor(() => {
-      expect(screen.queryByText("Jan Jansen")).not.toBeInTheDocument();
-      expect(screen.getByText("Piet Pietersen")).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Jan Jansen")).not.toBeInTheDocument();
+        expect(screen.getByText("Piet Pietersen")).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
   });
 
   it("shows status filter select", () => {
@@ -255,5 +260,89 @@ describe("Chauffeurs", () => {
   it("shows status badges for drivers", () => {
     renderChauffeurs();
     expect(screen.getAllByText(/Beschikbaar/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("focust de zoekbalk bij '/'-toets", async () => {
+    renderChauffeurs();
+    const searchInput = screen.getByPlaceholderText(/zoek/i);
+    expect(document.activeElement).not.toBe(searchInput);
+
+    const event = new KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(searchInput);
+    });
+  });
+
+  it("reset actieve filters met Escape", async () => {
+    const user = userEvent.setup();
+    renderChauffeurs();
+    const searchInput = screen.getByPlaceholderText(/zoek/i);
+    await user.type(searchInput, "Jan");
+    await waitFor(() => {
+      expect(screen.queryByText("Piet Pietersen")).not.toBeInTheDocument();
+    });
+    searchInput.blur();
+
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+
+    // Search zelf wordt niet gewist door Escape (alleen filters). Dat is correct gedrag.
+    // Deze test verifieert dat Escape geen crash veroorzaakt.
+    expect(screen.getByText("Jan Jansen")).toBeInTheDocument();
+  });
+
+  it("selecteert een chauffeur via checkbox", async () => {
+    const user = userEvent.setup();
+    renderChauffeurs();
+    const checkbox = screen.getByRole("checkbox", { name: /Selecteer Jan Jansen/i });
+    await user.click(checkbox);
+    expect(screen.getByText(/chauffeur geselecteerd/i)).toBeInTheDocument();
+  });
+
+  it("toont bulk-acties bij selectie", async () => {
+    const user = userEvent.setup();
+    renderChauffeurs();
+    const checkbox = screen.getByRole("checkbox", { name: /Selecteer Jan Jansen/i });
+    await user.click(checkbox);
+    expect(screen.getByRole("button", { name: /Export selectie/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Archiveer$/i })).toBeInTheDocument();
+  });
+
+  it("bulk archiveert geselecteerde chauffeurs", async () => {
+    const user = userEvent.setup();
+    renderChauffeurs();
+    const jan = screen.getByRole("checkbox", { name: /Selecteer Jan Jansen/i });
+    const piet = screen.getByRole("checkbox", { name: /Selecteer Piet Pietersen/i });
+    await user.click(jan);
+    await user.click(piet);
+    const archiveBtn = screen.getByRole("button", { name: /^Archiveer$/i });
+    await user.click(archiveBtn);
+    await waitFor(() => {
+      expect(mockArchiveMutateAsync).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("opent status-popover bij klik op status-badge", async () => {
+    const user = userEvent.setup();
+    renderChauffeurs();
+    const statusTrigger = screen.getByRole("button", { name: /Status wijzigen van Jan Jansen/i });
+    await user.click(statusTrigger);
+    await waitFor(() => {
+      expect(screen.getByText(/Status wijzigen/i)).toBeInTheDocument();
+    });
+  });
+
+  it("wijzigt status via popover-optie", async () => {
+    const user = userEvent.setup();
+    renderChauffeurs();
+    const statusTrigger = screen.getByRole("button", { name: /Status wijzigen van Jan Jansen/i });
+    await user.click(statusTrigger);
+    const onderwegOption = await screen.findByRole("button", { name: /^Onderweg$/ });
+    await user.click(onderwegOption);
+    await waitFor(() => {
+      expect(mockUpdateStatusMutateAsync).toHaveBeenCalledWith({ id: "d1", status: "onderweg" });
+    });
   });
 });

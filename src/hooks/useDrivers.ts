@@ -171,6 +171,20 @@ export function useDrivers() {
     },
   });
 
+  const updateDriverStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase
+        .from("drivers" as any)
+        .update({ status })
+        .eq("id", id);
+      if (error) throw error;
+      return { id, status };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["drivers"] });
+    },
+  });
+
   return {
     ...query,
     createDriver,
@@ -178,6 +192,7 @@ export function useDrivers() {
     deleteDriver,
     archiveDriver,
     reactivateDriver,
+    updateDriverStatus,
   };
 }
 
