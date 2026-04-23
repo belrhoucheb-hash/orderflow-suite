@@ -51,6 +51,9 @@ export const clientInputSchema = z
     billing_emails: z
       .array(z.string().trim().email("Ongeldig e-mailadres"))
       .default([]),
+    reminder_emails: z
+      .array(z.string().trim().email("Ongeldig e-mailadres"))
+      .default([]),
     billing_address: addressSchema,
 
     shipping_same_as_main: z.boolean().default(true),

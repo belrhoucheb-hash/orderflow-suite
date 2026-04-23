@@ -65,6 +65,7 @@ interface FormState {
   billing_same_as_main: boolean;
   billing_email: string;
   billing_emails: string[];
+  reminder_emails: string[];
   billing_address: AddressValue;
 
   shipping_same_as_main: boolean;
@@ -89,6 +90,7 @@ const INITIAL: FormState = {
   billing_same_as_main: true,
   billing_email: "",
   billing_emails: [],
+  reminder_emails: [],
   billing_address: { ...EMPTY_ADDRESS },
   shipping_same_as_main: true,
   shipping_address: { ...EMPTY_ADDRESS },
@@ -125,6 +127,7 @@ function formFromClient(c: Client): FormState {
     billing_same_as_main: c.billing_same_as_main ?? true,
     billing_email: c.billing_email ?? "",
     billing_emails: c.billing_emails ?? [],
+    reminder_emails: c.reminder_emails ?? [],
     billing_address: addressFromClient(c, "billing_"),
     shipping_same_as_main: c.shipping_same_as_main ?? true,
     shipping_address: addressFromClient(c, "shipping_"),
@@ -308,6 +311,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
       billing_same_as_main: form.billing_same_as_main,
       billing_email: form.billing_emails[0] ?? form.billing_email,
       billing_emails: form.billing_emails,
+      reminder_emails: form.reminder_emails,
       billing_address: form.billing_address,
       shipping_same_as_main: form.shipping_same_as_main,
       shipping_address: form.shipping_address,
@@ -355,6 +359,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
         billing_email:
           parsed.data.billing_emails[0] || parsed.data.billing_email || null,
         billing_emails: parsed.data.billing_emails,
+        reminder_emails: parsed.data.reminder_emails,
         billing_address: composeAddressString(billing) || null,
         billing_zipcode: billing.zipcode || null,
         billing_city: billing.city || null,
@@ -578,6 +583,17 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
                   placeholder="Voeg een e-mailadres toe en druk op Enter"
                 />
                 {errors.billing_emails && <ErrorText>{errors.billing_emails}</ErrorText>}
+              </div>
+              <div>
+                <Label>Betalingsherinneringen e-mail</Label>
+                <EmailChipInput
+                  value={form.reminder_emails}
+                  onChange={(next) =>
+                    setForm((prev) => ({ ...prev, reminder_emails: next }))
+                  }
+                  placeholder="Leeg = gebruik de factuur-e-mails"
+                />
+                {errors.reminder_emails && <ErrorText>{errors.reminder_emails}</ErrorText>}
               </div>
               {!form.billing_same_as_main && (
                 <AddressAutocomplete
