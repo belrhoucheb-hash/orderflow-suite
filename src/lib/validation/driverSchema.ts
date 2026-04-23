@@ -81,8 +81,7 @@ function ageInYears(isoDate: string): number {
   return age;
 }
 
-export const driverSchema = z
-  .object({
+export const driverBaseSchema = z.object({
     name: z.string().trim().min(1, "Naam is verplicht"),
     email: optionalEmail,
     phone: optionalPhone,
@@ -134,7 +133,9 @@ export const driverSchema = z
       .optional()
       .or(z.literal("")),
     emergency_contact_phone: optionalPhone,
-  })
+  });
+
+export const driverSchema = driverBaseSchema
   .superRefine((data, ctx) => {
     if (data.bsn && data.bsn.trim() !== "" && !isValidBsn(data.bsn)) {
       ctx.addIssue({
