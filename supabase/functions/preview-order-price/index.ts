@@ -29,18 +29,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
+import { getUserAuth } from "../_shared/auth.ts";
 import { calculateOrderPrice } from "../_shared/pricingEngine.ts";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 import type {
   PricingOrderInput,
   RateCard,
   Surcharge,
   PriceBreakdown,
 } from "../_shared/rateModels.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 interface PreviewRequest {
   tenant_id: string;
@@ -78,7 +75,7 @@ interface PreviewError {
   error: string;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -95,23 +92,38 @@ function validate(body: unknown): PreviewRequest | string {
 }
 
 serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req);
+
+  if (req.method !== "POST") return jsonResponse({ ok: false, error: "Method not allowed" }, 405, corsHeaders);
+
+  // Vereist een geldige user-JWT met tenant_id; wordt vanuit het NewOrder-form
+  // aangeroepen via supabase.functions.invoke (browser-sessie).
+  const auth = await getUserAuth(req);
+  if (!auth.ok) {
+    return jsonResponse({ ok: false, error: auth.error }, auth.status, corsHeaders);
+  }
 
   let raw: unknown;
   try {
     raw = await req.json();
   } catch {
-    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400);
+    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400, corsHeaders);
   }
 
   const input = validate(raw);
-  if (typeof input === "string") return jsonResponse({ ok: false, error: input }, 400);
+  if (typeof input === "string") return jsonResponse({ ok: false, error: input }, 400, corsHeaders);
+
+  // Cross-tenant blokkeren: tenant_id in body moet matchen met token.
+  if (input.tenant_id !== auth.tenantId) {
+    return jsonResponse({ ok: false, error: "Forbidden: tenant mismatch" }, 403, corsHeaders);
+  }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) {
-    return jsonResponse({ ok: false, error: "Server niet geconfigureerd" }, 500);
+    return jsonResponse({ ok: false, error: "Server niet geconfigureerd" }, 500, corsHeaders);
   }
 
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
@@ -123,7 +135,7 @@ serve(async (req: Request) => {
     });
     if (!flag) {
       const resp: PreviewSkipped = { ok: true, skipped: true, reason: "Tariefmotor staat uit voor deze tenant" };
-      return jsonResponse(resp);
+      return jsonResponse(resp, 200, corsHeaders);
     }
 
     // Rate cards met rules laden, tenant-scoped.
@@ -134,10 +146,10 @@ serve(async (req: Request) => {
       .eq("is_active", true);
     if (rcErr) {
       const resp: PreviewError = { ok: false, error: `Fout bij laden tariefkaarten: ${rcErr.message}` };
-      return jsonResponse(resp, 500);
+      return jsonResponse(resp, 500, corsHeaders);
     }
     if (!rateCards || rateCards.length === 0) {
-      return jsonResponse({ ok: false, error: "Geen actieve tariefkaart gevonden" } as PreviewError, 422);
+      return jsonResponse({ ok: false, error: "Geen actieve tariefkaart gevonden" } as PreviewError, 422, corsHeaders);
     }
 
     // Kies card: prefereer klant-specifiek, anders tenant-default.
@@ -148,7 +160,7 @@ serve(async (req: Request) => {
     const card = clientCard ?? defaultCard ?? (rateCards as RateCard[])[0];
 
     if (card.currency !== "EUR") {
-      return jsonResponse({ ok: false, error: `Alleen EUR ondersteund (gevonden: ${card.currency})` } as PreviewError, 422);
+      return jsonResponse({ ok: false, error: `Alleen EUR ondersteund (gevonden: ${card.currency})` } as PreviewError, 422, corsHeaders);
     }
 
     // Surcharges laden.
@@ -197,10 +209,10 @@ serve(async (req: Request) => {
       rate_card_id: card.id,
       rate_card_name: card.name,
     };
-    return jsonResponse(resp);
+    return jsonResponse(resp, 200, corsHeaders);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("preview-order-price error:", msg);
-    return jsonResponse({ ok: false, error: msg } as PreviewError, 500);
+    return jsonResponse({ ok: false, error: msg } as PreviewError, 500, corsHeaders);
   }
 });

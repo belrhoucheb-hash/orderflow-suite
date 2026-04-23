@@ -19,10 +19,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
+import { isTrustedCaller } from "../_shared/auth.ts";
 import { calculateOrderPrice } from "../_shared/pricingEngine.ts";
 import { selectSmallestVehicleType } from "../_shared/vehicleSelector.ts";
 import { selectRateCard } from "../_shared/rateCardSelector.ts";
 import { buildSnapshot, buildErrorSnapshot } from "../_shared/pricingSnapshot.ts";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 import type {
   PricingOrderInput,
   VehicleType,
@@ -32,10 +34,7 @@ import type {
   PricingSnapshotV2,
 } from "../_shared/rateModels.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const CORS_OPTIONS = { extraHeaders: ["x-cron-secret"] };
 
 interface RequestBody {
   order_id: string;
@@ -59,7 +58,7 @@ interface ErrorResponse {
   snapshot?: PricingSnapshotV2;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200, corsHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -362,29 +361,35 @@ async function persistSnapshot(
 // ─── HTTP handler ───────────────────────────────────────────
 
 serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  const preflight = handleOptions(req, CORS_OPTIONS);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req, CORS_OPTIONS);
+
+  // Trusted-callers only: deze function muteert pricing-snapshots en moet
+  // alleen door DB-triggers / cron / interne workers worden aangeroepen.
+  if (!isTrustedCaller(req)) {
+    return jsonResponse({ ok: false, error: "Unauthorized" }, 401, corsHeaders);
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
+    return jsonResponse({ ok: false, error: "Method not allowed" }, 405, corsHeaders);
   }
 
   let body: RequestBody;
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400);
+    return jsonResponse({ ok: false, error: "Invalid JSON body" }, 400, corsHeaders);
   }
 
   if (!body.order_id || typeof body.order_id !== "string") {
-    return jsonResponse({ ok: false, error: "order_id required" }, 400);
+    return jsonResponse({ ok: false, error: "order_id required" }, 400, corsHeaders);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) {
-    return jsonResponse({ ok: false, error: "Server niet geconfigureerd" }, 500);
+    return jsonResponse({ ok: false, error: "Server niet geconfigureerd" }, 500, corsHeaders);
   }
 
   const supabase = createClient(supabaseUrl, serviceKey, {
@@ -393,10 +398,10 @@ serve(async (req: Request) => {
 
   try {
     const result = await handleRequest(supabase, body);
-    return jsonResponse(result, "ok" in result && result.ok ? 200 : 422);
+    return jsonResponse(result, "ok" in result && result.ok ? 200 : 422, corsHeaders);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("calculate-order-price error:", msg);
-    return jsonResponse({ ok: false, error: msg }, 500);
+    return jsonResponse({ ok: false, error: msg }, 500, corsHeaders);
   }
 });

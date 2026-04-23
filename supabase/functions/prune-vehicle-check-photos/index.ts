@@ -9,28 +9,26 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getUserAuth, isTrustedCaller } from "../_shared/auth.ts";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
-const ALLOWED_ORIGINS = new Set([
-  "https://orderflow-suite.vercel.app",
-  "http://localhost:8080",
-  "http://localhost:8081",
-  "http://localhost:5173",
-  "http://127.0.0.1:8080",
-]);
-
-function corsFor(req: Request): Record<string, string> {
-  const origin = req.headers.get("origin") ?? "";
-  const allow = ALLOWED_ORIGINS.has(origin) ? origin : "https://orderflow-suite.vercel.app";
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
-    "Vary": "Origin",
-  };
-}
+const CORS_OPTIONS = { extraHeaders: ["x-cron-secret"] };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsFor(req) });
+  const preflight = handleOptions(req, CORS_OPTIONS);
+  if (preflight) return preflight;
+
+  // Twee geldige routes: cron / interne caller (service-role of CRON_SECRET),
+  // of een geauthenticeerde planner/admin via UI met user-JWT.
+  if (!isTrustedCaller(req)) {
+    const auth = await getUserAuth(req);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), {
+        status: auth.status,
+        headers: { ...corsFor(req, CORS_OPTIONS), "Content-Type": "application/json" },
+      });
+    }
+  }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -38,7 +36,7 @@ serve(async (req) => {
     if (!supabaseUrl || !serviceKey) {
       return new Response(
         JSON.stringify({ error: "SUPABASE_URL of SUPABASE_SERVICE_ROLE_KEY ontbreekt" }),
-        { status: 500, headers: { ...corsFor(req), "Content-Type": "application/json" } },
+        { status: 500, headers: { ...corsFor(req, CORS_OPTIONS), "Content-Type": "application/json" } },
       );
     }
 
@@ -50,7 +48,7 @@ serve(async (req) => {
       if (!Number.isFinite(parsed) || parsed < 1) {
         return new Response(
           JSON.stringify({ error: "days moet een geheel getal >= 1 zijn" }),
-          { status: 400, headers: { ...corsFor(req), "Content-Type": "application/json" } },
+          { status: 400, headers: { ...corsFor(req, CORS_OPTIONS), "Content-Type": "application/json" } },
         );
       }
       days = parsed;
@@ -70,7 +68,7 @@ serve(async (req) => {
       console.error("prune_vehicle_check_photos RPC error:", error);
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
-        headers: { ...corsFor(req), "Content-Type": "application/json" },
+        headers: { ...corsFor(req, CORS_OPTIONS), "Content-Type": "application/json" },
       });
     }
 
@@ -94,13 +92,13 @@ serve(async (req) => {
         deleted_bytes_estimate: deletedBytes,
         days_threshold: days,
       }),
-      { headers: { ...corsFor(req), "Content-Type": "application/json" } },
+      { headers: { ...corsFor(req, CORS_OPTIONS), "Content-Type": "application/json" } },
     );
   } catch (e) {
     console.error(e);
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
-      headers: { ...corsFor(req), "Content-Type": "application/json" },
+      headers: { ...corsFor(req, CORS_OPTIONS), "Content-Type": "application/json" },
     });
   }
 });

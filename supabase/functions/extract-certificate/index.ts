@@ -18,27 +18,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-
-const ALLOWED_ORIGINS = new Set([
-  "https://orderflow-suite.vercel.app",
-  "http://localhost:8080",
-  "http://localhost:8081",
-  "http://localhost:5173",
-  "http://127.0.0.1:8080",
-]);
-
-function corsFor(req: Request): Record<string, string> {
-  const origin = req.headers.get("origin") ?? "";
-  const allow = ALLOWED_ORIGINS.has(origin)
-    ? origin
-    : "https://orderflow-suite.vercel.app";
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
-    Vary: "Origin",
-  };
-}
+import { getUserAuth } from "../_shared/auth.ts";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
 function geminiUrl(): string {
   const key = Deno.env.get("GEMINI_API_KEY");
@@ -149,10 +130,21 @@ function validateCode(raw: string | null, types: CertType[]): string | null {
 }
 
 serve(async (req) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
   const cors = corsFor(req);
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: cors });
+  }
+
+  // Vereist een geldige user-JWT met tenant_id; alleen ingelogde planners
+  // mogen certificaten via AI scannen.
+  const auth = await getUserAuth(req);
+  if (!auth.ok) {
+    return new Response(
+      JSON.stringify({ error: auth.error }),
+      { status: auth.status, headers: { ...cors, "content-type": "application/json" } },
+    );
   }
 
   try {
@@ -165,6 +157,14 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "file_base64, mime_type en tenant_id zijn verplicht" }),
         { status: 400, headers: { ...cors, "content-type": "application/json" } },
+      );
+    }
+
+    // Cross-tenant blokkeren: tenant_id in body moet matchen met token.
+    if (tenantId !== auth.tenantId) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: tenant mismatch" }),
+        { status: 403, headers: { ...cors, "content-type": "application/json" } },
       );
     }
     if (fileBase64.length > 14 * 1024 * 1024) {

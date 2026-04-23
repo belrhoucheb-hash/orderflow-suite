@@ -13,11 +13,10 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { isTrustedCaller } from "../_shared/auth.ts";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
-};
+const CORS_OPTIONS = { extraHeaders: ["x-cron-secret"] };
 
 interface ExpiringRecord {
   id: string;
@@ -65,8 +64,16 @@ function daysBetween(today: Date, target: Date): number {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  const preflight = handleOptions(req, CORS_OPTIONS);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req, CORS_OPTIONS);
+
+  // Cron-only: alleen pg_cron (service-role) of CRON_SECRET mag triggeren.
+  if (!isTrustedCaller(req)) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "content-type": "application/json" },
+    });
   }
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");

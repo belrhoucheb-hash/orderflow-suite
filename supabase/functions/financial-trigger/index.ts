@@ -13,6 +13,7 @@
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isTrustedCaller } from "../_shared/auth.ts";
 
 // Default margin threshold: 15%
 const DEFAULT_MARGIN_THRESHOLD_PCT = 15;
@@ -33,6 +34,14 @@ interface TripPayload {
 }
 
 Deno.serve(async (req: Request) => {
+  // Webhook-only: DB-webhook stuurt service-role JWT, of CRON_SECRET via header.
+  if (!isTrustedCaller(req)) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   try {
     // 1. Parse the webhook payload
     const payload: TripPayload = await req.json();

@@ -12,12 +12,10 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { corsFor, handleOptions } from "../_shared/cors.ts";
+import { getUserAuth, isTrustedCaller } from "../_shared/auth.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+const CORS_OPTIONS = { extraHeaders: ["x-cron-secret"] };
 
 const REMINDER_THRESHOLD_HOURS = 4;
 const MIN_REMINDER_GAP_MS = 3 * 60 * 60 * 1000; // niet vaker dan 1x/3u
@@ -46,8 +44,22 @@ interface OrderRow {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS")
-    return new Response(null, { headers: corsHeaders });
+  const preflight = handleOptions(req, CORS_OPTIONS);
+  if (preflight) return preflight;
+  const corsHeaders = corsFor(req, CORS_OPTIONS);
+
+  // Twee geldige routes:
+  //   1. Cron / DB-trigger met service-role JWT of CRON_SECRET (volledige sweep).
+  //   2. Geauthenticeerde planner via UI ("Nu herinneren"-knop) met user-JWT.
+  if (!isTrustedCaller(req)) {
+    const auth = await getUserAuth(req);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), {
+        status: auth.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
