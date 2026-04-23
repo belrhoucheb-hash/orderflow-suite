@@ -30,8 +30,8 @@ import {
   EMPTY_ADDRESS,
   type AddressValue,
 } from "@/components/clients/AddressAutocomplete";
-import { KvkLookupBar } from "@/components/clients/KvkLookupBar";
-import type { KvkCompany } from "@/hooks/useKvkLookup";
+import { CompanyLookupBar } from "@/components/clients/CompanyLookupBar";
+import type { CompanyDetails } from "@/hooks/useCompanyLookup";
 import { toast } from "sonner";
 
 interface Props {
@@ -169,11 +169,13 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
     (v: AddressValue) =>
       setForm((prev) => ({ ...prev, [key]: v }));
 
-  const applyKvkResult = async (r: KvkCompany) => {
+  const applyCompanyLookup = async (r: CompanyDetails) => {
     setForm((prev) => ({
       ...prev,
       name: r.name || prev.name,
-      kvk_number: r.kvk || prev.kvk_number,
+      // KvK-nummer niet automatisch invullen: Google Places kent het
+      // Handelsregister niet, dus dat veld blijft handmatig.
+      primary_phone: r.phone || prev.primary_phone,
     }));
 
     const addressQuery = [
@@ -413,7 +415,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
           <DialogTitle className="font-display text-lg tracking-tight">{isEdit ? "Klant bewerken" : "Nieuwe klant"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {!isEdit && <KvkLookupBar onSelect={applyKvkResult} />}
+          {!isEdit && <CompanyLookupBar onSelect={applyCompanyLookup} />}
           <Section title="Bedrijfsgegevens">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">

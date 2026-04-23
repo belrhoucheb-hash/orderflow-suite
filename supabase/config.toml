@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.kvk-lookup]
 verify_jwt = false
+
+[functions.google-places-business]
+verify_jwt = false
