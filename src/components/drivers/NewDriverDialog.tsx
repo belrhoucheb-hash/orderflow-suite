@@ -180,7 +180,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   const { data: certifications = [] } = useDriverCertifications();
   const activeCertifications = certifications.filter((c) => c.is_active);
 
-  const { data: certExpiries, upsertExpiry, deleteExpiry } = useDriverCertificationExpiry(
+  const { data: certExpiries, upsertExpiry } = useDriverCertificationExpiry(
     driver?.id ?? null,
   );
 
@@ -333,12 +333,13 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
         toast.success("Chauffeur toegevoegd");
       }
 
-      // Cert-vervaldata synchroniseren met de aangevinkte certs:
-      // 1) upsert voor aangevinkte certs met een ingevulde vervaldatum,
-      // 2) delete expiry-rijen die horen bij certs die NIET meer zijn aangevinkt,
-      //    zodat uitgevinkte certificeringen niet blijven meetellen in
-      //    "Verlopend 60d"-kaart.
-      const selected = new Set(form.selectedCerts);
+      // Alleen upserten voor aangevinkte certs met een ingevulde
+      // vervaldatum. Rijen in driver_certification_expiry worden hier
+      // NIET meer gedelete op basis van selectedCerts, omdat die tabel
+      // inmiddels ook geuploade documenten (document_url / document_name)
+      // bevat via DriverCertificateRecordsSection. Een checkbox uitvinken
+      // mag zo'n rij-met-bestand niet stilletjes weggooien, dat moet
+      // bewust via de prullenbak in de certificaten-tab.
       const expiryFailures: string[] = [];
 
       for (const code of form.selectedCerts) {
@@ -352,18 +353,6 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
             });
           } catch {
             expiryFailures.push(code);
-          }
-        }
-      }
-
-      if (certExpiries) {
-        for (const row of certExpiries) {
-          if (!selected.has(row.certification_code)) {
-            try {
-              await deleteExpiry.mutateAsync(row.id);
-            } catch {
-              expiryFailures.push(row.certification_code);
-            }
           }
         }
       }
