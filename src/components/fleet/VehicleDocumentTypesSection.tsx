@@ -119,8 +119,11 @@ export function VehicleDocumentTypesSection() {
 
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-            <FileText className="h-4.5 w-4.5 text-primary" strokeWidth={1.5} />
+          <div
+            className="h-9 w-9 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.3)]"
+            style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.25))" }}
+          >
+            <FileText className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
           </div>
           <div>
             <h3 className="text-lg font-bold">Voertuigdocumenten</h3>
@@ -129,17 +132,17 @@ export function VehicleDocumentTypesSection() {
             </p>
           </div>
         </div>
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 rounded-lg"
+        <button
+          type="button"
           onClick={() => {
             setEditing(null);
             setDialogOpen(true);
           }}
+          className="btn-luxe btn-luxe--primary !h-8"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
           Toevoegen
-        </Button>
+        </button>
       </div>
 
       <div className="card--luxe overflow-hidden">

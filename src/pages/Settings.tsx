@@ -236,8 +236,8 @@ const Settings = () => {
         subtitle={t('pages.settings.subtitle')}
       />
 
-      <Tabs 
-        defaultValue={getActiveTab()} 
+      <Tabs
+        value={getActiveTab()}
         onValueChange={handleTabChange}
         className="space-y-6"
       >

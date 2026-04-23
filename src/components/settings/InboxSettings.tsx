@@ -201,9 +201,13 @@ export function InboxSettings() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={openCreate} size="sm">
-              <Plus className="h-4 w-4 mr-1" /> Nieuwe inbox
-            </Button>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="btn-luxe btn-luxe--primary !h-9"
+            >
+              <Plus className="h-4 w-4" /> Nieuwe inbox
+            </button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>

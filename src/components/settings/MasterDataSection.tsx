@@ -261,13 +261,13 @@ export function MasterDataSection() {
               <p className="text-xs text-muted-foreground">Eenheden voor orders en capaciteitsberekening.</p>
             </div>
           </div>
-          <Button
-            size="sm"
-            className="h-8 gap-1.5 rounded-lg"
+          <button
+            type="button"
             onClick={() => { setLoadingUnitInitial(null); setLoadingUnitDialogOpen(true); }}
+            className="btn-luxe btn-luxe--primary !h-8"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />Toevoegen
-          </Button>
+          </button>
         </div>
 
         <Card className="card--luxe overflow-hidden">
@@ -353,13 +353,13 @@ export function MasterDataSection() {
               <p className="text-xs text-muted-foreground">Speciale kenmerken zoals ADR, Koeling of Laadklep.</p>
             </div>
           </div>
-          <Button
-            size="sm"
-            className="h-8 gap-1.5 rounded-lg"
+          <button
+            type="button"
             onClick={() => { setRequirementInitial(null); setRequirementDialogOpen(true); }}
+            className="btn-luxe btn-luxe--primary !h-8"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />Toevoegen
-          </Button>
+          </button>
         </div>
 
         <Card className="card--luxe overflow-hidden">
@@ -485,8 +485,11 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
     <section className="space-y-4">
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Warehouse className="h-4.5 w-4.5 text-primary" strokeWidth={1.5} />
+          <div
+            className="h-9 w-9 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.3)]"
+            style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.25))" }}
+          >
+            <Warehouse className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
           </div>
           <div>
             <h3 className="text-lg font-bold">Warehouses</h3>
@@ -494,9 +497,13 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
           </div>
         </div>
         {!isAdding && (
-          <Button size="sm" className="h-8 gap-1.5 rounded-lg" onClick={() => { resetForm(); setIsAdding(true); }}>
+          <button
+            type="button"
+            onClick={() => { resetForm(); setIsAdding(true); }}
+            className="btn-luxe btn-luxe--primary !h-8"
+          >
             <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />Toevoegen
-          </Button>
+          </button>
         )}
       </div>
 
@@ -508,7 +515,7 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
           </div>
         ) : (
           <Table>
-            <TableHeader className="bg-muted/30">
+            <TableHeader className="bg-[hsl(var(--gold-soft)/0.3)]">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[200px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider font-semibold">Adres</TableHead>
@@ -519,7 +526,7 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
             </TableHeader>
             <TableBody>
               {isAdding && (
-                <TableRow className="bg-primary/5 hover:bg-primary/5 border-b-primary/20">
+                <TableRow className="bg-[hsl(var(--gold-soft)/0.25)] hover:bg-[hsl(var(--gold-soft)/0.25)] border-b-[hsl(var(--gold)/0.25)]">
                   <TableCell><Input className="h-8 text-xs bg-background" placeholder="RCS Export Hub" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></TableCell>
                   <TableCell><Input className="h-8 text-xs bg-background" placeholder="Volledig adres" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></TableCell>
                   <TableCell>
@@ -555,7 +562,7 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
                   <TableCell className="text-xs text-center text-muted-foreground">{wh.is_default ? 'Ja' : ''}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" aria-label={`Bewerken ${wh.name}`} className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => startEdit(wh)}>
+                      <Button size="icon" variant="ghost" aria-label={`Bewerken ${wh.name}`} className="h-7 w-7 text-muted-foreground hover:text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.5)]" onClick={() => startEdit(wh)}>
                         <Edit2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                       </Button>
                       <Button size="icon" variant="ghost" aria-label={`Verwijderen ${wh.name}`} className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => onRequestDelete(wh)}>
