@@ -19,6 +19,7 @@ export interface Client {
   country: string;
   kvk_number: string | null;
   btw_number: string | null;
+  debtor_number: string | null;
   payment_terms: number | null;
   is_active: boolean;
   created_at: string;

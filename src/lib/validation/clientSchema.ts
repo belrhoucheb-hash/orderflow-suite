@@ -31,6 +31,7 @@ export const clientInputSchema = z
     phone: optionalText,
     kvk_number: optionalText,
     btw_number: optionalText,
+    debtor_number: optionalText,
     payment_terms: z
       .number()
       .int()

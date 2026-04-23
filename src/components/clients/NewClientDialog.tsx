@@ -49,6 +49,7 @@ interface FormState {
   phone: string;
   kvk_number: string;
   btw_number: string;
+  debtor_number: string;
 
   main_address: AddressValue;
 
@@ -71,6 +72,7 @@ const INITIAL: FormState = {
   phone: "",
   kvk_number: "",
   btw_number: "",
+  debtor_number: "",
   main_address: { ...EMPTY_ADDRESS },
   billing_same_as_main: true,
   billing_email: "",
@@ -103,6 +105,7 @@ function formFromClient(c: Client): FormState {
     phone: c.phone ?? "",
     kvk_number: c.kvk_number ?? "",
     btw_number: c.btw_number ?? "",
+    debtor_number: c.debtor_number ?? "",
     main_address: addressFromClient(c, ""),
     billing_same_as_main: c.billing_same_as_main ?? true,
     billing_email: c.billing_email ?? "",
@@ -282,6 +285,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
       phone: form.phone,
       kvk_number: form.kvk_number,
       btw_number: form.btw_number,
+      debtor_number: form.debtor_number,
       payment_terms: 30,
       main_address: form.main_address,
       billing_same_as_main: form.billing_same_as_main,
@@ -314,6 +318,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
         phone: parsed.data.phone || null,
         kvk_number: parsed.data.kvk_number || null,
         btw_number: parsed.data.btw_number || null,
+        debtor_number: parsed.data.debtor_number || null,
 
         address: composeAddressString(main) || null,
         zipcode: main.zipcode || null,
@@ -441,6 +446,15 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
                 <Input
                   value={form.btw_number}
                   onChange={setField("btw_number")}
+                  className="field-luxe"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Debiteurnummer</Label>
+                <Input
+                  value={form.debtor_number}
+                  onChange={setField("debtor_number")}
+                  placeholder="Bijv. 10042"
                   className="field-luxe"
                 />
               </div>
