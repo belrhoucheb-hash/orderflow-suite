@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
@@ -14,6 +14,7 @@ export interface Tenant {
 interface TenantContextType {
   tenant: Tenant | null;
   loading: boolean;
+  refresh: () => Promise<void>;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -47,9 +48,15 @@ function hexToHSL(hex: string): string {
 }
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshCounter, setRefreshCounter] = useState(0);
+  const refresh = useCallback(async () => {
+    setRefreshCounter((c) => c + 1);
+  }, []);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
 
   useEffect(() => {
     async function resolveTenant() {
@@ -139,7 +146,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
     
     resolveTenant();
-  }, [user, authLoading]);
+  }, [user, authLoading, refreshCounter]);
 
   // Inject dynamic CSS properties
   useEffect(() => {
@@ -155,7 +162,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, [tenant]);
 
   return (
-    <TenantContext.Provider value={{ tenant, loading }}>
+    <TenantContext.Provider value={{ tenant, loading, refresh }}>
       {children}
     </TenantContext.Provider>
   );

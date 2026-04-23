@@ -24,8 +24,10 @@ import { VehicleDocumentTypesSection } from "@/components/fleet/VehicleDocumentT
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
+import { useUpdateTenantBranding } from "@/hooks/useUpdateTenant";
 import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
+import { PricingPreview } from "@/components/settings/PricingPreview";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
 import { InboxSettings } from "@/components/settings/InboxSettings";
@@ -111,23 +113,40 @@ const Settings = () => {
   const [companyName, setCompanyName] = useState("");
   const [primaryColor, setPrimaryColor] = useState("#3b82f6");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const updateBranding = useUpdateTenantBranding();
 
   useEffect(() => {
     if (tenant) {
       setCompanyName(tenant.name || "");
       setPrimaryColor(tenant.primaryColor || "#3b82f6");
-      if (tenant.logoUrl) setLogoPreview(tenant.logoUrl);
+      setLogoPreview(tenant.logoUrl || null);
+      setPendingLogoFile(null);
     }
   }, [tenant]);
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error("Logo te groot", { description: "Maximaal 2 MB." });
+        return;
+      }
+      setPendingLogoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => setLogoPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleSaveBranding = async () => {
+    await updateBranding.mutateAsync({
+      name: companyName,
+      primary_color: primaryColor,
+      logo_file: pendingLogoFile,
+    });
+    setPendingLogoFile(null);
   };
 
   // Notification settings state
@@ -479,24 +498,14 @@ const Settings = () => {
             </div>
 
             <div className="pt-4 border-t border-[hsl(var(--gold)/0.12)]">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-block">
-                      <button
-                        type="button"
-                        onClick={() => toast.success("Branding opgeslagen", { description: "Wijzigingen worden doorgevoerd." })}
-                        className="btn-luxe btn-luxe--primary !h-9"
-                      >
-                        Opslaan
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Binnenkort beschikbaar</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <button
+                type="button"
+                onClick={handleSaveBranding}
+                disabled={updateBranding.isPending}
+                className="btn-luxe btn-luxe--primary !h-9"
+              >
+                {updateBranding.isPending ? "Opslaan..." : "Opslaan"}
+              </button>
             </div>
           </div>
         </TabsContent>
@@ -841,6 +850,7 @@ const Settings = () => {
         </TabsContent>
 
         <TabsContent value="tarieven" className="space-y-6">
+          <PricingPreview />
           <RateCardSettings />
           <SurchargeSettings />
         </TabsContent>
