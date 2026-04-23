@@ -1,9 +1,9 @@
 name: E2E Tests
+# Handmatig te starten via Actions-tab. Push/PR-triggers staan uit zolang
+# secrets (E2E_USER_EMAIL/PASSWORD + VITE_SUPABASE_*) nog niet ingesteld zijn;
+# zonder die waarden kan de webserver niet booten en timeouten alle tests.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   e2e:
