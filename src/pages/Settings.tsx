@@ -1,16 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Settings as SettingsIcon,
   Database,
   Users,
   Palette,
-  Bell,
-  ShieldCheck,
   ChevronRight,
   Upload,
   MessageSquare,
-  Phone,
   Smartphone,
   Link,
   BookOpen,
@@ -18,10 +14,8 @@ import {
   FileText,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -46,6 +40,15 @@ const LANGUAGE_OPTIONS = [
   { value: "de", label: "Deutsch" },
   { value: "fr", label: "Français" },
 ];
+
+const TAB_TRIGGER_CLASS =
+  "rounded-none border-b-2 border-transparent bg-transparent shadow-none data-[state=active]:border-[hsl(var(--gold-deep))] data-[state=active]:bg-transparent data-[state=active]:text-[hsl(var(--gold-deep))] data-[state=active]:shadow-none px-3 py-2.5 text-[12px] font-medium tracking-tight text-muted-foreground hover:text-[hsl(var(--gold-deep))] transition-colors whitespace-nowrap";
+
+const LUXE_ICON_TILE =
+  "h-10 w-10 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.3)]";
+const LUXE_ICON_TILE_STYLE = {
+  background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.25))",
+} as const;
 
 const Settings = () => {
   const location = useLocation();
@@ -243,71 +246,71 @@ const Settings = () => {
         onValueChange={handleTabChange}
         className="space-y-6"
       >
-        <div className="border-b border-border/40 pb-px">
-          <TabsList className="bg-transparent h-12 w-full justify-start gap-8 p-0">
-            <TabsTrigger 
-              value="algemeen" 
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+        <div className="border-b border-[hsl(var(--gold)/0.2)] pb-px overflow-x-auto">
+          <TabsList className="bg-transparent h-auto w-full justify-start gap-0 p-0">
+            <TabsTrigger
+              value="algemeen"
+              className={TAB_TRIGGER_CLASS}
             >
               {t('pages.settings.tabs.general')}
             </TabsTrigger>
             <TabsTrigger
               value="stamgegevens"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               {t('pages.settings.tabs.masterData')}
             </TabsTrigger>
             <TabsTrigger
               value="branding"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               {t('pages.settings.tabs.branding')}
             </TabsTrigger>
             <TabsTrigger
               value="notificaties"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               {t('pages.settings.tabs.notifications')}
             </TabsTrigger>
             <TabsTrigger
               value="sms"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               {t('pages.settings.tabs.sms')}
             </TabsTrigger>
             <TabsTrigger
               value="integraties"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               {t('pages.settings.tabs.integrations')}
             </TabsTrigger>
             <TabsTrigger
               value="inboxen"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               Inboxen
             </TabsTrigger>
             <TabsTrigger
               value="tarieven"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               Tarieven
             </TabsTrigger>
             <TabsTrigger
               value="kosten"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               Kosten
             </TabsTrigger>
             <TabsTrigger
               value="webhooks"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               Webhooks
             </TabsTrigger>
             <TabsTrigger
               value="api"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-foreground text-muted-foreground rounded-none px-1 h-full text-sm font-medium transition-all"
+              className={TAB_TRIGGER_CLASS}
             >
               API
             </TabsTrigger>
@@ -316,76 +319,80 @@ const Settings = () => {
 
         <TabsContent value="algemeen" className="space-y-6 outline-none">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="rounded-2xl border-border/40 hover:shadow-md transition-all cursor-pointer group" onClick={() => handleTabChange("stamgegevens")}>
-              <CardHeader className="pb-3">
-                <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                  <Database className="h-4.5 w-4.5 text-amber-600" strokeWidth={1.5} />
-                </div>
-                <CardTitle className="text-base font-semibold">Stamgegevens</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Beheer voertuigtypes, eenheden en transportvereisten.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0 flex items-center justify-end">
-                <ChevronRight className="h-4 w-4 text-muted-foreground/30" />
-              </CardContent>
-            </Card>
+            <button
+              type="button"
+              onClick={() => handleTabChange("stamgegevens")}
+              className="card--luxe p-5 text-left hover:shadow-md transition-all group"
+            >
+              <div className={LUXE_ICON_TILE} style={LUXE_ICON_TILE_STYLE}>
+                <Database className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+              </div>
+              <h3 className="mt-3 text-base font-semibold text-foreground">Stamgegevens</h3>
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                Beheer voertuigtypes, ladingeenheden en transportvereisten.
+              </p>
+              <div className="mt-3 flex items-center justify-end">
+                <ChevronRight className="h-4 w-4 text-[hsl(var(--gold)/0.4)] group-hover:text-[hsl(var(--gold-deep))] transition-colors" />
+              </div>
+            </button>
 
-            <Card className="rounded-2xl border-border/40 hover:shadow-md transition-all cursor-pointer group" onClick={() => navigate("/users")}>
-              <CardHeader className="pb-3">
-                <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                  <Users className="h-4.5 w-4.5 text-blue-600" strokeWidth={1.5} />
-                </div>
-                <CardTitle className="text-base font-semibold">Gebruikersbeheer</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Beheer medewerkers en toegangsrechten.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0 flex items-center justify-end">
-                <ChevronRight className="h-4 w-4 text-muted-foreground/30" />
-              </CardContent>
-            </Card>
+            <button
+              type="button"
+              onClick={() => navigate("/users")}
+              className="card--luxe p-5 text-left hover:shadow-md transition-all group"
+            >
+              <div className={LUXE_ICON_TILE} style={LUXE_ICON_TILE_STYLE}>
+                <Users className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+              </div>
+              <h3 className="mt-3 text-base font-semibold text-foreground">Gebruikersbeheer</h3>
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                Beheer medewerkers en toegangsrechten.
+              </p>
+              <div className="mt-3 flex items-center justify-end">
+                <ChevronRight className="h-4 w-4 text-[hsl(var(--gold)/0.4)] group-hover:text-[hsl(var(--gold-deep))] transition-colors" />
+              </div>
+            </button>
 
-            <Card className="rounded-2xl border-border/40 hover:shadow-md transition-all cursor-pointer group" onClick={() => handleTabChange("branding")}>
-              <CardHeader className="pb-3">
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                  <Palette className="h-4.5 w-4.5 text-emerald-600" strokeWidth={1.5} />
-                </div>
-                <CardTitle className="text-base font-semibold">Branding & Kleuren</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Pas het thema, logo en kleuren van uw platform aan.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0 flex items-center justify-end">
-                <ChevronRight className="h-4 w-4 text-muted-foreground/30" />
-              </CardContent>
-            </Card>
+            <button
+              type="button"
+              onClick={() => handleTabChange("branding")}
+              className="card--luxe p-5 text-left hover:shadow-md transition-all group"
+            >
+              <div className={LUXE_ICON_TILE} style={LUXE_ICON_TILE_STYLE}>
+                <Palette className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+              </div>
+              <h3 className="mt-3 text-base font-semibold text-foreground">Branding en kleuren</h3>
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                Pas het thema, logo en kleuren van je platform aan.
+              </p>
+              <div className="mt-3 flex items-center justify-end">
+                <ChevronRight className="h-4 w-4 text-[hsl(var(--gold)/0.4)] group-hover:text-[hsl(var(--gold-deep))] transition-colors" />
+              </div>
+            </button>
           </div>
 
-          <Card className="rounded-2xl border-border/40 mt-6">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">{t('settings.language')}</CardTitle>
-              <CardDescription className="text-xs leading-relaxed">
-                {t('settings.languageDescription')}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="max-w-xs">
-                <Select value={currentLang} onValueChange={handleLanguageChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LANGUAGE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="card--luxe p-5 mt-6">
+            <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+              {t('settings.language')}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+              {t('settings.languageDescription')}
+            </p>
+            <div className="max-w-xs mt-4">
+              <Select value={currentLang} onValueChange={handleLanguageChange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="stamgegevens" className="outline-none space-y-8">
@@ -394,192 +401,208 @@ const Settings = () => {
         </TabsContent>
 
         <TabsContent value="branding" className="outline-none">
-           <Card className="rounded-2xl border-border/40">
-             <CardHeader>
-               <CardTitle>Branding</CardTitle>
-               <CardDescription>Configureer uw bedrijfsidentiteit.</CardDescription>
-             </CardHeader>
-             <CardContent className="space-y-6">
-               <div className="space-y-2">
-                 <Label htmlFor="companyName">Bedrijfsnaam</Label>
-                 <Input
-                   id="companyName"
-                   value={companyName}
-                   onChange={(e) => setCompanyName(e.target.value)}
-                   placeholder="Uw bedrijfsnaam"
-                 />
-               </div>
+          <div className="card--luxe p-6 space-y-6">
+            <div>
+              <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                Branding
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Configureer je bedrijfsidentiteit.</p>
+            </div>
 
-               <div className="space-y-2">
-                 <Label htmlFor="primaryColor">Primaire kleur</Label>
-                 <div className="flex items-center gap-3">
-                   <Input
-                     id="primaryColor"
-                     type="color"
-                     value={primaryColor}
-                     onChange={(e) => setPrimaryColor(e.target.value)}
-                     className="w-16 h-10 p-1 cursor-pointer"
-                   />
-                   <Input
-                     value={primaryColor}
-                     onChange={(e) => setPrimaryColor(e.target.value)}
-                     className="max-w-[140px] font-mono text-sm"
-                     placeholder="#000000"
-                   />
-                 </div>
-               </div>
+            <div className="space-y-2">
+              <Label htmlFor="companyName">Bedrijfsnaam</Label>
+              <Input
+                id="companyName"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Bedrijfsnaam"
+              />
+            </div>
 
-               <div className="space-y-2">
-                 <Label>Logo upload</Label>
-                 <div className="flex items-center gap-4">
-                   <div
-                     className="h-20 w-20 rounded-xl border-2 border-dashed border-border/60 flex items-center justify-center overflow-hidden bg-muted/30 cursor-pointer hover:border-primary/40 transition-colors"
-                     onClick={() => fileInputRef.current?.click()}
-                   >
-                     {logoPreview ? (
-                       <img src={logoPreview} alt="Logo preview" className="h-full w-full object-contain" />
-                     ) : (
-                       <Upload className="h-5 w-5 text-muted-foreground/50" strokeWidth={1.5} />
-                     )}
-                   </div>
-                   <div className="flex flex-col gap-1">
-                     <Button
-                       variant="outline"
-                       size="sm"
-                       onClick={() => fileInputRef.current?.click()}
-                     >
-                       Bestand kiezen
-                     </Button>
-                     <p className="text-xs text-muted-foreground">PNG, JPG of SVG. Max 2MB.</p>
-                   </div>
-                   <input
-                     ref={fileInputRef}
-                     type="file"
-                     accept="image/png,image/jpeg,image/svg+xml"
-                     className="hidden"
-                     onChange={handleLogoChange}
-                   />
-                 </div>
-               </div>
+            <div className="space-y-2">
+              <Label htmlFor="primaryColor">Primaire kleur</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="primaryColor"
+                  type="color"
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  className="w-16 h-10 p-1 cursor-pointer"
+                />
+                <Input
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  className="max-w-[140px] font-mono text-sm"
+                  placeholder="#000000"
+                />
+              </div>
+            </div>
 
-               <div className="pt-4 border-t border-border/40">
-                 <TooltipProvider>
-                   <Tooltip>
-                     <TooltipTrigger asChild>
-                       <span className="inline-block">
-                         <Button onClick={() => toast.success("Branding opgeslagen", { description: "Wijzigingen worden doorgevoerd." })}>Opslaan</Button>
-                       </span>
-                     </TooltipTrigger>
-                     <TooltipContent>
-                       <p>Binnenkort beschikbaar</p>
-                     </TooltipContent>
-                   </Tooltip>
-                 </TooltipProvider>
-               </div>
-             </CardContent>
-           </Card>
+            <div className="space-y-2">
+              <Label>Logo upload</Label>
+              <div className="flex items-center gap-4">
+                <div
+                  className="h-20 w-20 rounded-xl border-2 border-dashed border-[hsl(var(--gold)/0.3)] flex items-center justify-center overflow-hidden bg-[hsl(var(--gold-soft)/0.25)] cursor-pointer hover:border-[hsl(var(--gold-deep))] transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Logo preview" className="h-full w-full object-contain" />
+                  ) : (
+                    <Upload className="h-5 w-5 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+                  )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="btn-luxe !h-9"
+                  >
+                    <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    Bestand kiezen
+                  </button>
+                  <p className="text-xs text-muted-foreground">PNG, JPG of SVG. Max 2MB.</p>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml"
+                  className="hidden"
+                  onChange={handleLogoChange}
+                />
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-block">
+                      <button
+                        type="button"
+                        onClick={() => toast.success("Branding opgeslagen", { description: "Wijzigingen worden doorgevoerd." })}
+                        className="btn-luxe btn-luxe--primary !h-9"
+                      >
+                        Opslaan
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Binnenkort beschikbaar</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="notificaties" className="outline-none">
-           <Card className="rounded-2xl border-border/40">
-             <CardHeader>
-               <CardTitle>Notificaties</CardTitle>
-               <CardDescription>Beheer hoe en wanneer u meldingen ontvangt.</CardDescription>
-             </CardHeader>
-             <CardContent className="space-y-1">
-               <div className="flex items-center justify-between py-4 border-b border-border/40">
-                 <div className="space-y-0.5 pr-4">
-                   <Label className="text-sm font-medium">E-mail bij nieuwe order</Label>
-                   <p className="text-xs text-muted-foreground">Ontvang een melding zodra een nieuwe order wordt aangemaakt.</p>
-                 </div>
-                 <Switch checked={notifications.newOrder} onCheckedChange={() => toggleNotification("newOrder")} />
-               </div>
+          <div className="card--luxe p-6 space-y-1">
+            <div className="pb-4">
+              <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                Notificaties
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Beheer hoe en wanneer je meldingen ontvangt.</p>
+            </div>
 
-               <div className="flex items-center justify-between py-4 border-b border-border/40">
-                 <div className="space-y-0.5 pr-4">
-                   <Label className="text-sm font-medium">E-mail bij annulering</Label>
-                   <p className="text-xs text-muted-foreground">Ontvang een melding wanneer een order wordt geannuleerd.</p>
-                 </div>
-                 <Switch checked={notifications.cancellation} onCheckedChange={() => toggleNotification("cancellation")} />
-               </div>
+            <div className="flex items-center justify-between py-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <div className="space-y-0.5 pr-4">
+                <Label className="text-sm font-medium">E-mail bij nieuwe order</Label>
+                <p className="text-xs text-muted-foreground">Ontvang een melding zodra een nieuwe order wordt aangemaakt.</p>
+              </div>
+              <Switch checked={notifications.newOrder} onCheckedChange={() => toggleNotification("newOrder")} />
+            </div>
 
-               <div className="flex items-center justify-between py-4 border-b border-border/40">
-                 <div className="space-y-0.5 pr-4">
-                   <Label className="text-sm font-medium">E-mail bij deadline overschrijding</Label>
-                   <p className="text-xs text-muted-foreground">Ontvang een waarschuwing wanneer een order de geplande deadline overschrijdt.</p>
-                 </div>
-                 <Switch checked={notifications.deadlineExceeded} onCheckedChange={() => toggleNotification("deadlineExceeded")} />
-               </div>
+            <div className="flex items-center justify-between py-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <div className="space-y-0.5 pr-4">
+                <Label className="text-sm font-medium">E-mail bij annulering</Label>
+                <p className="text-xs text-muted-foreground">Ontvang een melding wanneer een order wordt geannuleerd.</p>
+              </div>
+              <Switch checked={notifications.cancellation} onCheckedChange={() => toggleNotification("cancellation")} />
+            </div>
 
-               <div className="flex items-center justify-between py-4 border-b border-border/40">
-                 <div className="space-y-0.5 pr-4">
-                   <Label className="text-sm font-medium">Dagelijkse samenvatting</Label>
-                   <p className="text-xs text-muted-foreground">Ontvang elke ochtend een overzicht van de orders en activiteiten van de vorige dag.</p>
-                 </div>
-                 <Switch checked={notifications.dailySummary} onCheckedChange={() => toggleNotification("dailySummary")} />
-               </div>
+            <div className="flex items-center justify-between py-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <div className="space-y-0.5 pr-4">
+                <Label className="text-sm font-medium">E-mail bij deadline-overschrijding</Label>
+                <p className="text-xs text-muted-foreground">Ontvang een waarschuwing wanneer een order de geplande deadline overschrijdt.</p>
+              </div>
+              <Switch checked={notifications.deadlineExceeded} onCheckedChange={() => toggleNotification("deadlineExceeded")} />
+            </div>
 
-               <div className="flex items-center justify-between py-4">
-                 <div className="space-y-0.5 pr-4">
-                   <Label className="text-sm font-medium">Wekelijks rapport</Label>
-                   <p className="text-xs text-muted-foreground">Ontvang elke maandag een wekelijks rapport met statistieken en trends.</p>
-                 </div>
-                 <Switch checked={notifications.weeklyReport} onCheckedChange={() => toggleNotification("weeklyReport")} />
-               </div>
+            <div className="flex items-center justify-between py-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <div className="space-y-0.5 pr-4">
+                <Label className="text-sm font-medium">Dagelijkse samenvatting</Label>
+                <p className="text-xs text-muted-foreground">Ontvang elke ochtend een overzicht van de orders en activiteiten van de vorige dag.</p>
+              </div>
+              <Switch checked={notifications.dailySummary} onCheckedChange={() => toggleNotification("dailySummary")} />
+            </div>
 
-               <div className="pt-4 border-t border-border/40 mt-4">
-                 <Button onClick={handleSaveNotifications} disabled={saveNotifications.isPending}>
-                   {saveNotifications.isPending ? "Opslaan..." : "Notificaties Opslaan"}
-                 </Button>
-               </div>
-             </CardContent>
-           </Card>
+            <div className="flex items-center justify-between py-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <div className="space-y-0.5 pr-4">
+                <Label className="text-sm font-medium">Wekelijks rapport</Label>
+                <p className="text-xs text-muted-foreground">Ontvang elke maandag een wekelijks rapport met statistieken en trends.</p>
+              </div>
+              <Switch checked={notifications.weeklyReport} onCheckedChange={() => toggleNotification("weeklyReport")} />
+            </div>
+
+            <div className="pt-4 mt-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <button
+                type="button"
+                onClick={handleSaveNotifications}
+                disabled={saveNotifications.isPending}
+                className="btn-luxe btn-luxe--primary !h-9"
+              >
+                {saveNotifications.isPending ? "Opslaan..." : "Notificaties opslaan"}
+              </button>
+            </div>
+          </div>
         </TabsContent>
 
         {/* SMS Tab */}
         <TabsContent value="sms" className="outline-none">
-          <Card className="rounded-2xl border-border/40">
-            <CardHeader>
-              <CardTitle>SMS Notificaties</CardTitle>
-              <CardDescription>Stuur SMS berichten naar klanten bij belangrijke statusupdates.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Provider selection */}
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">SMS Provider</Label>
-                <div className="flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setSmsProvider("twilio")}
-                    className={cn(
-                      "flex-1 rounded-lg border-2 p-4 text-left transition-all",
-                      smsProvider === "twilio"
-                        ? "border-primary bg-primary/5"
-                        : "border-border/40 hover:border-border"
-                    )}
-                  >
-                    <p className="text-sm font-semibold">Twilio</p>
-                    <p className="text-xs text-muted-foreground mt-1">Wereldwijde SMS provider</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSmsProvider("messagebird")}
-                    className={cn(
-                      "flex-1 rounded-lg border-2 p-4 text-left transition-all",
-                      smsProvider === "messagebird"
-                        ? "border-primary bg-primary/5"
-                        : "border-border/40 hover:border-border"
-                    )}
-                  >
-                    <p className="text-sm font-semibold">MessageBird</p>
-                    <p className="text-xs text-muted-foreground mt-1">Nederlandse SMS provider</p>
-                  </button>
-                </div>
-              </div>
+          <div className="card--luxe p-6 space-y-6">
+            <div>
+              <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                SMS-notificaties
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Stuur SMS-berichten naar klanten bij belangrijke statusupdates.</p>
+            </div>
 
-              {/* Provider credentials */}
-              {smsProvider === "twilio" ? (
-                <div className="space-y-4 rounded-lg border border-border/40 p-4">
+            {/* Provider selection */}
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">SMS-provider</Label>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setSmsProvider("twilio")}
+                  className={cn(
+                    "flex-1 rounded-lg border p-4 text-left transition-all",
+                    smsProvider === "twilio"
+                      ? "border-[hsl(var(--gold-deep))] bg-[hsl(var(--gold-soft)/0.3)]"
+                      : "border-[hsl(var(--gold)/0.2)] hover:border-[hsl(var(--gold-deep))]"
+                  )}
+                >
+                  <p className="text-sm font-semibold">Twilio</p>
+                  <p className="text-xs text-muted-foreground mt-1">Wereldwijde SMS-provider.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSmsProvider("messagebird")}
+                  className={cn(
+                    "flex-1 rounded-lg border p-4 text-left transition-all",
+                    smsProvider === "messagebird"
+                      ? "border-[hsl(var(--gold-deep))] bg-[hsl(var(--gold-soft)/0.3)]"
+                      : "border-[hsl(var(--gold)/0.2)] hover:border-[hsl(var(--gold-deep))]"
+                  )}
+                >
+                  <p className="text-sm font-semibold">MessageBird</p>
+                  <p className="text-xs text-muted-foreground mt-1">Nederlandse SMS-provider.</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Provider credentials */}
+            {smsProvider === "twilio" ? (
+              <div className="space-y-4 rounded-lg border border-[hsl(var(--gold)/0.2)] p-4 bg-[hsl(var(--gold-soft)/0.15)]">
                   <div className="space-y-2">
                     <Label htmlFor="twilioSid">Account SID</Label>
                     <Input
@@ -609,314 +632,264 @@ const Settings = () => {
                     />
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-4 rounded-lg border border-border/40 p-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="mbApiKey">API Key</Label>
-                    <Input
-                      id="mbApiKey"
-                      type="password"
-                      value={messageBirdApiKey}
-                      onChange={(e) => setMessageBirdApiKey(e.target.value)}
-                      placeholder="Uw MessageBird API Key"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mbOriginator">Originator</Label>
-                    <Input
-                      id="mbOriginator"
-                      value={messageBirdOriginator}
-                      onChange={(e) => setMessageBirdOriginator(e.target.value)}
-                      placeholder="Bedrijfsnaam of telefoonnummer"
-                    />
-                  </div>
+            ) : (
+              <div className="space-y-4 rounded-lg border border-[hsl(var(--gold)/0.2)] p-4 bg-[hsl(var(--gold-soft)/0.15)]">
+                <div className="space-y-2">
+                  <Label htmlFor="mbApiKey">API-key</Label>
+                  <Input
+                    id="mbApiKey"
+                    type="password"
+                    value={messageBirdApiKey}
+                    onChange={(e) => setMessageBirdApiKey(e.target.value)}
+                    placeholder="MessageBird API-key"
+                  />
                 </div>
-              )}
-
-              {/* SMS Event toggles */}
-              <div className="space-y-1">
-                <Label className="text-sm font-semibold">SMS Events</Label>
-                <div className="rounded-lg border border-border/40 divide-y divide-border/30">
-                  <div className="flex items-center justify-between p-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm font-medium">Zending onderweg</Label>
-                      <p className="text-xs text-muted-foreground">Stuur een SMS wanneer de zending onderweg is.</p>
-                    </div>
-                    <Switch checked={smsEvents.onderweg} onCheckedChange={() => toggleSmsEvent("onderweg")} />
-                  </div>
-                  <div className="flex items-center justify-between p-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm font-medium">Zending afgeleverd</Label>
-                      <p className="text-xs text-muted-foreground">Stuur een SMS wanneer de zending is afgeleverd.</p>
-                    </div>
-                    <Switch checked={smsEvents.afgeleverd} onCheckedChange={() => toggleSmsEvent("afgeleverd")} />
-                  </div>
-                  <div className="flex items-center justify-between p-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm font-medium">Vertraging melding</Label>
-                      <p className="text-xs text-muted-foreground">Stuur een SMS bij een verwachte vertraging.</p>
-                    </div>
-                    <Switch checked={smsEvents.vertraging} onCheckedChange={() => toggleSmsEvent("vertraging")} />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mbOriginator">Afzender</Label>
+                  <Input
+                    id="mbOriginator"
+                    value={messageBirdOriginator}
+                    onChange={(e) => setMessageBirdOriginator(e.target.value)}
+                    placeholder="Bedrijfsnaam of telefoonnummer"
+                  />
                 </div>
               </div>
+            )}
 
-              {/* SMS Template */}
-              <div className="space-y-2">
-                <Label htmlFor="smsTemplate">SMS Template</Label>
-                <Textarea
-                  id="smsTemplate"
-                  value={smsTemplate}
-                  onChange={(e) => setSmsTemplate(e.target.value)}
-                  placeholder="Uw zending #{order_number} is onderweg. Verwachte levertijd: {eta}."
-                  rows={3}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Beschikbare variabelen: <code className="bg-muted px-1 rounded">{"{order_number}"}</code>, <code className="bg-muted px-1 rounded">{"{eta}"}</code>, <code className="bg-muted px-1 rounded">{"{status}"}</code>, <code className="bg-muted px-1 rounded">{"{tracking_url}"}</code>
-                </p>
+            {/* SMS Event toggles */}
+            <div className="space-y-1">
+              <Label className="text-sm font-semibold">SMS-events</Label>
+              <div className="rounded-lg border border-[hsl(var(--gold)/0.2)] divide-y divide-[hsl(var(--gold)/0.12)]">
+                <div className="flex items-center justify-between p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Zending onderweg</Label>
+                    <p className="text-xs text-muted-foreground">Stuur een SMS wanneer de zending onderweg is.</p>
+                  </div>
+                  <Switch checked={smsEvents.onderweg} onCheckedChange={() => toggleSmsEvent("onderweg")} />
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Zending afgeleverd</Label>
+                    <p className="text-xs text-muted-foreground">Stuur een SMS wanneer de zending is afgeleverd.</p>
+                  </div>
+                  <Switch checked={smsEvents.afgeleverd} onCheckedChange={() => toggleSmsEvent("afgeleverd")} />
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Vertragingsmelding</Label>
+                    <p className="text-xs text-muted-foreground">Stuur een SMS bij een verwachte vertraging.</p>
+                  </div>
+                  <Switch checked={smsEvents.vertraging} onCheckedChange={() => toggleSmsEvent("vertraging")} />
+                </div>
               </div>
+            </div>
 
-              {/* Test SMS button */}
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    toast.success("Test SMS verstuurd", { description: "Een test SMS is verstuurd naar het geconfigureerde nummer.", });
-                  }}
-                >
-                  <Smartphone className="h-4 w-4 mr-2" strokeWidth={1.5} />
-                  Verstuur test SMS
-                </Button>
-              </div>
+            {/* SMS Template */}
+            <div className="space-y-2">
+              <Label htmlFor="smsTemplate">SMS-template</Label>
+              <Textarea
+                id="smsTemplate"
+                value={smsTemplate}
+                onChange={(e) => setSmsTemplate(e.target.value)}
+                placeholder="Je zending #{order_number} is onderweg. Verwachte levertijd: {eta}."
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                Beschikbare variabelen: <code className="bg-[hsl(var(--gold-soft)/0.4)] border border-[hsl(var(--gold)/0.2)] px-1 rounded">{"{order_number}"}</code>, <code className="bg-[hsl(var(--gold-soft)/0.4)] border border-[hsl(var(--gold)/0.2)] px-1 rounded">{"{eta}"}</code>, <code className="bg-[hsl(var(--gold-soft)/0.4)] border border-[hsl(var(--gold)/0.2)] px-1 rounded">{"{status}"}</code>, <code className="bg-[hsl(var(--gold-soft)/0.4)] border border-[hsl(var(--gold)/0.2)] px-1 rounded">{"{tracking_url}"}</code>
+              </p>
+            </div>
 
-              {/* Save button */}
-              <div className="pt-4 border-t border-border/40">
-                <Button onClick={handleSaveSms} disabled={saveSms.isPending}>
-                  {saveSms.isPending ? "Opslaan..." : "Opslaan"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            {/* Test SMS button */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => toast.success("Test-SMS verstuurd", { description: "Een test-SMS is verstuurd naar het geconfigureerde nummer." })}
+                className="btn-luxe !h-9"
+              >
+                <Smartphone className="h-3.5 w-3.5" strokeWidth={1.5} />
+                Verstuur test-SMS
+              </button>
+            </div>
+
+            {/* Save button */}
+            <div className="pt-4 border-t border-[hsl(var(--gold)/0.12)]">
+              <button
+                type="button"
+                onClick={handleSaveSms}
+                disabled={saveSms.isPending}
+                className="btn-luxe btn-luxe--primary !h-9"
+              >
+                {saveSms.isPending ? "Opslaan..." : "Opslaan"}
+              </button>
+            </div>
+          </div>
         </TabsContent>
 
         {/* Integraties Tab */}
         <TabsContent value="integraties" className="outline-none">
-          <Card className="rounded-2xl border-border/40">
-            <CardHeader>
-              <CardTitle>Externe Integraties</CardTitle>
-              <CardDescription>Koppel externe diensten en systemen aan uw TMS platform.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Slack */}
-                <div className="rounded-xl border border-border/40 p-4 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                        <MessageSquare className="h-4.5 w-4.5 text-purple-600" strokeWidth={1.5} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Slack</p>
-                        <p className="text-xs text-muted-foreground">Meldingen in Slack kanalen</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={integrations.slack.enabled}
-                      onCheckedChange={() => toggleIntegration("slack")}
+          <div className="card--luxe p-6">
+            <div className="pb-4">
+              <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                Externe integraties
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Koppel externe diensten en systemen aan je TMS-platform.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <IntegrationCard
+                title="Slack"
+                description="Meldingen in Slack-kanalen."
+                icon={MessageSquare}
+                enabled={integrations.slack.enabled}
+                onToggle={() => toggleIntegration("slack")}
+              >
+                {integrations.slack.enabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="slackWebhook" className="text-xs">Webhook-URL</Label>
+                    <Input
+                      id="slackWebhook"
+                      value={integrations.slack.webhookUrl}
+                      onChange={(e) => updateIntegration("slack", "webhookUrl", e.target.value)}
+                      placeholder="https://hooks.slack.com/services/..."
+                      className="text-xs"
                     />
                   </div>
-                  {integrations.slack.enabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="slackWebhook" className="text-xs">Webhook URL</Label>
+                )}
+              </IntegrationCard>
+
+              <IntegrationCard
+                title="Teams"
+                description="Microsoft Teams-notificaties."
+                icon={Users}
+                enabled={integrations.teams.enabled}
+                onToggle={() => toggleIntegration("teams")}
+              >
+                {integrations.teams.enabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="teamsWebhook" className="text-xs">Webhook-URL</Label>
+                    <Input
+                      id="teamsWebhook"
+                      value={integrations.teams.webhookUrl}
+                      onChange={(e) => updateIntegration("teams", "webhookUrl", e.target.value)}
+                      placeholder="https://outlook.office.com/webhook/..."
+                      className="text-xs"
+                    />
+                  </div>
+                )}
+              </IntegrationCard>
+
+              <IntegrationCard
+                title="Exact Online"
+                description="Boekhouding-synchronisatie."
+                icon={BookOpen}
+                enabled={integrations.exactOnline.enabled}
+                onToggle={() => toggleIntegration("exactOnline")}
+              >
+                {integrations.exactOnline.enabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="exactApiKey" className="text-xs">API-key</Label>
+                    <Input
+                      id="exactApiKey"
+                      type="password"
+                      value={integrations.exactOnline.apiKey}
+                      onChange={(e) => updateIntegration("exactOnline", "apiKey", e.target.value)}
+                      placeholder="Exact Online API-key"
+                      className="text-xs"
+                    />
+                  </div>
+                )}
+              </IntegrationCard>
+
+              <IntegrationCard
+                title="Twinfield"
+                description="Facturatiekoppeling."
+                icon={FileText}
+                enabled={integrations.twinfield.enabled}
+                onToggle={() => toggleIntegration("twinfield")}
+              >
+                {integrations.twinfield.enabled && (
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="twinfieldUser" className="text-xs">Gebruikersnaam</Label>
                       <Input
-                        id="slackWebhook"
-                        value={integrations.slack.webhookUrl}
-                        onChange={(e) => updateIntegration("slack", "webhookUrl", e.target.value)}
-                        placeholder="https://hooks.slack.com/services/..."
+                        id="twinfieldUser"
+                        value={integrations.twinfield.username}
+                        onChange={(e) => updateIntegration("twinfield", "username", e.target.value)}
+                        placeholder="Gebruikersnaam"
                         className="text-xs"
                       />
                     </div>
-                  )}
-                </div>
-
-                {/* Microsoft Teams */}
-                <div className="rounded-xl border border-border/40 p-4 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                        <Users className="h-4.5 w-4.5 text-blue-600" strokeWidth={1.5} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Teams</p>
-                        <p className="text-xs text-muted-foreground">Microsoft Teams notificaties</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={integrations.teams.enabled}
-                      onCheckedChange={() => toggleIntegration("teams")}
-                    />
-                  </div>
-                  {integrations.teams.enabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="teamsWebhook" className="text-xs">Webhook URL</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor="twinfieldPass" className="text-xs">Wachtwoord</Label>
                       <Input
-                        id="teamsWebhook"
-                        value={integrations.teams.webhookUrl}
-                        onChange={(e) => updateIntegration("teams", "webhookUrl", e.target.value)}
-                        placeholder="https://outlook.office.com/webhook/..."
-                        className="text-xs"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Exact Online */}
-                <div className="rounded-xl border border-border/40 p-4 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                        <BookOpen className="h-4.5 w-4.5 text-emerald-600" strokeWidth={1.5} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Exact Online</p>
-                        <p className="text-xs text-muted-foreground">Boekhouding synchronisatie</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={integrations.exactOnline.enabled}
-                      onCheckedChange={() => toggleIntegration("exactOnline")}
-                    />
-                  </div>
-                  {integrations.exactOnline.enabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="exactApiKey" className="text-xs">API Key</Label>
-                      <Input
-                        id="exactApiKey"
+                        id="twinfieldPass"
                         type="password"
-                        value={integrations.exactOnline.apiKey}
-                        onChange={(e) => updateIntegration("exactOnline", "apiKey", e.target.value)}
-                        placeholder="Uw Exact Online API Key"
+                        value={integrations.twinfield.password}
+                        onChange={(e) => updateIntegration("twinfield", "password", e.target.value)}
+                        placeholder="Wachtwoord"
                         className="text-xs"
                       />
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+              </IntegrationCard>
 
-                {/* Twinfield */}
-                <div className="rounded-xl border border-border/40 p-4 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                        <FileText className="h-4.5 w-4.5 text-amber-600" strokeWidth={1.5} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Twinfield</p>
-                        <p className="text-xs text-muted-foreground">Facturatie koppeling</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={integrations.twinfield.enabled}
-                      onCheckedChange={() => toggleIntegration("twinfield")}
+              <IntegrationCard
+                title="Samsara"
+                description="Telematica en GPS-tracking."
+                icon={Truck}
+                enabled={integrations.samsara.enabled}
+                onToggle={() => toggleIntegration("samsara")}
+              >
+                {integrations.samsara.enabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="samsaraApiKey" className="text-xs">API-key</Label>
+                    <Input
+                      id="samsaraApiKey"
+                      type="password"
+                      value={integrations.samsara.apiKey}
+                      onChange={(e) => updateIntegration("samsara", "apiKey", e.target.value)}
+                      placeholder="Samsara API-key"
+                      className="text-xs"
                     />
                   </div>
-                  {integrations.twinfield.enabled && (
-                    <div className="space-y-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="twinfieldUser" className="text-xs">Gebruikersnaam</Label>
-                        <Input
-                          id="twinfieldUser"
-                          value={integrations.twinfield.username}
-                          onChange={(e) => updateIntegration("twinfield", "username", e.target.value)}
-                          placeholder="Gebruikersnaam"
-                          className="text-xs"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="twinfieldPass" className="text-xs">Wachtwoord</Label>
-                        <Input
-                          id="twinfieldPass"
-                          type="password"
-                          value={integrations.twinfield.password}
-                          onChange={(e) => updateIntegration("twinfield", "password", e.target.value)}
-                          placeholder="Wachtwoord"
-                          className="text-xs"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
+              </IntegrationCard>
 
-                {/* Samsara */}
-                <div className="rounded-xl border border-border/40 p-4 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-red-500/10 flex items-center justify-center">
-                        <Truck className="h-4.5 w-4.5 text-red-600" strokeWidth={1.5} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Samsara</p>
-                        <p className="text-xs text-muted-foreground">Telematica & GPS tracking</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={integrations.samsara.enabled}
-                      onCheckedChange={() => toggleIntegration("samsara")}
+              <IntegrationCard
+                title="TransFollow"
+                description="Digitale vrachtbrieven."
+                icon={Link}
+                enabled={integrations.transfollow.enabled}
+                onToggle={() => toggleIntegration("transfollow")}
+              >
+                {integrations.transfollow.enabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="transfollowApiKey" className="text-xs">API-key</Label>
+                    <Input
+                      id="transfollowApiKey"
+                      type="password"
+                      value={integrations.transfollow.apiKey}
+                      onChange={(e) => updateIntegration("transfollow", "apiKey", e.target.value)}
+                      placeholder="TransFollow API-key"
+                      className="text-xs"
                     />
                   </div>
-                  {integrations.samsara.enabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="samsaraApiKey" className="text-xs">API Key</Label>
-                      <Input
-                        id="samsaraApiKey"
-                        type="password"
-                        value={integrations.samsara.apiKey}
-                        onChange={(e) => updateIntegration("samsara", "apiKey", e.target.value)}
-                        placeholder="Uw Samsara API Key"
-                        className="text-xs"
-                      />
-                    </div>
-                  )}
-                </div>
+                )}
+              </IntegrationCard>
+            </div>
 
-                {/* TransFollow */}
-                <div className="rounded-xl border border-border/40 p-4 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                        <Link className="h-4.5 w-4.5 text-indigo-600" strokeWidth={1.5} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">TransFollow</p>
-                        <p className="text-xs text-muted-foreground">Digitale vrachtbrieven</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={integrations.transfollow.enabled}
-                      onCheckedChange={() => toggleIntegration("transfollow")}
-                    />
-                  </div>
-                  {integrations.transfollow.enabled && (
-                    <div className="space-y-2">
-                      <Label htmlFor="transfollowApiKey" className="text-xs">API Key</Label>
-                      <Input
-                        id="transfollowApiKey"
-                        type="password"
-                        value={integrations.transfollow.apiKey}
-                        onChange={(e) => updateIntegration("transfollow", "apiKey", e.target.value)}
-                        placeholder="Uw TransFollow API Key"
-                        className="text-xs"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="pt-6 border-t border-border/40 mt-6">
-                <Button onClick={handleSaveIntegrations} disabled={saveIntegrations.isPending}>
-                  {saveIntegrations.isPending ? "Opslaan..." : "Integraties Opslaan"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="pt-6 border-t border-[hsl(var(--gold)/0.12)] mt-6">
+              <button
+                type="button"
+                onClick={handleSaveIntegrations}
+                disabled={saveIntegrations.isPending}
+                className="btn-luxe btn-luxe--primary !h-9"
+              >
+                {saveIntegrations.isPending ? "Opslaan..." : "Integraties opslaan"}
+              </button>
+            </div>
+          </div>
         </TabsContent>
 
         {/* Inboxen Tab */}
@@ -926,98 +899,125 @@ const Settings = () => {
 
         {/* Webhooks Tab */}
         <TabsContent value="webhooks" className="outline-none">
-          <Card className="rounded-2xl border-border/40">
-            <CardHeader>
-              <CardTitle className="text-lg font-display">Outbound Webhooks</CardTitle>
-              <CardDescription>Stuur automatisch meldingen naar externe systemen bij statuswijzigingen.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="rounded-lg border border-border/40 divide-y divide-border/30">
-                {[
-                  { event: "order.created", label: "Order aangemaakt", desc: "Wanneer een nieuwe order wordt aangemaakt" },
-                  { event: "order.status_changed", label: "Status gewijzigd", desc: "Bij elke statuswijziging (PENDING → PLANNED → IN_TRANSIT → DELIVERED)" },
-                  { event: "order.cancelled", label: "Order geannuleerd", desc: "Wanneer een order wordt geannuleerd" },
-                  { event: "delivery.completed", label: "Levering voltooid", desc: "Wanneer een chauffeur de levering bevestigt met handtekening" },
-                  { event: "invoice.created", label: "Factuur aangemaakt", desc: "Wanneer een nieuwe factuur wordt gegenereerd" },
-                ].map((wh) => (
-                  <div key={wh.event} className="flex items-center justify-between p-4">
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-medium">{wh.label}</p>
-                      <p className="text-xs text-muted-foreground">{wh.desc}</p>
-                      <code className="text-xs font-mono text-muted-foreground/60">{wh.event}</code>
-                    </div>
-                    <Switch />
+          <div className="card--luxe p-6 space-y-6">
+            <div>
+              <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                Outbound webhooks
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Stuur automatisch meldingen naar externe systemen bij statuswijzigingen.</p>
+            </div>
+
+            <div className="rounded-lg border border-[hsl(var(--gold)/0.2)] divide-y divide-[hsl(var(--gold)/0.12)]">
+              {[
+                { event: "order.created", label: "Order aangemaakt", desc: "Wanneer een nieuwe order wordt aangemaakt." },
+                { event: "order.status_changed", label: "Status gewijzigd", desc: "Bij elke statuswijziging (PENDING, PLANNED, IN_TRANSIT, DELIVERED)." },
+                { event: "order.cancelled", label: "Order geannuleerd", desc: "Wanneer een order wordt geannuleerd." },
+                { event: "delivery.completed", label: "Levering voltooid", desc: "Wanneer een chauffeur de levering bevestigt met handtekening." },
+                { event: "invoice.created", label: "Factuur aangemaakt", desc: "Wanneer een nieuwe factuur wordt gegenereerd." },
+              ].map((wh) => (
+                <div key={wh.event} className="flex items-center justify-between p-4">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">{wh.label}</p>
+                    <p className="text-xs text-muted-foreground">{wh.desc}</p>
+                    <code className="text-xs font-mono text-[hsl(var(--gold-deep))]">{wh.event}</code>
                   </div>
-                ))}
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">Webhook URL</Label>
-                <div className="flex gap-2">
-                  <Input placeholder="https://jouw-systeem.nl/webhook" className="flex-1" />
-                  <Button onClick={() => toast.success("Webhook URL opgeslagen")}>Opslaan</Button>
+                  <Switch />
                 </div>
-                <p className="text-xs text-muted-foreground">Alle geselecteerde events worden als POST request naar deze URL gestuurd met een JSON payload.</p>
-              </div>
+              ))}
+            </div>
 
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">Webhook Secret</Label>
-                <div className="flex gap-2">
-                  <Input type="password" placeholder="whsec_..." className="flex-1 font-mono" />
-                  <Button variant="outline" onClick={() => toast.success("Webhook secret gegenereerd", { description: "whsec_" + Math.random().toString(36).slice(2, 18) })}>Genereer</Button>
-                </div>
-                <p className="text-xs text-muted-foreground">Optioneel. Wordt meegestuurd als X-Webhook-Secret header voor verificatie.</p>
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Webhook-URL</Label>
+              <div className="flex gap-2">
+                <Input placeholder="https://jouw-systeem.nl/webhook" className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => toast.success("Webhook-URL opgeslagen")}
+                  className="btn-luxe btn-luxe--primary !h-9"
+                >
+                  Opslaan
+                </button>
               </div>
-            </CardContent>
-          </Card>
+              <p className="text-xs text-muted-foreground">Alle geselecteerde events worden als POST-request naar deze URL gestuurd met een JSON-payload.</p>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">Webhook-secret</Label>
+              <div className="flex gap-2">
+                <Input type="password" placeholder="whsec_..." className="flex-1 font-mono" />
+                <button
+                  type="button"
+                  onClick={() => toast.success("Webhook-secret gegenereerd", { description: "whsec_" + Math.random().toString(36).slice(2, 18) })}
+                  className="btn-luxe !h-9"
+                >
+                  Genereer
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">Optioneel. Wordt meegestuurd als X-Webhook-Secret-header voor verificatie.</p>
+            </div>
+          </div>
         </TabsContent>
 
         {/* API Tab */}
         <TabsContent value="api" className="outline-none">
-          <Card className="rounded-2xl border-border/40">
-            <CardHeader>
-              <CardTitle className="text-lg font-display">API Toegang</CardTitle>
-              <CardDescription>Beheer API keys voor externe integraties met je TMS.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">API Key</Label>
-                <div className="flex gap-2">
-                  <Input type="password" value="sk_live_••••••••••••••••••••••" readOnly className="flex-1 font-mono text-sm" />
-                  <Button variant="outline" onClick={() => { navigator.clipboard.writeText("sk_live_demo_key_placeholder"); toast.success("API key gekopieerd"); }}>Kopieer</Button>
-                  <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => toast.success("API key hernieuwd", { description: "De oude key is ongeldig gemaakt." })}>Hernieuw</Button>
-                </div>
-                <p className="text-xs text-muted-foreground">Gebruik deze key in de Authorization header: <code className="bg-muted px-1 rounded">Bearer sk_live_...</code></p>
-              </div>
+          <div className="card--luxe p-6 space-y-6">
+            <div>
+              <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                API-toegang
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Beheer API-keys voor externe integraties met je TMS.</p>
+            </div>
 
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">API Endpoints</Label>
-                <div className="rounded-lg border border-border/40 divide-y divide-border/30 font-mono text-sm">
-                  {[
-                    { method: "POST", path: "/api/orders", desc: "Order aanmaken" },
-                    { method: "GET", path: "/api/orders/:id", desc: "Order ophalen" },
-                    { method: "PATCH", path: "/api/orders/:id/status", desc: "Status wijzigen" },
-                    { method: "GET", path: "/api/track/:order_number", desc: "Track & Trace (publiek)" },
-                    { method: "GET", path: "/api/vehicles", desc: "Voertuigen ophalen" },
-                    { method: "GET", path: "/api/drivers", desc: "Chauffeurs ophalen" },
-                  ].map((ep) => (
-                    <div key={ep.path} className="flex items-center gap-3 p-3">
-                      <span className={cn(
-                        "text-xs font-bold px-2 py-0.5 rounded uppercase",
-                        ep.method === "POST" ? "bg-emerald-100 text-emerald-700" :
-                        ep.method === "PATCH" ? "bg-amber-100 text-amber-700" :
-                        "bg-blue-100 text-blue-700"
-                      )}>{ep.method}</span>
-                      <span className="text-xs flex-1">{ep.path}</span>
-                      <span className="text-xs text-muted-foreground">{ep.desc}</span>
-                    </div>
-                  ))}
-                </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">API-key</Label>
+              <div className="flex gap-2">
+                <Input type="password" value="sk_live_••••••••••••••••••••••" readOnly className="flex-1 font-mono text-sm" />
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText("sk_live_demo_key_placeholder"); toast.success("API-key gekopieerd"); }}
+                  className="btn-luxe !h-9"
+                >
+                  Kopieer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toast.success("API-key hernieuwd", { description: "De oude key is ongeldig gemaakt." })}
+                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-destructive/30 text-destructive text-[12px] font-medium hover:bg-destructive/10 transition-colors"
+                >
+                  Hernieuw
+                </button>
               </div>
+              <p className="text-xs text-muted-foreground">Gebruik deze key in de Authorization-header: <code className="bg-[hsl(var(--gold-soft)/0.4)] border border-[hsl(var(--gold)/0.2)] px-1 rounded">Bearer sk_live_...</code></p>
+            </div>
 
-              <div className="rounded-lg bg-muted/30 border border-border/30 p-4">
-                <p className="text-sm font-semibold mb-2">Voorbeeld request</p>
-                <pre className="text-xs text-muted-foreground bg-background rounded p-3 overflow-x-auto">{`curl -X POST https://api.royaltycargo.nl/orders \\
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">API-endpoints</Label>
+              <div className="rounded-lg border border-[hsl(var(--gold)/0.2)] divide-y divide-[hsl(var(--gold)/0.12)] font-mono text-sm">
+                {[
+                  { method: "POST", path: "/api/orders", desc: "Order aanmaken" },
+                  { method: "GET", path: "/api/orders/:id", desc: "Order ophalen" },
+                  { method: "PATCH", path: "/api/orders/:id/status", desc: "Status wijzigen" },
+                  { method: "GET", path: "/api/track/:order_number", desc: "Track en trace (publiek)" },
+                  { method: "GET", path: "/api/vehicles", desc: "Voertuigen ophalen" },
+                  { method: "GET", path: "/api/drivers", desc: "Chauffeurs ophalen" },
+                ].map((ep) => (
+                  <div key={ep.path} className="flex items-center gap-3 p-3">
+                    <span className={cn(
+                      "text-xs font-bold px-2 py-0.5 rounded uppercase border",
+                      ep.method === "POST" ? "bg-[hsl(var(--gold-soft)/0.6)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.3)]" :
+                      ep.method === "PATCH" ? "bg-amber-100 text-amber-700 border-amber-200" :
+                      "bg-[hsl(var(--gold-soft)/0.4)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.2)]"
+                    )}>{ep.method}</span>
+                    <span className="text-xs flex-1">{ep.path}</span>
+                    <span className="text-xs text-muted-foreground">{ep.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-[hsl(var(--gold-soft)/0.25)] border border-[hsl(var(--gold)/0.2)] p-4">
+              <p className="text-sm font-semibold mb-2 text-[hsl(var(--gold-deep))]">Voorbeeldrequest</p>
+              <pre className="text-xs text-muted-foreground bg-background border border-[hsl(var(--gold)/0.12)] rounded p-3 overflow-x-auto">{`curl -X POST https://api.royaltycargo.nl/orders \\
   -H "Authorization: Bearer sk_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -1028,9 +1028,8 @@ const Settings = () => {
     "unit": "Pallets",
     "weight_kg": 4000
   }'`}</pre>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="tarieven" className="space-y-6">
@@ -1048,3 +1047,40 @@ const Settings = () => {
 };
 
 export default Settings;
+
+function IntegrationCard({
+  title,
+  description,
+  icon: Icon,
+  enabled,
+  onToggle,
+  children,
+}: {
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  enabled: boolean;
+  onToggle: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold-soft)/0.15)] p-4 space-y-4">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="h-10 w-10 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.3)]"
+            style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.25))" }}
+          >
+            <Icon className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">{title}</p>
+            <p className="text-xs text-muted-foreground">{description}</p>
+          </div>
+        </div>
+        <Switch checked={enabled} onCheckedChange={onToggle} />
+      </div>
+      {children}
+    </div>
+  );
+}
