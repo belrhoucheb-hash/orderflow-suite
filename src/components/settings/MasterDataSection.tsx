@@ -13,14 +13,24 @@ import {
   Info,
   Warehouse,
 } from "lucide-react";
-import { useWarehouses, useCreateWarehouse, useUpdateWarehouse, useDeleteWarehouse, type WarehouseInput, type Warehouse as WarehouseType } from "@/hooks/useWarehouses";
-import { PlanningV2Toggle } from "./PlanningV2Toggle";
+import {
+  useWarehouses,
+  useCreateWarehouse,
+  useUpdateWarehouse,
+  type WarehouseInput,
+  type Warehouse as WarehouseType,
+} from "@/hooks/useWarehouses";
 import { LoadingUnitDialog, type LoadingUnitFormValues } from "./LoadingUnitDialog";
 import { RequirementTypeDialog, type RequirementTypeFormValues } from "./RequirementTypeDialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTenant } from "@/contexts/TenantContext";
 import {
-  Card,
-} from "@/components/ui/card";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +41,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 interface LoadingUnitRow {
@@ -49,15 +69,27 @@ interface RequirementTypeRow {
   color: string | null;
 }
 
+type DeleteTarget =
+  | { table: "loading_units"; id: string; label: string }
+  | { table: "requirement_types"; id: string; label: string }
+  | { table: "tenant_warehouses"; id: string; label: string };
+
+const STALE_FIVE_MIN = 5 * 60_000;
+
 export function MasterDataSection() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
+  const tenantId = tenant?.id;
 
   const { data: loadingUnits = [], isLoading: loadingUnitsData } = useQuery<LoadingUnitRow[]>({
-    queryKey: ["settings-loading-units"],
+    queryKey: ["settings-loading-units", tenantId],
+    enabled: !!tenantId,
+    staleTime: STALE_FIVE_MIN,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loading_units")
         .select("*")
+        .is("deleted_at", null)
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as LoadingUnitRow[];
@@ -65,25 +97,38 @@ export function MasterDataSection() {
   });
 
   const { data: requirementTypes = [], isLoading: loadingRequirements } = useQuery<RequirementTypeRow[]>({
-    queryKey: ["settings-requirement-types"],
+    queryKey: ["settings-requirement-types", tenantId],
+    enabled: !!tenantId,
+    staleTime: STALE_FIVE_MIN,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("requirement_types")
         .select("*")
+        .is("deleted_at", null)
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as RequirementTypeRow[];
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async ({ table, id }: { table: "loading_units" | "requirement_types"; id: string }) => {
-      const { error } = await supabase.from(table).delete().eq("id", id);
+  const softDelete = useMutation({
+    mutationFn: async ({ table, id }: { table: DeleteTarget["table"]; id: string }) => {
+      const { error } = await (supabase as any)
+        .from(table)
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [`settings-${variables.table.replace("_", "-")}`] });
-      toast.success("Verwijderd", { description: "Gegeven succesvol verwijderd." });
+      const keyByTable: Record<DeleteTarget["table"], unknown[]> = {
+        loading_units: ["settings-loading-units", tenantId],
+        requirement_types: ["settings-requirement-types", tenantId],
+        tenant_warehouses: ["warehouses", tenantId],
+      };
+      queryClient.invalidateQueries({ queryKey: keyByTable[variables.table] });
+      toast.success("Verwijderd", {
+        description: "Gegeven is verwijderd uit de lijst. Historische data blijft bewaard voor administratie.",
+      });
     },
     onError: () => {
       toast.error("Fout", { description: "Kon gegeven niet verwijderen." });
@@ -92,18 +137,13 @@ export function MasterDataSection() {
 
   const [loadingUnitDialogOpen, setLoadingUnitDialogOpen] = useState(false);
   const [loadingUnitInitial, setLoadingUnitInitial] = useState<Partial<LoadingUnitFormValues> | null>(null);
+  const [requirementDialogOpen, setRequirementDialogOpen] = useState(false);
+  const [requirementInitial, setRequirementInitial] = useState<Partial<RequirementTypeFormValues> | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   const upsertLoadingUnit = useMutation({
     mutationFn: async (values: LoadingUnitFormValues) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("user_id", user?.id)
-        .single();
-      const tenantId = profile?.tenant_id;
       if (!tenantId) throw new Error("Geen tenant gevonden voor huidige gebruiker");
-
       const payload = {
         name: values.name.trim(),
         code: values.code.trim(),
@@ -111,14 +151,13 @@ export function MasterDataSection() {
         default_dimensions: values.default_dimensions?.trim() || null,
         tenant_id: tenantId,
       };
-
       const { error } = await supabase
         .from("loading_units")
         .upsert(payload, { onConflict: "tenant_id,code" });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings-loading-units"] });
+      queryClient.invalidateQueries({ queryKey: ["settings-loading-units", tenantId] });
       setLoadingUnitDialogOpen(false);
       setLoadingUnitInitial(null);
       toast.success("Opgeslagen", { description: "Ladingeenheid bijgewerkt." });
@@ -128,20 +167,9 @@ export function MasterDataSection() {
     },
   });
 
-  const [requirementDialogOpen, setRequirementDialogOpen] = useState(false);
-  const [requirementInitial, setRequirementInitial] = useState<Partial<RequirementTypeFormValues> | null>(null);
-
   const upsertRequirementType = useMutation({
     mutationFn: async (values: RequirementTypeFormValues) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("user_id", user?.id)
-        .single();
-      const tenantId = profile?.tenant_id;
       if (!tenantId) throw new Error("Geen tenant gevonden voor huidige gebruiker");
-
       const payload = {
         name: values.name.trim(),
         code: values.code.trim(),
@@ -149,14 +177,13 @@ export function MasterDataSection() {
         color: values.color?.trim() || null,
         tenant_id: tenantId,
       };
-
       const { error } = await supabase
         .from("requirement_types")
         .upsert(payload, { onConflict: "tenant_id,code" });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings-requirement-types"] });
+      queryClient.invalidateQueries({ queryKey: ["settings-requirement-types", tenantId] });
       setRequirementDialogOpen(false);
       setRequirementInitial(null);
       toast.success("Opgeslagen", { description: "Transportvereiste bijgewerkt." });
@@ -191,10 +218,33 @@ export function MasterDataSection() {
         submitting={upsertRequirementType.isPending}
       />
 
-      {/* Planbord v2 feature-flag */}
-      <section>
-        <PlanningV2Toggle />
-      </section>
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Verwijderen bevestigen</AlertDialogTitle>
+            <AlertDialogDescription>
+              Je staat op het punt "{deleteTarget?.label}" te verwijderen uit de actieve lijst.
+              Het item verdwijnt direct uit de UI, maar de onderliggende gegevens worden
+              volgens de wettelijke bewaarplicht (AVG) bewaard en blijven verbonden aan
+              historische orders en bewegingen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteTarget) {
+                  softDelete.mutate({ table: deleteTarget.table, id: deleteTarget.id });
+                  setDeleteTarget(null);
+                }
+              }}
+            >
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Loading Units */}
       <section className="space-y-4">
@@ -230,8 +280,15 @@ export function MasterDataSection() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {loadingUnits.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-8">
+                      Nog geen ladingeenheden. Voeg er een toe om ze te kunnen koppelen aan orders.
+                    </TableCell>
+                  </TableRow>
+                )}
                 {loadingUnits.map((lu) => (
-                  <TableRow key={lu.id} className="group transition-colors">
+                  <TableRow key={lu.id} className="transition-colors">
                     <TableCell className="font-medium text-xs">{lu.name}</TableCell>
                     <TableCell>
                       <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{lu.code}</code>
@@ -241,10 +298,11 @@ export function MasterDataSection() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{lu.default_dimensions || "—"}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Bewerken ${lu.name}`}
                           className="h-7 w-7 text-muted-foreground hover:text-foreground"
                           onClick={() => {
                             setLoadingUnitInitial({
@@ -261,8 +319,9 @@ export function MasterDataSection() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Verwijderen ${lu.name}`}
                           className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => deleteMutation.mutate({ table: "loading_units", id: lu.id })}
+                          onClick={() => setDeleteTarget({ table: "loading_units", id: lu.id, label: lu.name })}
                         >
                           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                         </Button>
@@ -310,8 +369,15 @@ export function MasterDataSection() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {requirementTypes.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-8">
+                      Nog geen transportvereisten. Voeg ADR, Koeling of een eigen kenmerk toe.
+                    </TableCell>
+                  </TableRow>
+                )}
                 {requirementTypes.map((rt) => (
-                  <TableRow key={rt.id} className="group transition-colors">
+                  <TableRow key={rt.id} className="transition-colors">
                     <TableCell className="font-medium text-xs flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full" style={{ background: rt.color || "#888" }} />
                       {rt.name}
@@ -322,10 +388,11 @@ export function MasterDataSection() {
                     <TableCell className="text-xs text-muted-foreground uppercase font-medium">{rt.category}</TableCell>
                     <TableCell className="text-xs font-mono text-muted-foreground uppercase">{rt.color || "—"}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1">
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Bewerken ${rt.name}`}
                           className="h-7 w-7 text-muted-foreground hover:text-foreground"
                           onClick={() => {
                             setRequirementInitial({
@@ -342,8 +409,9 @@ export function MasterDataSection() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Verwijderen ${rt.name}`}
                           className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => deleteMutation.mutate({ table: "requirement_types", id: rt.id })}
+                          onClick={() => setDeleteTarget({ table: "requirement_types", id: rt.id, label: rt.name })}
                         >
                           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                         </Button>
@@ -358,7 +426,7 @@ export function MasterDataSection() {
       </section>
 
       {/* Warehouses */}
-      <WarehousesSection />
+      <WarehousesSection onRequestDelete={(wh) => setDeleteTarget({ table: "tenant_warehouses", id: wh.id, label: wh.name })} />
 
       <div className="bg-primary/5 rounded-2xl border border-primary/10 p-5 mt-10">
         <div className="flex gap-3">
@@ -366,8 +434,8 @@ export function MasterDataSection() {
           <div className="space-y-1">
             <h4 className="text-sm font-semibold text-primary">Over Stamgegevens</h4>
             <p className="text-xs text-primary/70 leading-relaxed">
-              Stamgegevens vormen het fundament van uw TMS. Wijzigingen hier hebben directe invloed op de
-              planning en orderverwerking. Wees voorzichtig bij het verwijderen van actieve types.
+              Stamgegevens vormen het fundament van uw TMS. Verwijderde items verdwijnen uit de actieve
+              lijst, maar blijven conform de AVG-bewaarplicht gekoppeld aan historische orders en bewegingen.
             </p>
           </div>
         </div>
@@ -376,17 +444,20 @@ export function MasterDataSection() {
   );
 }
 
-function WarehousesSection() {
+function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: WarehouseType) => void }) {
   const { data: warehouses = [], isLoading } = useWarehouses();
   const createMut = useCreateWarehouse();
   const updateMut = useUpdateWarehouse();
-  const deleteMut = useDeleteWarehouse();
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<WarehouseInput>({ name: '', address: '', warehouse_type: 'OPS', is_default: false });
 
-  const resetForm = () => { setForm({ name: '', address: '', warehouse_type: 'OPS', is_default: false }); setIsAdding(false); setEditingId(null); };
+  const resetForm = () => {
+    setForm({ name: '', address: '', warehouse_type: 'OPS', is_default: false });
+    setIsAdding(false);
+    setEditingId(null);
+  };
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.address.trim()) return;
@@ -446,7 +517,7 @@ function WarehousesSection() {
                   <TableCell><Input className="h-8 text-xs bg-background" placeholder="RCS Export Hub" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></TableCell>
                   <TableCell><Input className="h-8 text-xs bg-background" placeholder="Volledig adres" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></TableCell>
                   <TableCell>
-                    <Select value={form.warehouse_type} onValueChange={v => setForm({ ...form, warehouse_type: v as any })}>
+                    <Select value={form.warehouse_type} onValueChange={v => setForm({ ...form, warehouse_type: v as WarehouseInput["warehouse_type"] })}>
                       <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="OPS">OPS</SelectItem>
@@ -460,10 +531,10 @@ function WarehousesSection() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={handleSave} disabled={!form.name || !form.address}>
+                      <Button size="icon" variant="ghost" aria-label="Opslaan" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={handleSave} disabled={!form.name || !form.address}>
                         <Check className="h-3.5 w-3.5" strokeWidth={1.5} />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={resetForm}>
+                      <Button size="icon" variant="ghost" aria-label="Annuleren" className="h-7 w-7 text-muted-foreground" onClick={resetForm}>
                         <X className="h-3.5 w-3.5" strokeWidth={1.5} />
                       </Button>
                     </div>
@@ -471,17 +542,17 @@ function WarehousesSection() {
                 </TableRow>
               )}
               {warehouses.map((wh) => (
-                <TableRow key={wh.id} className="group transition-colors">
+                <TableRow key={wh.id} className="transition-colors">
                   <TableCell className="font-medium text-xs">{wh.name}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{wh.address}</TableCell>
                   <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{wh.warehouse_type}</code></TableCell>
                   <TableCell className="text-xs text-center text-muted-foreground">{wh.is_default ? 'Ja' : ''}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => startEdit(wh)}>
+                      <Button size="icon" variant="ghost" aria-label={`Bewerken ${wh.name}`} className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => startEdit(wh)}>
                         <Edit2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => deleteMut.mutate(wh.id)}>
+                      <Button size="icon" variant="ghost" aria-label={`Verwijderen ${wh.name}`} className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => onRequestDelete(wh)}>
                         <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                       </Button>
                     </div>

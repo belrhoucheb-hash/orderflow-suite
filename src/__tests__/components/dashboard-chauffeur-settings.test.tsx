@@ -562,7 +562,7 @@ describe("MasterDataSection", () => {
     });
     const nameInput = screen.getByPlaceholderText("ADR...");
     const codeInput = screen.getByPlaceholderText("adr");
-    const colorInput = screen.getByPlaceholderText("#000000");
+    const colorInput = screen.getByPlaceholderText("#6b7280");
     fireEvent.change(nameInput, { target: { value: "Koeling" } });
     fireEvent.change(codeInput, { target: { value: "koeling" } });
     fireEvent.change(colorInput, { target: { value: "#0000ff" } });

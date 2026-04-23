@@ -10,6 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export interface RequirementTypeFormValues {
   name: string;
@@ -26,11 +33,18 @@ interface RequirementTypeDialogProps {
   submitting?: boolean;
 }
 
+const CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: "transport", label: "Transport" },
+  { value: "equipment", label: "Equipment" },
+  { value: "documentatie", label: "Documentatie" },
+  { value: "veiligheid", label: "Veiligheid" },
+];
+
 const empty: RequirementTypeFormValues = {
   name: "",
   code: "",
   category: "transport",
-  color: "",
+  color: "#6b7280",
 };
 
 export function RequirementTypeDialog({ open, onOpenChange, initial, onSubmit, submitting }: RequirementTypeDialogProps) {
@@ -77,21 +91,39 @@ export function RequirementTypeDialog({ open, onOpenChange, initial, onSubmit, s
         <div className="grid grid-cols-2 gap-4 pt-2">
           <div className="space-y-1.5">
             <Label htmlFor="rt-category">Categorie</Label>
-            <Input
-              id="rt-category"
+            <Select
               value={values.category}
-              placeholder="transport"
-              onChange={(e) => setValues((v) => ({ ...v, category: e.target.value }))}
-            />
+              onValueChange={(val) => setValues((v) => ({ ...v, category: val }))}
+            >
+              <SelectTrigger id="rt-category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="rt-color">Kleur (hex)</Label>
-            <Input
-              id="rt-color"
-              value={values.color}
-              placeholder="#000000"
-              onChange={(e) => setValues((v) => ({ ...v, color: e.target.value }))}
-            />
+            <Label htmlFor="rt-color">Kleur</Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="rt-color"
+                type="color"
+                value={values.color || "#6b7280"}
+                onChange={(e) => setValues((v) => ({ ...v, color: e.target.value }))}
+                className="h-9 w-12 rounded-md border border-input bg-background cursor-pointer"
+              />
+              <Input
+                value={values.color}
+                placeholder="#6b7280"
+                onChange={(e) => setValues((v) => ({ ...v, color: e.target.value }))}
+                className="font-mono"
+              />
+            </div>
           </div>
         </div>
 

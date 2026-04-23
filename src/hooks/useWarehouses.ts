@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantOptional } from "@/contexts/TenantContext";
+import { toast } from "sonner";
 
 export interface Warehouse {
   id: string;
@@ -25,6 +26,7 @@ export function useWarehouses() {
         .from("tenant_warehouses")
         .select("*")
         .eq("tenant_id", tenant!.id)
+        .is("deleted_at", null)
         .order("warehouse_type", { ascending: true })
         .order("name", { ascending: true });
       if (error) throw error;
@@ -47,7 +49,13 @@ export function useCreateWarehouse() {
       if (error) throw error;
       return data as Warehouse;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["warehouses"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["warehouses"] });
+      toast.success("Opgeslagen", { description: "Warehouse toegevoegd." });
+    },
+    onError: (err: Error) => {
+      toast.error("Fout", { description: err.message || "Kon warehouse niet opslaan." });
+    },
   });
 }
 
@@ -64,20 +72,12 @@ export function useUpdateWarehouse() {
       if (error) throw error;
       return data as Warehouse;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["warehouses"] }),
-  });
-}
-
-export function useDeleteWarehouse() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await (supabase as any)
-        .from("tenant_warehouses")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["warehouses"] });
+      toast.success("Opgeslagen", { description: "Warehouse bijgewerkt." });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["warehouses"] }),
+    onError: (err: Error) => {
+      toast.error("Fout", { description: err.message || "Kon warehouse niet opslaan." });
+    },
   });
 }
