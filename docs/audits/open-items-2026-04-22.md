@@ -1,7 +1,7 @@
 # Open audit-items per 2026-04-22
 
 Stand van zaken na de orders- en klanten-audits van 2026-04-22. Gecommit onder
-`e32ad49` (sprint-4 clients+orders) en het vervolg in deze commit.
+`e32ad49` (sprint-4 clients+orders) en het vervolg in de merges van 22 april.
 
 ## Afgerond
 
@@ -20,11 +20,33 @@ Alle top-10 items uit de audit zijn geland.
 - #10 Unsaved-changes-AlertDialog bij sluiten van NewClientDialog
 - #4 NewOrder `?client_id=`-param + vorige-order prefill
 
+Secundaire items uit "Structurele verbeteringen":
+
+- Omzet-YTD in `StatsStrip` via `useRevenueYtd`, aggregatie van
+  `invoices.total` per tenant plus klant, met statussen verzonden, betaald
+  en vervallen. Scope-afwijking, de hook aggregeert YTD per klant in plaats
+  van tenant-breed zoals oorspronkelijk geschetst. Reden: de "—" stond in
+  de per-klant-detailkaart, niet in een tenant-brede StatsStrip. Tenant-
+  brede omzet valt onder Finance-scope, zie Dependency-notities.
+- Slapende-klant-detectie (90 dagen geen order) via `useClientStats` en
+  `dormantOnly`-flag in `useClientsList`. Server-side via
+  `.not('id','in', recentIds)`. Filter-Select "Alleen slapende klanten" en
+  KPI-strip-cel in de klantenlijst.
+- Bulk-acties: checkbox-kolom, select-all met indeterminate-state, toolbar
+  met CSV-export en "Zet op inactief" via `useBulkUpdateClientsActive`
+  (archive-pattern, hard-delete blijft weg). AlertDialog hergebruikt het
+  patroon van NewClientDialog-#10.
+
 ### Orders-tab (audit: `docs/audits/orders-2026-04-22.md`)
 
-Uit de top-10 geland:
+Alle top-10 items uit de audit zijn geland.
 
 - #1 Sort-memo dependency fix (`Orders.tsx`)
+- #2 Server-side sorteren via `useOrders`-opties `sortField` en `sortDirection`,
+  UI-veldnaam mapt in `SORT_FIELD_TO_DB` naar de DB-kolom (`client_name`,
+  `weight_kg`, `status`, `created_at`). Sort-keys zitten in de query-key zodat
+  react-query per combinatie cachet. `created_at DESC` blijft tiebreaker voor
+  stabiele paginering.
 - #3 `localStorage.local_test_orders` verwijderd uit `OrderDetail.tsx`
 - #4 Audit-log op CREATE (per leg in NewOrder via `createShipmentWithLegs`),
   CANCEL en REOPEN (OrderDetail), plus defense-in-depth in `useCreateOrder` en
@@ -32,64 +54,51 @@ Uit de top-10 geland:
 - #5 Dupliceer-order: hover-knop op klant-cel in orderlijst, navigeert naar
   `/orders/nieuw?client_id=...` die de prefill-flow triggert
 - #6 Expliciete `.select()`-kolommen in `useOrders` i.p.v. `select('*')`
-- #2 Server-side sorteren via `useOrders`-opties `sortField` en `sortDirection`,
-  UI-veldnaam mapt in `SORT_FIELD_TO_DB` naar de DB-kolom (`client_name`,
-  `weight_kg`, `status`, `created_at`). Sort-keys zitten in de query-key zodat
-  react-query per combinatie cachet. `created_at DESC` blijft tiebreaker voor
-  stabiele paginering. Bij intensief gebruik van `weight_kg DESC` loont een
-  `(tenant_id, weight_kg DESC)`-index alsnog, nu nog niet toegevoegd.
+- #7 Unsaved-changes-AlertDialog in NewOrder: dirty-check t.o.v. initial
+  state (incl. prefill vanuit `?client_id=`), AlertDialog bij Annuleren of
+  outside-click. Zelfde patroon als NewClientDialog.
 - #8 Order-number zoeken op geformatteerde string: zoekwoord wordt in
   `useOrders` genormaliseerd (`RCS-` prefix weg, jaar-prefix weg, leading
   zeros weg) en als `order_number.eq.<int>` aan de `or()`-clause toegevoegd.
   Tekstzoek op `client_name`, `pickup_address` en `delivery_address` blijft
-  intact. Placeholder in de zoekbalk laat nu expliciet `RCS-2026-0001` zien.
-  Unit-tests dekken de formats `RCS-2026-0042`, `0042` en zuivere tekst.
+  intact. Placeholder laat `RCS-2026-0001` zien. Unit-tests dekken
+  `RCS-2026-0042`, `0042` en zuivere tekst.
+- #9 `NewOrder.handleSave` gebruikt `orderInputSchema.parse`. ZodError-
+  catch mapt naar dezelfde toast-flow. Nieuwe test dekt happy path,
+  missende leg en ongeldige gewichten.
+- #10 KPI-cel "DRAFT ouder dan 2u" met klik-filter. Tenant-gescoped count-
+  query (`useStaleDraftCount`, 60s refetch), klik zet
+  `createdBefore`-filter dat server-side via `.lt("created_at", ...)` wordt
+  toegepast. Client-side stale-filter weggehaald.
 
 ## Nog te doen
 
-### Orders-tab
-
-- **#7 "Leaving with unsaved changes"-waarschuwing in NewOrder** (S-effort,
-  mid-impact), zelfde patroon als het nu in NewClientDialog staat (dirty-check
-  + AlertDialog bij Annuleren of outside-click).
-- **#9 Handmatige validatie in `NewOrder.handleSave` vervangen door
-  `orderInputSchema.parse`** (M-effort, mid-impact), voorkomt drift tussen
-  Zod-schema en de duplicate-validatie in de component.
-- **#10 "DRAFT ouder dan 2u"-KPI-cel** (S-effort, mid-impact), één extra query
-  op `status='DRAFT' AND created_at < now() - interval '2 hour'`, met klik als
-  snel-filter.
-
-### Klanten-tab
-
-Alle top-10 geland. Secundaire items uit de rapport-sectie "Structurele
-verbeteringen":
-
-- Omzet-YTD-metric in `StatsStrip`, via aggregatie van `invoices.total_cents`
-  of `order_charges` per client. Nu toont de kaart "—" met caption
-  "niet beschikbaar".
-- Slapende-klant-detectie (90 dagen geen order), filter + KPI-strip-cel.
-- Bulk-acties op klanten, o.a. bulk-inactief-schakelen en CSV-export.
-
 ### Dialog-component tests
 
-`src/__tests__/components/dialog-components.test.tsx`:
+Nog steeds flakey. Fix-poging op 2026-04-22 via globale
+`@react-google-maps/api`-mock in `src/test/setup.ts` is gerevert omdat
+de mock andere test-suites brak (`NewClientDialog`, `NewVehicleDialog`,
+`core-components > AppLayout` faalden op "Element type is invalid").
+Onderliggende oorzaak (module-parse-kost van 1.5MB maps-library bij
+eerste `await import()`) niet opgelost. Volgende poging vraagt een
+completere mock-matrix of een Vite-level alias die de library
+stub't in testmode.
 
-- `ClientDetailPanel > renders tabs`, af en toe een timeout van 5000ms. Tijdens
-  laatste run passeerde hij (4283ms). Vermoedelijk flakey door de Google-Maps
-  mock die traag laadt. Als hij blijft hangen: verhoog `testTimeout` in de
-  vitest-config naar 10000ms, of hoist de `useGoogleMaps`-mock verder naar
-  boven zodat hij synchroon loaded-is-false retourneert.
-- `NewDriverDialog > renders create mode when no driver prop`, zelfde
-  patroon. Niet door audit-wijzigingen veroorzaakt.
+- `ClientDetailPanel > renders tabs`, timeout 5000ms, halen in 1625-3079ms.
+- `NewDriverDialog > renders create mode when no driver prop`, zelfde.
 
-Deze flakiness bestond al voor de audit-sprint; de pre-existing architectuur
-met directe Google-Maps loader in de detail-component is de oorzaak.
+### Nieuwe items uit de consolidatie
+
+- **Tenant-brede omzet-YTD-metric** (Finance-scope, niet Klanten-tab),
+  aggregatie over `invoices.total` per tenant voor alle klanten
+  gezamenlijk. Verschijnt op Finance-dashboard, niet in de klant-detail-
+  kaart. Pak op wanneer de Finance-tab ingericht wordt.
 
 ## Dependency-notities
 
 - Geen van de open items vereist een migratie.
 - Item "Server-side sorteren" kan baat hebben bij een index op
-  `(tenant_id, weight_kg DESC)` als weight sortering actief wordt, nu is dat
-  niet nodig.
-- Item "Omzet-YTD" vraagt een aparte query of materialized view; dat valt
-  eerder onder Finance-scope dan Klanten-tab.
+  `(tenant_id, weight_kg DESC)` als `weight_kg`-sortering actief gebruikt
+  wordt; nu nog niet nodig.
+- Tenant-brede omzet-YTD vraagt een aparte query of materialized view; valt
+  onder Finance-scope.
