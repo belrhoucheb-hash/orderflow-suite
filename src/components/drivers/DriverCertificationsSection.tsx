@@ -12,6 +12,16 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DriverCertificationDialog,
   type DriverCertificationFormValues,
 } from "@/components/drivers/DriverCertificationDialog";
@@ -33,6 +43,7 @@ export function DriverCertificationsSection() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<DriverCertification | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DriverCertification | null>(null);
 
   const submitting = createMut.isPending || updateMut.isPending;
 
@@ -84,19 +95,18 @@ export function DriverCertificationsSection() {
     }
   };
 
-  const handleDelete = (cert: DriverCertification) => {
-    const inUse = counts[cert.code] ?? 0;
-    const confirmMsg =
-      inUse > 0
-        ? `"${cert.name}" is nog toegekend aan ${inUse} chauffeur${inUse === 1 ? "" : "s"}. Toch verwijderen?`
-        : `Certificering "${cert.name}" verwijderen?`;
-    if (!window.confirm(confirmMsg)) return;
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    const cert = pendingDelete;
     deleteMut.mutate(cert.id, {
       onSuccess: () => toast.success("Verwijderd", { description: "Certificering verwijderd." }),
       onError: (err: Error) =>
         toast.error("Fout", { description: err.message || "Kon certificering niet verwijderen." }),
     });
+    setPendingDelete(null);
   };
+
+  const pendingDeleteInUse = pendingDelete ? (counts[pendingDelete.code] ?? 0) : 0;
 
   return (
     <section className="space-y-4">
@@ -202,6 +212,7 @@ export function DriverCertificationsSection() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Certificering ${cert.name} bewerken`}
                           className="h-7 w-7 text-muted-foreground hover:text-foreground"
                           onClick={() => {
                             setEditing(cert);
@@ -213,8 +224,9 @@ export function DriverCertificationsSection() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Certificering ${cert.name} verwijderen`}
                           className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDelete(cert)}
+                          onClick={() => setPendingDelete(cert)}
                         >
                           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                         </Button>
@@ -227,6 +239,33 @@ export function DriverCertificationsSection() {
           </Table>
         )}
       </Card>
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Certificering verwijderen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete && pendingDeleteInUse > 0
+                ? `"${pendingDelete.name}" is nog toegekend aan ${pendingDeleteInUse} chauffeur${pendingDeleteInUse === 1 ? "" : "s"}. Toch verwijderen?`
+                : pendingDelete
+                  ? `Certificering "${pendingDelete.name}" wordt permanent verwijderd.`
+                  : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

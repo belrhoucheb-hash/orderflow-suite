@@ -3,6 +3,16 @@ import { Download, FileText, Loader2, Pencil, Sparkles, Trash2, Upload } from "l
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -79,6 +89,7 @@ export function DriverCertificateRecordsSection({ driverId }: Props) {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<DriverCertificateRecord | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DriverCertificateRecord | null>(null);
   // Bestand + AI-voorstel die meegegeven worden aan de dialog zodra de
   // scan klaar is. Zo ziet de gebruiker in één keer de vooringevulde
   // velden en hoeft alleen te reviewen/op te slaan.
@@ -210,14 +221,10 @@ export function DriverCertificateRecordsSection({ driverId }: Props) {
     }
   };
 
-  const onDelete = async (r: DriverCertificateRecord) => {
-    if (
-      !window.confirm(
-        `Certificaat "${certNameByCode[r.certification_code] ?? r.certification_code}" verwijderen?`,
-      )
-    ) {
-      return;
-    }
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const r = pendingDelete;
+    setPendingDelete(null);
     try {
       await deleteMut.mutateAsync({
         id: r.id,
@@ -371,6 +378,7 @@ export function DriverCertificateRecordsSection({ driverId }: Props) {
                         className="h-7 w-7"
                         onClick={() => onDownload(r)}
                         title="Downloaden"
+                        aria-label="Certificaat downloaden"
                       >
                         <Download className="h-3.5 w-3.5" />
                       </Button>
@@ -382,6 +390,7 @@ export function DriverCertificateRecordsSection({ driverId }: Props) {
                       className="h-7 w-7"
                       onClick={() => onEdit(r)}
                       title="Bewerken"
+                      aria-label="Certificaat bewerken"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
@@ -390,8 +399,9 @@ export function DriverCertificateRecordsSection({ driverId }: Props) {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-destructive"
-                      onClick={() => onDelete(r)}
+                      onClick={() => setPendingDelete(r)}
                       title="Verwijderen"
+                      aria-label="Certificaat verwijderen"
                       disabled={deleteMut.isPending}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -423,6 +433,31 @@ export function DriverCertificateRecordsSection({ driverId }: Props) {
         onSubmit={onSubmit}
         submitting={submitting}
       />
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Certificaat verwijderen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete
+                ? `Certificaat "${certNameByCode[pendingDelete.certification_code] ?? pendingDelete.certification_code}" en eventuele uploads worden permanent verwijderd.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

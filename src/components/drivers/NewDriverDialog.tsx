@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { nl } from "date-fns/locale";
 import { CalendarIcon, AlertTriangle } from "lucide-react";
@@ -10,6 +10,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -175,6 +185,8 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   );
 
   const [form, setForm] = useState<FormState>(INITIAL);
+  const [initialForm, setInitialForm] = useState<FormState>(INITIAL);
+  const [pendingClose, setPendingClose] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [tab, setTab] = useState("basis");
   const [birthDateOpen, setBirthDateOpen] = useState(false);
@@ -186,10 +198,35 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
 
   useEffect(() => {
     if (!open) return;
-    setForm(driver ? toFormState(driver) : INITIAL);
+    const base = driver ? toFormState(driver) : INITIAL;
+    setForm(base);
+    setInitialForm(base);
     setErrors({});
     setTab("basis");
+    setPendingClose(false);
   }, [driver, open]);
+
+  const isDirty = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(initialForm),
+    [form, initialForm],
+  );
+
+  const requestClose = (next: boolean) => {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    if (isDirty) {
+      setPendingClose(true);
+      return;
+    }
+    onOpenChange(false);
+  };
+
+  const confirmDiscard = () => {
+    setPendingClose(false);
+    onOpenChange(false);
+  };
 
   useEffect(() => {
     if (!certExpiries) return;
@@ -371,7 +408,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
     : "Legitimatienummer";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent className="sm:max-w-[720px] max-h-[92vh] flex flex-col rounded-2xl p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-3 border-b border-border/40">
           <DialogTitle className="font-display text-xl">
@@ -806,7 +843,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => requestClose(false)}
               disabled={isPending}
               className="rounded-xl border-border/50"
             >
@@ -822,6 +859,26 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
           </DialogFooter>
         </form>
       </DialogContent>
+      <AlertDialog
+        open={pendingClose}
+        onOpenChange={(o) => !o && setPendingClose(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Wijzigingen weggooien?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Je hebt wijzigingen die nog niet zijn opgeslagen. Sluit je de dialog nu,
+              dan gaan ze verloren.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Doorgaan met bewerken</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscard}>
+              Wijzigingen weggooien
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

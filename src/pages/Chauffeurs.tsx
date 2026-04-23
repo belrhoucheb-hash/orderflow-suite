@@ -582,6 +582,7 @@ function DriverCard({ driver: d, vehicleMap, certLabels, onEdit, onDelete }: Dri
                 <Button
                   variant="ghost"
                   className="h-8 w-8 p-0 hover:bg-primary/5 transition-colors"
+                  aria-label={`Acties voor ${d.name}`}
                 >
                   <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                 </Button>
@@ -776,6 +777,7 @@ function DriversTable({
                       size="sm"
                       className="h-7 px-2"
                       onClick={() => onEdit(d)}
+                      aria-label={`${d.name} bewerken`}
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
@@ -784,6 +786,7 @@ function DriversTable({
                       size="sm"
                       className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/5"
                       onClick={() => onDelete(d)}
+                      aria-label={`${d.name} verwijderen`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
