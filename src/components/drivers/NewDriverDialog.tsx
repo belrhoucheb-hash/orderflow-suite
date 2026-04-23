@@ -943,6 +943,30 @@ function ErrorText({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-destructive mt-1">{children}</p>;
 }
 
+// Probeert "dd-mm-jjjj", "d-m-jjjj", "ddmmjjjj" of dezelfde varianten
+// met "/" of "." als scheidingsteken te parsen. Bij ongeldige invoer
+// geven we null terug zodat de aanroeper de oude waarde kan herstellen.
+function parseDutchDate(input: string): Date | null {
+  const cleaned = input.trim();
+  if (!cleaned) return null;
+  const match = cleaned.match(/^(\d{1,2})[-/.\s]?(\d{1,2})[-/.\s]?(\d{2}|\d{4})$/);
+  if (!match) return null;
+  const day = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  let year = parseInt(match[3], 10);
+  if (match[3].length === 2) year += year >= 70 ? 1900 : 2000;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
 function DatePickerButton({
   id,
   open,
@@ -962,28 +986,65 @@ function DatePickerButton({
   toYear: number;
   defaultMonth?: Date;
 }) {
+  const [text, setText] = useState(value ? format(value, "dd-MM-yyyy") : "");
+
+  // Houd de tekst in sync als de waarde van buiten verandert (bijv. via
+  // de kalenderselectie of als het formulier herlaadt).
+  useEffect(() => {
+    setText(value ? format(value, "dd-MM-yyyy") : "");
+  }, [value]);
+
+  const commit = () => {
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      onSelect(undefined);
+      return;
+    }
+    const parsed = parseDutchDate(trimmed);
+    if (parsed) {
+      onSelect(parsed);
+    } else {
+      // Ongeldige invoer, zet terug naar de laatst geldige waarde.
+      setText(value ? format(value, "dd-MM-yyyy") : "");
+    }
+  };
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <button
+      <div
+        className={cn(
+          "flex h-10 w-full items-center gap-2 rounded-xl border px-3 py-2 text-sm",
+          "border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--card))] text-foreground",
+          "focus-within:border-[hsl(var(--gold)/0.6)] focus-within:ring-2 focus-within:ring-[hsl(var(--gold)/0.4)]",
+        )}
+      >
+        <input
           id={id}
-          type="button"
-          className={cn(
-            // Zelfde look als field-luxe inputs: lichte achtergrond met
-            // subtiele gold border, geen accent-fill op hover of open.
-            "flex h-10 w-full items-center gap-2 rounded-xl border px-3 py-2 text-sm",
-            "border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--card))] text-foreground",
-            "hover:border-[hsl(var(--gold)/0.5)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gold)/0.4)]",
-            "data-[state=open]:border-[hsl(var(--gold)/0.6)]",
-            !value && "text-muted-foreground",
-          )}
-        >
-          <CalendarIcon className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
-          <span className="truncate">
-            {value ? format(value, "d MMMM yyyy", { locale: nl }) : "Kies een datum"}
-          </span>
-        </button>
-      </PopoverTrigger>
+          type="text"
+          inputMode="numeric"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+              (e.currentTarget as HTMLInputElement).blur();
+            }
+          }}
+          placeholder="dd-mm-jjjj"
+          className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+        />
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label="Open kalender"
+            className="text-[hsl(var(--gold-deep))] hover:text-[hsl(var(--gold-deep))]"
+          >
+            <CalendarIcon className="h-4 w-4" />
+          </button>
+        </PopoverTrigger>
+      </div>
       <PopoverContent
         className="w-auto p-0 rounded-xl border-[hsl(var(--gold)/0.25)] shadow-lg"
         align="start"
