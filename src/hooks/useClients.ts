@@ -36,6 +36,7 @@ export interface Client {
   coords_manual: boolean;
 
   billing_email: string | null;
+  billing_emails: string[];
   billing_same_as_main: boolean;
   billing_address: string | null;
   billing_zipcode: string | null;

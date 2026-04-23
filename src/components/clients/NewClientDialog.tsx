@@ -64,6 +64,7 @@ interface FormState {
 
   billing_same_as_main: boolean;
   billing_email: string;
+  billing_emails: string[];
   billing_address: AddressValue;
 
   shipping_same_as_main: boolean;
@@ -87,6 +88,7 @@ const INITIAL: FormState = {
   main_address: { ...EMPTY_ADDRESS },
   billing_same_as_main: true,
   billing_email: "",
+  billing_emails: [],
   billing_address: { ...EMPTY_ADDRESS },
   shipping_same_as_main: true,
   shipping_address: { ...EMPTY_ADDRESS },
@@ -122,6 +124,7 @@ function formFromClient(c: Client): FormState {
     main_address: addressFromClient(c, ""),
     billing_same_as_main: c.billing_same_as_main ?? true,
     billing_email: c.billing_email ?? "",
+    billing_emails: c.billing_emails ?? [],
     billing_address: addressFromClient(c, "billing_"),
     shipping_same_as_main: c.shipping_same_as_main ?? true,
     shipping_address: addressFromClient(c, "shipping_"),
@@ -303,7 +306,8 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
       payment_terms: form.payment_terms,
       main_address: form.main_address,
       billing_same_as_main: form.billing_same_as_main,
-      billing_email: form.billing_email,
+      billing_email: form.billing_emails[0] ?? form.billing_email,
+      billing_emails: form.billing_emails,
       billing_address: form.billing_address,
       shipping_same_as_main: form.shipping_same_as_main,
       shipping_address: form.shipping_address,
@@ -348,7 +352,9 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
         coords_manual: main.coords_manual,
 
         billing_same_as_main: parsed.data.billing_same_as_main,
-        billing_email: parsed.data.billing_email || null,
+        billing_email:
+          parsed.data.billing_emails[0] || parsed.data.billing_email || null,
+        billing_emails: parsed.data.billing_emails,
         billing_address: composeAddressString(billing) || null,
         billing_zipcode: billing.zipcode || null,
         billing_city: billing.city || null,
@@ -564,14 +570,14 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
             <div className="space-y-3">
               <div>
                 <Label>Factuur e-mail</Label>
-                <Input
-                  type="email"
-                  value={form.billing_email}
-                  onChange={setField("billing_email")}
-                  placeholder="Leeg = gebruik algemeen e-mail"
-                  className="field-luxe"
+                <EmailChipInput
+                  value={form.billing_emails}
+                  onChange={(next) =>
+                    setForm((prev) => ({ ...prev, billing_emails: next }))
+                  }
+                  placeholder="Voeg een e-mailadres toe en druk op Enter"
                 />
-                {errors.billing_email && <ErrorText>{errors.billing_email}</ErrorText>}
+                {errors.billing_emails && <ErrorText>{errors.billing_emails}</ErrorText>}
               </div>
               {!form.billing_same_as_main && (
                 <AddressAutocomplete
@@ -660,4 +666,85 @@ function Label({ children }: { children: React.ReactNode }) {
 
 function ErrorText({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-destructive mt-1">{children}</p>;
+}
+
+// Simpele chip-input voor meerdere e-mailadressen. Enter of komma voegt
+// het huidige adres toe; klikken op het kruisje verwijdert een chip.
+// Bewust kleine scope: ontdubbelt case-insensitive, valideert alleen
+// minimale e-mail-vorm zodat onzin er niet in sluipt.
+function EmailChipInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const [invalid, setInvalid] = useState(false);
+
+  const commit = () => {
+    const trimmed = draft.trim().replace(/,+$/, "");
+    if (!trimmed) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setInvalid(true);
+      return;
+    }
+    if (value.some((v) => v.toLowerCase() === trimmed.toLowerCase())) {
+      setDraft("");
+      setInvalid(false);
+      return;
+    }
+    onChange([...value, trimmed]);
+    setDraft("");
+    setInvalid(false);
+  };
+
+  return (
+    <div>
+      <div className="field-luxe flex flex-wrap items-center gap-1.5 min-h-10 py-1.5">
+        {value.map((email, idx) => (
+          <span
+            key={`${email}-${idx}`}
+            className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--gold)/0.12)] px-2 py-0.5 text-xs"
+          >
+            {email}
+            <button
+              type="button"
+              aria-label={`Verwijder ${email}`}
+              onClick={() => onChange(value.filter((_, i) => i !== idx))}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          type="email"
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (invalid) setInvalid(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Backspace" && !draft && value.length > 0) {
+              onChange(value.slice(0, -1));
+            }
+          }}
+          onBlur={commit}
+          placeholder={value.length === 0 ? placeholder : ""}
+          className="flex-1 min-w-[160px] bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+        />
+      </div>
+      {invalid && (
+        <p className="text-xs text-destructive mt-1">
+          Ongeldig e-mailadres, gebruik bijv. naam@voorbeeld.nl.
+        </p>
+      )}
+    </div>
+  );
 }
