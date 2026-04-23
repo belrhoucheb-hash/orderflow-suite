@@ -166,6 +166,7 @@ export function useCreateRateCard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rate_cards"] });
+      queryClient.invalidateQueries({ queryKey: ["rate-card-audit-log"] });
       toast.success("Tariefkaart aangemaakt");
     },
     onError: () => {
@@ -219,6 +220,7 @@ export function useDeleteRateCard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rate_cards"] });
+      queryClient.invalidateQueries({ queryKey: ["rate-card-audit-log"] });
       toast.success("Tariefkaart verwijderd");
     },
     onError: () => {
@@ -271,6 +273,7 @@ export function useUpsertRateRules() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rate_cards"] });
+      queryClient.invalidateQueries({ queryKey: ["rate-card-audit-log"] });
       toast.success("Tariefregels opgeslagen");
     },
     onError: () => {

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Save, ChevronDown, ChevronUp, Settings2, HelpCircle, Coins } from "lucide-react";
 import { useRateCards, useCreateRateCard, useUpdateRateCard, useDeleteRateCard, useUpsertRateRules } from "@/hooks/useRateCards";
+import { RateCardAuditTrail } from "@/components/settings/RateCardAuditTrail";
 import { useTenant } from "@/contexts/TenantContext";
 import type { RuleType } from "@/types/rateModels";
 import { RULE_TYPES, RULE_TYPE_LABELS } from "@/types/rateModels";
@@ -356,6 +357,8 @@ export function RateCardSettings() {
                     <Save className="h-4 w-4" /> Opslaan
                   </button>
                 </div>
+
+                <RateCardAuditTrail rateCardId={card.id} />
               </div>
             )}
           </div>
