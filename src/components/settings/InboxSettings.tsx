@@ -188,7 +188,7 @@ export function InboxSettings() {
   const data = inboxes.data || [];
 
   return (
-    <Card className="rounded-2xl border-border/40">
+    <Card className="card--luxe">
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
         <div>
           <CardTitle className="flex items-center gap-2">
@@ -322,7 +322,7 @@ export function InboxSettings() {
             {data.map((inbox) => (
               <div
                 key={inbox.id}
-                className="flex items-center justify-between p-3 rounded-xl border border-border/40"
+                className="flex items-center justify-between p-3 rounded-xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold-soft)/0.15)]"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">

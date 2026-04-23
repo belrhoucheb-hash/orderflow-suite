@@ -142,7 +142,7 @@ export function VehicleDocumentTypesSection() {
         </Button>
       </div>
 
-      <Card className="rounded-2xl border-border/40 overflow-hidden shadow-sm">
+      <div className="card--luxe overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center p-12 text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
@@ -150,7 +150,7 @@ export function VehicleDocumentTypesSection() {
           </div>
         ) : (
           <Table>
-            <TableHeader className="bg-muted/30">
+            <TableHeader className="bg-[hsl(var(--gold-soft)/0.3)]">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[200px] text-xs uppercase tracking-wider font-semibold">
                   Naam
@@ -218,7 +218,7 @@ export function VehicleDocumentTypesSection() {
             </TableBody>
           </Table>
         )}
-      </Card>
+      </div>
 
       <AlertDialog
         open={pendingDelete !== null}

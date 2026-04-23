@@ -250,8 +250,11 @@ export function MasterDataSection() {
       <section className="space-y-4">
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center">
-              <Package className="h-4.5 w-4.5 text-amber-600" strokeWidth={1.5} />
+            <div
+              className="h-9 w-9 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.3)]"
+              style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.25))" }}
+            >
+              <Package className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
             </div>
             <div>
               <h3 className="text-lg font-bold">Ladingeenheden</h3>
@@ -267,10 +270,10 @@ export function MasterDataSection() {
           </Button>
         </div>
 
-        <Card className="rounded-2xl border-border/40 overflow-hidden shadow-sm">
+        <Card className="card--luxe overflow-hidden">
           {loadingUnitsData ? renderLoading() : (
             <Table>
-              <TableHeader className="bg-muted/30">
+              <TableHeader className="bg-[hsl(var(--gold-soft)/0.3)]">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[200px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider font-semibold">Code</TableHead>
@@ -339,8 +342,11 @@ export function MasterDataSection() {
       <section className="space-y-4">
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-purple-500/10 flex items-center justify-center">
-              <AlertTriangle className="h-4.5 w-4.5 text-purple-600" strokeWidth={1.5} />
+            <div
+              className="h-9 w-9 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.3)]"
+              style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)/0.8), hsl(var(--gold-soft)/0.25))" }}
+            >
+              <AlertTriangle className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
             </div>
             <div>
               <h3 className="text-lg font-bold">Transportvereisten</h3>
@@ -356,10 +362,10 @@ export function MasterDataSection() {
           </Button>
         </div>
 
-        <Card className="rounded-2xl border-border/40 overflow-hidden shadow-sm">
+        <Card className="card--luxe overflow-hidden">
           {loadingRequirements ? renderLoading() : (
             <Table>
-              <TableHeader className="bg-muted/30">
+              <TableHeader className="bg-[hsl(var(--gold-soft)/0.3)]">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[200px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
                   <TableHead className="text-xs uppercase tracking-wider font-semibold">Code</TableHead>
@@ -428,13 +434,13 @@ export function MasterDataSection() {
       {/* Warehouses */}
       <WarehousesSection onRequestDelete={(wh) => setDeleteTarget({ table: "tenant_warehouses", id: wh.id, label: wh.name })} />
 
-      <div className="bg-primary/5 rounded-2xl border border-primary/10 p-5 mt-10">
+      <div className="card--luxe p-5 mt-10" style={{ background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.25) 100%)" }}>
         <div className="flex gap-3">
-          <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" strokeWidth={1.5} />
+          <Info className="h-5 w-5 text-[hsl(var(--gold-deep))] shrink-0 mt-0.5" strokeWidth={1.5} />
           <div className="space-y-1">
-            <h4 className="text-sm font-semibold text-primary">Over Stamgegevens</h4>
-            <p className="text-xs text-primary/70 leading-relaxed">
-              Stamgegevens vormen het fundament van uw TMS. Verwijderde items verdwijnen uit de actieve
+            <h4 className="text-sm font-semibold text-[hsl(var(--gold-deep))]">Over stamgegevens</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Stamgegevens vormen het fundament van je TMS. Verwijderde items verdwijnen uit de actieve
               lijst, maar blijven conform de AVG-bewaarplicht gekoppeld aan historische orders en bewegingen.
             </p>
           </div>
@@ -494,7 +500,7 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
         )}
       </div>
 
-      <Card className="rounded-2xl border-border/40 overflow-hidden shadow-sm">
+      <Card className="card--luxe overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center p-12 text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
