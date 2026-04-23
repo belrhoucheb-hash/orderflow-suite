@@ -1,8 +1,19 @@
 import { useMemo, useState } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { History, ChevronDown, ChevronUp, Plus, Pencil, Trash2 } from "lucide-react";
+import { History, ChevronDown, ChevronUp, Plus, Pencil, Trash2, Undo2 } from "lucide-react";
 import { useRateCardAuditLog, type AuditLogEntry, type AuditAction } from "@/hooks/useRateCardAuditLog";
+import { useRollbackAuditEntry } from "@/hooks/useRollbackAuditEntry";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Props {
   rateCardId: string;
@@ -68,9 +79,20 @@ function summarizeEntry(entry: AuditLogEntry): { title: string; details: string[
   return { title, details };
 }
 
+function canRollback(action: AuditAction): boolean {
+  return action === "card_updated" || action === "rule_updated" || action === "card_created" || action === "rule_created";
+}
+
+function rollbackLabel(action: AuditAction): string {
+  if (action === "card_created" || action === "rule_created") return "Toevoeging ongedaan maken";
+  return "Wijziging terugdraaien";
+}
+
 export function RateCardAuditTrail({ rateCardId }: Props) {
   const [open, setOpen] = useState(false);
+  const [pendingRollback, setPendingRollback] = useState<AuditLogEntry | null>(null);
   const { data: entries = [], isLoading } = useRateCardAuditLog(rateCardId, 50);
+  const rollback = useRollbackAuditEntry();
 
   const rendered = useMemo(() => entries.map((e) => ({ entry: e, summary: summarizeEntry(e) })), [entries]);
 
@@ -123,12 +145,27 @@ export function RateCardAuditTrail({ rateCardId }: Props) {
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="text-xs font-medium text-foreground">{summary.title}</p>
-                    <p
-                      className="text-[10px] text-muted-foreground tabular-nums shrink-0"
-                      title={absolute}
-                    >
-                      {relative}
-                    </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {canRollback(entry.action) && (
+                        <button
+                          type="button"
+                          onClick={() => setPendingRollback(entry)}
+                          disabled={rollback.isPending}
+                          className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground hover:text-[hsl(var(--gold-deep))] transition-colors disabled:opacity-40"
+                          aria-label={rollbackLabel(entry.action)}
+                          title={rollbackLabel(entry.action)}
+                        >
+                          <Undo2 className="h-3 w-3" strokeWidth={1.5} />
+                          Terugdraaien
+                        </button>
+                      )}
+                      <p
+                        className="text-[10px] text-muted-foreground tabular-nums"
+                        title={absolute}
+                      >
+                        {relative}
+                      </p>
+                    </div>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     {entry.actor_display_name ?? "Onbekende gebruiker"}
@@ -148,6 +185,38 @@ export function RateCardAuditTrail({ rateCardId }: Props) {
           })}
         </div>
       )}
+
+      <AlertDialog
+        open={pendingRollback !== null}
+        onOpenChange={(o) => { if (!o) setPendingRollback(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingRollback ? rollbackLabel(pendingRollback.action) : "Terugdraaien"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingRollback?.action === "card_created" || pendingRollback?.action === "rule_created"
+                ? "De toegevoegde tariefkaart of -regel wordt verwijderd. Deze actie wordt zelf ook gelogd, dus je kunt 'm later terugdraaien als het een vergissing was."
+                : "De waarden worden teruggezet naar de stand van voor deze wijziging. Er wordt een nieuwe audit-entry aangemaakt, dus je kunt altijd terug naar de huidige stand."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!pendingRollback) return;
+                const entry = pendingRollback;
+                setPendingRollback(null);
+                rollback.mutate(entry);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Terugdraaien
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

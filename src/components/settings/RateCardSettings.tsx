@@ -12,8 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Save, ChevronDown, ChevronUp, Settings2, HelpCircle, Coins } from "lucide-react";
+import { Plus, Trash2, Save, ChevronDown, ChevronUp, Settings2, HelpCircle, Coins, Copy } from "lucide-react";
 import { useRateCards, useCreateRateCard, useUpdateRateCard, useDeleteRateCard, useUpsertRateRules } from "@/hooks/useRateCards";
+import { useDuplicateRateCard } from "@/hooks/useDuplicateRateCard";
 import { RateCardAuditTrail } from "@/components/settings/RateCardAuditTrail";
 import { useTenant } from "@/contexts/TenantContext";
 import type { RuleType } from "@/types/rateModels";
@@ -69,6 +70,7 @@ export function RateCardSettings() {
   const updateRateCard = useUpdateRateCard();
   const deleteRateCard = useDeleteRateCard();
   const upsertRules = useUpsertRateRules();
+  const duplicateRateCard = useDuplicateRateCard();
 
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
@@ -218,6 +220,18 @@ export function RateCardSettings() {
                   className="text-xs text-muted-foreground hover:text-[hsl(var(--gold-deep))] px-2 py-1 rounded transition-colors"
                 >
                   {card.is_active ? "Deactiveer" : "Activeer"}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    duplicateRateCard.mutate({ sourceCardId: card.id });
+                  }}
+                  disabled={duplicateRateCard.isPending}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-[hsl(var(--gold-deep))] px-2 py-1 rounded transition-colors disabled:opacity-50"
+                >
+                  <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  Dupliceer
                 </button>
                 <button
                   type="button"

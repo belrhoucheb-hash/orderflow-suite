@@ -28,6 +28,7 @@ import { useUpdateTenantBranding } from "@/hooks/useUpdateTenant";
 import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
 import { PricingPreview } from "@/components/settings/PricingPreview";
+import { SettingsCommandPalette } from "@/components/settings/SettingsCommandPalette";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
 import { InboxSettings } from "@/components/settings/InboxSettings";
@@ -290,6 +291,8 @@ const Settings = () => {
         title={t('pages.settings.title')}
         subtitle={t('pages.settings.subtitle')}
       />
+
+      <SettingsCommandPalette />
 
       <Tabs
         value={getActiveTab()}
