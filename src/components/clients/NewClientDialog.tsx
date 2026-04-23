@@ -489,60 +489,19 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
 
           {!isEdit && (
             <Section title="Primair contact">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <Label>Naam</Label>
-                  <Input
-                    value={form.contact_person}
-                    onChange={setField("contact_person")}
-                    className="field-luxe"
-                  />
-                </div>
-                <div>
-                  <Label>E-mail</Label>
-                  <Input
-                    type="email"
-                    value={form.primary_email}
-                    onChange={setField("primary_email")}
-                    className="field-luxe"
-                  />
-                </div>
-                <div>
-                  <Label>Telefoon</Label>
-                  <Input
-                    value={form.primary_phone}
-                    onChange={setField("primary_phone")}
-                    className="field-luxe"
-                  />
-                </div>
+              <div>
+                <Label>Naam</Label>
+                <Input
+                  value={form.contact_person}
+                  onChange={setField("contact_person")}
+                  className="field-luxe"
+                />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 Wordt automatisch als primair contact geregistreerd bij deze klant. Voor bestaande klanten beheer je contacten via het tabblad Contacten.
               </p>
             </Section>
           )}
-
-          <Section title="Algemeen e-mail en telefoon">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Algemeen e-mail</Label>
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={setField("email")}
-                  className="field-luxe"
-                />
-              </div>
-              <div>
-                <Label>Algemeen telefoon</Label>
-                <Input
-                  value={form.phone}
-                  onChange={setField("phone")}
-                  className="field-luxe"
-                />
-              </div>
-            </div>
-          </Section>
 
           <Section title="Facturatie">
             <div className="flex items-center justify-between mb-3">
@@ -574,25 +533,6 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
                 />
               )}
             </div>
-          </Section>
-
-          <Section title="Postadres">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-foreground">Postadres = hoofdadres</span>
-              <Switch
-                checked={form.shipping_same_as_main}
-                onCheckedChange={toggle("shipping_same_as_main")}
-              />
-            </div>
-            {!form.shipping_same_as_main && (
-              <AddressAutocomplete
-                value={form.shipping_address}
-                onChange={setAddress("shipping_address")}
-                error={
-                  errors["shipping_address.lat"] || errors["shipping_address.street"]
-                }
-              />
-            )}
           </Section>
 
           {isEdit && (
