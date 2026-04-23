@@ -238,9 +238,10 @@ export function useAddVehicle() {
   const vehiclesInsert = useTenantInsert("vehicles");
   return useMutation({
     mutationFn: async (vehicle: {
-      code: string; name: string; plate: string; type: string;
-      brand?: string; build_year?: number;
+      name: string; plate: string; type: string;
+      code?: string; brand?: string; build_year?: number;
       capacity_kg?: number; capacity_pallets?: number;
+      load_length_cm?: number; load_width_cm?: number; load_height_cm?: number;
       features?: string[]; status?: string; assigned_driver?: string;
     }) => {
       const { error } = await vehiclesInsert.insert({ ...vehicle });

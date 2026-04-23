@@ -23,22 +23,13 @@ export const VEHICLE_TYPE_VALUES = ["busje", "bakwagen", "koelwagen", "trekker"]
 export const vehicleTypeEnum = z.enum(VEHICLE_TYPE_VALUES);
 export type VehicleTypeCode = z.infer<typeof vehicleTypeEnum>;
 
+const optionalPositiveInt = z
+  .number()
+  .int("Moet een heel getal zijn")
+  .min(0, "Kan niet negatief zijn")
+  .optional();
+
 export const vehicleInputSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .superRefine((val, ctx) => {
-      if (!val) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Code is verplicht" });
-        return;
-      }
-      if (!/^[A-Za-z0-9-]+$/.test(val)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Code mag alleen letters, cijfers en streepjes bevatten",
-        });
-      }
-    }),
   name: z.string().trim().min(1, "Naam is verplicht"),
   plate: z
     .string()
@@ -53,15 +44,13 @@ export const vehicleInputSchema = z.object({
       }
     }),
   type: z.string().trim().min(1, "Kies een voertuigtype"),
-  brand: optionalText,
   capacity_kg: z
     .number()
     .min(0, "Gewicht kan niet negatief zijn")
     .optional(),
-  capacity_pallets: z
-    .number()
-    .min(0, "Palletplaatsen kunnen niet negatief zijn")
-    .optional(),
+  load_length_cm: optionalPositiveInt,
+  load_width_cm: optionalPositiveInt,
+  load_height_cm: optionalPositiveInt,
 });
 
 export type VehicleInput = z.infer<typeof vehicleInputSchema>;

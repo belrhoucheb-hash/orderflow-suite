@@ -21,13 +21,13 @@ interface VehicleTypeOption {
 }
 
 export function NewVehicleDialog({ open, onOpenChange }: Props) {
-  const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
   const [type, setType] = useState("");
-  const [brand, setBrand] = useState("");
   const [capacityKg, setCapacityKg] = useState("");
-  const [capacityPallets, setCapacityPallets] = useState("");
+  const [loadLength, setLoadLength] = useState("");
+  const [loadWidth, setLoadWidth] = useState("");
+  const [loadHeight, setLoadHeight] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const addVehicle = useAddVehicle();
 
@@ -37,6 +37,7 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
       const { data, error } = await supabase
         .from("vehicle_types")
         .select("code,name")
+        .eq("is_active", true)
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return (data ?? []) as VehicleTypeOption[];
@@ -55,15 +56,25 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
     }
   }, [open]);
 
+  const reset = () => {
+    setName("");
+    setPlate("");
+    setType("");
+    setCapacityKg("");
+    setLoadLength("");
+    setLoadWidth("");
+    setLoadHeight("");
+  };
+
   const handleSubmit = async () => {
     const parsed = vehicleInputSchema.safeParse({
-      code,
       name,
       plate,
       type,
-      brand: brand || undefined,
       capacity_kg: capacityKg ? Number(capacityKg) : undefined,
-      capacity_pallets: capacityPallets ? Number(capacityPallets) : undefined,
+      load_length_cm: loadLength ? Number(loadLength) : undefined,
+      load_width_cm: loadWidth ? Number(loadWidth) : undefined,
+      load_height_cm: loadHeight ? Number(loadHeight) : undefined,
     });
 
     if (!parsed.success) {
@@ -78,17 +89,17 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
 
     try {
       await addVehicle.mutateAsync({
-        code: parsed.data.code,
         name: parsed.data.name,
         plate: parsed.data.plate,
         type: parsed.data.type,
-        brand: parsed.data.brand || undefined,
         capacity_kg: parsed.data.capacity_kg,
-        capacity_pallets: parsed.data.capacity_pallets,
+        load_length_cm: parsed.data.load_length_cm,
+        load_width_cm: parsed.data.load_width_cm,
+        load_height_cm: parsed.data.load_height_cm,
       });
       toast.success("Voertuig toegevoegd");
       onOpenChange(false);
-      setCode(""); setName(""); setPlate(""); setType(""); setBrand(""); setCapacityKg(""); setCapacityPallets("");
+      reset();
     } catch (err: any) {
       toast.error(err?.message ?? "Fout bij toevoegen");
     }
@@ -104,62 +115,79 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
           <div>
             <SectionTitle>Voertuiggegevens</SectionTitle>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Code</Label>
-                <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="VH-04" />
-                {errors.code && <ErrorText>{errors.code}</ErrorText>}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Kenteken</Label>
-                <Input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="XX-123-YY" />
-                {errors.plate && <ErrorText>{errors.plate}</ErrorText>}
-              </div>
               <div className="col-span-2">
                 <Label className="text-xs text-muted-foreground">Naam</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mercedes Sprinter" />
                 {errors.name && <ErrorText>{errors.name}</ErrorText>}
               </div>
+              <div className="col-span-2">
+                <Label className="text-xs text-muted-foreground">Kenteken</Label>
+                <Input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="XX-123-YY" />
+                {errors.plate && <ErrorText>{errors.plate}</ErrorText>}
+              </div>
             </div>
           </div>
 
           <div>
-            <SectionTitle>Type en merk</SectionTitle>
-            <div className="grid grid-cols-2 gap-3">
+            <SectionTitle>Type</SectionTitle>
+            <Select value={type} onValueChange={setType} disabled={vehicleTypes.length === 0}>
+              <SelectTrigger>
+                <SelectValue placeholder={vehicleTypes.length === 0 ? "Geen types, beheer via tab Types" : "Kies type"} />
+              </SelectTrigger>
+              <SelectContent>
+                {vehicleTypes.map((vt) => (
+                  <SelectItem key={vt.code} value={vt.code}>{vt.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.type && <ErrorText>{errors.type}</ErrorText>}
+          </div>
+
+          <div>
+            <SectionTitle>Laadruimte</SectionTitle>
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label className="text-xs text-muted-foreground">Type</Label>
-                <Select value={type} onValueChange={setType} disabled={vehicleTypes.length === 0}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={vehicleTypes.length === 0 ? "Geen types, beheer via tab Types" : "Kies type"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicleTypes.map((vt) => (
-                      <SelectItem key={vt.code} value={vt.code}>{vt.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.type && <ErrorText>{errors.type}</ErrorText>}
+                <Label className="text-xs text-muted-foreground">Lengte (cm)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={loadLength}
+                  onChange={(e) => setLoadLength(e.target.value)}
+                />
+                {errors.load_length_cm && <ErrorText>{errors.load_length_cm}</ErrorText>}
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Merk</Label>
-                <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Mercedes" />
-                {errors.brand && <ErrorText>{errors.brand}</ErrorText>}
+                <Label className="text-xs text-muted-foreground">Breedte (cm)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={loadWidth}
+                  onChange={(e) => setLoadWidth(e.target.value)}
+                />
+                {errors.load_width_cm && <ErrorText>{errors.load_width_cm}</ErrorText>}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Hoogte (cm)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={loadHeight}
+                  onChange={(e) => setLoadHeight(e.target.value)}
+                />
+                {errors.load_height_cm && <ErrorText>{errors.load_height_cm}</ErrorText>}
               </div>
             </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Binnenmaat laadruimte, optioneel.
+            </p>
           </div>
 
           <div>
             <SectionTitle>Capaciteit</SectionTitle>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Max gewicht (kg)</Label>
-                <Input type="number" value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
-                {errors.capacity_kg && <ErrorText>{errors.capacity_kg}</ErrorText>}
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Palletplaatsen</Label>
-                <Input type="number" value={capacityPallets} onChange={(e) => setCapacityPallets(e.target.value)} />
-                {errors.capacity_pallets && <ErrorText>{errors.capacity_pallets}</ErrorText>}
-              </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Max gewicht (kg)</Label>
+              <Input type="number" value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
+              {errors.capacity_kg && <ErrorText>{errors.capacity_kg}</ErrorText>}
             </div>
           </div>
 
