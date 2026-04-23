@@ -216,8 +216,8 @@ export function InboxSettings() {
                 Vul de IMAP-gegevens in en test de verbinding voor het opslaan.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3">
-              <div>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
                 <Label htmlFor="inbox-label">Naam</Label>
                 <Input
                   id="inbox-label"
@@ -227,7 +227,7 @@ export function InboxSettings() {
                 />
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
+                <div className="col-span-2 space-y-1.5">
                   <Label htmlFor="inbox-host">IMAP-host</Label>
                   <Input
                     id="inbox-host"
@@ -236,7 +236,7 @@ export function InboxSettings() {
                     placeholder="imap.gmail.com"
                   />
                 </div>
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="inbox-port">Poort</Label>
                   <Input
                     id="inbox-port"
@@ -246,7 +246,7 @@ export function InboxSettings() {
                   />
                 </div>
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="inbox-user">Gebruikersnaam</Label>
                 <Input
                   id="inbox-user"
@@ -256,7 +256,7 @@ export function InboxSettings() {
                   autoComplete="off"
                 />
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="inbox-pass">Wachtwoord {isEdit && <span className="text-muted-foreground text-xs">(leeg laten behoudt huidige)</span>}</Label>
                 <Input
                   id="inbox-pass"
@@ -267,7 +267,7 @@ export function InboxSettings() {
                   autoComplete="new-password"
                 />
               </div>
-              <div>
+              <div className="space-y-1.5">
                 <Label htmlFor="inbox-folder">Folder</Label>
                 <Input
                   id="inbox-folder"
@@ -277,18 +277,18 @@ export function InboxSettings() {
               </div>
 
               <div className="flex items-center gap-2 pt-2">
-                <Button
+                <button
                   type="button"
-                  variant="secondary"
                   onClick={runTest}
                   disabled={testState === "pending"}
+                  className="btn-luxe !h-9"
                 >
                   {testState === "pending" ? (
-                    <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Testen...</>
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Testen...</>
                   ) : (
                     "Test verbinding"
                   )}
-                </Button>
+                </button>
                 {testState === "ok" && (
                   <span className="text-sm text-emerald-600 inline-flex items-center gap-1">
                     <CheckCircle2 className="h-4 w-4" /> Verbinding gelukt
@@ -302,14 +302,22 @@ export function InboxSettings() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setDialogOpen(false)}>Annuleren</Button>
-              <Button
+              <button
+                type="button"
+                onClick={() => setDialogOpen(false)}
+                className="text-sm text-muted-foreground hover:text-foreground px-3 h-9 rounded-md transition-colors"
+              >
+                Annuleren
+              </button>
+              <button
+                type="button"
                 onClick={save}
                 disabled={testState !== "ok" || inboxes.create.isPending || inboxes.update.isPending}
+                className="btn-luxe btn-luxe--primary !h-9"
               >
-                {(inboxes.create.isPending || inboxes.update.isPending) && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                {(inboxes.create.isPending || inboxes.update.isPending) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Opslaan
-              </Button>
+              </button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
