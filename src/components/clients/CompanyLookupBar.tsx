@@ -86,10 +86,6 @@ export function CompanyLookupBar({ onSelect }: Props) {
           <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
         )}
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        Vult naam en adres automatisch vanuit Google. Vul KvK-nummer zelf in.
-      </p>
-
       {open && results.length > 0 && (
         <div className="absolute left-3 right-3 top-full z-30 mt-1 max-h-72 overflow-auto rounded-md border border-border bg-popover shadow-lg">
           {results.map((r) => (
