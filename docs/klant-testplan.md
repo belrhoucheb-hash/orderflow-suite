@@ -2,7 +2,7 @@
 
 Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionaliteit wordt opgeleverd. De meest recente toevoegingen staan bovenaan per sectie, en in "Wat is er nieuw sinds de vorige test" hieronder.
 
-**Laatste update**: 2026-04-22, klanten-vervolg (omzet YTD, slapende klanten, bulk-acties)
+**Laatste update**: 2026-04-23, REST API v1 beschikbaar (admins maken tokens onder Instellingen; klant-admins in het portaal)
 
 **Hoe dit document te gebruiken**:
 - Kijk eerst naar "Wat is er nieuw sinds de vorige test" voor een snelle samenvatting.
@@ -17,6 +17,20 @@ Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionalitei
 ---
 
 ## Wat is er nieuw sinds de vorige test
+
+**Publieke API-tokens (2026-04-23), onder Instellingen > API-tokens en in het klantportaal**:
+- Onder **Instellingen > API-tokens** kun je nu een **API-token** aanmaken waarmee een extern systeem (ERP, boekhouding, dashboard, eigen website) data uit OrderFlow kan ophalen of nieuwe orders kan insturen.
+- Per token kies je welke **rechten** het krijgt: orders lezen, orders aanmaken, ritten lezen, facturen lezen, klanten lezen. Je kunt ook een **verloopdatum** zetten (30 dagen, 90 dagen, 1 jaar of nooit).
+- De token wordt **eenmalig getoond** na aanmaken, kopieer hem meteen. Daarna zie je alleen nog de eerste 8 karakters als herkenning.
+- **Intrekken** met de rode prullenbak. Ingetrokken tokens werken direct niet meer, ze verdwijnen naar een aparte sectie in de lijst.
+- In het **klantportaal** onder **Instellingen** kan een klant-admin zelf tokens aanmaken die alleen zijn eigen orders en facturen zien (niet die van andere klanten van jou).
+
+**Webhooks onder Instellingen (2026-04-23), alleen voor admin**:
+- Onder **Instellingen > Webhooks** kun je een koppeling maken waarmee je eigen systeem (ERP, boekhouding, dashboard) een bericht krijgt zodra er iets gebeurt, bijvoorbeeld zodra een order wordt aangemaakt of een factuur betaald is.
+- Per koppeling kies je een **naam**, een **URL** waar de berichten naartoe gaan, en welke **gebeurtenissen** je wilt ontvangen.
+- Na aanmaken krijg je **eenmalig een geheime sleutel** te zien. Sla die meteen op, hij is nodig om aan de ontvangende kant te controleren dat het bericht echt van OrderFlow komt.
+- Met de **test-knop** stuur je een test-bericht naar de URL zodat je kunt controleren of alles goed staat.
+- In de **delivery-log** per koppeling zie je per bericht of het aankwam, welke responscode er terugkwam en hoe lang het duurde. Je kunt een mislukt bericht opnieuw versturen met **Replay**.
 
 **Klantenlijst (2026-04-22)**:
 - In het klant-detailpaneel op het tabblad **Overzicht** staat nu een echte **"Omzet YTD"** in euro's op basis van je facturen van dit jaar. Eerder stond hier "niet beschikbaar".
@@ -585,7 +599,36 @@ Opmerking: _______________________
 
 ---
 
-## 8. Algemene bevindingen
+## 8. Snelstart-koppeling (BK-01)
+
+Nieuw: facturen kunnen automatisch in Snelstart geboekt worden zodra je ze op "verzonden" zet. Je hoeft niets meer handmatig over te tikken.
+
+**Voorbereiding:**
+- Ga naar Instellingen, Integraties.
+- Zet "Snelstart" aan. Laat voorlopig "Testmodus" ook aan staan (dan worden boekingen gesimuleerd, er gaat niets naar je echte Snelstart). Klik "Integraties opslaan".
+
+**Stappen:**
+1. Maak een factuur uit een afgeronde rit (of open een bestaande conceptfactuur).
+2. Klik op "Markeer als verzonden".
+3. Kijk binnen enkele seconden naar de status-balk bovenaan de factuur.
+
+Verwachte uitkomst: je ziet naast de status "Verzonden" een tweede groene label staan, "Snelstart: geboekt", met een boekingsnummer erachter. Bij testmodus begint dat nummer met "MOCK-".
+
+**Extra check bij een echt Snelstart-account (optioneel):**
+- Zet "Testmodus" uit en vul client-key, subscription-key, administratie-ID, grootboek omzet en grootboek BTW.
+- Klik "Verbinding testen", je zou "Verbinding met Snelstart OK" te zien moeten krijgen.
+- Stuur opnieuw een factuur "verzonden", en open daarna Snelstart in een ander tabblad: de verkoopboeking moet daar terug te vinden zijn op factuurnummer.
+
+**Bij fouten:** als er iets misgaat zie je een rood label "Snelstart: fout" met een tooltip die de oorzaak uitlegt. Er staat dan ook een knop "Opnieuw proberen".
+
+- [ ] Werkt zoals verwacht
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+---
+
+## 9. Algemene bevindingen
 
 **Voelde er iets traag, verwarrend, of niet-logisch?** Schrijf het hier op, ook kleine dingen.
 
