@@ -94,8 +94,9 @@ describe("Orders", () => {
 
   it("shows order count subtitle", () => {
     renderOrders();
-    // Header eyebrow toont totaalcount: "3 orders" (luxe refactor)
-    expect(screen.getByText(/3 orders/i)).toBeInTheDocument();
+    // Header eyebrow toont totaalcount. Sinds cursor-paginatie staat er ook
+    // "Pagina 1 · circa N orders" in de footer, dus tellen we ≥ 1 match.
+    expect(screen.getAllByText(/3 orders/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("displays orders in table", () => {
@@ -147,8 +148,8 @@ describe("Orders", () => {
 
   it("shows pagination info", () => {
     renderOrders();
-    // Pagination luxe: "1–3 van 3" (en-dash, geen suffix meer)
-    expect(screen.getByText(/1.{1,3}3 van 3/)).toBeInTheDocument();
+    // Cursor-paginatie toont "Pagina 1 · circa N orders" bij default-sort.
+    expect(screen.getByText(/Pagina 1/i)).toBeInTheDocument();
   });
 
   it("order numbers link to detail page", () => {

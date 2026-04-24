@@ -445,12 +445,14 @@ describe("useDeleteOrder", () => {
 describe("useOrdersSubscription", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("sets up realtime subscription on mount", () => {
+  it("skipt subscription wanneer er geen tenant beschikbaar is", () => {
+    // createWrapper levert geen TenantProvider, dus useTenantOptional()
+    // geeft null terug. Subscribe mag dan niet opstarten (anders krijgt
+    // iedere user tenant-brede events).
     const { unmount } = renderHook(() => useOrdersSubscription(), { wrapper: createWrapper() });
 
-    expect(mockSupabase.channel).toHaveBeenCalledWith("public:orders");
+    expect(mockSupabase.channel).not.toHaveBeenCalled();
     unmount();
-    expect(mockSupabase.removeChannel).toHaveBeenCalled();
   });
 });
 

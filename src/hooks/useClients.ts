@@ -533,7 +533,19 @@ export function useCreateClient() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSuccess: (data) => {
+      // Seed de single-client cache en invalidaat de lijsten + stats.
+      // De juiste plek van de nieuwe rij is filter-/sort-afhankelijk, dus
+      // een precieze injectie in de lijst-cache is onbetrouwbaar — laten
+      // we aan de refetch over.
+      if (data?.id) {
+        qc.setQueryData(["client", data.id], data);
+      }
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["clients_list"] });
+      qc.invalidateQueries({ queryKey: ["client_stats"] });
+      qc.invalidateQueries({ queryKey: ["client_countries"] });
+    },
   });
 }
 
@@ -593,6 +605,19 @@ export function useClientDuplicateCheck(kvk: string, excludeId?: string) {
   };
 }
 
+// Velden op `clients` die filters/sortering/stats in de lijsten beïnvloeden.
+// Bij een wijziging hierin moet de lijst-query refetchen; voor andere velden
+// (telefoon, notities, factuurvoorkeuren) volstaat een cache-update per record.
+const CLIENT_LIST_AFFECTING_FIELDS = new Set([
+  "name",
+  "contact_person",
+  "email",
+  "is_active",
+  "country",
+  "kvk_number",
+  "city",
+]);
+
 export function useUpdateClient() {
   const qc = useQueryClient();
   return useMutation({
@@ -606,7 +631,38 @@ export function useUpdateClient() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onMutate: async ({ id, ...patch }: Partial<Client> & { id: string }) => {
+      await qc.cancelQueries({ queryKey: ["client", id] });
+      const previous = qc.getQueryData<any>(["client", id]);
+      if (previous) {
+        qc.setQueryData(["client", id], { ...previous, ...patch });
+      }
+      return { previous };
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.previous) {
+        qc.setQueryData(["client", id], ctx.previous);
+      }
+    },
+    onSuccess: (data, variables) => {
+      // Detail-cache met serverresultaat bijwerken (dekt eventuele auto-
+      // fields zoals coords-geocoding die server-side gebeuren).
+      if (data) {
+        qc.setQueryData(["client", variables.id], (prev: any) =>
+          prev ? { ...prev, ...data } : data,
+        );
+      }
+
+      const changedFields = Object.keys(variables).filter((k) => k !== "id");
+      const touchesList = changedFields.some((f) =>
+        CLIENT_LIST_AFFECTING_FIELDS.has(f),
+      );
+      if (touchesList) {
+        qc.invalidateQueries({ queryKey: ["clients"] });
+        qc.invalidateQueries({ queryKey: ["clients_list"] });
+        qc.invalidateQueries({ queryKey: ["client_stats"] });
+      }
+    },
   });
 }
 

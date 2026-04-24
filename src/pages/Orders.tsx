@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
 import { INFO_STATUS_LABEL, priorityDotColors } from "@/lib/orderDisplay";
-import { useOrders, useStaleDraftCount } from "@/hooks/useOrders";
+import { useOrders, useStaleDraftCount, type OrderListCursor } from "@/hooks/useOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUnreadNoteOrderIds } from "@/hooks/useOrderNotesRead";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,6 +89,10 @@ const Orders = () => {
   const [staleDraftOnly, setStaleDraftOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize] = useState(25);
+  // Cursor-stack voor keyset-paginatie op de default-sort (createdAt DESC).
+  // stack[i] is de cursor die page i+1 opent (dus length = huidige page in cursor-mode).
+  // Bij non-default sort wordt deze stack genegeerd en valt de UI terug op `page`-offset.
+  const [cursorStack, setCursorStack] = useState<OrderListCursor[]>([]);
   const [printOrder, setPrintOrder] = useState<any>(null);
   const [printLoading, setPrintLoading] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -105,30 +109,38 @@ const Orders = () => {
         ? { field, direction: prev.direction === "asc" ? "desc" : "asc" }
         : { field, direction: "asc" }
     );
+    // Sort-wissel = andere volgorde = cursor-stack is niet meer valide.
+    setPage(0);
+    setCursorStack([]);
   };
 
-  // Reset page when filters change
+  // Reset zowel offset-page als cursor-stack bij elke filter-/sort-wisseling.
+  const resetPagination = () => {
+    setPage(0);
+    setCursorStack([]);
+  };
+
   const handleSearchChange = (value: string) => {
     setSearch(value);
-    setPage(0);
+    resetPagination();
     clearSelection();
   };
 
   const handleStatusFilterChange = (value: string) => {
     setStatusFilter(value);
-    setPage(0);
+    resetPagination();
     clearSelection();
   };
 
   const handleOrderTypeChange = (value: string) => {
     setOrderTypeFilter(value);
-    setPage(0);
+    resetPagination();
     clearSelection();
   };
 
   const handleDepartmentFilterChange = (value: string) => {
     setDepartmentFilter(value);
-    setPage(0);
+    resetPagination();
     clearSelection();
   };
 
@@ -144,6 +156,12 @@ const Orders = () => {
   // als createdBefore-filter zodra de stale-toggle actief is.
   const { data: staleDraft } = useStaleDraftCount(2);
 
+  // Cursor-mode actief bij default sort (createdAt DESC). Anders offset.
+  const isCursorMode =
+    !sortConfig || (sortConfig.field === "createdAt" && sortConfig.direction === "desc");
+  const currentCursor = isCursorMode ? (cursorStack[cursorStack.length - 1] ?? null) : null;
+  const displayedPage = isCursorMode ? cursorStack.length : page;
+
   const { data, isLoading, isError, refetch } = useOrders({
     page,
     pageSize,
@@ -154,6 +172,10 @@ const Orders = () => {
     sortField: sortConfig?.field as ("customer" | "totalWeight" | "status" | "createdAt") | undefined,
     sortDirection: sortConfig?.direction,
     createdBefore: staleDraftOnly ? staleDraft?.cutoffIso : undefined,
+    // In offset-mode is het exacte totaal nodig voor "pagina X van Y".
+    // In cursor-mode tonen we "pagina X" en gebruiken estimated voor de subtitle.
+    countMode: isCursorMode ? "estimated" : "exact",
+    cursor: currentCursor,
   } as any);
   const { unreadOrderIds } = useUnreadNoteOrderIds();
   const rawOrders = data?.orders ?? [];
@@ -861,16 +883,24 @@ const Orders = () => {
         >
           <p className="uppercase tracking-[0.14em] text-muted-foreground/80 tabular-nums">
             {orders.length > 0
-              ? `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, totalCount)} van ${totalCount}`
+              ? isCursorMode
+                ? `Circa ${totalCount.toLocaleString("nl-NL")} orders`
+                : `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, totalCount)} van ${totalCount}`
               : "0 orders"}
           </p>
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
+              onClick={() => {
+                if (isCursorMode) {
+                  setCursorStack((s) => s.slice(0, -1));
+                } else {
+                  setPage((p) => Math.max(0, p - 1));
+                }
+              }}
+              disabled={isCursorMode ? cursorStack.length === 0 : page === 0}
               className={cn(
                 "inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors",
-                page === 0
+                (isCursorMode ? cursorStack.length === 0 : page === 0)
                   ? "text-muted-foreground/30 cursor-not-allowed"
                   : "text-muted-foreground/80 hover:text-[hsl(var(--gold-deep))]",
               )}
@@ -879,14 +909,25 @@ const Orders = () => {
               Vorige
             </button>
             <span className="tabular-nums text-[hsl(var(--gold-deep))] font-semibold">
-              {page + 1} / {totalPages}
+              {isCursorMode ? `Pagina ${displayedPage + 1}` : `${page + 1} / ${totalPages}`}
             </span>
             <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
+              onClick={() => {
+                if (isCursorMode) {
+                  const next = (data as any)?.nextCursor as OrderListCursor | null | undefined;
+                  if (next) setCursorStack((s) => [...s, next]);
+                } else {
+                  setPage((p) => Math.min(totalPages - 1, p + 1));
+                }
+              }}
+              disabled={
+                isCursorMode
+                  ? !(data as any)?.nextCursor
+                  : page >= totalPages - 1
+              }
               className={cn(
                 "inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors",
-                page >= totalPages - 1
+                (isCursorMode ? !(data as any)?.nextCursor : page >= totalPages - 1)
                   ? "text-muted-foreground/30 cursor-not-allowed"
                   : "text-muted-foreground/80 hover:text-[hsl(var(--gold-deep))]",
               )}

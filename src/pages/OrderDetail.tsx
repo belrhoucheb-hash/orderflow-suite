@@ -41,7 +41,7 @@ import { useTenantOptional } from "@/contexts/TenantContext";
 import { useCreateInvoice, useCalculateOrderCost } from "@/hooks/useInvoices";
 import { useUpdateOrder, useDeleteOrder } from "@/hooks/useOrders";
 import { Trash2 } from "lucide-react";
-import { logAudit } from "@/lib/auditLog";
+// Audit op orders wordt server-side door de trigger `audit_orders` gedaan.
 import { useDepartments } from "@/hooks/useDepartments";
 import { useOrderNotesRead } from "@/hooks/useOrderNotesRead";
 import { LuxeDatePicker, LuxeTimeRange } from "@/components/ui/LuxePicker";
@@ -210,24 +210,12 @@ const OrderDetail = () => {
         await supabase.from("orders").update({ vehicle_id: null }).eq("id", orderId);
       }
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       toast.success("Order geannuleerd", { description: `Order #${order?.order_number} is geannuleerd` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       setShowCancelDialog(false);
-
-      // Fire-and-forget audit-log voor annulering.
-      logAudit({
-        table_name: "orders",
-        record_id: variables.orderId,
-        action: "UPDATE",
-        tenant_id: tenant?.id,
-        old_data: { status: order?.status ?? null },
-        new_data: { status: "CANCELLED", cancel_reason: variables.reason || null },
-        changed_fields: order?.vehicle_id
-          ? ["status", "internal_note", "vehicle_id"]
-          : ["status", "internal_note"],
-      });
+      // Audit: trigger `audit_orders` logt de status-update automatisch.
     },
     onError: (e: Error) => {
       toast.error("Fout", { description: e.message });
@@ -243,21 +231,11 @@ const OrderDetail = () => {
       }).eq("id", orderId);
       if (error) throw error;
     },
-    onSuccess: (_data, orderId) => {
+    onSuccess: () => {
       toast.success("Order heropend", { description: `Order #${order?.order_number} is terug in behandeling` });
       queryClient.invalidateQueries({ queryKey: ["order-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-      // Fire-and-forget audit-log voor heropenen.
-      logAudit({
-        table_name: "orders",
-        record_id: orderId,
-        action: "UPDATE",
-        tenant_id: tenant?.id,
-        old_data: { status: "CANCELLED" },
-        new_data: { status: "PENDING" },
-        changed_fields: ["status", "internal_note"],
-      });
+      // Audit: trigger `audit_orders` logt de status-update automatisch.
     },
   });
 

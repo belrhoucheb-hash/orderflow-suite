@@ -2,7 +2,10 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Order } from "@/data/mockData";
-import { logAudit } from "@/lib/auditLog";
+// Geen frontend logAudit meer voor orders: de server-trigger `audit_orders`
+// (baseline.sql regel 3505) schrijft bij elke INSERT/UPDATE/DELETE op orders
+// al een rij in audit_log. Dubbel schrijven vanuit de client is puur
+// performance-verlies zonder extra informatie.
 import { emitEventDirect } from "@/hooks/useEventPipeline";
 import type { EventType } from "@/types/events";
 import { useTenantOptional } from "@/contexts/TenantContext";
@@ -42,6 +45,26 @@ export interface UseOrdersOptions {
    * snelfilter vanuit de KPI-strip.
    */
   createdBefore?: string;
+  /**
+   * Telwijze voor het totaal. Default "estimated" (planner-estimate, O(1),
+   * geen scan) zodat de orderlijst bij miljoenen rijen niet elke pageload
+   * een seq scan triggert. Zet op "exact" alleen voor plekken waar het
+   * precieze aantal functioneel nodig is (bv. export-bevestiging).
+   */
+  countMode?: "estimated" | "exact" | "planned";
+  /**
+   * Keyset-cursor: wanneer gezet wordt `.range()` (offset-paginatie) niet
+   * gebruikt maar een keyset-filter op `(created_at, id) < (cursor)` voor
+   * stabiele O(log N) paginatie bij diepe pages. Alleen actief bij de
+   * default sort (createdAt). Bij een andere sortkolom wordt de cursor
+   * genegeerd en valt de hook terug op offset.
+   */
+  cursor?: { createdAt: string; id: string } | null;
+}
+
+export interface OrderListCursor {
+  createdAt: string;
+  id: string;
 }
 
 // UI-veldnaam → DB-kolom. Beperkt tot wat de orderlijst kan tonen en
@@ -58,12 +81,12 @@ const SORT_FIELD_TO_DB: Record<OrderListSortField, string> = {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function useOrders(options: UseOrdersOptions = {}) {
-  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, createdBefore } = options;
+  const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, createdBefore, countMode = "estimated", cursor = null } = options;
   const queryClient = useQueryClient();
   const { tenant } = useTenantOptional();
 
   return useQuery({
-    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, createdBefore, tenantId: tenant?.id }],
+    queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, createdBefore, countMode, cursor, tenantId: tenant?.id }],
     staleTime: 5_000,
     queryFn: async () => {
       // Expliciete kolom-set: alleen wat Orders-lijst UI rendert. Scheelt payload
@@ -97,15 +120,31 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
       const sortColumn = sortField ? SORT_FIELD_TO_DB[sortField] : "created_at";
       const sortAscending = sortDirection === "asc";
+      // Cursor-modus is alleen veilig op de default-sort (created_at DESC).
+      // Andere kolommen (status/weight_kg/client_name) hebben duplicaten en
+      // asc/desc-varianten die ingewikkelder keyset-vormen vereisen. Voor
+      // nu: bij non-default sort zwijgend terugvallen op offset-paginatie.
+      const useCursor = cursor && sortColumn === "created_at" && !sortAscending;
 
       let query = (supabase as any)
         .from("orders")
-        .select(LIST_COLUMNS, { count: "exact" })
-        .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-      // Fallback-tiebreaker zodat paginering stabiel blijft bij gelijke sort-waardes.
-      if (sortColumn !== "created_at") {
-        query = query.order("created_at", { ascending: false });
+        .select(LIST_COLUMNS, { count: countMode })
+        .order(sortColumn, { ascending: sortAscending, nullsFirst: false });
+
+      if (useCursor && cursor) {
+        // (created_at, id) < (cursor.createdAt, cursor.id) in DESC-volgorde.
+        // PostgREST ondersteunt geen tuple-vergelijking, dus gesimuleerd via:
+        //   created_at < cursor.createdAt
+        //   OR (created_at = cursor.createdAt AND id < cursor.id)
+        query = query
+          .or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`)
+          .order("id", { ascending: false })
+          .limit(pageSize);
+      } else {
+        query = query.range(page * pageSize, (page + 1) * pageSize - 1);
+        if (sortColumn !== "created_at") {
+          query = query.order("created_at", { ascending: false });
+        }
       }
 
       if (statusFilter && statusFilter !== "alle") {
@@ -220,7 +259,16 @@ export function useOrders(options: UseOrdersOptions = {}) {
         };
       });
 
-      return { orders, totalCount: count ?? 0 };
+      // nextCursor: alleen aanbieden als we op de default-sort draaien en
+      // een volle pagina teruggekregen hebben. Anders is er geen "volgende".
+      const lastRow = data?.[data.length - 1];
+      const canUseCursor = sortColumn === "created_at" && !sortAscending;
+      const nextCursor: OrderListCursor | null =
+        canUseCursor && lastRow && (data?.length ?? 0) >= pageSize
+          ? { createdAt: lastRow.created_at, id: lastRow.id }
+          : null;
+
+      return { orders, totalCount: count ?? 0, nextCursor };
     },
   });
 }
@@ -253,24 +301,74 @@ export function useStaleDraftCount(thresholdHours: number = 2) {
 
 export function useOrdersSubscription() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenantOptional();
+  const tenantId = tenant?.id;
 
   useEffect(() => {
+    if (!tenantId) return;
+
+    // Debounce invalidatie: bij een burst aan events (bulk-insert, auto-status-
+    // transitions) zou elke event anders een refetch van alle ["orders"]-queries
+    // triggeren. 200ms window = 1 refetch per burst.
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    const scheduleInvalidate = () => {
+      if (pending) return;
+      pending = setTimeout(() => {
+        pending = null;
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+      }, 200);
+    };
+
     const channel = supabase
-      .channel("public:orders")
+      .channel(`orders:tenant:${tenantId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["orders"] });
-        }
+        {
+          event: "*",
+          schema: "public",
+          table: "orders",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        scheduleInvalidate
       )
       .subscribe();
 
     return () => {
+      if (pending) clearTimeout(pending);
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, tenantId]);
 }
+
+// Expliciete kolom-subset voor de single-order fetch. Spiegelt de velden die
+// de `useOrder`-mapping hieronder nodig heeft; zware kolommen (pod_signature_url,
+// pod_photos, cmr_*, attachments, anomalies, source_email_body, ...) blijven
+// weg zodat de detail-payload klein blijft. Detail-specifieke kolommen zoals
+// die in OrderDetail.tsx worden gelezen, horen in de eigen `order-detail`
+// query die daar staat, niet hier.
+const DETAIL_COLUMNS = [
+  "id",
+  "created_at",
+  "order_number",
+  "client_id",
+  "client_name",
+  "source_email_from",
+  "pickup_address",
+  "delivery_address",
+  "status",
+  "priority",
+  "weight_kg",
+  "vehicle_id",
+  "internal_note",
+  "parent_order_id",
+  "department_id",
+  "shipment_id",
+  "leg_number",
+  "leg_role",
+  "info_status",
+  "missing_fields",
+  "time_window_end",
+].join(",");
 
 export function useOrder(id: string) {
   const queryClient = useQueryClient();
@@ -281,7 +379,7 @@ export function useOrder(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
+        .select(DETAIL_COLUMNS)
         .eq("id", id)
         .single();
 
@@ -341,9 +439,26 @@ export function useOrder(id: string) {
   });
 }
 
+// Velden die bepalen of een order in een lijst-filter of sort thuishoort.
+// Wijziging van één van deze → breed invalidaten. Andere velden (notes,
+// internal_note, vehicle_id, enz.) raken de lijst-filters niet, dus die
+// hoeven alleen de detail-cache te updaten.
+const LIST_AFFECTING_FIELDS = new Set([
+  "status",
+  "priority",
+  "client_id",
+  "client_name",
+  "order_type",
+  "department_id",
+  "weight_kg",
+  "shipment_id",
+  "parent_order_id",
+  "info_status",
+]);
+
 export function useCreateOrder() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (newOrder: any) => {
       const { data, error } = await supabase
@@ -351,26 +466,20 @@ export function useCreateOrder() {
         .insert([newOrder])
         .select()
         .single();
-        
+
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-      // Fire-and-forget audit trail voor nieuwe order via deze hook.
+      // Seed de single-order cache met de vers ingevoerde rij zodat een
+      // directe navigatie naar de detailpagina geen round-trip meer nodig
+      // heeft. De lijst-queries moeten wel refetchen want de juiste plek
+      // van de nieuwe rij hangt af van huidige filters/sort.
       if (data?.id) {
-        logAudit({
-          table_name: "orders",
-          record_id: data.id,
-          action: "INSERT",
-          new_data: {
-            status: data.status,
-            client_id: data.client_id,
-            leg_role: data.leg_role,
-          },
-        });
+        queryClient.setQueryData(["orders", data.id], data);
       }
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      // Audit wordt door de server-trigger `audit_orders` geschreven.
     },
   });
 }
@@ -407,9 +516,35 @@ export function useUpdateOrder() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["orders", variables.id] });
+    onMutate: async ({ id, updates }: { id: string; updates: any }) => {
+      // Optimistic update: patch de detail-cache meteen, sla de vorige
+      // waarde op zodat we bij error kunnen rollbacken.
+      await queryClient.cancelQueries({ queryKey: ["orders", id] });
+      const previous = queryClient.getQueryData<any>(["orders", id]);
+      if (previous) {
+        queryClient.setQueryData(["orders", id], { ...previous, ...updates });
+      }
+      return { previous };
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["orders", id], ctx.previous);
+      }
+    },
+    onSuccess: (data, variables) => {
+      // Detail-cache met het serverresultaat verversen (server-computed velden).
+      // Lijst alleen invalidaten als de wijziging filters/sort kan raken —
+      // scheelt een refetch-storm bij bulk-updates van notes of vehicle_id.
+      if (data) {
+        queryClient.setQueryData(["orders", variables.id], (prev: any) =>
+          prev ? { ...prev, ...data } : data,
+        );
+      }
+      const changedFields = Object.keys(variables.updates);
+      const touchesList = changedFields.some((f) => LIST_AFFECTING_FIELDS.has(f));
+      if (touchesList) {
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+      }
 
       // Fire-and-forget event pipeline for status changes
       if (variables.updates.status) {
@@ -422,16 +557,7 @@ export function useUpdateOrder() {
           emitEventDirect(variables.id, eventType, { actorType: "system" });
         }
       }
-
-      // Fire-and-forget audit trail for order updates (including status changes)
-      const changedFields = Object.keys(variables.updates);
-      logAudit({
-        table_name: "orders",
-        record_id: variables.id,
-        action: "UPDATE",
-        new_data: variables.updates,
-        changed_fields: changedFields,
-      });
+      // Audit wordt door de server-trigger `audit_orders` geschreven.
     },
   });
 }
@@ -450,14 +576,12 @@ export function useDeleteOrder() {
       return id;
     },
     onSuccess: (id) => {
+      // Detail-cache opruimen zodat een nav naar /orders/:id niet eerst een
+      // verwijderde rij uit de cache serveert. Daarna de lijst-queries
+      // invalidaten zodat tellers en pagina's vernieuwen.
+      queryClient.removeQueries({ queryKey: ["orders", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-
-      // Fire-and-forget audit trail voor harde delete via deze hook.
-      logAudit({
-        table_name: "orders",
-        record_id: id,
-        action: "DELETE",
-      });
+      // Audit wordt door de server-trigger `audit_orders` geschreven.
     },
   });
 }
