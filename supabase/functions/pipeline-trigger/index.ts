@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { isTrustedCaller } from "../_shared/auth.ts";
 import { corsFor, handleOptions } from "../_shared/cors.ts";
+import { emitWebhookEvent } from "../_shared/emit-webhook.ts";
+import { genericStatusEvent, mapStatusToEvent } from "../_shared/webhook-events.ts";
 
 const CORS_OPTIONS = { extraHeaders: ["x-cron-secret"] };
 
@@ -133,6 +135,27 @@ serve(async (req) => {
         JSON.stringify({ error: "Missing required fields: tenant_id, entity_type, entity_id, new_status" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Emit outbound webhook event(s) los van de autonomy-gate: externe
+    // subscribers moeten status-changes blijven ontvangen ook als interne
+    // autonomie uitstaat. Emit-fouten loggen maar niet re-throwen.
+    const narrowEntity = entityType as "order" | "trip" | "invoice";
+    const specificEvent = mapStatusToEvent(narrowEntity, newStatus);
+    const genericEvent = genericStatusEvent(narrowEntity);
+    const eventPayload = {
+      entity_type: entityType,
+      entity_id: entityId,
+      tenant_id: tenantId,
+      previous_status: previousStatus,
+      new_status: newStatus,
+      occurred_at: new Date().toISOString(),
+    };
+    if (specificEvent) {
+      await emitWebhookEvent(supabase, tenantId, specificEvent, eventPayload);
+    }
+    if (genericEvent) {
+      await emitWebhookEvent(supabase, tenantId, genericEvent, eventPayload);
     }
 
     // Check if autonomy is enabled for this tenant

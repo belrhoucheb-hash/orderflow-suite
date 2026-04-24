@@ -14,6 +14,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isTrustedCaller } from "../_shared/auth.ts";
+import { emitWebhookEvent } from "../_shared/emit-webhook.ts";
 
 // Default margin threshold: 15%
 const DEFAULT_MARGIN_THRESHOLD_PCT = 15;
@@ -69,6 +70,18 @@ Deno.serve(async (req: Request) => {
       trip_id: tripId,
       tenant_id: tenantId,
     };
+
+    // Emit trip.completed voor externe subscribers, vóór de (potentieel
+    // falende) invoicing-flow. Zo krijgt een klant altijd het trip-event,
+    // ongeacht of er auto-invoicing slaagt.
+    await emitWebhookEvent(supabase, tenantId, "trip.completed", {
+      entity_type: "trip",
+      entity_id: tripId,
+      tenant_id: tenantId,
+      previous_status: payload.old_record.status,
+      new_status: "COMPLETED",
+      occurred_at: new Date().toISOString(),
+    });
 
     // 3. Auto-invoice: price all orders and create draft/auto invoice
     //    Import dynamically to handle the case where modules are bundled
@@ -326,6 +339,21 @@ Deno.serve(async (req: Request) => {
         invoice_number: invoiceNumber,
         total,
         order_count: clientOrders.length,
+      });
+
+      // Emit invoice.created naar externe subscribers.
+      await emitWebhookEvent(supabase, tenantId, "invoice.created", {
+        entity_type: "invoice",
+        entity_id: invoice.id,
+        tenant_id: tenantId,
+        invoice_number: invoiceNumber,
+        client_id: clientId,
+        subtotal,
+        btw_amount: btwAmount,
+        total,
+        order_count: clientOrders.length,
+        trip_id: tripId,
+        occurred_at: new Date().toISOString(),
       });
 
       // --- Step 3b: Margin check ---
