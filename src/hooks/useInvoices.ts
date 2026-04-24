@@ -193,7 +193,20 @@ export function useUpdateInvoiceLines() {
       if (updateErr) throw updateErr;
       return updated as Invoice;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (data, variables) => {
+      // Totaalbedragen staan in de lijstweergave, dus een breed invalidate
+      // op invoices is hier terecht. Daarnaast de detail-cache verversen
+      // zodat invoice_lines en totalen direct goed staan bij terug navigeren.
+      if (data) {
+        queryClient.setQueryData(["invoices", variables.invoiceId], (prev: any) => {
+          // Houd `invoice_lines` uit de detail-query intact als die er al is;
+          // de mutation zelf stuurt alleen de factuurkop terug.
+          if (prev && Array.isArray(prev.invoice_lines)) {
+            return { ...prev, ...data, invoice_lines: prev.invoice_lines };
+          }
+          return prev ? { ...prev, ...data } : data;
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["invoices", variables.invoiceId] });
     },
@@ -345,7 +358,13 @@ export function useCreateInvoice() {
 
       return invoice as Invoice;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Seed de single-invoice cache zodat navigatie naar de detailpagina
+      // meteen de kop + totalen heeft (lines worden daar nog eens opgehaald
+      // omdat useInvoiceById een join uitvoert).
+      if (data?.id) {
+        queryClient.setQueryData(["invoices", data.id], data);
+      }
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
@@ -370,9 +389,29 @@ export function useUpdateInvoiceStatus() {
       if (error) throw error;
       return data as Invoice;
     },
-    onSuccess: (_, variables) => {
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: ["invoices", id] });
+      const previous = queryClient.getQueryData<any>(["invoices", id]);
+      if (previous) {
+        queryClient.setQueryData(["invoices", id], { ...previous, status });
+      }
+      return { previous };
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["invoices", id], ctx.previous);
+      }
+    },
+    onSuccess: (data, variables) => {
+      // Detail-cache met de verse server-row bijwerken (updated_at e.d.).
+      if (data) {
+        queryClient.setQueryData(["invoices", variables.id], (prev: any) =>
+          prev ? { ...prev, ...data } : data,
+        );
+      }
+      // Status bepaalt in welk filter-tabblad de factuur hoort (concept/
+      // verzonden/betaald/vervallen), dus lijst-refetch is nodig.
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["invoices", variables.id] });
 
       // Fire-and-forget audit trail for invoice status change
       logAudit({
@@ -382,6 +421,19 @@ export function useUpdateInvoiceStatus() {
         new_data: { status: variables.status },
         changed_fields: ["status"],
       });
+
+      // Bij overgang naar verzonden: fire-and-forget sync naar Snelstart.
+      // De edge function checkt zelf of de koppeling aanstaat en retourneert
+      // altijd 200, dus we willen hem niet awaiten of throwen.
+      if (variables.status === "verzonden") {
+        supabase.functions
+          .invoke("snelstart-sync", { body: { invoice_id: variables.id } })
+          .then(({ error }) => {
+            if (error) console.warn("[snelstart-sync] invoke faalde:", error.message);
+            queryClient.invalidateQueries({ queryKey: ["invoices", variables.id] });
+          })
+          .catch((err) => console.warn("[snelstart-sync] invoke exception:", err));
+      }
     },
   });
 }
@@ -423,7 +475,10 @@ export function useDeleteInvoice() {
       if (error) throw error;
       return true;
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      // Detail-cache van de verwijderde factuur opruimen, daarna lijst
+      // en orders (invoice_id op orders is genulled).
+      queryClient.removeQueries({ queryKey: ["invoices", id] });
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     },

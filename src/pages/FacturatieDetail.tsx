@@ -1,6 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useMemo, useState, useCallback } from "react";
-import { ArrowLeft, FileDown, Send, CheckCircle, AlertTriangle, Receipt, Loader2, Plus, Trash2, Save, Pencil } from "lucide-react";
+import { ArrowLeft, FileDown, Send, CheckCircle, AlertTriangle, Receipt, Loader2, Plus, Trash2, Save, Pencil, Calculator, RefreshCw } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -56,6 +59,25 @@ export default function FacturatieDetail() {
   const updateStatus = useUpdateInvoiceStatus();
   const updateLines = useUpdateInvoiceLines();
   const [confirmAction, setConfirmAction] = useState<{ status: string; label: string } | null>(null);
+  const [snelstartRetrying, setSnelstartRetrying] = useState(false);
+  const queryClient = useQueryClient();
+  const retrySnelstart = async () => {
+    if (!invoice) return;
+    setSnelstartRetrying(true);
+    try {
+      const { error } = await supabase.functions.invoke("snelstart-sync", {
+        body: { invoice_id: invoice.id },
+      });
+      if (error) throw new Error(error.message);
+      toast.success("Sync naar Snelstart gestart");
+      queryClient.invalidateQueries({ queryKey: ["invoices", invoice.id] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error("Sync mislukt", { description: msg });
+    } finally {
+      setSnelstartRetrying(false);
+    }
+  };
 
   // Editing state
   const [isEditing, setIsEditing] = useState(false);
@@ -236,7 +258,7 @@ export default function FacturatieDetail() {
       {/* Status + Acties */}
       <div className="bg-card rounded-xl border border-border/40 p-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <span className={cn("px-3 py-1 rounded-lg text-sm font-medium", style.bg, style.text)}>
               {style.label}
             </span>
@@ -245,6 +267,47 @@ export default function FacturatieDetail() {
                 <AlertTriangle className="h-4 w-4" /> Vervallen
               </span>
             )}
+            {(() => {
+              const st = (invoice as any).snelstart_status as
+                | "niet_geboekt" | "bezig" | "geboekt" | "fout" | undefined;
+              if (!st || st === "niet_geboekt") return null;
+              const snelstartLabel: Record<string, { bg: string; text: string; label: string }> = {
+                bezig:   { bg: "bg-amber-100",   text: "text-amber-800",   label: "Snelstart: bezig" },
+                geboekt: { bg: "bg-emerald-100", text: "text-emerald-800", label: "Snelstart: geboekt" },
+                fout:    { bg: "bg-red-100",     text: "text-red-800",     label: "Snelstart: fout" },
+              };
+              const s = snelstartLabel[st];
+              const errorText = (invoice as any).snelstart_error as string | null;
+              const boekingId = (invoice as any).snelstart_boeking_id as string | null;
+              const badge = (
+                <span className={cn("flex items-center gap-1 px-3 py-1 rounded-lg text-sm font-medium", s.bg, s.text)}>
+                  <Calculator className="h-3.5 w-3.5" />
+                  {s.label}
+                  {boekingId && st === "geboekt" && (
+                    <span className="ml-1 font-mono text-xs opacity-75">#{boekingId}</span>
+                  )}
+                </span>
+              );
+              return (
+                <div className="flex items-center gap-2">
+                  {st === "fout" && errorText ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild><div>{badge}</div></TooltipTrigger>
+                        <TooltipContent className="max-w-xs">{errorText}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : badge}
+                  {st === "fout" && (
+                    <Button size="sm" variant="outline" className="gap-1.5"
+                      onClick={retrySnelstart} disabled={snelstartRetrying}>
+                      <RefreshCw className={cn("h-3.5 w-3.5", snelstartRetrying && "animate-spin")} />
+                      Opnieuw proberen
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2">
             {effectiveStatus === "concept" && (

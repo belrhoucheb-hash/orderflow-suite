@@ -10,6 +10,7 @@ import {
   BookOpen,
   Truck,
   FileText,
+  Calculator,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,11 @@ import { VehicleDocumentTypesSection } from "@/components/fleet/VehicleDocumentT
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
+import {
+  useIntegrationCredentials,
+  useSaveIntegrationCredentials,
+} from "@/hooks/useIntegrationCredentials";
+import { supabase } from "@/integrations/supabase/client";
 import { useUpdateTenantBranding } from "@/hooks/useUpdateTenant";
 import { RateCardSettings } from "@/components/settings/RateCardSettings";
 import { SurchargeSettings } from "@/components/settings/SurchargeSettings";
@@ -33,6 +39,8 @@ import { StickySaveBar } from "@/components/settings/StickySaveBar";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
 import { InboxSettings } from "@/components/settings/InboxSettings";
+import { WebhookSettings } from "@/components/settings/WebhookSettings";
+import { ApiTokenSettings } from "@/components/settings/ApiTokenSettings";
 import { useTranslation } from "react-i18next";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -73,6 +81,8 @@ const NAV_GROUPS: NavGroup[] = [
       { value: "sms", label: "SMS" },
       { value: "inboxen", label: "Inboxen" },
       { value: "integraties", label: "Integraties" },
+      { value: "webhooks", label: "Webhooks" },
+      { value: "api-tokens", label: "API-tokens" },
     ],
   },
   {
@@ -210,6 +220,98 @@ const Settings = () => {
     twinfield: { enabled: false, username: "", password: "" },
     samsara: { enabled: false, apiKey: "" },
   });
+
+  interface SnelstartFields {
+    clientKey: string;
+    subscriptionKey: string;
+    administratieId: string;
+    standaardGrootboek: string;
+    btwGrootboek: string;
+    mockMode: boolean;
+  }
+  const EMPTY_SNELSTART: SnelstartFields = {
+    clientKey: "",
+    subscriptionKey: "",
+    administratieId: "",
+    standaardGrootboek: "",
+    btwGrootboek: "",
+    mockMode: true,
+  };
+  const [snelstart, setSnelstart] = useState<{ enabled: boolean; fields: SnelstartFields }>(
+    { enabled: false, fields: { ...EMPTY_SNELSTART } },
+  );
+  const [snelstartBaseline, setSnelstartBaseline] = useState<string>("");
+  const [snelstartTesting, setSnelstartTesting] = useState(false);
+  const { data: snelstartSaved } = useIntegrationCredentials<SnelstartFields>("snelstart");
+  const saveSnelstart = useSaveIntegrationCredentials<SnelstartFields>("snelstart");
+  useEffect(() => {
+    if (snelstartSaved === undefined) return;
+    const merged = {
+      enabled: snelstartSaved.enabled,
+      fields: { ...EMPTY_SNELSTART, ...snelstartSaved.credentials },
+    };
+    setSnelstart(merged);
+    setSnelstartBaseline(JSON.stringify(merged));
+  }, [snelstartSaved]);
+
+  const snelstartDirty =
+    snelstartBaseline !== "" && JSON.stringify(snelstart) !== snelstartBaseline;
+  const revertSnelstart = () => {
+    if (!snelstartBaseline) return;
+    try { setSnelstart(JSON.parse(snelstartBaseline)); } catch { /* noop */ }
+  };
+  const updateSnelstartField = (field: keyof SnelstartFields, value: string | boolean) => {
+    setSnelstart((prev) => ({ ...prev, fields: { ...prev.fields, [field]: value } }));
+  };
+  const handleSaveSnelstart = async () => {
+    try {
+      await saveSnelstart.mutateAsync({
+        enabled: snelstart.enabled,
+        credentials: snelstart.fields,
+      });
+      setSnelstartBaseline(JSON.stringify(snelstart));
+      toast.success("Snelstart-koppeling opgeslagen");
+    } catch {
+      toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
+    }
+  };
+  const handleTestSnelstart = async () => {
+    if (!snelstart.enabled) {
+      toast.error("Zet de koppeling eerst aan");
+      return;
+    }
+    setSnelstartTesting(true);
+    try {
+      if (snelstart.fields.mockMode) {
+        toast.success("Testmodus actief, boekingen worden gesimuleerd");
+        return;
+      }
+      if (!snelstart.fields.clientKey || !snelstart.fields.subscriptionKey) {
+        toast.error("Vul clientKey en subscriptionKey in");
+        return;
+      }
+      const res = await fetch("https://auth.snelstart.nl/b2b/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "clientcredentials",
+          client_id: snelstart.fields.clientKey,
+          client_secret: snelstart.fields.subscriptionKey,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        toast.error(`Verbinding mislukt (${res.status})`, { description: text.slice(0, 160) });
+        return;
+      }
+      toast.success("Verbinding met Snelstart OK");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error("Verbinding mislukt", { description: message });
+    } finally {
+      setSnelstartTesting(false);
+    }
+  };
 
   // -- Settings persistence hooks --
   const { data: savedIntegrations } = useLoadSettings<typeof integrations>("integrations");
@@ -371,6 +473,8 @@ const Settings = () => {
     if (location.pathname.includes("/inboxen")) return "inboxen";
     if (location.pathname.includes("/tarieven")) return "tarieven";
     if (location.pathname.includes("/kosten")) return "kosten";
+    if (location.pathname.includes("/webhooks")) return "webhooks";
+    if (location.pathname.includes("/api-tokens")) return "api-tokens";
     return "algemeen";
   };
 
@@ -926,16 +1030,114 @@ const Settings = () => {
                 )}
               </IntegrationCard>
 
+              <IntegrationCard
+                title="Snelstart"
+                description="Boekhoud-synchronisatie. Verzonden facturen worden automatisch als verkoopboeking geboekt."
+                icon={Calculator}
+                enabled={snelstart.enabled}
+                onToggle={() => setSnelstart((p) => ({ ...p, enabled: !p.enabled }))}
+              >
+                {snelstart.enabled && (
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3 rounded-lg border border-[hsl(var(--gold)/0.15)] bg-[hsl(var(--gold-soft)/0.3)] px-3 py-2">
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">Testmodus</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Simuleer boekingen zonder echte Snelstart-account, handig totdat de API-sleutels klaar zijn.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={snelstart.fields.mockMode}
+                        onCheckedChange={(v) => updateSnelstartField("mockMode", v)}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="snelstartClientKey" className="text-xs">Client-key</Label>
+                      <Input
+                        id="snelstartClientKey"
+                        type="password"
+                        value={snelstart.fields.clientKey}
+                        onChange={(e) => updateSnelstartField("clientKey", e.target.value)}
+                        placeholder="Snelstart client-key"
+                        className="text-xs"
+                        disabled={snelstart.fields.mockMode}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="snelstartSubKey" className="text-xs">Subscription-key</Label>
+                      <Input
+                        id="snelstartSubKey"
+                        type="password"
+                        value={snelstart.fields.subscriptionKey}
+                        onChange={(e) => updateSnelstartField("subscriptionKey", e.target.value)}
+                        placeholder="Snelstart subscription-key"
+                        className="text-xs"
+                        disabled={snelstart.fields.mockMode}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="snelstartAdminId" className="text-xs">Administratie-ID</Label>
+                      <Input
+                        id="snelstartAdminId"
+                        value={snelstart.fields.administratieId}
+                        onChange={(e) => updateSnelstartField("administratieId", e.target.value)}
+                        placeholder="UUID van de administratie"
+                        className="text-xs"
+                        disabled={snelstart.fields.mockMode}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="snelstartGrb" className="text-xs">Grootboek omzet</Label>
+                        <Input
+                          id="snelstartGrb"
+                          value={snelstart.fields.standaardGrootboek}
+                          onChange={(e) => updateSnelstartField("standaardGrootboek", e.target.value)}
+                          placeholder="bv. 8000"
+                          className="text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="snelstartBtw" className="text-xs">Grootboek BTW</Label>
+                        <Input
+                          id="snelstartBtw"
+                          value={snelstart.fields.btwGrootboek}
+                          onChange={(e) => updateSnelstartField("btwGrootboek", e.target.value)}
+                          placeholder="bv. 1500"
+                          className="text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={handleTestSnelstart}
+                        disabled={snelstartTesting}
+                        className="text-[11px] font-medium text-[hsl(var(--gold-deep))] hover:underline disabled:opacity-50"
+                      >
+                        {snelstartTesting ? "Bezig met testen..." : "Verbinding testen"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </IntegrationCard>
+
             </div>
 
-            <div className="pt-6 border-t border-[hsl(var(--gold)/0.12)] mt-6">
+            <div className="pt-6 border-t border-[hsl(var(--gold)/0.12)] mt-6 flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleSaveIntegrations}
-                disabled={saveIntegrations.isPending}
+                onClick={async () => {
+                  await handleSaveIntegrations();
+                  if (snelstartDirty) await handleSaveSnelstart();
+                }}
+                disabled={saveIntegrations.isPending || saveSnelstart.isPending}
                 className="btn-luxe btn-luxe--primary !h-9"
               >
-                {saveIntegrations.isPending ? "Opslaan..." : "Integraties opslaan"}
+                {saveIntegrations.isPending || saveSnelstart.isPending
+                  ? "Opslaan..."
+                  : "Integraties opslaan"}
               </button>
             </div>
           </div>
@@ -955,6 +1157,14 @@ const Settings = () => {
         <TabsContent value="kosten" className="space-y-6">
           <FuelPriceSettings />
           <CostTypeSettings />
+        </TabsContent>
+
+        <TabsContent value="webhooks" className="space-y-6 outline-none">
+          <WebhookSettings />
+        </TabsContent>
+
+        <TabsContent value="api-tokens" className="space-y-6 outline-none">
+          <ApiTokenSettings clientId={null} />
         </TabsContent>
         </div>
       </Tabs>
@@ -989,10 +1199,13 @@ const Settings = () => {
       )}
       {getActiveTab() === "integraties" && (
         <StickySaveBar
-          dirty={integrationsDirty}
-          saving={saveIntegrations.isPending}
-          onSave={handleSaveIntegrations}
-          onRevert={revertIntegrations}
+          dirty={integrationsDirty || snelstartDirty}
+          saving={saveIntegrations.isPending || saveSnelstart.isPending}
+          onSave={async () => {
+            if (integrationsDirty) await handleSaveIntegrations();
+            if (snelstartDirty) await handleSaveSnelstart();
+          }}
+          onRevert={() => { revertIntegrations(); revertSnelstart(); }}
           label="Integraties hebben niet-opgeslagen wijzigingen"
         />
       )}
