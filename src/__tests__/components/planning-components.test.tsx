@@ -396,6 +396,8 @@ describe("PlanningDateNav", () => {
 describe("PlanningVehicleCard", () => {
   const baseProps = {
     vehicle: mockVehicle as any,
+    vehicleDbId: null,
+    selectedDate: "2026-04-06",
     assigned: [],
     onRemove: vi.fn(),
     onReorder: vi.fn(),
