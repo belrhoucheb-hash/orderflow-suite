@@ -43,7 +43,7 @@ function getISOWeek(date: Date): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-export type ViewMode = "day" | "week";
+export type ViewMode = "day" | "week" | "rooster";
 
 interface PlanningDateNavProps {
   selectedDate: string; // YYYY-MM-DD
@@ -138,6 +138,17 @@ export function PlanningDateNav({
             onClick={() => onViewModeChange("week")}
           >
             Week
+          </button>
+          <button
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium transition-colors",
+              viewMode === "rooster"
+                ? "bg-primary text-primary-foreground"
+                : "bg-background text-muted-foreground hover:bg-muted"
+            )}
+            onClick={() => onViewModeChange("rooster")}
+          >
+            Rooster
           </button>
         </div>
       </div>
