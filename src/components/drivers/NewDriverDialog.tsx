@@ -45,6 +45,7 @@ import {
 } from "@/hooks/useDrivers";
 import { useFleetVehicles } from "@/hooks/useFleet";
 import { useDriverCertifications } from "@/hooks/useDriverCertifications";
+import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { DriverCertificateRecordsSection } from "@/components/drivers/DriverCertificateRecordsSection";
 import { driverSchema, driverBaseSchema, daysUntil, maskBsn } from "@/lib/validation/driverSchema";
 
@@ -134,6 +135,9 @@ interface FormState {
   selectedCerts: string[];
   // Werkzaamheden (vrije tags: klant, voertuig, certificering)
   workTypes: string[];
+  // Planning-defaults
+  defaultShiftTemplateId: string;
+  defaultVehicleId: string;
 }
 
 const WORK_TYPE_OPTIONS: string[] = [
@@ -170,6 +174,8 @@ const FIELD_TO_TAB: Record<keyof FormState, string> = {
   status: "werk",
   vehicleId: "werk",
   workTypes: "werk",
+  defaultShiftTemplateId: "werk",
+  defaultVehicleId: "werk",
   bsn: "administratie",
   iban: "administratie",
   personnelNumber: "administratie",
@@ -205,6 +211,8 @@ const INITIAL: FormState = {
   personnelNumber: "",
   selectedCerts: [],
   workTypes: [],
+  defaultShiftTemplateId: "none",
+  defaultVehicleId: "none",
 };
 
 function parseDate(value: string | null | undefined): Date | undefined {
@@ -247,6 +255,8 @@ function toFormState(driver: Driver): FormState {
     personnelNumber: driver.personnel_number ?? "",
     selectedCerts: driver.certifications ?? [],
     workTypes: driver.work_types ?? [],
+    defaultShiftTemplateId: driver.default_shift_template_id ?? "none",
+    defaultVehicleId: driver.default_vehicle_id ?? "none",
   };
 }
 
@@ -256,6 +266,8 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
   const { data: vehicles } = useFleetVehicles();
   const { data: certifications = [] } = useDriverCertifications();
   const activeCertifications = certifications.filter((c) => c.is_active);
+  const { templates: shiftTemplates } = useShiftTemplates();
+  const activeVehicles = (vehicles ?? []).filter((v) => v.isActive);
 
   const { data: certExpiries, upsertExpiry } = useDriverCertificationExpiry(
     driver?.id ?? null,
@@ -525,6 +537,10 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
       emergency_contact_relation:
         (parsed.data.emergency_contact_relation as string | null) || null,
       emergency_contact_phone: parsed.data.emergency_contact_phone || null,
+      default_shift_template_id:
+        form.defaultShiftTemplateId === "none" ? null : form.defaultShiftTemplateId,
+      default_vehicle_id:
+        form.defaultVehicleId === "none" ? null : form.defaultVehicleId,
       // Status en vehicle alleen in edit-mode meegeven, bij create default
       ...(isEdit
         ? {
@@ -1042,6 +1058,61 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                         <SelectItem value="uitzendkracht">Uitzendkracht</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-border/40 space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Planning</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Standaardwaarden die de rooster-module gebruikt bij "Pas standaardrooster toe".
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="default-shift-template">Standaardrooster</Label>
+                      <Select
+                        value={form.defaultShiftTemplateId}
+                        onValueChange={(v) => setField("defaultShiftTemplateId", v)}
+                      >
+                        <SelectTrigger
+                          id="default-shift-template"
+                          className="rounded-xl border-border/50"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-border/50">
+                          <SelectItem value="none">Geen standaard</SelectItem>
+                          {shiftTemplates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="default-vehicle">Standaardvoertuig</Label>
+                      <Select
+                        value={form.defaultVehicleId}
+                        onValueChange={(v) => setField("defaultVehicleId", v)}
+                      >
+                        <SelectTrigger
+                          id="default-vehicle"
+                          className="rounded-xl border-border/50"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-border/50">
+                          <SelectItem value="none">Geen standaard</SelectItem>
+                          {activeVehicles.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.name} ({v.plate})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 

@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MasterDataSection } from "@/components/settings/MasterDataSection";
+import { ShiftTemplateSettings } from "@/components/settings/ShiftTemplateSettings";
 import { VehicleDocumentTypesSection } from "@/components/fleet/VehicleDocumentTypesSection";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
@@ -94,7 +95,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: "Data",
-    items: [{ value: "stamgegevens", label: "Stamgegevens" }],
+    items: [
+      { value: "stamgegevens", label: "Stamgegevens" },
+      { value: "rooster-types", label: "Rooster-types" },
+    ],
   },
 ];
 
@@ -466,6 +470,7 @@ const Settings = () => {
   // Determine active tab based on URL
   const getActiveTab = () => {
     if (location.pathname.includes("/stamgegevens")) return "stamgegevens";
+    if (location.pathname.includes("/rooster-types")) return "rooster-types";
     if (location.pathname.includes("/branding")) return "branding";
     if (location.pathname.includes("/notificaties")) return "notificaties";
     if (location.pathname.includes("/sms")) return "sms";
@@ -624,6 +629,10 @@ const Settings = () => {
         <TabsContent value="stamgegevens" className="outline-none space-y-8">
           <MasterDataSection />
           <VehicleDocumentTypesSection />
+        </TabsContent>
+
+        <TabsContent value="rooster-types" className="outline-none">
+          <ShiftTemplateSettings />
         </TabsContent>
 
         <TabsContent value="branding" className="outline-none">

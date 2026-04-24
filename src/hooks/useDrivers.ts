@@ -42,6 +42,9 @@ export interface Driver {
   hire_date: string | null;
   termination_date: string | null;
 
+  default_shift_template_id: string | null;
+  default_vehicle_id: string | null;
+
   created_at: string;
   updated_at: string;
 }
