@@ -2,13 +2,38 @@
 
 Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionaliteit wordt opgeleverd. De meest recente toevoegingen staan bovenaan per sectie, en in "Wat is er nieuw sinds de vorige test" hieronder.
 
-**Laatste update**: 2026-04-23, REST API v1 beschikbaar (admins maken tokens onder Instellingen; klant-admins in het portaal)
+**Laatste update**: 2026-04-24, Rooster-module beschikbaar (chauffeurs inplannen per dag/week los van orders, in Planning > Rooster)
 
 **Hoe dit document te gebruiken**:
 - Kijk eerst naar "Wat is er nieuw sinds de vorige test" voor een snelle samenvatting.
 - Loop dan de bijbehorende scenario's door in de secties.
 - Scenario's die je al eerder hebt afgevinkt en die niet veranderd zijn, kun je overslaan.
 - Vink aan of het werkt zoals verwacht, of noteer wat afwijkt.
+
+---
+
+### Scenario: Rooster-module (nieuw, 2026-04-24)
+
+**Voorbereiding**:
+- Ga naar **Instellingen > Rooster-types** en maak minstens drie rooster-types aan: bijvoorbeeld "Vroeg" (06:00), "Dag" (09:00) en "Laat" (14:00), elk met een eigen kleur.
+- Open een chauffeurs-profiel en vul in de sectie "Planning" een **Standaardrooster** en **Standaardvoertuig** in. Doe dit voor een paar chauffeurs.
+
+**Testen**:
+- [ ] Ga naar **Planning > Rooster**. Je ziet de Dagweergave voor vandaag.
+- [ ] Vul voor één chauffeur in: rooster "Dag", starttijd 09:30, een voertuig, status "werkt". Wacht een seconde en herlaad de pagina. De waarden staan nog steeds.
+- [ ] Zet voor een andere chauffeur de status op "ziek". Voertuig en starttijd-velden worden grijs of verdwijnen.
+- [ ] Klik op **"Print PDF"** rechtsboven. Er opent een PDF met het rooster van vandaag.
+- [ ] Schakel naar **Weekweergave**. Je ziet de matrix chauffeurs tegen 7 dagen. Cellen zijn gekleurd per rooster-type.
+- [ ] Klik op een lege cel en vul snel een rooster in via de popup. Sluit de popup en zie dat de cel gevuld is.
+- [ ] Sleep een gevulde cel naar een andere dag, of gebruik het menu-icoon "Kopieer naar". De rooster-data staat nu ook op die andere dag.
+- [ ] Klik op **"Pas standaardrooster toe"**. Je krijgt een bevestiging met de keuze "alleen lege dagen" of "alles overschrijven". Na bevestiging zie je dat alle chauffeurs met een standaardrooster gevuld zijn voor de hele week.
+- [ ] Navigeer naar volgende week en klik op **"Kopieer vorige week"**. Deze week wordt gevuld met dezelfde data als vorige week.
+- [ ] Klik op **"Wis week"**. Je krijgt twee keer een bevestiging. Na bevestiging is de hele week leeg.
+- [ ] Ga nu naar de normale **Planning** (Dagweergave met orders). Open een voertuig-kaart op een dag waarop een chauffeur ingepland staat voor dat voertuig. De chauffeur en starttijd worden automatisch vooringevuld.
+- [ ] Plan twee chauffeurs op hetzelfde voertuig dezelfde dag. In de order-planning toont de voertuig-kaart een **waarschuwing** over meerdere chauffeurs.
+
+**Opmerkingen**: _______________________________________________
+
 - Bij twijfel: schrijf op wat je zag en hoe het voelde, ook kleine dingen tellen.
 - Aan het eind is er ruimte voor algemene opmerkingen.
 
@@ -17,6 +42,19 @@ Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionalitei
 ---
 
 ## Wat is er nieuw sinds de vorige test
+
+**Rooster-module (2026-04-24), chauffeurs inplannen los van orders**:
+- Onder **Planning** staat een nieuwe knop **"Rooster"** naast Dag/Week/Map. Hiermee kun je chauffeurs per dag inplannen zonder dat er orders nodig zijn. Dit vervangt de Excel-planning.
+- Per chauffeur vul je per dag in: **rooster-type** (Vroeg, Dag, Laat, Hoya, of eigen type), **starttijd**, **voertuig**, **status** (werkt, vrij, ziek, verlof, feestdag) en eventueel een **notitie**.
+- **Dagweergave**: tabel met alle actieve chauffeurs, inline bewerkbaar. Is de chauffeur vrij of ziek, dan verdwijnt voertuig en starttijd automatisch. Met de knop **"Print PDF"** krijg je een print-klaar rooster voor de ochtend-briefing.
+- **Weekweergave**: matrix van chauffeurs tegen 7 dagen. Elke cel toont rooster, starttijd en voertuig in een kleur. Klik op een cel om snel aan te passen. Sleep een cel naar een andere dag om te kopiëren, of gebruik het menu-icoon voor "Kopieer naar".
+- **Snel-knoppen rechtsboven de week**:
+  - **"Kopieer vorige week"** neemt de planning van de week ervoor over, zodat je alleen de afwijkingen hoeft aan te passen.
+  - **"Pas standaardrooster toe"** vult de week met het standaard-rooster van elke chauffeur (in te stellen op het chauffeur-profiel). Kies of je alleen lege dagen wilt vullen of alles wilt overschrijven.
+  - **"Wis week"** leegt de hele week (met dubbele bevestiging).
+- **Rooster-types beheren**: onder **Instellingen > Rooster-types** maak je eigen rooster-types aan met naam, default-starttijd, default-eindtijd en kleur. Je kunt ook een volgorde instellen en types op inactief zetten (oude rooster-rijen blijven zichtbaar, maar het type verschijnt niet meer in nieuwe keuzes).
+- **Chauffeur-profiel**: in de chauffeurs-tab staat per chauffeur nu een sectie "Planning" met **Standaardrooster** en **Standaardvoertuig**. Deze worden gebruikt door de "Pas standaardrooster toe"-knop.
+- **Koppeling met order-planning**: als je in de order-planning een voertuig op een bepaalde dag opent, wordt de chauffeur en starttijd **automatisch vooringevuld** vanuit het rooster. Je kunt dit nog altijd handmatig overschrijven. Als er per ongeluk twee chauffeurs op hetzelfde voertuig dezelfde dag staan, toont de voertuig-kaart in de order-planning een **waarschuwing**.
 
 **Publieke API-tokens (2026-04-23), onder Instellingen > API-tokens en in het klantportaal**:
 - Onder **Instellingen > API-tokens** kun je nu een **API-token** aanmaken waarmee een extern systeem (ERP, boekhouding, dashboard, eigen website) data uit OrderFlow kan ophalen of nieuwe orders kan insturen.
