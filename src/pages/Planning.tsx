@@ -13,6 +13,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useVehicles, type FleetVehicle } from "@/hooks/useVehicles";
+import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 import { useDrivers } from "@/hooks/useDrivers";
 import {
   resolveCoordinates,
@@ -63,13 +64,22 @@ import { PlanningUnassignedSidebar } from "@/components/planning/PlanningUnassig
 import { PlanningMap } from "@/components/planning/PlanningMap";
 import { PlanningDateNav, toDateString, type ViewMode } from "@/components/planning/PlanningDateNav";
 import { PlanningWeekView } from "@/components/planning/PlanningWeekView";
+import { RoosterTab } from "@/components/planning/rooster/RoosterTab";
 import { useTenant } from "@/contexts/TenantContext";
 import { solveVRP } from "@/lib/vrpSolver";
 import { useLoadPlanningDraft, useSavePlanningDraft, useDeletePlanningDraft, collectWeekDrafts, usePlanningDraftsRealtime } from "@/hooks/usePlanningDrafts";
 
 const Planning = () => {
   const { data: fleetVehicles = [] } = useVehicles();
+  const { data: rawVehicles = [] } = useVehiclesRaw();
   const { data: drivers = [] } = useDrivers();
+
+  // ── Mapping code (uit FleetVehicle.id) naar rauwe DB-UUID, voor rooster-lookup.
+  const vehicleCodeToUuid = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of rawVehicles) map.set(v.code, v.id);
+    return map;
+  }, [rawVehicles]);
   const [assignments, setAssignments] = useState<Assignments>({});
   const [search, setSearch] = useState("");
   const [filterTag, setFilterTag] = useState<string | null>(null);
@@ -762,7 +772,12 @@ const Planning = () => {
           onViewModeChange={setViewMode}
         />
 
-        {viewMode === "week" ? (
+        {viewMode === "rooster" ? (
+          /* ── Rooster-module ── */
+          <div className="flex-1 overflow-y-auto">
+            <RoosterTab />
+          </div>
+        ) : viewMode === "week" ? (
           /* ── Week overview ── */
           <div className="flex-1 overflow-y-auto">
             <PlanningWeekView
@@ -811,6 +826,8 @@ const Planning = () => {
                     <PlanningVehicleCard
                       key={vehicle.id}
                       vehicle={vehicle}
+                      vehicleDbId={vehicleCodeToUuid.get(vehicle.code) ?? null}
+                      selectedDate={selectedDate}
                       assigned={assignments[vehicle.id] ?? []}
                       onRemove={handleRemove}
                       onReorder={handleReorder}

@@ -1,16 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { 
-  Truck, 
-  RotateCw, 
-  User, 
-  Clock, 
-  Package, 
-  Timer, 
-  Route, 
-  BarChart3, 
-  AlertTriangle 
+import {
+  Truck,
+  RotateCw,
+  User,
+  Clock,
+  Package,
+  Timer,
+  Route,
+  BarChart3,
+  AlertTriangle
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,19 +21,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { type FleetVehicle } from "@/hooks/useVehicles";
 import { type Driver } from "@/hooks/useDrivers";
+import { useDriverSchedulesForDate } from "@/hooks/useDriverScheduleForDate";
+import { findVehicleConflictsOnDate } from "@/lib/roosterConflicts";
 import { type GeoCoord, vehicleColors } from "@/data/geoData";
 import { MapPin, Weight } from "lucide-react";
 import { type PlanOrder, UNLOAD_MINUTES } from "./types";
-import { 
-  getTotalWeight, 
-  capacityColor, 
-  computeETAs, 
-  computeRouteStats 
+import {
+  getTotalWeight,
+  capacityColor,
+  computeETAs,
+  computeRouteStats
 } from "./planningUtils";
 import { PlanningOrderRow } from "./PlanningOrderRow";
 
 export function PlanningVehicleCard({
   vehicle,
+  vehicleDbId,
+  selectedDate,
   assigned,
   onRemove,
   onReorder,
@@ -50,6 +54,17 @@ export function PlanningVehicleCard({
   drivers,
 }: {
   vehicle: FleetVehicle;
+  /**
+   * Rauwe database-UUID van dit voertuig. `FleetVehicle.id` is de human-readable
+   * `code`, maar `driver_schedules.vehicle_id` verwijst naar de UUID. De parent
+   * mapt code→UUID via `useVehiclesRaw` en geeft het hier door.
+   */
+  vehicleDbId?: string | null;
+  /**
+   * Datum (yyyy-mm-dd) van de huidige planning, gebruikt om het rooster
+   * voor dezelfde dag te raadplegen voor prefill en conflict-detectie.
+   */
+  selectedDate: string;
   assigned: PlanOrder[];
   onRemove: (orderId: string) => void;
   onReorder: (vehicleId: string, oldIndex: number, newIndex: number) => void;
@@ -68,6 +83,55 @@ export function PlanningVehicleCard({
   const { isOver, setNodeRef } = useDroppable({ id: vehicle.id });
   const color = vehicleColors[vehicle.id] || "#888";
   const [activeTab, setActiveTab] = useState<"route" | "ingepland">("route");
+
+  // ── Rooster-integratie: prefill + conflict-detectie ─────────────────
+  const { data: daySchedules = [] } = useDriverSchedulesForDate(selectedDate);
+
+  const rosterHit = useMemo(() => {
+    if (!vehicleDbId) return null;
+    return (
+      daySchedules.find(
+        (s) => s.vehicle_id === vehicleDbId && s.status === "werkt",
+      ) ?? null
+    );
+  }, [daySchedules, vehicleDbId]);
+
+  const hasVehicleConflict = useMemo(() => {
+    if (!vehicleDbId) return false;
+    const conflicts = findVehicleConflictsOnDate(daySchedules);
+    return conflicts.has(vehicleDbId);
+  }, [daySchedules, vehicleDbId]);
+
+  // Prefill-logica: zodra het rooster een werkende chauffeur op dit voertuig
+  // aanwijst en de user nog niets heeft gekozen, vul driverId en startTime in
+  // via de parent-callbacks. We vuren per vehicle-kaart maar één keer per
+  // (vehicle, datum)-combinatie om handmatige overrides niet te overschrijven.
+  const prefilledKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!rosterHit) return;
+    const key = `${vehicle.id}|${selectedDate}|${rosterHit.id}`;
+    if (prefilledKeyRef.current === key) return;
+
+    const driverIsEmpty = !driverId;
+    // "07:00" is de hard-coded default uit Planning.tsx; behandel hem als leeg
+    // zodat een rooster-starttijd hem mag overschrijven, maar niet als de user
+    // een bewuste andere tijd heeft gekozen.
+    const startIsDefault = !startTime || startTime === "07:00";
+
+    let didPrefill = false;
+    if (driverIsEmpty && rosterHit.driver_id) {
+      onDriverChange(vehicle.id, rosterHit.driver_id);
+      didPrefill = true;
+    }
+    if (startIsDefault && rosterHit.start_time) {
+      // start_time uit DB kan "08:00" of "08:00:00" zijn, normaliseer naar HH:mm
+      const t = rosterHit.start_time.slice(0, 5);
+      onStartTimeChange(vehicle.id, t);
+      didPrefill = true;
+    }
+    if (didPrefill) prefilledKeyRef.current = key;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rosterHit, selectedDate, vehicle.id]);
 
   const totalKg = assigned.reduce((s, o) => s + getTotalWeight(o), 0);
   const totalPallets = assigned.reduce((s, o) => s + (o.quantity ?? 0), 0);
@@ -119,6 +183,15 @@ export function PlanningVehicleCard({
             <Badge variant="secondary" className="text-xs">{vehicle.type}</Badge>
           </div>
         </div>
+        {hasVehicleConflict && (
+          <div
+            role="alert"
+            className="mt-1.5 flex items-center gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-1 text-[11px] text-amber-700"
+          >
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            <span>Dit voertuig heeft meerdere chauffeurs ingepland vandaag</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-1.5">
           <p className="text-xs text-muted-foreground shrink-0">{vehicle.plate}</p>
           <Select value={driverId} onValueChange={(v) => onDriverChange(vehicle.id, v)}>
