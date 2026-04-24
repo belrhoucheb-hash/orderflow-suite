@@ -20,20 +20,20 @@ export function useDriverSchedules(dateFrom: string, dateTo: string) {
     enabled: !!tenant?.id && !!dateFrom && !!dateTo,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("driver_schedules" as any)
+        .from("driver_schedules")
         .select("*")
         .gte("date", dateFrom)
         .lte("date", dateTo)
         .order("date", { ascending: true });
       if (error) throw error;
-      return data as any as DriverSchedule[];
+      return data as DriverSchedule[];
     },
   });
 
   const upsertSchedule = useMutation({
     mutationFn: async (input: DriverScheduleInput | DriverScheduleUpsert) => {
       const { data, error } = await inserter
-        .upsert(input as any, { onConflict: "tenant_id,driver_id,date" })
+        .upsert(input, { onConflict: "tenant_id,driver_id,date" })
         .select()
         .single();
       if (error) throw error;
@@ -49,10 +49,10 @@ export function useDriverSchedules(dateFrom: string, dateTo: string) {
     mutationFn: async (rows: DriverScheduleUpsert[]) => {
       if (rows.length === 0) return [];
       const { data, error } = await inserter
-        .upsert(rows as any, { onConflict: "tenant_id,driver_id,date" })
+        .upsert(rows, { onConflict: "tenant_id,driver_id,date" })
         .select();
       if (error) throw error;
-      return data as any as DriverSchedule[];
+      return data as DriverSchedule[];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["driver-schedules"] });
@@ -63,7 +63,7 @@ export function useDriverSchedules(dateFrom: string, dateTo: string) {
   const deleteSchedule = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from("driver_schedules" as any)
+        .from("driver_schedules")
         .delete()
         .eq("id", id);
       if (error) throw error;
@@ -77,7 +77,7 @@ export function useDriverSchedules(dateFrom: string, dateTo: string) {
   const deleteRange = useMutation({
     mutationFn: async ({ from, to }: { from: string; to: string }) => {
       const { error } = await supabase
-        .from("driver_schedules" as any)
+        .from("driver_schedules")
         .delete()
         .gte("date", from)
         .lte("date", to);

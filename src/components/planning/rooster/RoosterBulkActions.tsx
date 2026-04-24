@@ -82,13 +82,13 @@ export function RoosterBulkActions({ date, onDone }: Props) {
   async function handleCopyPreviousWeek() {
     try {
       const { data, error } = await supabase
-        .from("driver_schedules" as any)
+        .from("driver_schedules")
         .select("*")
         .gte("date", prevWeekStart)
         .lte("date", prevWeekEnd);
       if (error) throw error;
 
-      const rows = (data as any as DriverSchedule[]) ?? [];
+      const rows = (data as DriverSchedule[]) ?? [];
       if (rows.length === 0) {
         toast.info("Vorige week is leeg, niets om te kopieren");
         setCopyOpen(false);

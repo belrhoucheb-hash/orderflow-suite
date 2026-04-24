@@ -16,13 +16,13 @@ export function useDriverScheduleForDate(driverId: string | null | undefined, da
     staleTime: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("driver_schedules" as any)
+        .from("driver_schedules")
         .select("*")
         .eq("driver_id", driverId!)
         .eq("date", date!)
         .maybeSingle();
       if (error) throw error;
-      return (data as any as DriverSchedule) ?? null;
+      return (data as DriverSchedule) ?? null;
     },
   });
 }
@@ -39,11 +39,11 @@ export function useDriverSchedulesForDate(date: string | null | undefined) {
     staleTime: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("driver_schedules" as any)
+        .from("driver_schedules")
         .select("*")
         .eq("date", date!);
       if (error) throw error;
-      return (data as any as DriverSchedule[]) ?? [];
+      return (data as DriverSchedule[]) ?? [];
     },
   });
 }

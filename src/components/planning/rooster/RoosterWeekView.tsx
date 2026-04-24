@@ -488,7 +488,7 @@ function useDriverSchedulesDeleteOnly() {
   const mutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from("driver_schedules" as any)
+        .from("driver_schedules")
         .delete()
         .eq("id", id);
       if (error) throw error;

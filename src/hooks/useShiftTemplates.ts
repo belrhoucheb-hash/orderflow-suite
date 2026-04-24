@@ -14,21 +14,21 @@ export function useShiftTemplates(options?: { includeInactive?: boolean }) {
     staleTime: 60_000,
     queryFn: async () => {
       let q = supabase
-        .from("shift_templates" as any)
+        .from("shift_templates")
         .select("*")
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
       if (!includeInactive) q = q.eq("is_active", true);
       const { data, error } = await q;
       if (error) throw error;
-      return data as any as ShiftTemplate[];
+      return data as ShiftTemplate[];
     },
   });
 
   const createTemplate = useMutation({
     mutationFn: async (input: ShiftTemplateInput) => {
       const { data, error } = await inserter
-        .insert(input as any)
+        .insert(input)
         .select()
         .single();
       if (error) throw error;
@@ -42,8 +42,8 @@ export function useShiftTemplates(options?: { includeInactive?: boolean }) {
   const updateTemplate = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<ShiftTemplateInput> }) => {
       const { data, error } = await supabase
-        .from("shift_templates" as any)
-        .update(patch as any)
+        .from("shift_templates")
+        .update(patch)
         .eq("id", id)
         .select()
         .single();
@@ -58,7 +58,7 @@ export function useShiftTemplates(options?: { includeInactive?: boolean }) {
   const deleteTemplate = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from("shift_templates" as any)
+        .from("shift_templates")
         .delete()
         .eq("id", id);
       if (error) throw error;
