@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useClientPortalUsers";
 import { PORTAL_ROLE_LABELS } from "@/types/clientPortal";
 import type { PortalRole } from "@/types/clientPortal";
+import { ApiTokenSettings } from "@/components/settings/ApiTokenSettings";
 
 export default function PortalSettings() {
   const { data: portalUser } = useCurrentPortalUser();
@@ -193,6 +194,20 @@ export default function PortalSettings() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* API-tokens , admin-only in het portaal */}
+      {isAdmin && portalUser?.client_id && (
+        <Card>
+          <CardContent className="pt-6">
+            <ApiTokenSettings
+              clientId={portalUser.client_id}
+              hideTenantOnlyScopes={true}
+              title="API-tokens"
+              subtitle="Geef je eigen systemen toegang tot jullie data in OrderFlow via de REST API."
+            />
           </CardContent>
         </Card>
       )}
