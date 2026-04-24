@@ -1,20 +1,22 @@
 import { Euro } from "lucide-react";
 import { motion } from "framer-motion";
-import type { Order } from "@/data/mockData";
 import type { FleetVehicle } from "@/hooks/useVehicles";
+import { useDashboardFinancialStats } from "@/hooks/useDashboardFinancialStats";
 
 interface Props {
-  orders: Order[];
   vehicles: FleetVehicle[];
 }
 
-export function FinancialKPIWidget({ orders, vehicles }: Props) {
-  const plannedTrips = orders.filter((o) => o.status === "IN_TRANSIT").length;
+export function FinancialKPIWidget({ vehicles }: Props) {
+  const { data: stats } = useDashboardFinancialStats();
+
+  const plannedTrips = stats?.plannedTrips ?? 0;
+  // NB: er bestaat geen price_total_* kolom op orders; tot er een echte
+  // prijsbron is blijft dit een forfait per actieve rit.
   const estimatedRevenue = plannedTrips * 485;
   const costPerKm = 1.32;
 
-  // Beladingsgraad: total weight / total capacity
-  const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
+  const totalWeight = stats?.totalWeightKg ?? 0;
   const totalCapacity = vehicles.reduce((s, v) => s + v.capacityKg, 0);
   const loadPercentage = totalCapacity > 0 ? Math.round((totalWeight / totalCapacity) * 100) : 0;
   const freePercentage = 100 - loadPercentage;

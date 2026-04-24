@@ -5,6 +5,7 @@ import {
   BarChart3, CircleDot, Navigation, Timer,
 } from "lucide-react";
 import { useOrders } from "@/hooks/useOrders";
+import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useVehicles } from "@/hooks/useVehicles";
 import { usePendingReleaseCount } from "@/hooks/useVehicleCheckHistory";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,64 +30,49 @@ const Dashboard = () => {
   const { effectiveRole } = useAuth();
   const canSeeVehicleCheck = effectiveRole === "admin" || effectiveRole === "planner";
   const { data: pendingReleaseCount = 0 } = usePendingReleaseCount();
-  const { data: ordersData, isLoading: ordersLoading, isError: ordersError, refetch: refetchOrders } = useOrders();
-  const orders = ordersData?.orders ?? [];
+  // KPI's via DB-aggregatie (correct bij miljoenen orders). Voor de
+  // "Recente orders"-tabel een aparte query die alleen de laatste 6 trekt.
+  const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useDashboardStats();
+  const { data: recentData, isLoading: recentLoading, isError: recentError, refetch: refetchRecent } = useOrders({
+    pageSize: 6,
+    sortField: "createdAt",
+    sortDirection: "desc",
+    countMode: "estimated",
+  });
+  const recentOrders = recentData?.orders ?? [];
   const { data: vehicles = [], isLoading: vehiclesLoading, isError: vehiclesError, refetch: refetchVehicles } = useVehicles();
-  const isLoading = ordersLoading || vehiclesLoading;
-  const isError = ordersError || vehiclesError;
-
-  const stats = useMemo(() => {
-    const byStatus = orders.reduce((acc, o) => {
-      acc[o.status] = (acc[o.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const spoedOrders = orders.filter((o) => o.priority === "spoed" || o.priority === "hoog");
-    const onderwegOrders = orders.filter((o) => o.status === "IN_TRANSIT");
-    const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
-    const overdueOrders = orders.filter((o) => {
-      if (o.status === "DELIVERED" || o.status === "CANCELLED") return false;
-      return o.estimatedDelivery && new Date(o.estimatedDelivery) < today;
-    });
-    return { byStatus, spoedOrders, onderwegOrders, totalWeight, totalVehicles: vehicles.length, overdueOrders };
-  }, [orders, vehicles]);
-
-  const recentOrders = useMemo(() =>
-    [...orders]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 6),
-    [orders]
-  );
+  const isLoading = statsLoading || recentLoading || vehiclesLoading;
+  const isError = statsError || recentError || vehiclesError;
 
   const aiInsights = useMemo(() => {
     const insights: { type: "warning" | "opportunity" | "info"; text: string }[] = [];
-    if (stats.overdueOrders.length > 0) {
-      insights.push({ type: "warning", text: `${stats.overdueOrders.length} order${stats.overdueOrders.length > 1 ? "s" : ""} ${stats.overdueOrders.length > 1 ? "lopen" : "loopt"} risico op vertraging op basis van huidige status` });
+    if (!stats) return insights;
+
+    if (stats.overdue > 0) {
+      insights.push({ type: "warning", text: `${stats.overdue} order${stats.overdue > 1 ? "s" : ""} ${stats.overdue > 1 ? "lopen" : "loopt"} risico op vertraging op basis van huidige status` });
     }
-    const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
     const totalCapacity = vehicles.reduce((s, v) => s + v.capacityKg, 0);
-    const loadPct = totalCapacity > 0 ? Math.round((totalWeight / totalCapacity) * 100) : 0;
+    const loadPct = totalCapacity > 0 ? Math.round((stats.totalWeightKg / totalCapacity) * 100) : 0;
     if (loadPct < 50 && totalCapacity > 0) {
-      insights.push({ type: "opportunity", text: `Beladingsgraad is ${loadPct}%, er is ruimte voor ${Math.round((totalCapacity - totalWeight) / 1000)} ton extra lading` });
+      insights.push({ type: "opportunity", text: `Beladingsgraad is ${loadPct}%, er is ruimte voor ${Math.round((totalCapacity - stats.totalWeightKg) / 1000)} ton extra lading` });
     } else if (loadPct > 85) {
       insights.push({ type: "warning", text: `Beladingsgraad is ${loadPct}%, vloot nadert maximale capaciteit` });
     }
-    const plannedCount = orders.filter(o => o.status === "PLANNED" || o.status === "IN_TRANSIT").length;
-    if (plannedCount > 0) {
-      insights.push({ type: "info", text: `${plannedCount} ritten actief gepland, capaciteit wordt gemonitord` });
+    if (stats.plannedOrInTransit > 0) {
+      insights.push({ type: "info", text: `${stats.plannedOrInTransit} ritten actief gepland, capaciteit wordt gemonitord` });
     }
-    const delivered = stats.byStatus["DELIVERED"] || 0;
-    if (orders.length > 0 && delivered > 0) {
-      const deliveryRate = Math.round((delivered / orders.length) * 100);
+    if (stats.total > 0 && stats.delivered > 0) {
+      const deliveryRate = Math.round((stats.delivered / stats.total) * 100);
       insights.push({ type: "info", text: `Leveringsratio: ${deliveryRate}% van alle orders succesvol afgeleverd` });
     }
     if (insights.length === 0) {
       insights.push({ type: "info", text: "Alle systemen operationeel, geen bijzonderheden gedetecteerd" });
     }
     return insights.slice(0, 4);
-  }, [orders, vehicles, stats]);
+  }, [vehicles, stats]);
 
   if (isLoading) return <LoadingState message="Dashboard laden..." />;
-  if (isError) return <QueryError message="Kan dashboardgegevens niet laden." onRetry={() => { refetchOrders(); refetchVehicles(); }} />;
+  if (isError || !stats) return <QueryError message="Kan dashboardgegevens niet laden." onRetry={() => { refetchStats(); refetchRecent(); refetchVehicles(); }} />;
 
   return (
     <div className="-m-6 min-h-[calc(100vh-3rem)] flex flex-col bg-muted/30">
@@ -134,19 +120,20 @@ const Dashboard = () => {
           <KPIStrip
             columns={6}
             items={[
-              { label: "Totaal orders", value: orders.length, icon: BarChart3, iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
+              { label: "Totaal orders", value: stats.total, icon: BarChart3, iconColor: "text-blue-600", iconBg: "bg-blue-500/10" },
               { label: "Voertuigen", value: vehicles.length, icon: Truck, iconColor: "text-violet-600", iconBg: "bg-violet-500/10" },
-              { label: "Nieuw", value: (stats.byStatus["DRAFT"] || 0) + (stats.byStatus["PENDING"] || 0), icon: CircleDot, iconColor: "text-sky-600", iconBg: "bg-sky-500/10" },
-              { label: "Onderweg", value: stats.byStatus["IN_TRANSIT"] || 0, icon: Navigation, iconColor: "text-primary", iconBg: "bg-primary/10" },
-              { label: "Afgeleverd", value: stats.byStatus["DELIVERED"] || 0, icon: CheckCircle2, iconColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
-              { label: "Achterstallig", value: stats.overdueOrders.length, icon: Timer, iconColor: stats.overdueOrders.length > 0 ? "text-destructive" : "text-muted-foreground", iconBg: stats.overdueOrders.length > 0 ? "bg-destructive/10" : "bg-muted" },
+              { label: "Nieuw", value: stats.nieuw, icon: CircleDot, iconColor: "text-sky-600", iconBg: "bg-sky-500/10" },
+              { label: "Onderweg", value: stats.inTransit, icon: Navigation, iconColor: "text-primary", iconBg: "bg-primary/10" },
+              { label: "Afgeleverd", value: stats.delivered, icon: CheckCircle2, iconColor: "text-emerald-600", iconBg: "bg-emerald-500/10" },
+              { label: "Achterstallig", value: stats.overdue, icon: Timer, iconColor: stats.overdue > 0 ? "text-destructive" : "text-muted-foreground", iconBg: stats.overdue > 0 ? "bg-destructive/10" : "bg-muted" },
             ]}
           />
 
-          {/* Financial & Forecast widgets */}
+          {/* Financial & Forecast widgets, KPI's uit eigen DB-RPC's zodat
+              aggregaties correct zijn bij miljoenen orders. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <FinancialKPIWidget orders={orders} vehicles={vehicles} />
-            <OperationalForecastWidget vehicles={vehicles} orders={orders} />
+            <FinancialKPIWidget vehicles={vehicles} />
+            <OperationalForecastWidget vehicles={vehicles} />
           </div>
 
           {/* Margin widget */}

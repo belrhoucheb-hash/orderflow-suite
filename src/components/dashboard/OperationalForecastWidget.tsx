@@ -1,22 +1,20 @@
 import { CalendarPlus, Container } from "lucide-react";
 import { motion } from "framer-motion";
-import type { Order } from "@/data/mockData";
 import type { FleetVehicle } from "@/hooks/useVehicles";
+import { useDashboardForecastStats } from "@/hooks/useDashboardForecastStats";
 
 interface Props {
   vehicles: FleetVehicle[];
-  orders: Order[];
 }
 
-export function OperationalForecastWidget({ vehicles, orders }: Props) {
-  const totalVehicles = vehicles.length || 1;
-  // Orders with status IN_TRANSIT or PLANNED = planned/active
-  const plannedCount = orders.filter((o) => o.status === "IN_TRANSIT" || o.status === "PLANNED").length;
-  const freeCount = Math.max(totalVehicles - plannedCount, 0);
+export function OperationalForecastWidget({ vehicles }: Props) {
+  const { data: stats } = useDashboardForecastStats();
 
-  // Pallet count from orders (exclude completed/cancelled)
-  const palletOrders = orders.filter((o) => o.status !== "DELIVERED" && o.status !== "CANCELLED");
-  const totalPallets = palletOrders.reduce((s, o) => s + (o.items?.length || 0), 0);
+  const totalVehicles = vehicles.length || 1;
+  const plannedCount = stats?.plannedOrInTransit ?? 0;
+  const freeCount = Math.max(totalVehicles - plannedCount, 0);
+  const activeOrderCount = stats?.activeOrderCount ?? 0;
+  const activeWeightKg = stats?.activeTotalWeightKg ?? 0;
 
   return (
     <motion.div
@@ -51,7 +49,7 @@ export function OperationalForecastWidget({ vehicles, orders }: Props) {
           </div>
           <div className="flex gap-0.5 mt-2.5 h-1.5 rounded-full overflow-hidden">
             <div className="bg-emerald-500 rounded-l-full" style={{ width: `${(freeCount / totalVehicles) * 100}%` }} />
-            <div className="rounded-r-full" style={{ background: "hsl(var(--gold-deep))" }} style={{ width: `${(plannedCount / totalVehicles) * 100}%` }} />
+            <div className="rounded-r-full" style={{ background: "hsl(var(--gold-deep))", width: `${(plannedCount / totalVehicles) * 100}%` }} />
           </div>
         </div>
 
@@ -61,9 +59,9 @@ export function OperationalForecastWidget({ vehicles, orders }: Props) {
             <Container className="h-8 w-8 text-muted-foreground/30" />
             <div>
               <p className="text-lg font-bold font-display tabular-nums">
-                {orders.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
+                {activeWeightKg.toLocaleString()} kg
               </p>
-              <p className="text-xs text-muted-foreground/60">{orders.length} orders</p>
+              <p className="text-xs text-muted-foreground/60">{activeOrderCount} actieve orders</p>
             </div>
           </div>
         </div>

@@ -35,6 +35,24 @@ const { mockUseOrders, mockUseVehicles } = vi.hoisted(() => {
 
 vi.mock("@/hooks/useOrders", () => ({ useOrders: mockUseOrders }));
 vi.mock("@/hooks/useVehicles", () => ({ useVehicles: mockUseVehicles }));
+vi.mock("@/hooks/useDashboardStats", () => ({
+  useDashboardStats: vi.fn(() => ({
+    data: {
+      total: 3,
+      byStatus: { DELIVERED: 1, IN_TRANSIT: 1, PENDING: 1 },
+      overdue: 1,
+      totalWeightKg: 2000,
+      spoed: 1,
+      inTransit: 1,
+      plannedOrInTransit: 1,
+      delivered: 1,
+      nieuw: 1,
+    },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  })),
+}));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({ effectiveRole: "admin", session: { user: { id: "test-user" } }, loading: false }),
 }));
