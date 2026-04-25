@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Database,
@@ -11,6 +11,10 @@ import {
   Truck,
   FileText,
   Calculator,
+  AlertTriangle,
+  CheckCircle2,
+  Bell,
+  ShieldCheck,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -30,6 +34,8 @@ import {
   useIntegrationCredentials,
   useSaveIntegrationCredentials,
 } from "@/hooks/useIntegrationCredentials";
+import { useConnectorList } from "@/hooks/useConnectors";
+import { useSaveSmsSettings, useSmsSettings } from "@/hooks/useSmsSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { useUpdateTenantBranding } from "@/hooks/useUpdateTenant";
 import { RateCardSettings } from "@/components/settings/RateCardSettings";
@@ -68,6 +74,88 @@ interface NavItem {
 interface NavGroup {
   title: string;
   items: NavItem[];
+}
+
+function SettingsStatusCard({
+  title,
+  value,
+  note,
+  tone = "default",
+  icon: Icon,
+}: {
+  title: string;
+  value: string;
+  note: string;
+  tone?: "default" | "warning";
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+}) {
+  const warning = tone === "warning";
+
+  return (
+    <div className="card--luxe p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{title}</p>
+          <div className="mt-2 text-[2rem] leading-none font-semibold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+            {value}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{note}</p>
+        </div>
+        <div
+          className={cn(
+            "h-10 w-10 rounded-xl flex items-center justify-center border",
+            warning
+              ? "border-amber-200 bg-amber-50 text-amber-700"
+              : "border-[hsl(var(--gold)/0.22)] bg-[hsl(var(--gold-soft)/0.22)] text-[hsl(var(--gold-deep))]",
+          )}
+        >
+          <Icon className="h-4 w-4" strokeWidth={1.7} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsOverviewCard({
+  title,
+  description,
+  icon: Icon,
+  items,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  items: Array<{ label: string; status: string; subtle?: boolean }>;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="card--luxe p-5 text-left transition-all hover:shadow-md hover:border-[hsl(var(--gold)/0.24)] group"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className={LUXE_ICON_TILE} style={LUXE_ICON_TILE_STYLE}>
+          <Icon className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+        </div>
+        <ChevronRight className="h-4 w-4 text-[hsl(var(--gold)/0.45)] transition-colors group-hover:text-[hsl(var(--gold-deep))]" />
+      </div>
+      <h3 className="mt-4 text-base font-semibold text-foreground">{title}</h3>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+
+      <div className="mt-4 space-y-2.5">
+        {items.map((item) => (
+          <div key={item.label} className="flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--gold)/0.08)] px-3 py-2">
+            <span className="text-sm text-foreground">{item.label}</span>
+            <span className={cn("text-[11px]", item.subtle ? "text-muted-foreground" : "font-medium text-[hsl(var(--gold-deep))]")}>
+              {item.status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </button>
+  );
 }
 
 const NAV_GROUPS: NavGroup[] = [
@@ -324,17 +412,18 @@ const Settings = () => {
   // -- Settings persistence hooks --
   const { data: savedIntegrations } = useLoadSettings<typeof integrations>("integrations");
   const { data: savedNotifications } = useLoadSettings<typeof notifications>("notifications");
-  const { data: savedSms } = useLoadSettings<Record<string, any>>("sms");
+  const { data: savedSms } = useSmsSettings();
 
   const saveIntegrations = useSaveSettings("integrations");
   const saveNotifications = useSaveSettings("notifications");
-  const saveSms = useSaveSettings("sms");
+  const saveSms = useSaveSmsSettings();
 
   // Baseline-state voor dirty-detectie per tab. Wordt gezet na load-
   // succes en na save-succes, dan is de huidige state "schoon".
   const [notificationsBaseline, setNotificationsBaseline] = useState<string>("");
   const [smsBaseline, setSmsBaseline] = useState<string>("");
   const [integrationsBaseline, setIntegrationsBaseline] = useState<string>("");
+  const connectorList = useConnectorList();
 
   // Load saved settings into state when fetched
   useEffect(() => {
@@ -365,18 +454,18 @@ const Settings = () => {
     if (savedSms && Object.keys(savedSms).length > 0) {
       if (savedSms.smsProvider) setSmsProvider(savedSms.smsProvider);
       if (savedSms.twilioAccountSid) setTwilioAccountSid(savedSms.twilioAccountSid);
-      if (savedSms.twilioAuthToken) setTwilioAuthToken(savedSms.twilioAuthToken);
+      setTwilioAuthToken(savedSms.twilioAuthToken ?? "");
       if (savedSms.twilioFromNumber) setTwilioFromNumber(savedSms.twilioFromNumber);
-      if (savedSms.messageBirdApiKey) setMessageBirdApiKey(savedSms.messageBirdApiKey);
+      setMessageBirdApiKey(savedSms.messageBirdApiKey ?? "");
       if (savedSms.messageBirdOriginator) setMessageBirdOriginator(savedSms.messageBirdOriginator);
       if (savedSms.smsEvents) setSmsEvents(prev => ({ ...prev, ...savedSms.smsEvents }));
       if (savedSms.smsTemplate) setSmsTemplate(savedSms.smsTemplate);
       setSmsBaseline(JSON.stringify({
         smsProvider: savedSms.smsProvider ?? "twilio",
         twilioAccountSid: savedSms.twilioAccountSid ?? "",
-        twilioAuthToken: savedSms.twilioAuthToken ?? "",
+        twilioAuthToken: "",
         twilioFromNumber: savedSms.twilioFromNumber ?? "",
-        messageBirdApiKey: savedSms.messageBirdApiKey ?? "",
+        messageBirdApiKey: "",
         messageBirdOriginator: savedSms.messageBirdOriginator ?? "",
         smsEvents: { onderweg: true, afgeleverd: true, vertraging: false, ...(savedSms.smsEvents ?? {}) },
         smsTemplate: savedSms.smsTemplate ?? "",
@@ -449,8 +538,14 @@ const Settings = () => {
         smsProvider, twilioAccountSid, twilioAuthToken, twilioFromNumber,
         messageBirdApiKey, messageBirdOriginator, smsEvents, smsTemplate,
       };
-      await saveSms.mutateAsync(payload);
-      setSmsBaseline(JSON.stringify(payload));
+      await saveSms.mutateAsync(payload as any);
+      setTwilioAuthToken("");
+      setMessageBirdApiKey("");
+      setSmsBaseline(JSON.stringify({
+        ...payload,
+        twilioAuthToken: "",
+        messageBirdApiKey: "",
+      }));
       toast.success("SMS instellingen opgeslagen");
     } catch {
       toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
@@ -493,6 +588,125 @@ const Settings = () => {
     else navigate(`/settings/${value}`);
   };
 
+  const activeTab = getActiveTab();
+  const connectorSummary = useMemo(() => {
+    const items = connectorList.data ?? [];
+    return {
+      total: items.length,
+      active: items.filter((item) => item.enabled).length,
+      connected: items.filter((item) => item.enabled && item.hasCredentials).length,
+      incomplete: items.filter((item) => item.enabled && !item.hasCredentials).length,
+    };
+  }, [connectorList.data]);
+
+  const smsConfigured = useMemo(() => {
+    if (smsProvider === "twilio") {
+      return Boolean(
+        twilioAccountSid &&
+        twilioFromNumber &&
+        (twilioAuthToken || savedSms?.hasTwilioAuthToken),
+      );
+    }
+
+    return Boolean(
+      messageBirdOriginator &&
+      (messageBirdApiKey || savedSms?.hasMessageBirdApiKey),
+    );
+  }, [
+    messageBirdApiKey,
+    messageBirdOriginator,
+    savedSms?.hasMessageBirdApiKey,
+    savedSms?.hasTwilioAuthToken,
+    smsProvider,
+    twilioAccountSid,
+    twilioAuthToken,
+    twilioFromNumber,
+  ]);
+
+  const attentionItems = useMemo(() => {
+    const items: Array<{ title: string; description: string; target: string }> = [];
+
+    if (!logoPreview) {
+      items.push({
+        title: "Branding nog niet compleet",
+        description: "Voeg een logo toe zodat login, portal en documenten consistenter ogen.",
+        target: "branding",
+      });
+    }
+
+    if (!smsConfigured) {
+      items.push({
+        title: "SMS-configuratie onvolledig",
+        description: "Klantmeldingen kunnen nog niet volledig betrouwbaar worden verstuurd.",
+        target: "sms",
+      });
+    }
+
+    if (connectorSummary.connected === 0) {
+      items.push({
+        title: "Nog geen actieve koppelingen",
+        description: "Er is nog geen externe integratie volledig verbonden met de omgeving.",
+        target: "integraties",
+      });
+    } else if (connectorSummary.incomplete > 0) {
+      items.push({
+        title: "Integraties vragen aandacht",
+        description: `${connectorSummary.incomplete} koppeling${connectorSummary.incomplete === 1 ? "" : "en"} mist nog volledige configuratie.`,
+        target: "integraties",
+      });
+    }
+
+    if (Object.values(notifications).every((value) => value === false)) {
+      items.push({
+        title: "Geen notificaties actief",
+        description: "Belangrijke operationele meldingen staan volledig uitgeschakeld.",
+        target: "notificaties",
+      });
+    }
+
+    return items.slice(0, 4);
+  }, [connectorSummary.connected, connectorSummary.incomplete, logoPreview, notifications, smsConfigured]);
+
+  const nextSteps = useMemo(() => {
+    const steps: Array<{ title: string; description: string; target: string }> = [];
+
+    if (!logoPreview) {
+      steps.push({
+        title: "Werk de branding af",
+        description: "Upload een logo en controleer de primaire kleur.",
+        target: "branding",
+      });
+    }
+    if (!smsConfigured) {
+      steps.push({
+        title: "Rond klantmeldingen af",
+        description: "Maak de SMS-provider compleet voor onderweg- en afleverberichten.",
+        target: "sms",
+      });
+    }
+    if (connectorSummary.connected === 0) {
+      steps.push({
+        title: "Verbind je eerste integratie",
+        description: "Start met boekhouding of Nostradamus om operationele data te synchroniseren.",
+        target: "integraties",
+      });
+    }
+    if (steps.length === 0) {
+      steps.push({
+        title: "Controleer ETA en inboxen",
+        description: "Loop communicatiekanalen na zodat planners en klanten dezelfde flow volgen.",
+        target: "eta-meldingen",
+      });
+      steps.push({
+        title: "Loop beheerrechten langs",
+        description: "Controleer gebruikers en toegangsniveaus voor admins en planners.",
+        target: "algemeen",
+      });
+    }
+
+    return steps.slice(0, 3);
+  }, [connectorSummary.connected, logoPreview, smsConfigured]);
+
   return (
     <div className="flex flex-col gap-6 h-full pb-12">
       <PageHeader
@@ -503,7 +717,7 @@ const Settings = () => {
       <SettingsCommandPalette />
 
       <Tabs
-        value={getActiveTab()}
+        value={activeTab}
         onValueChange={handleTabChange}
         className="flex-1 flex gap-6 min-h-0"
       >
@@ -524,7 +738,7 @@ const Settings = () => {
                 </p>
                 <div className="space-y-0.5">
                   {group.items.map((item) => {
-                    const active = getActiveTab() === item.value;
+                    const active = activeTab === item.value;
                     return (
                       <button
                         key={item.value}
@@ -554,79 +768,171 @@ const Settings = () => {
         <div className="flex-1 min-w-0 pb-6">
 
         <TabsContent value="algemeen" className="space-y-6 outline-none">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <button
-              type="button"
-              onClick={() => handleTabChange("stamgegevens")}
-              className="card--luxe p-5 text-left hover:shadow-md transition-all group"
-            >
-              <div className={LUXE_ICON_TILE} style={LUXE_ICON_TILE_STYLE}>
-                <Database className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <SettingsStatusCard
+                  title="Integraties actief"
+                  value={String(connectorSummary.connected)}
+                  note={`${connectorSummary.total} beschikbaar`}
+                  tone={connectorSummary.connected > 0 ? "default" : "warning"}
+                  icon={ShieldCheck}
+                />
+                <SettingsStatusCard
+                  title="Communicatie gereed"
+                  value={smsConfigured ? "Ja" : "Actie"}
+                  note={`${Object.values(notifications).filter(Boolean).length} meldingen actief`}
+                  tone={smsConfigured ? "default" : "warning"}
+                  icon={Bell}
+                />
+                <SettingsStatusCard
+                  title="Open aandachtspunten"
+                  value={String(attentionItems.length)}
+                  note={attentionItems.length === 0 ? "Omgeving oogt stabiel" : "Vraagt nog afronding"}
+                  tone={attentionItems.length === 0 ? "default" : "warning"}
+                  icon={AlertTriangle}
+                />
               </div>
-              <h3 className="mt-3 text-base font-semibold text-foreground">Stamgegevens</h3>
-              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                Beheer voertuigtypes, ladingeenheden en transportvereisten.
-              </p>
-              <div className="mt-3 flex items-center justify-end">
-                <ChevronRight className="h-4 w-4 text-[hsl(var(--gold)/0.4)] group-hover:text-[hsl(var(--gold-deep))] transition-colors" />
-              </div>
-            </button>
 
-            <button
-              type="button"
-              onClick={() => navigate("/users")}
-              className="card--luxe p-5 text-left hover:shadow-md transition-all group"
-            >
-              <div className={LUXE_ICON_TILE} style={LUXE_ICON_TILE_STYLE}>
-                <Users className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+              <div className="grid gap-4 md:grid-cols-2">
+                <SettingsOverviewCard
+                  title="Bedrijf"
+                  description="Houd merk, taal en teaminstellingen rustig en consistent op één plek."
+                  icon={Palette}
+                  onClick={() => handleTabChange("branding")}
+                  items={[
+                    { label: "Branding en kleuren", status: logoPreview ? "Klaar" : "Aanvullen" },
+                    { label: "Taal van de omgeving", status: LANGUAGE_OPTIONS.find((opt) => opt.value === currentLang)?.label ?? "Nederlands" },
+                    { label: "Gebruikersbeheer", status: "Beheren", subtle: true },
+                  ]}
+                />
+                <SettingsOverviewCard
+                  title="Operations"
+                  description="De kern van je operationele model: masterdata, roosters en prijslogica."
+                  icon={Truck}
+                  onClick={() => handleTabChange("stamgegevens")}
+                  items={[
+                    { label: "Stamgegevens", status: "Actief" },
+                    { label: "Rooster-types", status: "Beschikbaar" },
+                    { label: "Tarieven en kosten", status: "Onderhoud", subtle: true },
+                  ]}
+                />
+                <SettingsOverviewCard
+                  title="Communicatie"
+                  description="Bepaal hoe klanten en planners updates, ETA’s en berichten ontvangen."
+                  icon={Smartphone}
+                  onClick={() => handleTabChange("sms")}
+                  items={[
+                    { label: "SMS", status: smsConfigured ? "Klaar" : "Niet compleet" },
+                    { label: "Notificaties", status: `${Object.values(notifications).filter(Boolean).length} actief` },
+                    { label: "Inboxen en ETA", status: "Controleren", subtle: true },
+                  ]}
+                />
+                <SettingsOverviewCard
+                  title="Platform & integraties"
+                  description="Verbind externe systemen en beheer technische toegang vanuit één kalme cluster."
+                  icon={Database}
+                  onClick={() => handleTabChange("integraties")}
+                  items={[
+                    { label: "Connectoren", status: `${connectorSummary.connected} verbonden` },
+                    { label: "Webhooks", status: "Beschikbaar", subtle: true },
+                    { label: "API-tokens", status: "Beheer", subtle: true },
+                  ]}
+                />
               </div>
-              <h3 className="mt-3 text-base font-semibold text-foreground">Gebruikersbeheer</h3>
-              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                Beheer medewerkers en toegangsrechten.
-              </p>
-              <div className="mt-3 flex items-center justify-end">
-                <ChevronRight className="h-4 w-4 text-[hsl(var(--gold)/0.4)] group-hover:text-[hsl(var(--gold-deep))] transition-colors" />
-              </div>
-            </button>
 
-            <button
-              type="button"
-              onClick={() => handleTabChange("branding")}
-              className="card--luxe p-5 text-left hover:shadow-md transition-all group"
-            >
-              <div className={LUXE_ICON_TILE} style={LUXE_ICON_TILE_STYLE}>
-                <Palette className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+              <div className="card--luxe p-5">
+                <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                  {t('settings.language')}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                  {t('settings.languageDescription')}
+                </p>
+                <div className="max-w-xs mt-4">
+                  <Select value={currentLang} onValueChange={handleLanguageChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <h3 className="mt-3 text-base font-semibold text-foreground">Branding en kleuren</h3>
-              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                Pas het thema, logo en kleuren van je platform aan.
-              </p>
-              <div className="mt-3 flex items-center justify-end">
-                <ChevronRight className="h-4 w-4 text-[hsl(var(--gold)/0.4)] group-hover:text-[hsl(var(--gold-deep))] transition-colors" />
-              </div>
-            </button>
-          </div>
+            </div>
 
-          <div className="card--luxe p-5 mt-6">
-            <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
-              {t('settings.language')}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              {t('settings.languageDescription')}
-            </p>
-            <div className="max-w-xs mt-4">
-              <Select value={currentLang} onValueChange={handleLanguageChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LANGUAGE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
+            <div className="space-y-4">
+              <div className="card--luxe p-5 space-y-4">
+                <div>
+                  <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                    Aandacht nodig
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Alleen de punten die de omgeving echt nog moeten afronden.
+                  </p>
+                </div>
+                {attentionItems.length === 0 ? (
+                  <div className="rounded-xl border border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.14)] px-4 py-3 text-sm text-foreground">
+                    Geen directe aandachtspunten gevonden.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {attentionItems.map((item) => (
+                      <button
+                        key={item.title}
+                        type="button"
+                        onClick={() => handleTabChange(item.target)}
+                        className="w-full rounded-xl border border-[hsl(var(--gold)/0.14)] px-4 py-3 text-left transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-foreground">{item.title}</div>
+                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="card--luxe p-5 space-y-4">
+                <div>
+                  <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                    Volgende stappen
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Kleine aanbevelingen om de omgeving compleet en strak te houden.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {nextSteps.map((step, index) => (
+                    <button
+                      key={step.title}
+                      type="button"
+                      onClick={() => handleTabChange(step.target)}
+                      className="w-full rounded-xl border border-[hsl(var(--gold)/0.1)] px-4 py-3 text-left transition-colors hover:bg-[hsl(var(--gold-soft)/0.14)]"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[hsl(var(--gold)/0.18)] text-[11px] font-semibold text-[hsl(var(--gold-deep))]">
+                          {index + 1}
+                        </span>
+                        <div>
+                          <div className="text-sm font-medium text-foreground">{step.title}</div>
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.description}</p>
+                        </div>
+                      </div>
+                    </button>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              </div>
             </div>
           </div>
         </TabsContent>
@@ -1209,7 +1515,7 @@ const Settings = () => {
       </Tabs>
 
       {/* Actieve tab bepaalt welke save-bar zichtbaar is. Slechts één tegelijk. */}
-      {getActiveTab() === "branding" && (
+      {activeTab === "branding" && (
         <StickySaveBar
           dirty={brandingDirty}
           saving={updateBranding.isPending}
@@ -1218,7 +1524,7 @@ const Settings = () => {
           label="Branding heeft niet-opgeslagen wijzigingen"
         />
       )}
-      {getActiveTab() === "notificaties" && (
+      {activeTab === "notificaties" && (
         <StickySaveBar
           dirty={notificationsDirty}
           saving={saveNotifications.isPending}
@@ -1227,7 +1533,7 @@ const Settings = () => {
           label="Notificaties hebben niet-opgeslagen wijzigingen"
         />
       )}
-      {getActiveTab() === "sms" && (
+      {activeTab === "sms" && (
         <StickySaveBar
           dirty={smsDirty}
           saving={saveSms.isPending}
@@ -1237,7 +1543,7 @@ const Settings = () => {
         />
       )}
       {/* Save-bar uit voor integraties: nieuwe connector-UI heeft per-tab save-knoppen. */}
-      {false && getActiveTab() === "integraties" && (
+      {false && activeTab === "integraties" && (
         <StickySaveBar
           dirty={integrationsDirty || snelstartDirty}
           saving={saveIntegrations.isPending || saveSnelstart.isPending}
