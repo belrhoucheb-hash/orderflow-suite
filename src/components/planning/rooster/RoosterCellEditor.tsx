@@ -1,8 +1,8 @@
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { nl } from "date-fns/locale";
-import { Trash2 } from "lucide-react";
+import { AlertTriangle, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,14 @@ import {
 import { useDriverSchedules } from "@/hooks/useDriverSchedules";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
+import { useVehicleAvailability } from "@/hooks/useVehicleAvailability";
+import {
+  useSchedulePatterns,
+  type DayOfWeek,
+} from "@/hooks/useSchedulePatterns";
 import type { Driver } from "@/hooks/useDrivers";
+import { useRoosterEligibility } from "@/hooks/useRoosterEligibility";
+import { checkVehicleAvailability } from "@/lib/roosterEligibility";
 import type {
   DriverSchedule,
   DriverScheduleStatus,
@@ -82,6 +89,90 @@ export function RoosterCellEditor({
   const isDeleting = deleteSchedule.isPending;
 
   const dateLabel = format(parseISO(date), "EEEE d MMMM", { locale: nl });
+
+  // Voor de eligibility-checks op het huidig gekozen voertuig.
+  const eligibility = useRoosterEligibility({
+    driverId: driver.id,
+    date,
+    vehicleId: vehicleId === NONE ? null : vehicleId,
+    startTime: startTime || null,
+    endTime: endTime || null,
+  });
+
+  // Aparte query voor voertuig-availability per dag, zodat we per item in
+  // de Select kunnen markeren of dat voertuig op deze datum beschikbaar is.
+  const { data: vehicleAvailabilityRows = [] } = useVehicleAvailability(date);
+  const vehicleAvailabilityIssues = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of vehicles) {
+      const r = checkVehicleAvailability(v.id, date, vehicleAvailabilityRows);
+      if (!r.ok && r.reason) map.set(v.id, r.reason);
+    }
+    return map;
+  }, [vehicles, date, vehicleAvailabilityRows]);
+
+  const { patterns } = useSchedulePatterns(driver.id);
+  const dayOfWeek = useMemo(
+    () => parseISO(date).getDay() as DayOfWeek,
+    [date],
+  );
+  const suggestion = patterns.get(dayOfWeek) ?? null;
+
+  const suggestedTemplate = suggestion?.shift_template_id
+    ? templates.find((t) => t.id === suggestion.shift_template_id) ?? null
+    : null;
+  const suggestedVehicle = suggestion?.vehicle_id
+    ? vehicles.find((v) => v.id === suggestion.vehicle_id) ?? null
+    : null;
+  const suggestedStartTime =
+    suggestion?.start_time ?? suggestedTemplate?.default_start_time ?? null;
+  const suggestedEndTime = suggestedTemplate?.default_end_time ?? null;
+
+  // Tile alleen tonen als:
+  // - er een patroon is voor deze dag-van-week (>= 3 samples) en het
+  //   levert iets bruikbaars op (rooster of voertuig of starttijd),
+  // - de form-state nog leeg is (gebruiker heeft niets gekozen),
+  // - of de form-state al matcht met de suggestie (dan is toepassen
+  //   onnodig en verwarrend).
+  const formIsEmpty =
+    shiftTemplateId === NONE &&
+    vehicleId === NONE &&
+    startTime === "" &&
+    endTime === "" &&
+    status === "werkt";
+
+  const hasUsefulSuggestion =
+    !!suggestion &&
+    (suggestion.shift_template_id ||
+      suggestion.vehicle_id ||
+      suggestion.start_time);
+
+  const showSuggestion = hasUsefulSuggestion && formIsEmpty;
+
+  function applySuggestion() {
+    if (!suggestion) return;
+    setStatus("werkt");
+    if (suggestion.shift_template_id) {
+      setShiftTemplateId(suggestion.shift_template_id);
+    }
+    if (suggestedStartTime) setStartTime(suggestedStartTime);
+    if (suggestedEndTime) setEndTime(suggestedEndTime);
+    if (suggestion.vehicle_id) {
+      setVehicleId(suggestion.vehicle_id);
+    }
+  }
+
+  const suggestionParts: string[] = [];
+  if (suggestedTemplate) suggestionParts.push(suggestedTemplate.name);
+  if (suggestedStartTime) suggestionParts.push(suggestedStartTime);
+  if (suggestedVehicle) {
+    suggestionParts.push(
+      suggestedVehicle.plate
+        ? `${suggestedVehicle.code} (${suggestedVehicle.plate})`
+        : suggestedVehicle.code,
+    );
+  }
+  const suggestionText = suggestionParts.join(", ");
 
   async function handleSave() {
     try {
@@ -160,6 +251,30 @@ export function RoosterCellEditor({
       </div>
 
       <div className="space-y-2.5">
+        {showSuggestion && suggestionText && (
+          <div
+            className="card--luxe p-3 flex items-start gap-2.5"
+            style={displayFont}
+          >
+            <Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-[hsl(var(--gold-deep))]" />
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]/80">
+                Voorspelling op basis van laatste 8 weken
+              </div>
+              <div className="text-xs text-foreground/90 leading-snug">
+                {suggestionText}
+              </div>
+              <button
+                type="button"
+                onClick={applySuggestion}
+                className="btn-luxe btn-luxe--primary text-xs h-7 px-2.5"
+              >
+                Toepassen
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-1">
           <Label className={labelClass} style={displayFont}>
             Status
@@ -253,14 +368,50 @@ export function RoosterCellEditor({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE}>Geen voertuig</SelectItem>
-              {vehicles.map((v) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {v.code}
-                  {v.plate ? ` , ${v.plate}` : ""}
-                </SelectItem>
-              ))}
+              {vehicles.map((v) => {
+                const issue = vehicleAvailabilityIssues.get(v.id);
+                return (
+                  <SelectItem key={v.id} value={v.id}>
+                    <span className="inline-flex items-center gap-1.5">
+                      {issue && (
+                        <AlertTriangle
+                          aria-label={issue}
+                          className="h-3.5 w-3.5 text-destructive shrink-0"
+                        />
+                      )}
+                      <span>
+                        {v.code}
+                        {v.plate ? ` , ${v.plate}` : ""}
+                      </span>
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
+
+          {statusAllowsTimes &&
+            vehicleId !== NONE &&
+            eligibility.hasIssue && (
+              <div
+                role="alert"
+                className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 px-2.5 py-2 text-[11px] flex items-start gap-2"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <ul className="text-amber-900 dark:text-amber-100 space-y-0.5 leading-snug">
+                  {!eligibility.vehicle.ok && eligibility.vehicle.message && (
+                    <li>{eligibility.vehicle.message}</li>
+                  )}
+                  {!eligibility.certification.ok &&
+                    eligibility.certification.message && (
+                      <li>{eligibility.certification.message}</li>
+                    )}
+                  {!eligibility.hours.ok && eligibility.hours.message && (
+                    <li>{eligibility.hours.message}</li>
+                  )}
+                </ul>
+              </div>
+            )}
         </div>
 
         <div className="space-y-1">

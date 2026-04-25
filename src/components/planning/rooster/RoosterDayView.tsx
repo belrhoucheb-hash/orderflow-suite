@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Printer, Search, Trash2, Wand2 } from "lucide-react";
+import { AlertTriangle, Eye, Printer, Search, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format, parseISO } from "date-fns";
 
@@ -36,6 +36,11 @@ import { useDrivers } from "@/hooks/useDrivers";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { useDriverSchedules } from "@/hooks/useDriverSchedules";
 import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
+import { useVehicleAvailability } from "@/hooks/useVehicleAvailability";
+import {
+  checkDriverCertificationForVehicle,
+  checkVehicleAvailability,
+} from "@/lib/roosterEligibility";
 
 import {
   DRIVER_SCHEDULE_STATUSES,
@@ -46,6 +51,7 @@ import {
 
 import { exportDayRosterPdf } from "./RoosterPdfExport";
 import { RoosterConflictBanner } from "./RoosterConflictBanner";
+import { RoosterCapacityBanner } from "./RoosterCapacityBanner";
 
 // Radix Select staat geen lege string toe als item-value, dus sentinel.
 const NONE = "__none__";
@@ -89,6 +95,7 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
   const { data: drivers = [], isLoading: driversLoading } = useDrivers();
   const { templates, isLoading: templatesLoading } = useShiftTemplates();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useVehiclesRaw();
+  const { data: vehicleAvailabilityRows = [] } = useVehicleAvailability(date);
   const {
     schedules,
     isLoading: schedulesLoading,
@@ -140,6 +147,35 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
     }
     return map;
   }, [vehicles]);
+
+  // Eligibility-issues per voertuig op deze datum, los van de chauffeur.
+  // De waarschuwing is dezelfde voor iedere rij, dus eenmaal voorberekenen.
+  const vehicleAvailabilityIssues = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of vehicles) {
+      const r = checkVehicleAvailability(v.id, date, vehicleAvailabilityRows);
+      if (!r.ok && r.reason) map.set(v.id, r.reason);
+    }
+    return map;
+  }, [vehicles, date, vehicleAvailabilityRows]);
+
+  // Returnt of een chauffeur+voertuig-combo een certificering-issue heeft
+  // voor deze datum. Wordt per rij gebruikt om dropdown-items te markeren.
+  const getCertificationIssue = useCallback(
+    (driverId: string, vehicleId: string): string | null => {
+      const driver = drivers.find((d) => d.id === driverId);
+      if (!driver) return null;
+      const vehicle = vehicles.find((v) => v.id === vehicleId);
+      const r = checkDriverCertificationForVehicle(
+        driver,
+        vehicle?.type ?? null,
+        date,
+      );
+      if (r.ok) return null;
+      return r.warnings.join(", ");
+    },
+    [drivers, vehicles, date],
+  );
 
   const activeDrivers = useMemo(
     () => drivers.filter((d) => d.is_active !== false),
@@ -464,6 +500,7 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
         driverNames={driverNames}
         vehicleLabels={vehicleLabels}
       />
+      <RoosterCapacityBanner from={date} to={date} />
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
@@ -819,38 +856,95 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
 
                       <TableCell>
                         {working ? (
-                          <Select
-                            value={effective.vehicle_id ?? NONE}
-                            onValueChange={(v) =>
-                              schedulePatch(
-                                driver.id,
-                                { vehicle_id: v === NONE ? null : v },
-                                false,
-                              )
-                            }
-                          >
-                            <SelectTrigger
-                              className={cn(LUXE_TRIGGER_CLASS, "tabular-nums")}
-                              style={LUXE_DISPLAY_STYLE}
-                            >
-                              <SelectValue placeholder="Geen" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={NONE} className="text-xs">
-                                Geen voertuig
-                              </SelectItem>
-                              {vehicles.map((v) => (
-                                <SelectItem
-                                  key={v.id}
-                                  value={v.id}
-                                  className="text-xs"
+                          (() => {
+                            const currentVehicleId = effective.vehicle_id;
+                            const currentAvailability = currentVehicleId
+                              ? vehicleAvailabilityIssues.get(currentVehicleId) ??
+                                null
+                              : null;
+                            const currentCertification = currentVehicleId
+                              ? getCertificationIssue(driver.id, currentVehicleId)
+                              : null;
+                            const triggerIssue =
+                              currentAvailability ?? currentCertification;
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <Select
+                                  value={effective.vehicle_id ?? NONE}
+                                  onValueChange={(v) =>
+                                    schedulePatch(
+                                      driver.id,
+                                      { vehicle_id: v === NONE ? null : v },
+                                      false,
+                                    )
+                                  }
                                 >
-                                  {v.code}
-                                  {v.plate ? ` (${v.plate})` : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                                  <SelectTrigger
+                                    className={cn(
+                                      LUXE_TRIGGER_CLASS,
+                                      "tabular-nums",
+                                    )}
+                                    style={LUXE_DISPLAY_STYLE}
+                                  >
+                                    <SelectValue placeholder="Geen" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value={NONE} className="text-xs">
+                                      Geen voertuig
+                                    </SelectItem>
+                                    {vehicles.map((v) => {
+                                      const availability =
+                                        vehicleAvailabilityIssues.get(v.id) ??
+                                        null;
+                                      const certification = getCertificationIssue(
+                                        driver.id,
+                                        v.id,
+                                      );
+                                      const issueText =
+                                        availability ?? certification;
+                                      return (
+                                        <SelectItem
+                                          key={v.id}
+                                          value={v.id}
+                                          className="text-xs"
+                                        >
+                                          <span className="inline-flex items-center gap-1.5">
+                                            {issueText && (
+                                              <AlertTriangle
+                                                aria-label={issueText}
+                                                className={cn(
+                                                  "h-3 w-3 shrink-0",
+                                                  availability
+                                                    ? "text-destructive"
+                                                    : "text-amber-600",
+                                                )}
+                                              />
+                                            )}
+                                            <span>
+                                              {v.code}
+                                              {v.plate ? ` (${v.plate})` : ""}
+                                            </span>
+                                          </span>
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                                {triggerIssue && (
+                                  <AlertTriangle
+                                    aria-label={triggerIssue}
+                                    title={triggerIssue}
+                                    className={cn(
+                                      "h-3.5 w-3.5 shrink-0",
+                                      currentAvailability
+                                        ? "text-destructive"
+                                        : "text-amber-600",
+                                    )}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })()
                         ) : (
                           <span className="text-xs text-muted-foreground">
                             n.v.t.
@@ -1127,16 +1221,40 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                             <SelectItem value={NONE} className="text-xs">
                               Geen voertuig
                             </SelectItem>
-                            {vehicles.map((v) => (
-                              <SelectItem
-                                key={v.id}
-                                value={v.id}
-                                className="text-xs"
-                              >
-                                {v.code}
-                                {v.plate ? ` (${v.plate})` : ""}
-                              </SelectItem>
-                            ))}
+                            {vehicles.map((v) => {
+                              const availability =
+                                vehicleAvailabilityIssues.get(v.id) ?? null;
+                              const certification = getCertificationIssue(
+                                driver.id,
+                                v.id,
+                              );
+                              const issueText = availability ?? certification;
+                              return (
+                                <SelectItem
+                                  key={v.id}
+                                  value={v.id}
+                                  className="text-xs"
+                                >
+                                  <span className="inline-flex items-center gap-1.5">
+                                    {issueText && (
+                                      <AlertTriangle
+                                        aria-label={issueText}
+                                        className={cn(
+                                          "h-3 w-3 shrink-0",
+                                          availability
+                                            ? "text-destructive"
+                                            : "text-amber-600",
+                                        )}
+                                      />
+                                    )}
+                                    <span>
+                                      {v.code}
+                                      {v.plate ? ` (${v.plate})` : ""}
+                                    </span>
+                                  </span>
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       </div>

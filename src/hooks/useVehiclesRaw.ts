@@ -12,6 +12,7 @@ export interface RawVehicle {
   code: string;
   plate: string;
   name: string;
+  type: string | null;
   is_active: boolean;
 }
 
@@ -23,7 +24,7 @@ export function useVehiclesRaw(options?: { includeInactive?: boolean }) {
     queryFn: async () => {
       let q = supabase
         .from("vehicles")
-        .select("id, code, plate, name, is_active")
+        .select("id, code, plate, name, type, is_active")
         .order("code", { ascending: true });
       if (!includeInactive) q = q.eq("is_active", true);
       const { data, error } = await q;
