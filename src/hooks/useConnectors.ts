@@ -1,0 +1,198 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
+import { toast } from "sonner";
+import {
+  CONNECTOR_CATALOG,
+  findConnector,
+  type ConnectorDefinition,
+} from "@/lib/connectors/catalog";
+
+// ─── Catalog merged with live status ────────────────────────────────
+
+export interface ConnectorWithStatus extends ConnectorDefinition {
+  enabled: boolean;
+  hasCredentials: boolean;
+}
+
+export function useConnectorList() {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["connectors_list", tenant?.id],
+    enabled: !!tenant?.id,
+    staleTime: 30_000,
+    queryFn: async (): Promise<ConnectorWithStatus[]> => {
+      const { data, error } = await supabase
+        .from("integration_credentials" as any)
+        .select("provider, enabled, credentials")
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+
+      const byProvider = new Map<string, { enabled: boolean; hasCreds: boolean }>();
+      for (const row of (data ?? []) as Array<{
+        provider: string;
+        enabled: boolean;
+        credentials: Record<string, unknown>;
+      }>) {
+        byProvider.set(row.provider, {
+          enabled: row.enabled,
+          hasCreds: Object.keys(row.credentials ?? {}).length > 0,
+        });
+      }
+
+      return CONNECTOR_CATALOG.map((c) => {
+        const live = byProvider.get(c.slug);
+        return {
+          ...c,
+          enabled: live?.enabled ?? false,
+          hasCredentials: live?.hasCreds ?? false,
+        };
+      });
+    },
+  });
+}
+
+export function useConnector(slug: string | null) {
+  const list = useConnectorList();
+  return {
+    ...list,
+    data: list.data?.find((c) => c.slug === slug) ?? (slug ? findConnector(slug) : undefined),
+  };
+}
+
+// ─── Mapping ────────────────────────────────────────────────────────
+
+export interface MappingRow {
+  key: string;
+  value: string;
+}
+
+export function useConnectorMapping(provider: string) {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["connector_mapping", tenant?.id, provider],
+    enabled: !!tenant?.id,
+    staleTime: 30_000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase
+        .from("integration_mapping" as any)
+        .select("key, value")
+        .eq("tenant_id", tenant!.id)
+        .eq("provider", provider);
+      if (error) throw error;
+      const out: Record<string, string> = {};
+      for (const row of (data ?? []) as MappingRow[]) out[row.key] = row.value;
+      return out;
+    },
+  });
+}
+
+export function useSaveConnectorMapping(provider: string) {
+  const { tenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (entries: Record<string, string>) => {
+      if (!tenant?.id) throw new Error("Geen tenant");
+      const rows = Object.entries(entries)
+        .filter(([, v]) => v !== "")
+        .map(([key, value]) => ({
+          tenant_id: tenant.id,
+          provider,
+          key,
+          value,
+        }));
+      if (rows.length === 0) return;
+      const { error } = await supabase
+        .from("integration_mapping" as any)
+        .upsert(rows, { onConflict: "tenant_id,provider,key" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["connector_mapping"] });
+      toast.success("Mapping opgeslagen");
+    },
+    onError: (err) => {
+      toast.error("Opslaan mislukt", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+}
+
+// ─── Sync log ───────────────────────────────────────────────────────
+
+export interface SyncLogRow {
+  id: string;
+  provider: string;
+  direction: "push" | "pull" | "test";
+  event_type: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  status: "SUCCESS" | "FAILED" | "SKIPPED";
+  records_count: number;
+  error_message: string | null;
+  duration_ms: number | null;
+  external_id: string | null;
+  started_at: string;
+}
+
+export function useConnectorSyncLog(provider: string) {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["connector_sync_log", tenant?.id, provider],
+    enabled: !!tenant?.id,
+    staleTime: 10_000,
+    queryFn: async (): Promise<SyncLogRow[]> => {
+      const { data, error } = await supabase
+        .from("integration_sync_log" as any)
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .eq("provider", provider)
+        .order("started_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return (data ?? []) as unknown as SyncLogRow[];
+    },
+  });
+}
+
+// ─── Test connection ────────────────────────────────────────────────
+
+export function useTestConnector(provider: string) {
+  const { tenant } = useTenant();
+  return useMutation({
+    mutationFn: async () => {
+      if (!tenant?.id) throw new Error("Geen tenant");
+      const { data, error } = await supabase.functions.invoke(`connector-${provider}`, {
+        body: { action: "test", tenant_id: tenant.id },
+      });
+      if (error) throw error;
+      return data as { ok: boolean; message: string };
+    },
+    onSuccess: (res) => {
+      if (res.ok) toast.success(res.message ?? "Verbinding werkt");
+      else toast.error("Verbinding mislukt", { description: res.message });
+    },
+    onError: (err) => {
+      toast.error("Test-call mislukt", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+}
+
+// ─── OAuth-flow start (Exact) ───────────────────────────────────────
+
+export function buildExactOAuthUrl(tenantId: string): string | null {
+  const clientId = (import.meta as any).env?.VITE_EXACT_CLIENT_ID;
+  const redirectUri = (import.meta as any).env?.VITE_EXACT_REDIRECT_URI;
+  if (!clientId || !redirectUri) return null;
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    state: tenantId,
+    force_login: "1",
+  });
+  return `https://start.exactonline.nl/api/oauth2/auth?${params.toString()}`;
+}
