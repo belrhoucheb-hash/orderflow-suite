@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Printer, Trash2 } from "lucide-react";
+import { Eye, Printer, Search, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
+import { addDays, format, parseISO } from "date-fns";
+
+import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,11 +93,16 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
     schedules,
     isLoading: schedulesLoading,
     upsertSchedule,
+    bulkUpsert,
     deleteSchedule,
   } = useDriverSchedules(date, date);
 
   // Filter-toggle: ook chauffeurs zonder rooster-rij tonen?
   const [showUnplanned, setShowUnplanned] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterTemplate, setFilterTemplate] = useState<string>("__all__");
+  const [filterStatus, setFilterStatus] = useState<string>("__all__");
+  const [actionsBusy, setActionsBusy] = useState(false);
 
   // Debounce-timers per driver_id voor field-level updates
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -166,11 +174,56 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
     });
   }, [activeDrivers, scheduleByDriver, templates]);
 
-  // Filter op zichtbare rijen: standaard alleen chauffeurs met een rij.
+  // Filter op zichtbare rijen: combinatie van toon-niet-geplande, zoek-naam,
+  // rooster-type en status.
   const visibleDrivers = useMemo(() => {
-    if (showUnplanned) return sortedDrivers;
-    return sortedDrivers.filter((d) => scheduleByDriver.has(d.id));
-  }, [sortedDrivers, scheduleByDriver, showUnplanned]);
+    const q = search.trim().toLowerCase();
+    return sortedDrivers.filter((d) => {
+      const sched = scheduleByDriver.get(d.id);
+      if (!showUnplanned && !sched) return false;
+      if (q && !d.name.toLowerCase().includes(q)) return false;
+      if (filterTemplate !== "__all__") {
+        if (filterTemplate === "__none__") {
+          if (sched?.shift_template_id) return false;
+        } else if (sched?.shift_template_id !== filterTemplate) {
+          return false;
+        }
+      }
+      if (filterStatus !== "__all__") {
+        const status = sched?.status ?? "werkt";
+        if (status !== filterStatus) return false;
+      }
+      return true;
+    });
+  }, [
+    sortedDrivers,
+    scheduleByDriver,
+    showUnplanned,
+    search,
+    filterTemplate,
+    filterStatus,
+  ]);
+
+  // Stats over alle actieve chauffeurs (niet alleen zichtbare), voor de balk.
+  const stats = useMemo(() => {
+    const counts = {
+      werkt: 0,
+      vrij: 0,
+      ziek: 0,
+      verlof: 0,
+      feestdag: 0,
+      ongepland: 0,
+    };
+    for (const d of activeDrivers) {
+      const s = scheduleByDriver.get(d.id);
+      if (!s) {
+        counts.ongepland += 1;
+      } else {
+        counts[s.status] += 1;
+      }
+    }
+    return counts;
+  }, [activeDrivers, scheduleByDriver]);
 
   const runUpsert = useCallback(
     (driverId: string, patch: Patch) => {
