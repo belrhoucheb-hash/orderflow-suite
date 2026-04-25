@@ -308,8 +308,8 @@ export function SourcePanel({
     >
       {/* Top bar */}
       <div
-        className="shrink-0 flex items-center gap-2 px-4 h-11 border-b"
-        style={{ borderColor: "hsl(var(--border) / 0.5)" }}
+        className="shrink-0 flex min-h-11 flex-wrap items-center gap-2 border-b px-4 py-2"
+        style={{ borderColor: "hsl(var(--gold) / 0.1)", background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.08), hsl(var(--card)))" }}
       >
         <button
           className="h-7 w-7 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 lg:hidden"
@@ -341,14 +341,14 @@ export function SourcePanel({
         )}
         <div className="ml-auto flex items-center gap-1">
           <button
-            className="h-7 w-7 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.2)] hover:text-foreground"
             aria-label="Vorige (K)"
             title="Vorige (K)"
           >
             <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
           </button>
           <button
-            className="h-7 w-7 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.2)] hover:text-foreground"
             aria-label="Volgende (J)"
             title="Volgende (J)"
           >
@@ -357,7 +357,7 @@ export function SourcePanel({
           <div className="relative">
             <button
               onClick={() => setShowMenu((s) => !s)}
-              className="h-7 w-7 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.2)] hover:text-foreground"
               aria-label="Meer"
             >
               <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
@@ -381,14 +381,14 @@ export function SourcePanel({
 
       <ScrollArea className="flex-1" style={{ minWidth: 0 }}>
         {/* Header: subject + avatar row */}
-        <div className="px-6 pt-5 pb-4">
+        <div className="px-4 pb-4 pt-4 md:px-6 md:pt-5">
           <h2
-            className="text-[20px] font-semibold leading-tight mb-3"
+            className="mb-3 text-[18px] font-semibold leading-tight md:text-[20px]"
             style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
           >
             {selected.source_email_subject || "Geen onderwerp"}
           </h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div
               className="h-9 w-9 rounded-full grid place-items-center text-white text-[12px] font-semibold shrink-0"
               style={{
@@ -443,11 +443,11 @@ export function SourcePanel({
         )}
 
         {/* Tools row */}
-        <div className="px-6 mb-3 flex items-center gap-2 justify-end">
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2 px-4 md:px-6">
           <button
             onClick={() => setLinkageOn((v) => !v)}
             className={cn(
-              "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border transition-colors",
+              "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11.5px] transition-colors",
               linkageOn
                 ? "text-foreground border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold-soft)/0.35)]"
                 : "text-muted-foreground border-border hover:text-foreground",
@@ -470,7 +470,7 @@ export function SourcePanel({
         </div>
 
         {/* Email body */}
-        <div className="px-6 pb-5 text-[14px] leading-[1.7]" style={{ color: "hsl(var(--foreground))" }}>
+        <div className="px-4 pb-5 text-[14px] leading-[1.7] md:px-6" style={{ color: "hsl(var(--foreground))" }}>
           {body ? (
             linkageOn && Array.isArray(highlightedBody) && typeof highlightedBody[0] !== "string" ? (
               (highlightedBody as any[]).map(({ nodes, i }) => (
@@ -492,7 +492,7 @@ export function SourcePanel({
 
         {/* Attachments */}
         {hasAttachments && (
-          <div className="px-6 pb-5">
+          <div className="px-4 pb-5 md:px-6">
             <p
               className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-2"
               style={{ fontFamily: "'Space Grotesk', sans-serif" }}

@@ -33,10 +33,10 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
   return (
     <div
       className={cn(
-        "relative w-full text-left cursor-pointer group transition-colors",
+        "group relative w-full cursor-pointer text-left transition-colors",
         "border-b",
         isSelected
-          ? "bg-[hsl(var(--gold-soft)/0.45)]"
+          ? "bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.28),hsl(var(--gold-soft)/0.14))]"
           : bulkMode && isBulkChecked
             ? "bg-[hsl(var(--muted)/0.55)]"
             : "hover:bg-[hsl(var(--muted)/0.35)]",
@@ -113,10 +113,10 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
       )}
 
       {/* Row 1: from + time */}
-      <div className="flex items-center gap-2 mb-[2px]">
+      <div className="mb-[3px] flex flex-wrap items-center gap-x-2 gap-y-1">
         <span
           className={cn(
-            "flex-1 min-w-0 truncate text-[13px]",
+            "min-w-0 flex-1 truncate text-[13px]",
             isUnread ? "font-semibold text-foreground" : "font-medium text-foreground/90",
           )}
           style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.005em" }}
@@ -125,11 +125,11 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
         </span>
         {draft.confidence_score !== null && draft.confidence_score !== undefined && (
           <span
-            className="shrink-0 text-[10px] font-semibold tabular-nums px-[7px] py-[1px] rounded-full"
+            className="shrink-0 rounded-full px-[7px] py-[1px] text-[10px] font-semibold tabular-nums"
             style={{
               fontFamily: "'Space Grotesk', sans-serif",
               color: "hsl(var(--gold-deep))",
-              background: "hsl(var(--gold-soft))",
+              background: "hsl(var(--gold-soft) / 0.85)",
             }}
           >
             ORD-{draft.order_number}
@@ -144,10 +144,10 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
       </div>
 
       {/* Row 2: subject */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <p
           className={cn(
-            "truncate leading-[1.4] text-[12.5px] flex-1 min-w-0",
+            "min-w-0 flex-1 truncate text-[12.5px] leading-[1.4]",
             isUnread ? "text-foreground font-medium" : "text-muted-foreground",
           )}
         >

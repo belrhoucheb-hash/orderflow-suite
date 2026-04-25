@@ -167,11 +167,11 @@ export function InboxReviewPanel({
       style={{ minWidth: 0, overflow: "hidden", background: "hsl(var(--background))" }}
     >
       <ScrollArea className="flex-1" style={{ minWidth: 0 }}>
-        <div className="px-5 pt-5 pb-40">
+        <div className="px-4 pt-4 pb-40 md:px-5 md:pt-5">
           {/* Header block */}
-          <div className="flex items-start justify-between mb-3 gap-3">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span
                   className="text-[10px] font-semibold tabular-nums px-[8px] py-[2px] rounded-full"
                   style={{
@@ -190,7 +190,7 @@ export function InboxReviewPanel({
                 </span>
               </div>
               <h2
-                className="text-[22px] font-semibold leading-tight truncate"
+                className="truncate text-[20px] font-semibold leading-tight md:text-[22px]"
                 style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
               >
                 {selected.client_name || "Onbekende klant"}
@@ -217,7 +217,7 @@ export function InboxReviewPanel({
                 {dept === "export" ? "Export" : "Operations"}
               </button>
               {followUpStatus && (
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className={cn("inline-flex items-center rounded-full border px-2.5 py-[3px] text-[11px] font-medium", followUpStatus.tone)}>
                     {followUpStatus.label}
                   </span>
@@ -229,9 +229,9 @@ export function InboxReviewPanel({
                 </div>
               )}
             </div>
-            <div className="flex flex-col items-center shrink-0">
+            <div className="flex shrink-0 flex-row items-center gap-3 self-start md:flex-col md:items-center md:gap-0">
               <span
-                className="text-[10px] tabular-nums text-muted-foreground mb-2 px-2 py-[2px] rounded-full"
+                className="mb-0 rounded-full px-2 py-[2px] text-[10px] tabular-nums text-muted-foreground md:mb-2"
                 style={{ background: "hsl(var(--muted) / 0.5)" }}
               >
                 {receivedAgo > 0 ? `${receivedAgo}u geleden` : "zojuist"}
@@ -309,7 +309,7 @@ export function InboxReviewPanel({
                 )}
               </div>
               <button
-                className="mt-1 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground"
+                className="mt-0 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground md:mt-1"
                 style={{ fontFamily: "'Space Grotesk', sans-serif" }}
               >
                 <HelpCircle className="h-3 w-3" strokeWidth={1.75} />
