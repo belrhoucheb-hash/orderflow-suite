@@ -725,6 +725,53 @@ const Settings = () => {
     return steps.slice(0, 3);
   }, [connectorSummary.connected, logoPreview, smsConfigured]);
 
+  const overviewCards = [
+    {
+      title: "Bedrijf",
+      description: "Merk, taal en team op een vaste plek.",
+      icon: Palette,
+      target: "branding",
+      items: [
+        { label: "Branding en kleuren", status: logoPreview ? "Klaar" : "Aanvullen" },
+        { label: "Taal van de omgeving", status: LANGUAGE_OPTIONS.find((opt) => opt.value === currentLang)?.label ?? "Nederlands" },
+        { label: "Gebruikersbeheer", status: "Beheren", subtle: true },
+      ],
+    },
+    {
+      title: "Operations",
+      description: "Masterdata, roosters en prijslogica in balans.",
+      icon: Truck,
+      target: "stamgegevens",
+      items: [
+        { label: "Stamgegevens", status: "Actief" },
+        { label: "Rooster-types", status: "Beschikbaar" },
+        { label: "Tarieven en kosten", status: "Onderhoud", subtle: true },
+      ],
+    },
+    {
+      title: "Communicatie",
+      description: "Updates, ETA's en berichtenverkeer beheren.",
+      icon: Smartphone,
+      target: "sms",
+      items: [
+        { label: "SMS", status: smsConfigured ? "Klaar" : "Niet compleet" },
+        { label: "Notificaties", status: `${Object.values(notifications).filter(Boolean).length} actief` },
+        { label: "Inboxen en ETA", status: "Controleren", subtle: true },
+      ],
+    },
+    {
+      title: "Platform & integraties",
+      description: "Connectoren en toegang in een rustig technisch cluster.",
+      icon: Database,
+      target: "integraties",
+      items: [
+        { label: "Connectoren", status: `${connectorSummary.connected} verbonden` },
+        { label: "Webhooks", status: "Beschikbaar", subtle: true },
+        { label: "API-tokens", status: "Beheer", subtle: true },
+      ],
+    },
+  ] as const;
+
   return (
     <div className="flex flex-col gap-6 h-full pb-12">
       <PageHeader
@@ -751,7 +798,7 @@ const Settings = () => {
           <nav className="space-y-5">
             {NAV_GROUPS.map((group) => (
               <div key={group.title}>
-                <p className="text-[10px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.18em] mb-2 px-3">
+                <p className="mb-2 px-3 text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep)/0.72)]">
                   {group.title}
                 </p>
                 <div className="space-y-0.5">
@@ -845,6 +892,19 @@ const Settings = () => {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
+                {overviewCards.map((card) => (
+                  <SettingsOverviewCard
+                    key={card.title}
+                    title={card.title}
+                    description={card.description}
+                    icon={card.icon}
+                    onClick={() => handleTabChange(card.target)}
+                    items={card.items}
+                  />
+                ))}
+              </div>
+
+              <div className="hidden">
                 <SettingsOverviewCard
                   title="Bedrijf"
                   description="Houd merk, taal en teaminstellingen rustig en consistent op één plek."
