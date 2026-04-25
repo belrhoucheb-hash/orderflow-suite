@@ -84,22 +84,15 @@ export function AppSidebar() {
   const exceptionBadgeValue = exceptionCount?.total ?? 0;
 
   const renderNavGroup = (label: string, items: Array<{ title: string; url: string; icon: any }>) => (
-    <SidebarGroup
-      className="mt-4 first:mt-0 rounded-2xl border px-2.5 py-3"
-      style={{
-        borderColor: "hsl(218 24% 22%)",
-        background: "linear-gradient(180deg, hsl(222 27% 14%) 0%, hsl(220 24% 11%) 100%)",
-        boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.03)",
-      }}
-    >
+    <SidebarGroup className="mt-3 first:mt-0 px-1.5 py-0">
       <SidebarGroupLabel
-        className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]"
+        className="mb-1.5 px-2 text-[9px] font-semibold uppercase tracking-[0.24em] text-white/32"
         style={{ fontFamily: "var(--font-display)" }}
       >
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu className="space-y-1">
+        <SidebarMenu className="space-y-0.5">
           {items.map((item) => {
             const active = isActive(item.url);
             return (
@@ -111,32 +104,31 @@ export function AppSidebar() {
                     aria-label={item.title}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                      "relative flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] font-medium transition-all duration-150",
                       active
                         ? "text-white"
                         : "text-white/68 hover:text-white"
                     )}
                     style={active ? {
-                      background: "linear-gradient(135deg, hsl(217 25% 18%) 0%, hsl(220 22% 15%) 100%)",
-                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.28), 0 10px 20px -18px hsl(220 60% 3% / 0.9)",
+                      background: "hsl(219 22% 17%)",
+                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.22)",
                     } : {
                       background: "transparent",
                     }}
                   >
                     <span
-                      className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors"
                       style={active ? {
-                        background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+                        background: "hsl(var(--gold) / 0.18)",
                         color: "white",
-                        boxShadow: "0 8px 18px -12px hsl(var(--gold-deep) / 0.6)",
                       } : {
-                        background: "hsl(218 24% 18%)",
-                        color: "hsl(var(--gold-light))",
+                        background: "transparent",
+                        color: "hsl(0 0% 100% / 0.72)",
                       }}
                     >
-                      <item.icon className="h-[16px] w-[16px]" strokeWidth={active ? 2.1 : 1.8} />
+                      <item.icon className="h-[15px] w-[15px]" strokeWidth={active ? 2 : 1.85} />
                     </span>
-                    <span>{item.title}</span>
+                    <span className="truncate">{item.title}</span>
                     {item.url === "/exceptions" && exceptionBadgeValue > 0 && (
                       <span
                         className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
@@ -195,38 +187,37 @@ export function AppSidebar() {
       }}
     >
       <div
-        className="mx-3 mt-3 flex items-center gap-3 rounded-2xl border px-4 py-4"
+        className="mx-3 mt-3 flex items-center gap-3 rounded-2xl border px-3 py-3"
         style={{
-          borderColor: "hsl(218 24% 22%)",
-          background: "linear-gradient(135deg, hsl(223 27% 16%) 0%, hsl(221 25% 12%) 100%)",
-          boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.04)",
+          borderColor: "hsl(218 24% 18%)",
+          background: "hsl(222 24% 12%)",
         }}
       >
         <img 
           src={tenant?.logoUrl || defaultLogo} 
           alt={tenant?.name || "TMS"} 
-          className="h-10 w-10 rounded-xl object-contain p-1.5"
+          className="h-9 w-9 rounded-xl object-contain p-1.5"
           style={{
-            background: "linear-gradient(135deg, hsl(218 25% 18%) 0%, hsl(220 21% 14%) 100%)",
+            background: "hsl(219 22% 16%)",
             boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)",
           }}
         />
         {!collapsed && (
           <div className="flex flex-col min-w-0 pr-2">
             <span
-              className="truncate text-sm font-semibold tracking-tight leading-tight text-white"
+              className="truncate text-[15px] font-semibold tracking-tight leading-tight text-white"
               style={{ fontFamily: "var(--font-display)" }}
             >
               {tenant?.name || DEFAULT_COMPANY.name}
             </span>
-            <span className="text-[10px] uppercase tracking-[0.22em] text-[hsl(var(--gold-light))]">
+            <span className="text-[9px] uppercase tracking-[0.24em] text-white/36">
               Autonomous TMS
             </span>
           </div>
         )}
       </div>
 
-      <SidebarContent className="px-3 py-3">
+      <SidebarContent className="px-3 py-2">
         {visiblePrimaryGroups.map((group) => renderNavGroup(group.label, group.items))}
 
         {isAdmin && (
@@ -236,16 +227,16 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter
-        className="mx-3 mb-3 rounded-2xl border px-4 py-4"
+        className="mx-3 mb-3 rounded-2xl border px-3 py-3"
         style={{
-          borderColor: "hsl(218 24% 22%)",
-          background: "linear-gradient(180deg, hsl(221 24% 13%) 0%, hsl(220 21% 11%) 100%)",
+          borderColor: "hsl(218 24% 18%)",
+          background: "hsl(222 24% 12%)",
         }}
       >
         <div className="flex items-center gap-3">
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-            style={{ background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)" }}
+            style={{ background: "hsl(219 22% 18%)", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.2)" }}
           >
             {(profile?.display_name || user?.email || "?").slice(0, 2).toUpperCase()}
           </div>
@@ -257,21 +248,21 @@ export function AppSidebar() {
           )}
           <button
             onClick={() => navigate("/settings")}
-            className="shrink-0 rounded-md p-1.5 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
+            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
             aria-label="Instellingen"
           >
             <Settings className="h-4 w-4" />
           </button>
           <button
             onClick={toggleTheme}
-            className="shrink-0 rounded-md p-1.5 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
+            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
             aria-label={isDark ? "Licht thema" : "Donker thema"}
           >
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           <button
             onClick={async () => { await signOut(); navigate("/login"); }}
-            className="shrink-0 rounded-md p-1.5 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
+            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
             aria-label="Uitloggen"
           >
             <LogOut className="h-4 w-4" />
