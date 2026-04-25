@@ -37,6 +37,10 @@ vi.mock("@/lib/utils", () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(" "),
 }));
 
+vi.mock("@/components/inbox/InboxFollowUpPanel", () => ({
+  FollowUpPanel: ({ selected }: any) => <div data-testid="follow-up-panel">Follow-up {selected.id}</div>,
+}));
+
 // Mock inbox utils
 vi.mock("@/components/inbox/utils", () => ({
   formatDate: (d: string) => "1 jan",
@@ -364,6 +368,14 @@ describe("AnomalyWarnings", () => {
     ]} />);
     expect(screen.getByText("Te zwaar")).toBeInTheDocument();
     expect(screen.getByText("Te veel")).toBeInTheDocument();
+  });
+});
+
+describe("Follow-up status helpers", () => {
+  it("shows concept status on inbox row", async () => {
+    const { InboxListItem } = await import("@/components/inbox/InboxListItem");
+    render(<InboxListItem draft={{ ...baseDraft, follow_up_draft: "Concept mail" } as any} isSelected={false} onClick={vi.fn()} />);
+    expect(screen.getByText("Concept klaar")).toBeInTheDocument();
   });
 });
 
@@ -762,10 +774,12 @@ describe.skip("InboxReviewPanel", () => {
     form: baseForm as any,
     isCreatePending: false,
     addressSuggestions: { suggestions: [], loading: false },
+    autoConfirmAssessment: { eligible: false, confidence: 80, title: "Controle nodig", reason: "Nog review nodig" },
     onUpdateField: vi.fn(),
     onToggleRequirement: vi.fn(),
     onAutoSave: vi.fn(),
     onCreateOrder: vi.fn(),
+    onAutoConfirm: vi.fn(),
     onDelete: vi.fn(),
   };
 

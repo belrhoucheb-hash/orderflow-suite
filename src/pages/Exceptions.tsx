@@ -22,6 +22,7 @@ import {
   ReceiptText,
   ChevronDown,
   Play,
+  Filter,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,8 @@ interface ExceptionItem {
   /** "db" = from delivery_exceptions table, "adhoc" = computed from order data */
   source: "db" | "adhoc";
 }
+
+type ExceptionFocus = "all" | "critical" | "today" | "copilot" | "open";
 
 function CopilotHistory({ actionId }: { actionId: string }) {
   const { data: runs = [] } = useExceptionActionRuns(actionId);
@@ -159,6 +162,16 @@ function mapExceptionToSourceType(exc: ExceptionItem): ExceptionSourceType {
   if (exc.id.startsWith("anomaly-")) return "anomaly";
   if (exc.source === "adhoc") return "adhoc";
   return "delivery_exception";
+}
+
+function isSameDay(date: Date, compare: Date): boolean {
+  return date.toDateString() === compare.toDateString();
+}
+
+function getUrgencyLabel(urgency: Urgency): string {
+  if (urgency === "critical") return "Direct oppakken";
+  if (urgency === "warning") return "Vandaag beoordelen";
+  return "Monitoren";
 }
 
 function buildSuggestedAction(exc: ExceptionItem): ExceptionCopilotSuggestion {
@@ -327,6 +340,7 @@ function useExceptionOrders() {
 // ── Component ────────────────────────────────────────────────────────
 const Exceptions = () => {
   const [expandedCopilotId, setExpandedCopilotId] = useState<string | null>(null);
+  const [focus, setFocus] = useState<ExceptionFocus>("all");
   const { data: orderData, isLoading: ordersLoading } = useExceptionOrders();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useFleetVehicles();
   const { data: deliveryExceptions = [], isLoading: dexLoading } = useDeliveryExceptions();
@@ -520,6 +534,42 @@ const Exceptions = () => {
     [exceptionActions],
   );
 
+  const focusCounts = useReactMemo(() => {
+    const today = new Date();
+    const withActions = exceptions.map((exc) => {
+      const sourceType = mapExceptionToSourceType(exc);
+      const sourceKey = `${sourceType}:${exc.id}`;
+      const actions = actionsBySource.get(sourceKey) ?? [];
+      const recommendedAction =
+        actions.find((action) => action.recommended && action.status === "PENDING") ?? actions[0] ?? null;
+      return { exc, recommendedAction };
+    });
+
+    return {
+      all: withActions.length,
+      critical: withActions.filter(({ exc }) => exc.urgency === "critical").length,
+      today: withActions.filter(({ exc }) => isSameDay(exc.detectedAt, today)).length,
+      copilot: withActions.filter(({ recommendedAction }) => !!recommendedAction).length,
+      open: withActions.filter(({ exc }) => exc.source === "adhoc" || exc.source === "db").length,
+    };
+  }, [actionsBySource, exceptions]);
+
+  const filteredExceptions = useReactMemo(() => {
+    const today = new Date();
+    return exceptions.filter((exc) => {
+      const sourceType = mapExceptionToSourceType(exc);
+      const sourceKey = `${sourceType}:${exc.id}`;
+      const actions = actionsBySource.get(sourceKey) ?? [];
+      const hasCopilot = actions.length > 0;
+
+      if (focus === "critical") return exc.urgency === "critical";
+      if (focus === "today") return isSameDay(exc.detectedAt, today);
+      if (focus === "copilot") return hasCopilot;
+      if (focus === "open") return exc.source === "db" || exc.source === "adhoc";
+      return true;
+    });
+  }, [actionsBySource, exceptions, focus]);
+
   const totalCount = counts.delays + counts.missingData + counts.capacity + counts.sla + counts.delivery + (counts.anomalies ?? 0);
 
   if (isLoading) {
@@ -534,6 +584,14 @@ const Exceptions = () => {
     { label: "SLA risico", value: counts.sla, icon: Shield, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/40" },
     { label: "Anomalies", value: counts.anomalies ?? 0, icon: Brain, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/40" },
     { label: "Copilot acties", value: recommendedCount, icon: Bot, color: "text-[hsl(var(--gold-deep))]", bg: "bg-[hsl(var(--gold-soft)/0.35)]" },
+  ];
+
+  const focusOptions: Array<{ key: ExceptionFocus; label: string }> = [
+    { key: "all", label: "Alles" },
+    { key: "critical", label: "Kritiek" },
+    { key: "today", label: "Vandaag" },
+    { key: "copilot", label: "Met copilot" },
+    { key: "open", label: "Open werk" },
   ];
 
   const handleSaveSuggestion = async (exc: ExceptionItem, suggestion: ExceptionCopilotSuggestion) => {
@@ -583,21 +641,57 @@ const Exceptions = () => {
         ))}
       </div>
 
+      <div className="rounded-xl border bg-card p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              Planner focus
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Werk sneller vanuit een focuslijst in plaats van de hele exceptionstroom tegelijk.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {focusOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setFocus(option.key)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  focus === option.key
+                    ? "border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.38)] text-[hsl(var(--gold-deep))]"
+                    : "border-border/60 bg-background text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {option.label} ({focusCounts[option.key]})
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Exception List */}
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="px-5 py-3.5 border-b">
-          <h2 className="text-sm font-semibold text-foreground">Alle uitzonderingen</h2>
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-sm font-semibold text-foreground">Alle uitzonderingen</h2>
+            <span className="text-xs text-muted-foreground">
+              {filteredExceptions.length} zichtbaar van {exceptions.length}
+            </span>
+          </div>
         </div>
 
-        {exceptions.length === 0 ? (
+        {filteredExceptions.length === 0 ? (
           <EmptyState
             icon={CheckCircle2}
-            title="Geen uitzonderingen"
-            description="Alles loopt volgens planning"
+            title={exceptions.length === 0 ? "Geen uitzonderingen" : "Geen uitzonderingen in deze focus"}
+            description={exceptions.length === 0 ? "Alles loopt volgens planning" : "Kies een andere focus om meer werkitems te zien"}
           />
         ) : (
           <div className="divide-y">
-            {exceptions.map((exc, i) => {
+            {filteredExceptions.map((exc, i) => {
               const uc = urgencyConfig[exc.urgency];
               return (
                 <motion.div
@@ -638,10 +732,21 @@ const Exceptions = () => {
                               <span className="text-xs text-muted-foreground truncate">
                                 {exc.clientName}
                               </span>
+                              <span className="hidden md:inline-flex rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+                                {getUrgencyLabel(exc.urgency)}
+                              </span>
                             </div>
                             <p className="text-xs text-muted-foreground truncate mt-0.5">
                               {exc.description}
                             </p>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              <span className="chiplet">
+                                Aanbevolen: {(recommendedAction?.title ?? suggestion.title)}
+                              </span>
+                              <span className="chiplet">
+                                {Math.round(recommendedAction?.confidence ?? suggestion.confidence)}% confidence
+                              </span>
+                            </div>
                           </div>
 
                           <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">

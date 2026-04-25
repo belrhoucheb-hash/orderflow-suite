@@ -227,6 +227,69 @@ describe("useInbox", () => {
     expect(result.current.noConf).toBe(1);
   });
 
+  it("computes autoConfirmCandidates for complete high-confidence intake", async () => {
+    const drafts = [
+      {
+        id: "d1", status: "DRAFT", thread_type: "new", confidence_score: 97, missing_fields: [],
+        pickup_address: "Straat 1 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam",
+        quantity: 5, unit: "Pallets", weight_kg: 500, transport_type: "direct", anomalies: [],
+      },
+      {
+        id: "d2", status: "DRAFT", thread_type: "update", confidence_score: 99, missing_fields: [],
+        pickup_address: "Markt 1, Utrecht", delivery_address: "Kade 8, Breda",
+        quantity: 2, unit: "Pallets", weight_kg: 200, transport_type: "direct", anomalies: [],
+      },
+    ];
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "orders") {
+        return buildChain({ order: vi.fn().mockResolvedValue({ data: drafts, error: null }) });
+      }
+      return buildChain();
+    });
+
+    const { result } = renderHook(() => useInbox(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.drafts).toHaveLength(2));
+
+    expect(result.current.autoConfirmCandidates).toHaveLength(1);
+    expect(result.current.autoConfirmCandidates[0].id).toBe("d1");
+  });
+
+  it("computes intakeQueueStats across drafts and follow-up queues", async () => {
+    const drafts = [
+      {
+        id: "d1", status: "DRAFT", thread_type: "new", confidence_score: 97, missing_fields: [],
+        pickup_address: "Straat 1 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam",
+        quantity: 5, unit: "Pallets", weight_kg: 500, transport_type: "direct", anomalies: [],
+      },
+      {
+        id: "d2", status: "DRAFT", thread_type: "new", confidence_score: 50, missing_fields: ["pickup_address"],
+        pickup_address: "", delivery_address: "Kade 8, Breda",
+        quantity: 2, unit: "Pallets", weight_kg: 200, transport_type: "direct", anomalies: [],
+      },
+    ];
+
+    mockFrom.mockImplementation((table: string) => {
+      const chain = buildChain();
+      if (table === "orders") {
+        if ((chain.not as any).mock) {
+          chain.order.mockResolvedValue({ data: drafts, error: null });
+          chain.not = vi.fn().mockReturnValue(chain);
+          chain.is = vi.fn().mockReturnValue(chain);
+        }
+        return chain;
+      }
+      return buildChain();
+    });
+
+    const { result } = renderHook(() => useInbox(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.drafts).toHaveLength(2));
+
+    expect(result.current.intakeQueueStats.total).toBe(2);
+    expect(result.current.intakeQueueStats.autoConfirm).toBe(1);
+    expect(result.current.intakeQueueStats.needsAction).toBe(1);
+  });
+
   it("toggleBulkSelect adds and removes ids", async () => {
     const { result } = renderHook(() => useInbox(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));

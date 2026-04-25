@@ -25,6 +25,8 @@ import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 import { emitEventDirect } from "@/hooks/useEventPipeline";
 import { buildFewShotExamples } from "@/utils/fewShotBuilder";
 import type { AIDecision } from "@/types/confidence";
+import { assessAutoConfirm } from "@/lib/autoConfirm";
+import { buildIntakeQueueStats } from "@/lib/intakeQueue";
 
 export function useInbox() {
   const queryClient = useQueryClient();
@@ -34,7 +36,7 @@ export function useInbox() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [formData, setFormData] = useState<Record<string, FormState>>({});
   const [search, setSearch] = useState("");
-  const [sidebarFilter, setSidebarFilter] = useState<"alle" | "actie" | "klaar" | "verzonden" | "concepten">("alle");
+  const [sidebarFilter, setSidebarFilter] = useState<"alle" | "actie" | "klaar" | "autoconfirm" | "verzonden" | "concepten">("alle");
   const [filterDate, setFilterDate] = useState("");
   const [filterClient, setFilterClient] = useState("");
   const [filterType, setFilterType] = useState("");
@@ -120,6 +122,7 @@ export function useInbox() {
         .insert({
           tenant_id: tenantId,
           status: "DRAFT",
+          source: "EMAIL",
           source_email_from: emailFrom,
           source_email_subject: subject,
           source_email_body: emailBody,
@@ -173,6 +176,7 @@ export function useInbox() {
           .insert({
             tenant_id: tenantId,
             status: "DRAFT",
+            source: "EMAIL",
             source_email_from: fromEmail,
             source_email_subject: subjectLine,
             source_email_body: scenario.email,
@@ -547,6 +551,11 @@ export function useInbox() {
   const sourceOrders =
     sidebarFilter === "verzonden" ? sentOrders : sidebarFilter === "concepten" ? conceptOrders : drafts;
 
+  const getDraftAutoConfirmAssessment = useCallback(
+    (draft: OrderDraft) => assessAutoConfirm(draft, formData[draft.id]),
+    [formData],
+  );
+
   const filtered = useMemo(
     () =>
       sourceOrders.filter((d) => {
@@ -577,13 +586,14 @@ export function useInbox() {
         if (filterType && d.thread_type !== filterType) return false;
 
         if (sidebarFilter === "alle" || sidebarFilter === "verzonden" || sidebarFilter === "concepten") return true;
+        if (sidebarFilter === "autoconfirm") return getDraftAutoConfirmAssessment(d).eligible;
         const hasMissing = (d.missing_fields || []).length > 0;
         const score = d.confidence_score || 0;
         const isReady = !hasMissing && score >= 80;
         if (sidebarFilter === "klaar") return isReady;
         return !isReady;
       }),
-    [sourceOrders, search, filterDate, filterClient, filterType, sidebarFilter],
+    [sourceOrders, search, filterDate, filterClient, filterType, sidebarFilter, getDraftAutoConfirmAssessment],
   );
 
   const groupedByClient = useMemo(() => {
@@ -609,6 +619,16 @@ export function useInbox() {
     const score = d.confidence_score || 0;
     return !hasMissing && score >= 80;
   });
+
+  const autoConfirmCandidates = useMemo(
+    () => drafts.filter((draft) => getDraftAutoConfirmAssessment(draft).eligible),
+    [drafts, getDraftAutoConfirmAssessment],
+  );
+
+  const intakeQueueStats = useMemo(
+    () => buildIntakeQueueStats(drafts, sentOrders, conceptOrders, formData),
+    [drafts, sentOrders, conceptOrders, formData],
+  );
 
   const highConf = drafts.filter((d) => (d.confidence_score || 0) >= 80).length;
   const lowConf = drafts.filter((d) => (d.confidence_score || 0) > 0 && (d.confidence_score || 0) < 80).length;
@@ -716,6 +736,47 @@ export function useInbox() {
       if (f && !getFormErrors(f)) createOrderMutation.mutate({ id, form: f });
     });
     setBulkSelected(new Set());
+  };
+
+  const handleAutoConfirmSelected = () => {
+    const candidates = Array.from(bulkSelected)
+      .map((id) => drafts.find((draft) => draft.id === id))
+      .filter((draft): draft is OrderDraft => !!draft)
+      .filter((draft) => getDraftAutoConfirmAssessment(draft).eligible);
+
+    candidates.forEach((draft) => {
+      const candidateForm = formData[draft.id] ?? orderToForm(draft);
+      createOrderMutation.mutate({ id: draft.id, form: candidateForm });
+    });
+
+    if (candidates.length > 0) {
+      toast.success("Auto-confirm gestart", {
+        description: `${candidates.length} order${candidates.length > 1 ? "s" : ""} veilig doorgestuurd.`,
+      });
+    }
+
+    setBulkSelected(new Set());
+  };
+
+  const handleAutoConfirmAllSafe = () => {
+    autoConfirmCandidates.forEach((draft) => {
+      const candidateForm = formData[draft.id] ?? orderToForm(draft);
+      createOrderMutation.mutate({ id: draft.id, form: candidateForm });
+    });
+
+    if (autoConfirmCandidates.length > 0) {
+      toast.success("Auto-confirm gestart", {
+        description: `${autoConfirmCandidates.length} order${autoConfirmCandidates.length > 1 ? "s" : ""} veilig doorgestuurd.`,
+      });
+    }
+
+    setBulkSelected(new Set());
+  };
+
+  const handleAutoConfirmCurrent = () => {
+    if (!selected || !getDraftAutoConfirmAssessment(selected).eligible) return;
+    const selectedForm = formData[selected.id] ?? orderToForm(selected);
+    createOrderMutation.mutate({ id: selected.id, form: selectedForm });
   };
 
   // ─── Auto-extract AI when selecting unprocessed email ───
@@ -913,6 +974,8 @@ export function useInbox() {
     groupedByClient,
     needsAction,
     readyToGo,
+    autoConfirmCandidates,
+    intakeQueueStats,
     highConf,
     lowConf,
     noConf,
@@ -930,11 +993,14 @@ export function useInbox() {
     handleImportEmail,
     handleLoadTestScenario,
     handleCreateOrder,
+    handleAutoConfirmAllSafe,
+    handleAutoConfirmCurrent,
     handleDelete,
     handleAutoSave,
     handleMerge,
     handleBulkApprove,
     handleBulkApproveChecked,
+    handleAutoConfirmSelected,
     handleBulkDelete,
     updateField,
     toggleRequirement,
@@ -946,6 +1012,7 @@ export function useInbox() {
     // Mutations (for direct access if needed)
     createOrderMutation,
     deleteMutation,
+    getDraftAutoConfirmAssessment,
   };
 }
 

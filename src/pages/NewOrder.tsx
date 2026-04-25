@@ -38,6 +38,7 @@ import { orderFormSchema } from "@/lib/validation/orderSchema";
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { LuxeTimePicker } from "@/components/LuxeTimePicker";
 import { FinancialTab, type FinancialTabPayload, type FinancialTabCargo } from "@/components/orders/FinancialTab";
+import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
 
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
@@ -522,6 +523,7 @@ const NewOrder = () => {
         pickup_address: pickupLine?.locatie || null,
         delivery_address: deliveryLine?.locatie || null,
         final_delivery_address: finalDeliveryAddress,
+        source: "MANUAL",
         client_name: clientName.trim(),
         client_id: clientId,
         transport_type: transportType || null,
@@ -882,6 +884,10 @@ const NewOrder = () => {
             <h1 className="text-2xl font-semibold tracking-tight text-foreground leading-tight" style={{ fontFamily: "var(--font-display)" }}>
               Nieuwe order
             </h1>
+            <div className="mt-2 flex items-center gap-2">
+              <IntakeSourceBadge source="MANUAL" className="text-xs px-2 py-0.5" />
+              <span className="text-xs text-muted-foreground">Zelfde intake-taal als inbox en portal</span>
+            </div>
             <p className="text-xs text-muted-foreground mt-1.5">{todayFormatted}</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">

@@ -9,6 +9,7 @@ import { InboxReviewPanel } from "@/components/inbox/InboxReviewPanel";
 import { TEST_SCENARIOS, getFormErrors } from "@/components/inbox/utils";
 import { useInbox } from "@/hooks/useInbox";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
+import { AlertCircle, CheckCheck, Clock3, MailCheck } from "lucide-react";
 
 export default function Inbox() {
   const {
@@ -39,6 +40,8 @@ export default function Inbox() {
     filtered,
     needsAction,
     readyToGo,
+    autoConfirmCandidates,
+    intakeQueueStats,
     addressSuggestions,
     tenant,
 
@@ -47,6 +50,9 @@ export default function Inbox() {
     handleImportEmail,
     handleLoadTestScenario,
     handleCreateOrder,
+    handleAutoConfirmAllSafe,
+    handleAutoConfirmCurrent,
+    handleAutoConfirmSelected,
     handleDelete,
     handleAutoSave,
     updateField,
@@ -55,6 +61,7 @@ export default function Inbox() {
     setFormData,
     createOrderMutation,
     deleteMutation,
+    getDraftAutoConfirmAssessment,
   } = useInbox();
 
   if (isLoading) {
@@ -85,6 +92,7 @@ export default function Inbox() {
             { key: "alle" as const, label: "Alle", icon: InboxIcon, count: drafts.length },
             { key: "actie" as const, label: "Actie nodig", icon: CircleAlert, count: needsAction.length },
             { key: "klaar" as const, label: "Klaar", icon: CheckCircle2, count: readyToGo.length },
+            { key: "autoconfirm" as const, label: "Auto-confirm", icon: CheckCircle2, count: autoConfirmCandidates.length },
             { key: "verzonden" as const, label: "Verzonden", icon: Send, count: 0 },
             { key: "concepten" as const, label: "Concepten", icon: FileEdit, count: 0 },
           ].map((item) => (
@@ -165,9 +173,92 @@ export default function Inbox() {
                 <strong className="text-foreground font-semibold">{drafts.length}</strong>
                 <span className="mx-1.5">·</span>
                 <span>{needsAction.length} te reviewen</span>
+                <span className="mx-1.5">·</span>
+                <span>{autoConfirmCandidates.length} auto-confirm klaar</span>
               </p>
             </div>
+            {autoConfirmCandidates.length > 0 && (
+              <div className="mx-3 mb-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-emerald-900">Veilige intakekandidaten</p>
+                    <p className="text-[11px] text-emerald-700">
+                      {autoConfirmCandidates.length} order{autoConfirmCandidates.length > 1 ? "s" : ""} kunnen zonder extra review door.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSidebarFilter("autoconfirm");
+                      setBulkSelected(new Set(autoConfirmCandidates.map((draft) => draft.id)));
+                      handleAutoConfirmAllSafe();
+                    }}
+                    className="shrink-0 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                  >
+                    Bevestig veilig
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="p-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  {
+                    key: "actie",
+                    label: "Actie nodig",
+                    count: intakeQueueStats.needsAction,
+                    helper: "Onzeker of onvolledig",
+                    icon: AlertCircle,
+                    active: sidebarFilter === "actie",
+                    tone: "border-amber-200 bg-amber-50/70 text-amber-900",
+                  },
+                  {
+                    key: "autoconfirm",
+                    label: "Veilig automatisch",
+                    count: intakeQueueStats.autoConfirm,
+                    helper: "Kan direct door",
+                    icon: CheckCheck,
+                    active: sidebarFilter === "autoconfirm",
+                    tone: "border-emerald-200 bg-emerald-50/70 text-emerald-900",
+                  },
+                  {
+                    key: "concepten",
+                    label: "Wacht op info",
+                    count: intakeQueueStats.waitingForInfo,
+                    helper: "Concept klaar voor follow-up",
+                    icon: Clock3,
+                    active: sidebarFilter === "concepten",
+                    tone: "border-blue-200 bg-blue-50/70 text-blue-900",
+                  },
+                  {
+                    key: "verzonden",
+                    label: "Reactie verstuurd",
+                    count: intakeQueueStats.followUpSent,
+                    helper: "Wacht op klantreactie",
+                    icon: MailCheck,
+                    active: sidebarFilter === "verzonden",
+                    tone: "border-slate-200 bg-slate-50/90 text-slate-900",
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => setSidebarFilter(item.key as typeof sidebarFilter)}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-left transition-all",
+                      item.tone,
+                      item.active ? "ring-1 ring-primary/30" : "hover:border-primary/30",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold">{item.label}</p>
+                        <p className="text-[10px] opacity-75">{item.helper}</p>
+                      </div>
+                      <item.icon className="h-4 w-4 shrink-0 opacity-80" />
+                    </div>
+                    <p className="mt-2 text-lg font-semibold tabular-nums">{item.count}</p>
+                  </button>
+                ))}
+              </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                 <input
@@ -230,6 +321,9 @@ export default function Inbox() {
                     className="text-xs font-semibold text-green-600 hover:underline"
                   >
                     Goedkeuren
+                  </button>
+                  <button onClick={handleAutoConfirmSelected} className="text-xs font-semibold text-emerald-700 hover:underline">
+                    Auto-confirmeer veilig
                   </button>
                   <button
                     onClick={() => {
@@ -314,10 +408,12 @@ export default function Inbox() {
                 form={form}
                 isCreatePending={isCreatePending}
                 addressSuggestions={addressSuggestions}
+                autoConfirmAssessment={getDraftAutoConfirmAssessment(selected)}
                 onUpdateField={updateField}
                 onToggleRequirement={toggleRequirement}
                 onAutoSave={handleAutoSave}
                 onCreateOrder={handleCreateOrder}
+                onAutoConfirm={handleAutoConfirmCurrent}
                 onDelete={handleDelete}
               />
             </ResizablePanel>

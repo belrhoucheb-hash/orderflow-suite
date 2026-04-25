@@ -2,6 +2,7 @@ import { Bot, CheckCircle2, Edit3, XCircle, Clock } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { useDecisionFeed } from "@/hooks/useAutonomyDashboard";
+import { explainDecision } from "@/lib/decisionExplainability";
 import type { DecisionType } from "@/types/confidence";
 
 const DECISION_TYPE_LABELS: Record<DecisionType, string> = {
@@ -75,6 +76,13 @@ export function DecisionFeed({ limit = 20, maxHeight = "400px" }: DecisionFeedPr
         {decisions.map((decision) => {
           const config = RESOLUTION_CONFIG[decision.resolution] ?? RESOLUTION_CONFIG.PENDING;
           const Icon = config.icon;
+          const explanation = explainDecision(decision);
+          const confidenceToneClass =
+            explanation.confidenceTone === "high"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : explanation.confidenceTone === "medium"
+                ? "border-amber-200 bg-amber-50 text-amber-700"
+                : "border-red-200 bg-red-50 text-red-700";
           return (
             <div
               key={decision.id}
@@ -86,18 +94,24 @@ export function DecisionFeed({ limit = 20, maxHeight = "400px" }: DecisionFeedPr
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-foreground truncate">
-                    {decision.proposed_action}
+                    {explanation.summary}
                   </span>
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
                     {DECISION_TYPE_LABELS[decision.decision_type] ?? decision.decision_type}
                   </Badge>
                 </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {explanation.reason}
+                </p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={`text-xs font-medium ${config.color}`}>
                     {config.label}
                   </span>
+                  <span className={`rounded-full border px-1.5 py-0 text-[10px] font-medium ${confidenceToneClass}`}>
+                    {explanation.confidenceLabel}
+                  </span>
                   <span className="text-xs text-muted-foreground">
-                    {Math.round(decision.input_confidence)}% confidence
+                    {Math.round(decision.input_confidence)}%
                   </span>
                   <span className="text-xs text-muted-foreground/60">
                     {formatDate(decision.created_at)} {formatTime(decision.created_at)}

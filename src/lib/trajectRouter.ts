@@ -22,6 +22,7 @@ export interface BookingInput {
   pickup_address: string | null;
   delivery_address: string | null;
   final_delivery_address?: string | null;
+  source?: string | null;
   client_id?: string | null;
   client_name?: string | null;
   weight_kg?: number | null;
@@ -451,6 +452,7 @@ export async function createShipmentWithLegs(
       delivery_address: to,
       client_id: booking.client_id ?? null,
       client_name: booking.client_name ?? null,
+      source: booking.source ?? null,
       status: "DRAFT",
       weight_kg: booking.weight_kg ?? null,
       quantity: booking.quantity ?? null,

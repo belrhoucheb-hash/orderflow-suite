@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentPortalUser } from "@/hooks/useClientPortalUsers";
+import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
 
 interface PortalOrder {
   id: string;
@@ -321,11 +322,7 @@ export default function PortalOrders() {
                       >
                         {STATUS_LABELS[order.status] || order.status}
                       </Badge>
-                      {order.source === "PORTAL" && (
-                        <Badge className="text-[10px] bg-purple-100 text-purple-700 border-0 rounded-full">
-                          Portaal
-                        </Badge>
-                      )}
+                      <IntakeSourceBadge source={order.source} className="border-0" />
                     </div>
                     <div className="text-sm text-gray-500 space-y-0.5">
                       {order.pickup_address && (

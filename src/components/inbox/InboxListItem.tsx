@@ -1,7 +1,9 @@
 import { PlusCircle, RotateCw, Ban, CheckCircle2, HelpCircle } from "lucide-react";
+import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
 import type { OrderDraft } from "./types";
 import { formatDate } from "./utils";
 import { cn } from "@/lib/utils";
+import { getFollowUpStatus } from "@/lib/followUpStatus";
 
 interface Props {
   draft: OrderDraft;
@@ -26,6 +28,7 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
   const { Icon, label, stripe } = meta;
   const isUnread = !draft.confidence_score;
   const isCancel = threadType === "cancellation";
+  const followUpStatus = getFollowUpStatus(draft);
 
   return (
     <div
@@ -141,14 +144,26 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
       </div>
 
       {/* Row 2: subject */}
-      <p
-        className={cn(
-          "truncate leading-[1.4] text-[12.5px]",
-          isUnread ? "text-foreground font-medium" : "text-muted-foreground",
+      <div className="flex items-center gap-2">
+        <p
+          className={cn(
+            "truncate leading-[1.4] text-[12.5px] flex-1 min-w-0",
+            isUnread ? "text-foreground font-medium" : "text-muted-foreground",
+          )}
+        >
+          {draft.source_email_subject || "Geen onderwerp"}
+        </p>
+        {followUpStatus && (
+          <span className={cn("shrink-0 rounded-full border px-2 py-[2px] text-[10px] font-semibold", followUpStatus.tone)}>
+            {followUpStatus.label}
+          </span>
         )}
-      >
-        {draft.source_email_subject || "Geen onderwerp"}
-      </p>
+        <IntakeSourceBadge
+          source={draft.source}
+          fallbackHasEmail={!!draft.source_email_from}
+          className="shrink-0"
+        />
+      </div>
     </div>
   );
 }

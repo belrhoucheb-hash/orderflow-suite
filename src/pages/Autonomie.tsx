@@ -15,6 +15,7 @@ import { useDecisionFeed } from "@/hooks/useAutonomyDashboard";
 import { useTenantLearningStats } from "@/hooks/useAIFeedbackLoop";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
+import { explainDecision } from "@/lib/decisionExplainability";
 import { toast } from "sonner";
 import type { DecisionType } from "@/types/confidence";
 
@@ -308,22 +309,42 @@ function DecisionTable() {
             </thead>
             <tbody className="divide-y divide-border/20">
               {filtered.map((d) => (
-                <tr key={d.id} className="hover:bg-muted/10">
+                <tr key={d.id} className="hover:bg-muted/10 align-top">
                   <td className="px-3 py-2">
                     <Badge variant="outline" className="text-[10px]">
                       {MODULE_LABELS[d.decision_type] ?? d.decision_type}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-foreground truncate max-w-[200px]">
-                    {d.proposed_action}
+                  <td className="px-3 py-2 text-foreground max-w-[420px]">
+                    {(() => {
+                      const explanation = explainDecision(d);
+                      return (
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">{explanation.summary}</p>
+                          <p className="text-xs leading-relaxed text-muted-foreground">
+                            {explanation.reason}
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`font-medium ${RESOLUTION_COLORS[d.resolution] ?? ""}`}>
                       {d.resolution}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {Math.round(d.input_confidence)}%
+                  <td className="px-3 py-2 text-right">
+                    {(() => {
+                      const explanation = explainDecision(d);
+                      return (
+                        <div className="space-y-1">
+                          <div className="tabular-nums">{Math.round(d.input_confidence)}%</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {explanation.confidenceLabel}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
                     {new Date(d.created_at).toLocaleDateString("nl-NL", {

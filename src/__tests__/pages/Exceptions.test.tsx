@@ -461,6 +461,44 @@ describe("Exceptions", () => {
     });
   });
 
+  it("filters to critical exceptions via planner focus", async () => {
+    const user = userEvent.setup();
+    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+    setupMockData({
+      drafts: [
+        {
+          id: "o1",
+          order_number: 1001,
+          client_name: "Acme BV",
+          status: "DRAFT",
+          missing_fields: ["weight_kg"],
+          received_at: fourHoursAgo,
+          created_at: fourHoursAgo,
+        },
+      ],
+      deliveryExceptions: [
+        {
+          id: "dex-1",
+          exception_type: "DELAY",
+          severity: "CRITICAL",
+          description: "Critical delay",
+          order_id: "o1",
+          created_at: new Date().toISOString(),
+          status: "OPEN",
+        },
+      ],
+    });
+
+    renderExceptions();
+
+    await user.click(await screen.findByRole("button", { name: /Kritiek/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Critical delay")).toBeInTheDocument();
+      expect(screen.queryByText(/Ontbrekende velden/)).not.toBeInTheDocument();
+    });
+  });
+
   it("requires approval before execution for approval-gated copilot actions", async () => {
     const user = userEvent.setup();
     mockExceptionActionsData.push({

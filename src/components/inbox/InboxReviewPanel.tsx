@@ -30,6 +30,9 @@ import {
 import { cn } from "@/lib/utils";
 import type { OrderDraft, FormState } from "./types";
 import { requirementOptions } from "./types";
+import type { AutoConfirmAssessment } from "@/lib/autoConfirm";
+import { FollowUpPanel } from "@/components/inbox/InboxFollowUpPanel";
+import { getFollowUpStatus } from "@/lib/followUpStatus";
 import {
   getFilledCount,
   getTotalFields,
@@ -44,10 +47,12 @@ interface Props {
   form: FormState;
   isCreatePending: boolean;
   addressSuggestions: any;
+  autoConfirmAssessment: AutoConfirmAssessment;
   onUpdateField: (field: keyof FormState, value: any) => void;
   onToggleRequirement: (req: string) => void;
   onAutoSave: () => void;
   onCreateOrder: () => void;
+  onAutoConfirm: () => void;
   onDelete: () => void;
 }
 
@@ -106,10 +111,12 @@ export function InboxReviewPanel({
   selected,
   form,
   isCreatePending,
+  autoConfirmAssessment,
   onUpdateField,
   onToggleRequirement,
   onAutoSave,
   onCreateOrder,
+  onAutoConfirm,
   onDelete,
 }: Props) {
   const formErrors = getFormErrors(form);
@@ -145,6 +152,8 @@ export function InboxReviewPanel({
   const possibleDuplicate = (selected as any).possible_duplicate as boolean | undefined;
   const anomalies = selected.anomalies || [];
   const weightAnomaly = anomalies.find((a) => a.field === "weight_kg");
+  const followUpStatus = getFollowUpStatus(selected);
+  const missingFieldsCount = (selected.missing_fields || []).length;
 
   const totalKg = form.weight
     ? form.perUnit
@@ -207,6 +216,18 @@ export function InboxReviewPanel({
                 />
                 {dept === "export" ? "Export" : "Operations"}
               </button>
+              {followUpStatus && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className={cn("inline-flex items-center rounded-full border px-2.5 py-[3px] text-[11px] font-medium", followUpStatus.tone)}>
+                    {followUpStatus.label}
+                  </span>
+                  {missingFieldsCount > 0 && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {missingFieldsCount} veld{missingFieldsCount > 1 ? "en" : ""} wachten op klantinfo
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex flex-col items-center shrink-0">
               <span
@@ -353,6 +374,17 @@ export function InboxReviewPanel({
                   ? `Uit e-mail plus ${selected.attachments.length} bijlage${selected.attachments.length > 1 ? "n" : ""}`
                   : "Uit e-mailtekst"}
               </p>
+              <div
+                className={cn(
+                  "mt-3 rounded-lg px-3 py-2 text-[11.5px] border",
+                  autoConfirmAssessment.eligible
+                    ? "bg-emerald-50 text-emerald-900 border-emerald-200"
+                    : "bg-amber-50 text-amber-900 border-amber-200",
+                )}
+              >
+                <p className="font-semibold">{autoConfirmAssessment.title}</p>
+                <p className="mt-1">{autoConfirmAssessment.reason}</p>
+              </div>
             </div>
           </section>
 
@@ -728,6 +760,25 @@ export function InboxReviewPanel({
               </div>
             </section>
           )}
+
+          {(selected.missing_fields?.length || selected.follow_up_draft || selected.follow_up_sent_at) && (
+            <section className="mb-5">
+              <ChapterHead
+                badge="VI"
+                title="Wacht Op Info"
+                sub={
+                  selected.follow_up_sent_at
+                    ? "Follow-up is verstuurd, wacht op reactie van de klant"
+                    : selected.follow_up_draft
+                      ? "Concept staat klaar om te versturen"
+                      : "Er ontbreekt nog informatie om de order af te ronden"
+                }
+              />
+              <div className="card--luxe overflow-hidden">
+                <FollowUpPanel selected={selected} />
+              </div>
+            </section>
+          )}
         </div>
       </ScrollArea>
 
@@ -758,7 +809,7 @@ export function InboxReviewPanel({
           </p>
         </div>
         <button
-          onClick={onCreateOrder}
+          onClick={autoConfirmAssessment.eligible ? onAutoConfirm : onCreateOrder}
           disabled={isCreatePending || formErrors}
           className={cn(
             "w-full h-11 rounded-xl font-semibold text-[13px] transition-all inline-flex items-center justify-center gap-2",
@@ -779,7 +830,7 @@ export function InboxReviewPanel({
           ) : (
             <>
               <Check className="h-4 w-4" strokeWidth={2} />
-              Maak order aan
+              {autoConfirmAssessment.eligible ? "Auto-confirm en maak order aan" : "Maak order aan"}
             </>
           )}
         </button>

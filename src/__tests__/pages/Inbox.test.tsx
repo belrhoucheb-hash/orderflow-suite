@@ -8,9 +8,9 @@ import { MemoryRouter } from "react-router-dom";
 const { mockUseInbox, mockSetSelectedId, mockSetSearch, mockSetSidebarFilter,
   mockSetFilterDate, mockSetFilterClient, mockSetFilterType, mockSetMobileView,
   mockSetBulkSelected, mockHandleImportEmail, mockHandleLoadTestScenario,
-  mockHandleCreateOrder, mockHandleDelete, mockHandleAutoSave,
+  mockHandleCreateOrder, mockHandleAutoConfirmAllSafe, mockHandleAutoConfirmCurrent, mockHandleAutoConfirmSelected, mockHandleDelete, mockHandleAutoSave,
   mockUpdateField, mockToggleRequirement, mockEnrichAddresses, mockSetFormData,
-  mockCreateOrderMutate, mockDeleteMutate, mockFileInputRef } = vi.hoisted(() => {
+  mockCreateOrderMutate, mockDeleteMutate, mockFileInputRef, mockGetDraftAutoConfirmAssessment } = vi.hoisted(() => {
   const ref = { current: null } as any;
   return {
     mockSetSelectedId: vi.fn(),
@@ -24,6 +24,9 @@ const { mockUseInbox, mockSetSelectedId, mockSetSearch, mockSetSidebarFilter,
     mockHandleImportEmail: vi.fn(),
     mockHandleLoadTestScenario: vi.fn().mockResolvedValue(undefined),
     mockHandleCreateOrder: vi.fn(),
+    mockHandleAutoConfirmAllSafe: vi.fn(),
+    mockHandleAutoConfirmCurrent: vi.fn(),
+    mockHandleAutoConfirmSelected: vi.fn(),
     mockHandleDelete: vi.fn(),
     mockHandleAutoSave: vi.fn(),
     mockUpdateField: vi.fn(),
@@ -32,6 +35,12 @@ const { mockUseInbox, mockSetSelectedId, mockSetSearch, mockSetSidebarFilter,
     mockSetFormData: vi.fn(),
     mockCreateOrderMutate: vi.fn(),
     mockDeleteMutate: vi.fn(),
+    mockGetDraftAutoConfirmAssessment: vi.fn().mockReturnValue({
+      eligible: false,
+      confidence: 80,
+      title: "Controle nodig",
+      reason: "Nog handmatige review nodig.",
+    }),
     mockFileInputRef: ref,
     mockUseInbox: vi.fn(),
   };
@@ -45,10 +54,11 @@ function defaultHookReturn(overrides: any = {}) {
     mobileView: "list", setMobileView: mockSetMobileView, bulkSelected: new Set(), setBulkSelected: mockSetBulkSelected,
     loadingScenario: null, fileInputRef: mockFileInputRef,
     drafts: [], isLoading: false, selected: null, form: null, filtered: [],
-    needsAction: [], readyToGo: [], addressSuggestions: [], tenant: { id: "t1", name: "Test BV" },
+    needsAction: [], readyToGo: [], autoConfirmCandidates: [], intakeQueueStats: { total: 0, needsAction: 0, ready: 0, autoConfirm: 0, waitingForInfo: 0, followUpSent: 0 }, addressSuggestions: [], tenant: { id: "t1", name: "Test BV" },
     isCreatePending: false, handleImportEmail: mockHandleImportEmail, handleLoadTestScenario: mockHandleLoadTestScenario,
-    handleCreateOrder: mockHandleCreateOrder, handleDelete: mockHandleDelete, handleAutoSave: mockHandleAutoSave,
+    handleCreateOrder: mockHandleCreateOrder, handleAutoConfirmAllSafe: mockHandleAutoConfirmAllSafe, handleAutoConfirmCurrent: mockHandleAutoConfirmCurrent, handleAutoConfirmSelected: mockHandleAutoConfirmSelected, handleDelete: mockHandleDelete, handleAutoSave: mockHandleAutoSave,
     updateField: mockUpdateField, toggleRequirement: mockToggleRequirement, enrichAddresses: mockEnrichAddresses, setFormData: mockSetFormData,
+    getDraftAutoConfirmAssessment: mockGetDraftAutoConfirmAssessment,
     createOrderMutation: { mutate: mockCreateOrderMutate, isPending: false },
     deleteMutation: { mutate: mockDeleteMutate, isPending: false },
     ...overrides,
@@ -75,9 +85,10 @@ vi.mock("@/components/inbox/InboxListItem", () => ({
   ),
 }));
 vi.mock("@/components/inbox/InboxReviewPanel", () => ({
-  InboxReviewPanel: ({ onCreateOrder, onDelete, onAutoSave, onUpdateField, onToggleRequirement }: any) => (
+  InboxReviewPanel: ({ onCreateOrder, onAutoConfirm, onDelete, onAutoSave, onUpdateField, onToggleRequirement }: any) => (
     <div data-testid="review-panel">
       <button data-testid="create-order-btn" onClick={onCreateOrder}>Create</button>
+      <button data-testid="auto-confirm-btn" onClick={onAutoConfirm}>AutoConfirm</button>
       <button data-testid="delete-btn" onClick={onDelete}>Delete</button>
       <button data-testid="autosave-btn" onClick={onAutoSave}>AutoSave</button>
       <button data-testid="update-field-btn" onClick={() => onUpdateField("client_name", "X")}>UpdateField</button>
@@ -370,6 +381,17 @@ describe("Inbox", () => {
     expect(mockHandleCreateOrder).toHaveBeenCalled();
   });
 
+  it("calls handleAutoConfirmCurrent from review panel", async () => {
+    const user = userEvent.setup();
+    mockUseInbox.mockReturnValue(defaultHookReturn({
+      selected: mockDraft,
+      form: mockForm,
+    }));
+    renderInbox();
+    await user.click(screen.getByTestId("auto-confirm-btn"));
+    expect(mockHandleAutoConfirmCurrent).toHaveBeenCalled();
+  });
+
   // ── ReviewPanel: handleDelete ──
   it("calls handleDelete from review panel", async () => {
     const user = userEvent.setup();
@@ -492,10 +514,34 @@ describe("Inbox", () => {
       drafts: [mockDraft, mockDraft2],
       needsAction: [mockDraft],
       readyToGo: [mockDraft2],
+      autoConfirmCandidates: [mockDraft2],
     }));
     renderInbox();
     // The sidebar shows counts for drafts (2), needsAction (1), readyToGo (1)
     expect(screen.getAllByText("2").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("1").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows auto-confirm summary and triggers safe confirm action", async () => {
+    const user = userEvent.setup();
+    mockUseInbox.mockReturnValue(defaultHookReturn({
+      autoConfirmCandidates: [mockDraft],
+    }));
+    renderInbox();
+    expect(screen.getByText("Veilige intakekandidaten")).toBeInTheDocument();
+    await user.click(screen.getByText("Bevestig veilig"));
+    expect(mockHandleAutoConfirmAllSafe).toHaveBeenCalled();
+  });
+
+  it("shows intake queue cards and switches focus", async () => {
+    const user = userEvent.setup();
+    mockUseInbox.mockReturnValue(defaultHookReturn({
+      intakeQueueStats: { total: 6, needsAction: 2, ready: 3, autoConfirm: 1, waitingForInfo: 4, followUpSent: 5 },
+    }));
+    renderInbox();
+    expect(screen.getByText("Wacht op info")).toBeInTheDocument();
+    expect(screen.getByText("Reactie verstuurd")).toBeInTheDocument();
+    await user.click(screen.getByText("Wacht op info"));
+    expect(mockSetSidebarFilter).toHaveBeenCalledWith("concepten");
   });
 });
