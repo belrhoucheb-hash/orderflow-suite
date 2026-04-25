@@ -205,62 +205,62 @@ export default function Inbox() {
               </div>
             )}
             <div className="space-y-3 p-3">
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 {[
                   {
                     key: "actie",
                     label: "Actie nodig",
                     count: intakeQueueStats.needsAction,
-                    helper: "Onzeker of onvolledig",
+                    helper: "Review",
                     icon: AlertCircle,
                     active: sidebarFilter === "actie",
-                      tone: "border-amber-200/70 bg-[linear-gradient(180deg,rgba(255,251,235,0.92),rgba(255,251,235,0.72))] text-amber-950",
+                    tone: "border-amber-200/60 bg-[linear-gradient(180deg,rgba(255,251,235,0.84),rgba(255,251,235,0.58))] text-amber-950",
                   },
                   {
                     key: "autoconfirm",
-                    label: "Veilig automatisch",
+                    label: "Veilig",
                     count: intakeQueueStats.autoConfirm,
-                    helper: "Kan direct door",
+                    helper: "Direct door",
                     icon: CheckCheck,
                     active: sidebarFilter === "autoconfirm",
-                      tone: "border-emerald-200/70 bg-[linear-gradient(180deg,rgba(236,253,245,0.92),rgba(236,253,245,0.72))] text-emerald-950",
+                    tone: "border-emerald-200/60 bg-[linear-gradient(180deg,rgba(236,253,245,0.84),rgba(236,253,245,0.58))] text-emerald-950",
                   },
                   {
                     key: "concepten",
                     label: "Wacht op info",
                     count: intakeQueueStats.waitingForInfo,
-                    helper: "Concept klaar voor follow-up",
+                    helper: "Follow-up",
                     icon: Clock3,
                     active: sidebarFilter === "concepten",
-                      tone: "border-sky-200/70 bg-[linear-gradient(180deg,rgba(240,249,255,0.92),rgba(240,249,255,0.72))] text-sky-950",
+                    tone: "border-sky-200/60 bg-[linear-gradient(180deg,rgba(240,249,255,0.84),rgba(240,249,255,0.58))] text-sky-950",
                   },
                   {
                     key: "verzonden",
-                    label: "Reactie verstuurd",
+                    label: "Reactie",
                     count: intakeQueueStats.followUpSent,
-                    helper: "Wacht op klantreactie",
+                    helper: "Verstuurd",
                     icon: MailCheck,
                     active: sidebarFilter === "verzonden",
-                      tone: "border-slate-200/70 bg-[linear-gradient(180deg,rgba(248,250,252,0.95),rgba(248,250,252,0.78))] text-slate-900",
+                    tone: "border-slate-200/60 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(248,250,252,0.64))] text-slate-900",
                   },
                 ].map((item) => (
                   <button
                     key={item.key}
                     onClick={() => setSidebarFilter(item.key as typeof sidebarFilter)}
                     className={cn(
-                      "rounded-2xl border px-3.5 py-3 text-left transition-all",
+                      "rounded-2xl border px-3 py-2.5 text-left transition-all",
                       item.tone,
-                      item.active ? "ring-1 ring-[hsl(var(--gold)/0.25)] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.08)]" : "hover:border-[hsl(var(--gold)/0.18)]",
+                      item.active ? "ring-1 ring-[hsl(var(--gold)/0.22)] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.08)]" : "hover:border-[hsl(var(--gold)/0.16)]",
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-[11px] font-semibold tracking-[0.01em]">{item.label}</p>
-                        <p className="mt-0.5 text-[10px] opacity-75">{item.helper}</p>
+                        <p className="mt-0.5 text-[10px] opacity-70">{item.helper}</p>
                       </div>
-                      <item.icon className="h-4 w-4 shrink-0 opacity-70" />
+                      <item.icon className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-55" />
                     </div>
-                    <p className="mt-2.5 text-lg font-semibold tabular-nums">{item.count}</p>
+                    <p className="mt-2 text-[1.1rem] font-semibold leading-none tabular-nums">{item.count}</p>
                   </button>
                 ))}
               </div>
