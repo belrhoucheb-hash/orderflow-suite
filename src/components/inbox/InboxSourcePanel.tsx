@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OrderDraft, FormState } from "./types";
 import { FollowUpPanel } from "./InboxFollowUpPanel";
+import type { InboxCaseSummary } from "@/lib/inboxCase";
 
 // Build highlight segments using field_confidence levels (ok/warn/err)
 function buildHighlights(body: string, form: FormState | null, draft: OrderDraft): React.ReactNode[] {
@@ -148,10 +149,12 @@ function initials(name: string | null | undefined): string {
 export function SourcePanel({
   selected,
   form,
+  caseSummary,
   onParseResult,
 }: {
   selected: OrderDraft;
   form: FormState | null;
+  caseSummary: InboxCaseSummary;
   onParseResult: (data: Partial<FormState>) => void;
 }) {
   const [replyOpen, setReplyOpen] = useState(false);
@@ -300,6 +303,7 @@ export function SourcePanel({
   }, [body, form, selected, linkageOn]);
 
   const replyPreview = replyText.trim().slice(0, 60);
+  const topBlockers = caseSummary.blockers.slice(0, 3);
 
   return (
     <div
@@ -442,6 +446,57 @@ export function SourcePanel({
           </div>
         )}
 
+        <div className="mx-4 mb-4 grid gap-2 md:mx-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div
+            className="rounded-2xl border px-3.5 py-3"
+            style={{
+              borderColor: "hsl(var(--gold) / 0.14)",
+              background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.14), white)",
+            }}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cn("rounded-full border px-2 py-[2px] text-[10px] font-semibold", caseSummary.status.tone)}>
+                {caseSummary.status.label}
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Volgende stap
+              </span>
+            </div>
+            <p className="mt-2 text-[13px] font-medium text-foreground">{caseSummary.nextStep}</p>
+            <p className="mt-1 text-[11px] leading-[1.5] text-muted-foreground">{caseSummary.status.description}</p>
+          </div>
+          <div
+            className="rounded-2xl border px-3.5 py-3"
+            style={{
+              borderColor: topBlockers.some((blocker) => blocker.severity === "critical") ? "rgb(254 202 202)" : "hsl(var(--gold) / 0.14)",
+              background: topBlockers.some((blocker) => blocker.severity === "critical")
+                ? "linear-gradient(180deg, rgba(254,242,242,0.92), rgba(255,255,255,1))"
+                : "linear-gradient(180deg, hsl(var(--gold-soft) / 0.1), white)",
+            }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wat vraagt aandacht?</p>
+            {topBlockers.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {topBlockers.map((blocker) => (
+                  <span
+                    key={blocker.key}
+                    className={cn(
+                      "inline-flex items-center rounded-full border px-2 py-[3px] text-[10.5px] font-medium",
+                      blocker.severity === "critical"
+                        ? "border-red-200 bg-red-50 text-red-700"
+                        : "border-amber-200 bg-amber-50 text-amber-800",
+                    )}
+                  >
+                    {blocker.label}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted-foreground">Geen directe blockers in de intake.</p>
+            )}
+          </div>
+        </div>
+
         {/* Tools row */}
         <div className="mb-3 flex flex-wrap items-center justify-end gap-2 px-4 md:px-6">
           <button
@@ -489,6 +544,57 @@ export function SourcePanel({
             <p className="text-xs text-muted-foreground italic">Geen inhoud beschikbaar</p>
           )}
         </div>
+
+        {(selected.changes_detected?.length || selected.anomalies?.length) && (
+          <div className="px-4 pb-5 md:px-6">
+            <div className="grid gap-3 lg:grid-cols-2">
+              {selected.changes_detected?.length ? (
+                <div
+                  className="rounded-2xl border px-3.5 py-3"
+                  style={{
+                    borderColor: "hsl(var(--gold) / 0.14)",
+                    background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.12), white)",
+                  }}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Gedetecteerde wijziging{selected.changes_detected.length > 1 ? "en" : ""}</p>
+                  <div className="mt-2 space-y-2">
+                    {selected.changes_detected.slice(0, 3).map((change, index) => (
+                      <div key={`${change.field}-${index}`} className="rounded-xl border border-[hsl(var(--gold)/0.1)] bg-white/80 px-3 py-2">
+                        <p className="text-[11.5px] font-medium text-foreground">{change.field.replace(/_/g, " ")}</p>
+                        <p className="mt-1 text-[10.5px] text-muted-foreground">
+                          <span className="line-through">{change.old_value || "leeg"}</span>
+                          <span className="mx-1.5">→</span>
+                          <span className="text-foreground">{change.new_value || "leeg"}</span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {selected.anomalies?.length ? (
+                <div
+                  className="rounded-2xl border px-3.5 py-3"
+                  style={{
+                    borderColor: "rgb(253 186 116)",
+                    background: "linear-gradient(180deg, rgba(255,247,237,0.94), white)",
+                  }}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Afwijkingen</p>
+                  <div className="mt-2 space-y-2">
+                    {selected.anomalies.slice(0, 3).map((anomaly, index) => (
+                      <div key={`${anomaly.field}-${index}`} className="rounded-xl border border-amber-200 bg-white/80 px-3 py-2">
+                        <p className="text-[11.5px] font-medium text-amber-900">{anomaly.message}</p>
+                        <p className="mt-1 text-[10.5px] text-amber-700">
+                          Waarde {anomaly.value} tegenover gebruikelijk {anomaly.avg_value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
 
         {/* Attachments */}
         {hasAttachments && (

@@ -1,5 +1,5 @@
 import type { OrderDraft, FormState } from "@/components/inbox/types";
-import { assessAutoConfirm } from "@/lib/autoConfirm";
+import { getInboxCaseStatus } from "@/lib/inboxCase";
 
 export interface IntakeQueueStats {
   total: number;
@@ -19,16 +19,25 @@ export function buildIntakeQueueStats(
   let needsAction = 0;
   let ready = 0;
   let autoConfirm = 0;
+  let waitingForInfo = 0;
+  let followUpSent = 0;
 
   for (const draft of drafts) {
-    const missingFields = draft.missing_fields ?? [];
-    const score = draft.confidence_score || 0;
+    const status = getInboxCaseStatus(draft, formData[draft.id]);
 
-    if (assessAutoConfirm(draft, formData[draft.id]).eligible) {
+    if (status.key === "auto_confirm_ready") {
       autoConfirm += 1;
     }
 
-    if (missingFields.length === 0 && score >= 80) {
+    if (status.key === "waiting_for_customer" || status.key === "draft_reply" || status.key === "info_needed") {
+      waitingForInfo += 1;
+    }
+
+    if (status.key === "waiting_for_customer") {
+      followUpSent += 1;
+    }
+
+    if (status.key === "ready_for_order" || status.key === "auto_confirm_ready") {
       ready += 1;
     } else {
       needsAction += 1;
@@ -40,7 +49,7 @@ export function buildIntakeQueueStats(
     needsAction,
     ready,
     autoConfirm,
-    waitingForInfo: conceptOrders.length,
-    followUpSent: sentOrders.length,
+    waitingForInfo: Math.max(waitingForInfo, conceptOrders.length),
+    followUpSent: Math.max(followUpSent, sentOrders.length),
   };
 }

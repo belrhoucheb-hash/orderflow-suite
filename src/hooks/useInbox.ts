@@ -27,6 +27,14 @@ import { buildFewShotExamples } from "@/utils/fewShotBuilder";
 import type { AIDecision } from "@/types/confidence";
 import { assessAutoConfirm } from "@/lib/autoConfirm";
 import { buildIntakeQueueStats } from "@/lib/intakeQueue";
+import { getInboxCaseSummary } from "@/lib/inboxCase";
+
+function formsEqual(left?: FormState | null, right?: FormState | null) {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+
+  return JSON.stringify(left) === JSON.stringify(right);
+}
 
 export function useInbox() {
   const queryClient = useQueryClient();
@@ -49,6 +57,7 @@ export function useInbox() {
   const [showDeliverySuggestions, setShowDeliverySuggestions] = useState(false);
   const [loadingScenario, setLoadingScenario] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const serverFormSnapshotsRef = useRef<Record<string, FormState>>({});
 
   // ─── Fleet / Capacity ───
   const { data: vehicles = [] } = useFleetVehicles();
@@ -368,14 +377,32 @@ export function useInbox() {
   // ─── Sync formData with drafts ───
   useEffect(() => {
     if (drafts.length > 0) {
-      const map: Record<string, FormState> = {};
-      drafts.forEach((d) => {
-        if (!formData[d.id]) map[d.id] = orderToForm(d);
+      setFormData((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        const nextSnapshots = { ...serverFormSnapshotsRef.current };
+
+        drafts.forEach((draft) => {
+          const serverForm = orderToForm(draft);
+          const previousSnapshot = serverFormSnapshotsRef.current[draft.id];
+          const currentForm = prev[draft.id];
+          const canHydrate = !currentForm || formsEqual(currentForm, previousSnapshot);
+
+          if (canHydrate && !formsEqual(currentForm, serverForm)) {
+            next[draft.id] = serverForm;
+            changed = true;
+          }
+
+          nextSnapshots[draft.id] = serverForm;
+        });
+
+        serverFormSnapshotsRef.current = nextSnapshots;
+        return changed ? next : prev;
       });
-      if (Object.keys(map).length > 0) setFormData((prev) => ({ ...prev, ...map }));
+
       if (!selectedId || !drafts.find((d) => d.id === selectedId)) setSelectedId(drafts[0].id);
     }
-  }, [drafts]);
+  }, [drafts, selectedId]);
 
   // ─── Mutations ───
   const createOrderMutation = useMutation({
@@ -556,6 +583,11 @@ export function useInbox() {
     [formData],
   );
 
+  const getDraftCaseSummary = useCallback(
+    (draft: OrderDraft) => getInboxCaseSummary(draft, formData[draft.id], assessAutoConfirm(draft, formData[draft.id])),
+    [formData],
+  );
+
   const filtered = useMemo(
     () =>
       sourceOrders.filter((d) => {
@@ -586,14 +618,16 @@ export function useInbox() {
         if (filterType && d.thread_type !== filterType) return false;
 
         if (sidebarFilter === "alle" || sidebarFilter === "verzonden" || sidebarFilter === "concepten") return true;
-        if (sidebarFilter === "autoconfirm") return getDraftAutoConfirmAssessment(d).eligible;
-        const hasMissing = (d.missing_fields || []).length > 0;
-        const score = d.confidence_score || 0;
-        const isReady = !hasMissing && score >= 80;
-        if (sidebarFilter === "klaar") return isReady;
-        return !isReady;
+
+        const caseStatus = getDraftCaseSummary(d).status.key;
+
+        if (sidebarFilter === "autoconfirm") return caseStatus === "auto_confirm_ready";
+        if (sidebarFilter === "klaar") return caseStatus === "ready_for_order" || caseStatus === "auto_confirm_ready";
+        if (sidebarFilter === "actie") return !["ready_for_order", "auto_confirm_ready", "waiting_for_customer"].includes(caseStatus);
+
+        return true;
       }),
-    [sourceOrders, search, filterDate, filterClient, filterType, sidebarFilter, getDraftAutoConfirmAssessment],
+    [sourceOrders, search, filterDate, filterClient, filterType, sidebarFilter, getDraftCaseSummary],
   );
 
   const groupedByClient = useMemo(() => {
@@ -607,22 +641,19 @@ export function useInbox() {
     return groups;
   }, [filtered, groupByClient]);
 
-  const needsAction = filtered.filter((d) => {
-    const hasMissing = (d.missing_fields || []).length > 0;
-    const lc = (d.confidence_score || 0) > 0 && (d.confidence_score || 0) < 80;
-    const noScore = !d.confidence_score;
-    return hasMissing || lc || noScore;
+  const needsAction = filtered.filter((draft) => {
+    const key = getDraftCaseSummary(draft).status.key;
+    return !["ready_for_order", "auto_confirm_ready", "waiting_for_customer"].includes(key);
   });
 
-  const readyToGo = filtered.filter((d) => {
-    const hasMissing = (d.missing_fields || []).length > 0;
-    const score = d.confidence_score || 0;
-    return !hasMissing && score >= 80;
+  const readyToGo = filtered.filter((draft) => {
+    const key = getDraftCaseSummary(draft).status.key;
+    return key === "ready_for_order" || key === "auto_confirm_ready";
   });
 
   const autoConfirmCandidates = useMemo(
-    () => drafts.filter((draft) => getDraftAutoConfirmAssessment(draft).eligible),
-    [drafts, getDraftAutoConfirmAssessment],
+    () => drafts.filter((draft) => getDraftCaseSummary(draft).status.key === "auto_confirm_ready"),
+    [drafts, getDraftCaseSummary],
   );
 
   const intakeQueueStats = useMemo(
@@ -1013,6 +1044,7 @@ export function useInbox() {
     createOrderMutation,
     deleteMutation,
     getDraftAutoConfirmAssessment,
+    getDraftCaseSummary,
   };
 }
 

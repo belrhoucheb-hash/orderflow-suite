@@ -4,9 +4,11 @@ import type { OrderDraft } from "./types";
 import { formatDate } from "./utils";
 import { cn } from "@/lib/utils";
 import { getFollowUpStatus } from "@/lib/followUpStatus";
+import type { InboxCaseSummary } from "@/lib/inboxCase";
 
 interface Props {
   draft: OrderDraft;
+  caseSummary: InboxCaseSummary;
   isSelected: boolean;
   isBulkChecked?: boolean;
   onBulkToggle?: (id: string) => void;
@@ -22,7 +24,7 @@ const TYPE_META: Record<string, { label: string; Icon: any; stripe: string }> = 
   question: { label: "Vraag", Icon: HelpCircle, stripe: "hsl(210 50% 55%)" },
 };
 
-export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, onClick, bulkMode }: Props) {
+export function InboxListItem({ draft, caseSummary, isSelected, isBulkChecked, onBulkToggle, onClick, bulkMode }: Props) {
   const threadType = draft.thread_type || "new";
   const meta = TYPE_META[threadType] || TYPE_META.new;
   const { Icon, label, stripe } = meta;
@@ -30,6 +32,8 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
   const isCancel = threadType === "cancellation";
   const followUpStatus = getFollowUpStatus(draft);
   const attachmentsCount = draft.attachments?.length || 0;
+  const blockerCount = caseSummary.blockers.length;
+  const topBlocker = caseSummary.blockers[0];
 
   return (
     <div
@@ -159,11 +163,31 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
             {followUpStatus.label}
           </span>
         )}
+        <span className={cn("shrink-0 rounded-full border px-2 py-[2px] text-[10px] font-semibold", caseSummary.status.tone)}>
+          {caseSummary.status.label}
+        </span>
         <IntakeSourceBadge
           source={draft.source}
           fallbackHasEmail={!!draft.source_email_from}
           className="shrink-0"
         />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10.5px]">
+        <span className="font-medium text-muted-foreground">Volgende stap:</span>
+        <span className="text-foreground/90">{caseSummary.nextStep}</span>
+        {topBlocker && (
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full border px-2 py-[2px] font-medium",
+              topBlocker.severity === "critical"
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-amber-200 bg-amber-50 text-amber-800",
+            )}
+          >
+            {topBlocker.label}
+            {blockerCount > 1 ? ` +${blockerCount - 1}` : ""}
+          </span>
+        )}
       </div>
       {(attachmentsCount > 0 || threadType !== "new") && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">

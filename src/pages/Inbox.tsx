@@ -62,6 +62,7 @@ export default function Inbox() {
     createOrderMutation,
     deleteMutation,
     getDraftAutoConfirmAssessment,
+    getDraftCaseSummary,
   } = useInbox();
 
   if (isLoading) {
@@ -352,6 +353,7 @@ export default function Inbox() {
                   <InboxListItem
                     key={draft.id}
                     draft={draft}
+                    caseSummary={getDraftCaseSummary(draft)}
                     isSelected={selectedId === draft.id}
                     bulkMode={bulkSelected.size > 0}
                     isBulkChecked={bulkSelected.has(draft.id)}
@@ -398,6 +400,7 @@ export default function Inbox() {
                 <SourcePanel
                   selected={selected}
                   form={form}
+                  caseSummary={getDraftCaseSummary(selected)}
                   onParseResult={(data) => {
                     if (!selected) return;
                     const { result: enriched, enrichments } = enrichAddresses(data);
@@ -416,6 +419,7 @@ export default function Inbox() {
                 isCreatePending={isCreatePending}
                 addressSuggestions={addressSuggestions}
                 autoConfirmAssessment={getDraftAutoConfirmAssessment(selected)}
+                caseSummary={getDraftCaseSummary(selected)}
                 onUpdateField={updateField}
                 onToggleRequirement={toggleRequirement}
                 onAutoSave={handleAutoSave}

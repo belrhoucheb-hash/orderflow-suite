@@ -35,6 +35,7 @@ import type { AutoConfirmAssessment } from "@/lib/autoConfirm";
 import { FollowUpPanel } from "@/components/inbox/InboxFollowUpPanel";
 import { getRecommendedFollowUpAction } from "@/lib/followUpDraft";
 import { getFollowUpStatus } from "@/lib/followUpStatus";
+import type { InboxCaseSummary } from "@/lib/inboxCase";
 import {
   getFilledCount,
   getTotalFields,
@@ -50,6 +51,7 @@ interface Props {
   isCreatePending: boolean;
   addressSuggestions: any;
   autoConfirmAssessment: AutoConfirmAssessment;
+  caseSummary: InboxCaseSummary;
   onUpdateField: (field: keyof FormState, value: any) => void;
   onToggleRequirement: (req: string) => void;
   onAutoSave: () => void;
@@ -135,6 +137,7 @@ export function InboxReviewPanel({
   form,
   isCreatePending,
   autoConfirmAssessment,
+  caseSummary,
   onUpdateField,
   onToggleRequirement,
   onAutoSave,
@@ -213,6 +216,7 @@ export function InboxReviewPanel({
   const routeNeedsAttention = pickupNeedsAttention || deliveryNeedsAttention;
   const cargoNeedsAttention = quantityMissing || weightMissing || dimensionsMissing || !!weightAnomaly;
   const requirementsNeedAttention = requirementsMissing;
+  const topBlockers = caseSummary.blockers.slice(0, 4);
   const recommendedFollowUpAction = getRecommendedFollowUpAction(selected);
   const needsFollowUpGuidance =
     !autoConfirmAssessment.eligible &&
@@ -232,7 +236,9 @@ export function InboxReviewPanel({
       ? autoConfirmAssessment.reason
       : needsFollowUpGuidance
         ? recommendedFollowUpAction.description
-        : autoConfirmAssessment.reason;
+        : topBlockers.length > 0
+          ? `${caseSummary.nextStep} · ${topBlockers[0].label}`
+          : autoConfirmAssessment.reason;
 
   const totalKg = form.weight
     ? form.perUnit
@@ -368,6 +374,12 @@ export function InboxReviewPanel({
                   )}
                 </div>
               )}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className={cn("inline-flex items-center rounded-full border px-2.5 py-[3px] text-[11px] font-medium", caseSummary.status.tone)}>
+                  {caseSummary.status.label}
+                </span>
+                <span className="text-[11px] text-muted-foreground">Volgende stap: {caseSummary.nextStep}</span>
+              </div>
             </div>
             <div className="flex shrink-0 flex-row items-center gap-3 self-start md:flex-col md:items-center md:gap-0">
               <span
@@ -1016,6 +1028,34 @@ export function InboxReviewPanel({
           boxShadow: "0 -8px 30px rgb(0 0 0 / 0.06)",
         }}
       >
+        {topBlockers.length > 0 && (
+          <div
+            className="mb-3 rounded-2xl border px-3 py-3"
+            style={{
+              borderColor: topBlockers.some((blocker) => blocker.severity === "critical") ? "rgb(254 202 202)" : "rgb(253 230 138)",
+              background: topBlockers.some((blocker) => blocker.severity === "critical")
+                ? "linear-gradient(180deg, rgba(254,242,242,0.94), rgba(255,255,255,0.98))"
+                : "linear-gradient(180deg, rgba(255,251,235,0.94), rgba(255,255,255,0.98))",
+            }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Wat blokkeert nu</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {topBlockers.map((blocker) => (
+                <span
+                  key={blocker.key}
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-2 py-[3px] text-[10.5px] font-medium",
+                    blocker.severity === "critical"
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-amber-200 bg-amber-50 text-amber-800",
+                  )}
+                >
+                  {blocker.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div
           className="hairline"
           style={{ marginBottom: 10 }}
