@@ -45,6 +45,7 @@ import { DRIVER_SCHEDULE_STATUS_LABELS } from "@/types/rooster";
 
 import { RoosterCellEditor } from "./RoosterCellEditor";
 import { RoosterConflictBanner } from "./RoosterConflictBanner";
+import { RoosterCapacityBanner } from "./RoosterCapacityBanner";
 
 interface Props {
   /**
@@ -329,6 +330,7 @@ export function RoosterWeekView({ date }: Props) {
         driverNames={driverNames}
         vehicleLabels={vehicleLabels}
       />
+      <RoosterCapacityBanner from={weekStart} to={weekEnd} />
       {isMobile ? (
         // Op smal scherm: drag-drop uit, alleen horizontaal scrollen + de
         // "Kopieer naar"-menu in de cel-popover. Dat voorkomt dat een
