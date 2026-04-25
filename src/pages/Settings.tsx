@@ -148,21 +148,24 @@ function SettingsOverviewCard({
     <button
       type="button"
       onClick={onClick}
-      className="card--luxe p-5 md:p-6 text-left transition-all hover:shadow-md hover:border-[hsl(var(--gold)/0.24)] group"
+      className="card--luxe p-5 md:p-6 text-left transition-all hover:border-[hsl(var(--gold)/0.2)] hover:bg-[hsl(var(--gold-soft)/0.06)] group"
     >
       <div className="flex items-start justify-between gap-4">
-        <div className={LUXE_ICON_TILE} style={LUXE_ICON_TILE_STYLE}>
+        <div className={cn(LUXE_ICON_TILE, "h-11 w-11 rounded-2xl")} style={LUXE_ICON_TILE_STYLE}>
           <Icon className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
         </div>
         <ChevronRight className="h-4 w-4 text-[hsl(var(--gold)/0.45)] transition-colors group-hover:text-[hsl(var(--gold-deep))]" />
       </div>
       <h3 className="mt-5 text-base font-semibold text-foreground">{title}</h3>
-      <p className="mt-2 max-w-[44ch] text-xs leading-relaxed text-muted-foreground">{description}</p>
+      <p className="mt-2 max-w-[38ch] text-xs leading-relaxed text-muted-foreground">{description}</p>
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-5 space-y-2.5">
         {items.map((item) => (
-          <div key={item.label} className="flex items-center justify-between gap-4 rounded-xl border border-[hsl(var(--gold)/0.08)] px-3.5 py-2.5">
-            <span className="text-sm text-foreground">{item.label}</span>
+          <div
+            key={item.label}
+            className="flex items-center justify-between gap-4 rounded-xl bg-[hsl(var(--gold-soft)/0.09)] px-3.5 py-2.5"
+          >
+            <span className="text-sm text-foreground/90">{item.label}</span>
             <span className={cn("text-[11px] whitespace-nowrap", item.subtle ? "text-muted-foreground" : "font-medium text-[hsl(var(--gold-deep))]")}>
               {item.status}
             </span>
@@ -947,16 +950,17 @@ const Settings = () => {
                         key={item.title}
                         type="button"
                         onClick={() => handleTabChange(item.target)}
-                        className="w-full rounded-2xl border border-[hsl(var(--gold)/0.14)] px-4 py-3.5 text-left transition-colors hover:bg-[hsl(var(--gold-soft)/0.16)]"
+                        className="w-full rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3.5 text-left transition-colors hover:bg-[hsl(var(--gold-soft)/0.16)]"
                       >
                         <div className="flex items-start gap-3">
                           <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]">
                             <AlertTriangle className="h-3.5 w-3.5" />
                           </span>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="text-sm font-medium text-foreground">{item.title}</div>
                             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
                           </div>
+                          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--gold)/0.45)]" />
                         </div>
                       </button>
                     ))}
@@ -979,16 +983,17 @@ const Settings = () => {
                       key={step.title}
                       type="button"
                       onClick={() => handleTabChange(step.target)}
-                      className="w-full rounded-2xl border border-[hsl(var(--gold)/0.1)] px-4 py-3.5 text-left transition-colors hover:bg-[hsl(var(--gold-soft)/0.12)]"
+                      className="w-full rounded-2xl border border-[hsl(var(--gold)/0.08)] bg-[hsl(var(--gold-soft)/0.06)] px-4 py-3.5 text-left transition-colors hover:bg-[hsl(var(--gold-soft)/0.12)]"
                     >
                       <div className="flex items-start gap-3">
                         <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[hsl(var(--gold)/0.18)] text-[11px] font-semibold text-[hsl(var(--gold-deep))]">
                           {index + 1}
                         </span>
-                        <div>
+                        <div className="flex-1">
                           <div className="text-sm font-medium text-foreground">{step.title}</div>
                           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.description}</p>
                         </div>
+                        <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--gold)/0.4)]" />
                       </div>
                     </button>
                   ))}
