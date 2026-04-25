@@ -14,6 +14,14 @@ import {
   CheckCircle2,
   Shield,
   Brain,
+  Bot,
+  Sparkles,
+  Wand2,
+  Send,
+  FileWarning,
+  ReceiptText,
+  ChevronDown,
+  Play,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +31,19 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "sonner";
+import { useMemo as useReactMemo, useState } from "react";
+import {
+  useCreateExceptionAction,
+  useExceptionActions,
+  useExceptionActionRuns,
+  useExecuteExceptionAction,
+  useUpdateExceptionActionStatus,
+} from "@/hooks/useExceptionActions";
+import type {
+  CreateExceptionActionInput,
+  ExceptionAction,
+  ExceptionSourceType,
+} from "@/types/exceptionActions";
 
 // ── Types ────────────────────────────────────────────────────────────
 type ExceptionType = "Vertraging" | "Data mist" | "Capaciteit" | "SLA" | "Voorspelde vertraging";
@@ -40,6 +61,65 @@ interface ExceptionItem {
   actionTo: string;
   /** "db" = from delivery_exceptions table, "adhoc" = computed from order data */
   source: "db" | "adhoc";
+}
+
+function CopilotHistory({ actionId }: { actionId: string }) {
+  const { data: runs = [] } = useExceptionActionRuns(actionId);
+
+  if (runs.length === 0) return null;
+
+  return (
+    <div className="mt-3 border-t border-[hsl(var(--gold)/0.12)] pt-3">
+      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-semibold mb-2">
+        Copilot Historie
+      </p>
+      <div className="space-y-1.5">
+        {runs.slice(0, 4).map((run) => (
+          <div key={run.id} className="flex items-center justify-between gap-3 text-xs">
+            <span className="text-foreground font-medium">{run.runType}</span>
+            <span className="text-muted-foreground">{new Date(run.createdAt).toLocaleString("nl-NL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface ExceptionCopilotSuggestion {
+  sourceType: ExceptionSourceType;
+  sourceRef: string;
+  actionType: string;
+  title: string;
+  description: string;
+  confidence: number;
+  impact: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  requiresApproval: boolean;
+}
+
+function extractOrderId(exc: ExceptionItem): string | undefined {
+  if (exc.id.startsWith("missing-")) return exc.id.replace("missing-", "");
+  if (exc.id.startsWith("sla-")) return exc.id.replace("sla-", "");
+  if (exc.id.startsWith("delay-")) return exc.id.replace("delay-", "");
+  if (exc.actionTo.startsWith("/orders/")) return exc.actionTo.replace("/orders/", "");
+  return undefined;
+}
+
+function extractTripId(exc: ExceptionItem): string | undefined {
+  const match = exc.actionTo.match(/trip=([a-f0-9-]+)/i);
+  if (match?.[1]) return match[1];
+  if (exc.actionTo.startsWith("/planning/")) return exc.actionTo.replace("/planning/", "");
+  return undefined;
+}
+
+function extractMissingFields(description: string): string[] {
+  const marker = "Ontbrekende velden:";
+  if (!description.includes(marker)) return [];
+  return description
+    .split(marker)[1]
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -67,6 +147,120 @@ const typeBadgeColor: Record<ExceptionType, string> = {
   "Voorspelde vertraging":
     "bg-[hsl(var(--gold-soft)/0.4)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.3)]",
 };
+
+const copilotIconByAction: Record<string, typeof Send> = {
+  SEND_ETA_UPDATE: Send,
+  REQUEST_MISSING_INFO: FileWarning,
+  FLAG_BILLING_REVIEW: ReceiptText,
+  REMIND_DRIVER_FOR_POD: Sparkles,
+};
+
+function mapExceptionToSourceType(exc: ExceptionItem): ExceptionSourceType {
+  if (exc.id.startsWith("anomaly-")) return "anomaly";
+  if (exc.source === "adhoc") return "adhoc";
+  return "delivery_exception";
+}
+
+function buildSuggestedAction(exc: ExceptionItem): ExceptionCopilotSuggestion {
+  const sourceType = mapExceptionToSourceType(exc);
+  const sourceRef = exc.id;
+  const orderId = extractOrderId(exc);
+  const tripId = extractTripId(exc);
+
+  if (exc.type === "Voorspelde vertraging" || exc.type === "Vertraging") {
+    return {
+      sourceType,
+      sourceRef,
+      actionType: "SEND_ETA_UPDATE",
+      title: "Stuur proactieve ETA-update",
+      description: "Informeer klant en ontvanger direct over de afwijking om belverkeer en handmatige opvolging te beperken.",
+      confidence: exc.type === "Voorspelde vertraging" ? 91 : 84,
+      impact: {
+        customerImpact: "high",
+        riskReduction: "medium",
+        summary: "Voorkomt verrassingen en verlaagt escalatiekans",
+      },
+      payload: {
+        orderId,
+        tripId,
+        target: "customer_and_recipient",
+        exceptionType: exc.type,
+        orderNumber: exc.orderNumber,
+      },
+      requiresApproval: true,
+    };
+  }
+
+  if (exc.type === "Data mist" || exc.type === "SLA") {
+    return {
+      sourceType,
+      sourceRef,
+      actionType: "REQUEST_MISSING_INFO",
+      title: "Vraag ontbrekende info automatisch op",
+      description: "Start direct een follow-up richting klant of planner zodat de order weer door de flow kan.",
+      confidence: exc.type === "SLA" ? 89 : 93,
+      impact: {
+        customerImpact: "medium",
+        riskReduction: "high",
+        summary: "Verkort stilstand in intake en voorkomt SLA-verlies",
+      },
+      payload: {
+        orderId,
+        target: "customer",
+        exceptionType: exc.type,
+        orderNumber: exc.orderNumber,
+        missingFields: extractMissingFields(exc.description),
+      },
+      requiresApproval: true,
+    };
+  }
+
+  if (exc.description.toLowerCase().includes("pod")) {
+    return {
+      sourceType,
+      sourceRef,
+      actionType: "REMIND_DRIVER_FOR_POD",
+      title: "Herinner chauffeur aan POD",
+      description: "Stuur een gerichte reminder zodat aflevering sneller administratief wordt afgerond.",
+      confidence: 88,
+      impact: {
+        customerImpact: "low",
+        riskReduction: "medium",
+        summary: "Versnelt orderafronding en voorkomt facturatieblokkade",
+      },
+      payload: {
+        orderId,
+        tripId,
+        target: "driver",
+        exceptionType: exc.type,
+        orderNumber: exc.orderNumber,
+      },
+      requiresApproval: true,
+    };
+  }
+
+  return {
+    sourceType,
+    sourceRef,
+    actionType: "FLAG_BILLING_REVIEW",
+    title: "Markeer voor billing review",
+    description: "Zet deze uitzondering klaar voor financiële opvolging zodat extra kosten of afwijkingen niet verloren gaan.",
+    confidence: 86,
+    impact: {
+      customerImpact: "low",
+      riskReduction: "medium",
+      summary: "Borgt opbrengst en maakt exception financieel zichtbaar",
+    },
+    payload: {
+      orderId,
+      tripId,
+      target: "billing",
+      exceptionType: exc.type,
+      orderNumber: exc.orderNumber,
+    },
+    requiresApproval: true,
+  };
+}
 
 // ── Delivery exceptions from DB ─────────────────────────────────────
 function useDeliveryExceptions() {
@@ -132,10 +326,15 @@ function useExceptionOrders() {
 
 // ── Component ────────────────────────────────────────────────────────
 const Exceptions = () => {
+  const [expandedCopilotId, setExpandedCopilotId] = useState<string | null>(null);
   const { data: orderData, isLoading: ordersLoading } = useExceptionOrders();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useFleetVehicles();
   const { data: deliveryExceptions = [], isLoading: dexLoading } = useDeliveryExceptions();
   const { data: anomalies = [], isLoading: anomaliesLoading } = useAnomalies({ unresolvedOnly: true });
+  const { data: exceptionActions = [] } = useExceptionActions({ status: "ALL" });
+  const createExceptionAction = useCreateExceptionAction();
+  const updateExceptionActionStatus = useUpdateExceptionActionStatus();
+  const executeExceptionAction = useExecuteExceptionAction();
   const resolveException = useResolveException();
   const resolveAnomaly = useResolveAnomaly();
 
@@ -305,6 +504,22 @@ const Exceptions = () => {
     };
   }, [orderData, vehicles, deliveryExceptions, anomalies]);
 
+  const actionsBySource = useReactMemo(() => {
+    const map = new Map<string, ExceptionAction[]>();
+    for (const action of exceptionActions) {
+      const key = `${action.sourceType}:${action.sourceRef}`;
+      const list = map.get(key) ?? [];
+      list.push(action);
+      map.set(key, list);
+    }
+    return map;
+  }, [exceptionActions]);
+
+  const recommendedCount = useReactMemo(
+    () => exceptionActions.filter((action) => action.recommended && action.status === "PENDING").length,
+    [exceptionActions],
+  );
+
   const totalCount = counts.delays + counts.missingData + counts.capacity + counts.sla + counts.delivery + (counts.anomalies ?? 0);
 
   if (isLoading) {
@@ -318,7 +533,26 @@ const Exceptions = () => {
     { label: "Capaciteit", value: counts.capacity, icon: Truck, color: "text-violet-600", bg: "bg-violet-50 dark:bg-violet-950/40" },
     { label: "SLA risico", value: counts.sla, icon: Shield, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/40" },
     { label: "Anomalies", value: counts.anomalies ?? 0, icon: Brain, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/40" },
+    { label: "Copilot acties", value: recommendedCount, icon: Bot, color: "text-[hsl(var(--gold-deep))]", bg: "bg-[hsl(var(--gold-soft)/0.35)]" },
   ];
+
+  const handleSaveSuggestion = async (exc: ExceptionItem, suggestion: ExceptionCopilotSuggestion) => {
+    const payload: CreateExceptionActionInput = {
+      exceptionId: mapExceptionToSourceType(exc) === "delivery_exception" ? exc.id : undefined,
+      sourceType: suggestion.sourceType,
+      sourceRef: suggestion.sourceRef,
+      actionType: suggestion.actionType,
+      title: suggestion.title,
+      description: suggestion.description,
+      confidence: suggestion.confidence,
+      impact: suggestion.impact,
+      payload: suggestion.payload,
+      recommended: true,
+      requiresApproval: suggestion.requiresApproval,
+    };
+
+    await createExceptionAction.mutateAsync(payload);
+  };
 
   return (
     <div className="space-y-5">
@@ -329,7 +563,7 @@ const Exceptions = () => {
       />
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
         {kpis.map((kpi, i) => (
           <motion.div
             key={kpi.label}
@@ -371,73 +605,243 @@ const Exceptions = () => {
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.03 }}
-                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition-colors"
+                  className="px-5 py-3.5 hover:bg-muted/40 transition-colors"
                 >
-                  {/* Urgency icon */}
-                  <div className={cn("rounded-full p-1.5 ring-1", uc.bg, uc.ring)}>
-                    <AlertTriangle className={cn("h-4 w-4", uc.color)} strokeWidth={2} />
-                  </div>
+                  {(() => {
+                    const sourceType = mapExceptionToSourceType(exc);
+                    const sourceKey = `${sourceType}:${exc.id}`;
+                    const actions = actionsBySource.get(sourceKey) ?? [];
+                    const recommendedAction = actions.find((action) => action.recommended && action.status === "PENDING") ?? actions[0] ?? null;
+                    const suggestion = buildSuggestedAction(exc);
+                    const ActionIcon = copilotIconByAction[(recommendedAction?.actionType ?? suggestion.actionType)] ?? Wand2;
+                    const isExpanded = expandedCopilotId === exc.id;
 
-                  {/* Type badge */}
-                  <Badge
-                    variant="outline"
-                    className={cn("text-xs font-medium shrink-0 min-w-[80px] justify-center", typeBadgeColor[exc.type])}
-                  >
-                    {exc.type}
-                  </Badge>
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-4">
+                          <div className={cn("rounded-full p-1.5 ring-1", uc.bg, uc.ring)}>
+                            <AlertTriangle className={cn("h-4 w-4", uc.color)} strokeWidth={2} />
+                          </div>
 
-                  {/* Order + client */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {exc.orderNumber}
-                      </span>
-                      <span className="text-xs text-muted-foreground truncate">
-                        {exc.clientName}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {exc.description}
-                    </p>
-                  </div>
+                          <Badge
+                            variant="outline"
+                            className={cn("text-xs font-medium shrink-0 min-w-[80px] justify-center", typeBadgeColor[exc.type])}
+                          >
+                            {exc.type}
+                          </Badge>
 
-                  {/* Time since detected */}
-                  <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                    {timeAgo(exc.detectedAt)}
-                  </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {exc.orderNumber}
+                              </span>
+                              <span className="text-xs text-muted-foreground truncate">
+                                {exc.clientName}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                              {exc.description}
+                            </p>
+                          </div>
 
-                  {/* Action buttons */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {exc.source === "db" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                        disabled={resolveException.isPending || resolveAnomaly.isPending}
-                        onClick={() => {
-                          if (exc.id.startsWith("anomaly-")) {
-                            resolveAnomaly.mutate({ id: exc.id.replace("anomaly-", "") });
-                          } else {
-                            resolveException.mutate(exc.id);
-                          }
-                        }}
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Opgelost
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      asChild
-                      className="text-xs gap-1.5"
-                    >
-                      <Link to={exc.actionTo}>
-                        {exc.actionLabel}
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
-                  </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                            {timeAgo(exc.detectedAt)}
+                          </span>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {exc.source === "db" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                disabled={resolveException.isPending || resolveAnomaly.isPending}
+                                onClick={() => {
+                                  if (exc.id.startsWith("anomaly-")) {
+                                    resolveAnomaly.mutate({ id: exc.id.replace("anomaly-", "") });
+                                  } else {
+                                    resolveException.mutate(exc.id);
+                                  }
+                                }}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Opgelost
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              asChild
+                              className="text-xs gap-1.5"
+                            >
+                              <Link to={exc.actionTo}>
+                                {exc.actionLabel}
+                                <ArrowRight className="h-3.5 w-3.5" />
+                              </Link>
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs gap-1.5 border-[hsl(var(--gold)/0.22)] hover:bg-[hsl(var(--gold-soft)/0.18)]"
+                              onClick={() => setExpandedCopilotId(isExpanded ? null : exc.id)}
+                            >
+                              <Bot className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+                              Copilot
+                              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-180")} />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div
+                            className="ml-12 rounded-2xl border px-4 py-4"
+                            style={{
+                              background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.18) 0%, hsl(var(--card)) 100%)",
+                              borderColor: "hsl(var(--gold) / 0.18)",
+                            }}
+                          >
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="h-8 w-8 rounded-xl flex items-center justify-center bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))]">
+                                    <ActionIcon className="h-4 w-4" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className="text-[10px] uppercase tracking-[0.18em] font-semibold text-[hsl(var(--gold-deep))]"
+                                        style={{ fontFamily: "var(--font-display)" }}
+                                      >
+                                        Next Best Action
+                                      </span>
+                                      <Badge
+                                        variant="outline"
+                                        className="border-[hsl(var(--gold)/0.22)] bg-[hsl(var(--gold-soft)/0.35)] text-[hsl(var(--gold-deep))]"
+                                      >
+                                        {Math.round(recommendedAction?.confidence ?? suggestion.confidence)}% confidence
+                                      </Badge>
+                                    </div>
+                                    <h3 className="text-sm font-semibold text-foreground mt-0.5">
+                                      {recommendedAction?.title ?? suggestion.title}
+                                    </h3>
+                                  </div>
+                                </div>
+
+                                <p className="text-sm text-muted-foreground leading-relaxed max-w-3xl">
+                                  {recommendedAction?.description ?? suggestion.description}
+                                </p>
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <span className="chiplet">
+                                    {String((recommendedAction?.impact?.summary as string | undefined) ?? suggestion.impact.summary ?? "Directe operationele opvolging")}
+                                  </span>
+                                  <span className="chiplet">
+                                    {recommendedAction?.requiresApproval ?? suggestion.requiresApproval ? "Planner approval nodig" : "Mag autonoom"}
+                                  </span>
+                                  {recommendedAction ? (
+                                    <span className="chiplet">{recommendedAction.status}</span>
+                                  ) : (
+                                    <span className="chiplet chiplet--warn">Preview voorstel</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="lg:w-[280px] shrink-0">
+                                <div className="rounded-xl border border-white/40 bg-white/60 dark:bg-white/5 p-3 space-y-3">
+                                  <div>
+                                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-semibold">
+                                      Verwachte impact
+                                    </p>
+                                    <p className="text-sm text-foreground mt-1">
+                                      {String((recommendedAction?.impact?.summary as string | undefined) ?? suggestion.impact.summary ?? "Snellere exception-afhandeling")}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex flex-col gap-2">
+                                    {recommendedAction ? (
+                                      <>
+                                        {recommendedAction.status === "PENDING" && (
+                                          <>
+                                            <Button
+                                              size="sm"
+                                              className="w-full gap-1.5"
+                                              onClick={() => updateExceptionActionStatus.mutate({
+                                                id: recommendedAction.id,
+                                                status: "APPROVED",
+                                              })}
+                                              disabled={updateExceptionActionStatus.isPending}
+                                            >
+                                              <CheckCircle2 className="h-3.5 w-3.5" />
+                                              Goedkeuren
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="w-full gap-1.5 text-muted-foreground"
+                                              onClick={() => updateExceptionActionStatus.mutate({
+                                                id: recommendedAction.id,
+                                                status: "REJECTED",
+                                              })}
+                                              disabled={updateExceptionActionStatus.isPending}
+                                            >
+                                              Afwijzen
+                                            </Button>
+                                          </>
+                                        )}
+                                        <Button
+                                          size="sm"
+                                          variant={recommendedAction.status === "PENDING" ? "outline" : "default"}
+                                          className="w-full gap-1.5"
+                                          onClick={() => executeExceptionAction.mutate({
+                                            actionId: recommendedAction.id,
+                                            actionType: recommendedAction.actionType,
+                                            payload: {
+                                              ...recommendedAction.payload,
+                                              requiresApproval: recommendedAction.requiresApproval,
+                                              currentStatus: recommendedAction.status,
+                                            },
+                                          })}
+                                          disabled={
+                                            executeExceptionAction.isPending ||
+                                            (recommendedAction.requiresApproval && recommendedAction.status !== "APPROVED")
+                                          }
+                                        >
+                                          <Play className="h-3.5 w-3.5" />
+                                          Nu uitvoeren
+                                        </Button>
+                                        <CopilotHistory actionId={recommendedAction.id} />
+                                      </>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        className="w-full gap-1.5"
+                                        onClick={() => handleSaveSuggestion(exc, suggestion)}
+                                        disabled={createExceptionAction.isPending}
+                                      >
+                                        <Sparkles className="h-3.5 w-3.5" />
+                                        Opslaan als voorstel
+                                      </Button>
+                                    )}
+
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      asChild
+                                      className="w-full gap-1.5"
+                                    >
+                                      <Link to={exc.actionTo}>
+                                        Open context
+                                        <ArrowRight className="h-3.5 w-3.5" />
+                                      </Link>
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </motion.div>
               );
             })}

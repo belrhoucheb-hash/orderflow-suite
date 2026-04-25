@@ -177,6 +177,33 @@ describe("useDecisionFeed", () => {
     expect(result.current.data).toHaveLength(2);
     expect(result.current.data?.[0].id).toBe("d1");
   });
+
+  it("maps object-based proposed actions to readable titles", async () => {
+    const mockDecisions = [
+      {
+        id: "d3",
+        decision_type: "DISPATCH",
+        resolution: "APPROVED",
+        input_confidence: 88,
+        created_at: "2026-04-06T10:00:00Z",
+        proposed_action: { title: "Vraag ontbrekende info automatisch op", actionType: "REQUEST_MISSING_INFO" },
+        actual_action: { title: "Vraag ontbrekende info automatisch op", status: "EXECUTED" },
+        entity_id: "o3",
+        entity_type: "order",
+        client_id: "c3",
+      },
+    ];
+
+    mockSupabase.from.mockImplementation(() => chainMock(mockDecisions));
+
+    const { result } = renderHook(() => useDecisionFeed(10), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.[0].proposed_action).toBe("Vraag ontbrekende info automatisch op");
+    expect(result.current.data?.[0].actual_action).toBe("Vraag ontbrekende info automatisch op");
+  });
 });
 
 describe("useLearningProgress", () => {

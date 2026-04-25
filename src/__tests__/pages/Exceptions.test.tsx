@@ -5,7 +5,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 // ── Hoisted mocks ──────────────────────────────────────────────────
-const { mockSupabase, mockFleetVehicles } = vi.hoisted(() => {
+const {
+  mockSupabase,
+  mockFleetVehicles,
+  mockExceptionActionsData,
+  mockExceptionActionRunsData,
+  mockCreateExceptionActionMutateAsync,
+  mockUpdateExceptionActionStatusMutate,
+  mockExecuteExceptionActionMutate,
+} = vi.hoisted(() => {
   const makeChain = (data: any[] = []) => ({
     select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
     neq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(),
@@ -19,6 +27,11 @@ const { mockSupabase, mockFleetVehicles } = vi.hoisted(() => {
       from: vi.fn().mockImplementation(() => makeChain([])),
     },
     mockFleetVehicles: [] as any[],
+    mockExceptionActionsData: [] as any[],
+    mockExceptionActionRunsData: [] as any[],
+    mockCreateExceptionActionMutateAsync: vi.fn().mockResolvedValue(undefined),
+    mockUpdateExceptionActionStatusMutate: vi.fn(),
+    mockExecuteExceptionActionMutate: vi.fn(),
   };
 });
 
@@ -26,6 +39,23 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
 
 vi.mock("@/hooks/useFleet", () => ({
   useFleetVehicles: () => ({ data: mockFleetVehicles, isLoading: false }),
+}));
+
+vi.mock("@/hooks/useExceptionActions", () => ({
+  useExceptionActions: () => ({ data: mockExceptionActionsData }),
+  useExceptionActionRuns: () => ({ data: mockExceptionActionRunsData }),
+  useCreateExceptionAction: () => ({
+    mutateAsync: mockCreateExceptionActionMutateAsync,
+    isPending: false,
+  }),
+  useUpdateExceptionActionStatus: () => ({
+    mutate: mockUpdateExceptionActionStatusMutate,
+    isPending: false,
+  }),
+  useExecuteExceptionAction: () => ({
+    mutate: mockExecuteExceptionActionMutate,
+    isPending: false,
+  }),
 }));
 
 vi.mock("framer-motion", async () => ({
@@ -81,6 +111,8 @@ describe("Exceptions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFleetVehicles.length = 0;
+    mockExceptionActionsData.length = 0;
+    mockExceptionActionRunsData.length = 0;
   });
 
   it("renders without crashing", async () => {
@@ -397,5 +429,89 @@ describe("Exceptions", () => {
     await waitFor(() => {
       expect(screen.getByText("Onbekend")).toBeInTheDocument();
     });
+  });
+
+  it("shows copilot preview and saves a suggestion when no action exists", async () => {
+    const user = userEvent.setup();
+    setupMockData({
+      drafts: [
+        {
+          id: "o1",
+          order_number: 1001,
+          client_name: "Acme BV",
+          status: "DRAFT",
+          missing_fields: ["weight_kg"],
+          received_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+
+    renderExceptions();
+
+    await user.click(await screen.findByRole("button", { name: /Copilot/i }));
+
+    expect(await screen.findByText("Next Best Action")).toBeInTheDocument();
+    expect(screen.getByText(/Vraag ontbrekende info automatisch op/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Opslaan als voorstel/i }));
+
+    await waitFor(() => {
+      expect(mockCreateExceptionActionMutateAsync).toHaveBeenCalled();
+    });
+  });
+
+  it("requires approval before execution for approval-gated copilot actions", async () => {
+    const user = userEvent.setup();
+    mockExceptionActionsData.push({
+      id: "action-1",
+      sourceType: "adhoc",
+      sourceRef: "missing-o1",
+      actionType: "REQUEST_MISSING_INFO",
+      title: "Vraag ontbrekende info automatisch op",
+      description: "Vraag klantgegevens op.",
+      confidence: 93,
+      impact: { summary: "Verkort stilstand in intake" },
+      payload: { orderId: "o1" },
+      status: "PENDING",
+      recommended: true,
+      requiresApproval: true,
+    });
+    mockExceptionActionRunsData.push({
+      id: "run-1",
+      runType: "PROPOSED",
+      createdAt: new Date().toISOString(),
+    });
+
+    setupMockData({
+      drafts: [
+        {
+          id: "o1",
+          order_number: 1001,
+          client_name: "Acme BV",
+          status: "DRAFT",
+          missing_fields: ["weight_kg"],
+          received_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+
+    renderExceptions();
+
+    await user.click(await screen.findByRole("button", { name: /Copilot/i }));
+
+    expect(await screen.findByText("Copilot Historie")).toBeInTheDocument();
+
+    const executeButton = screen.getByRole("button", { name: /Nu uitvoeren/i });
+    expect(executeButton).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /Goedkeuren/i }));
+
+    expect(mockUpdateExceptionActionStatusMutate).toHaveBeenCalledWith({
+      id: "action-1",
+      status: "APPROVED",
+    });
+    expect(screen.getByText("PROPOSED")).toBeInTheDocument();
   });
 });

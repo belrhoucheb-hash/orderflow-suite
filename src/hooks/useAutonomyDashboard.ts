@@ -10,6 +10,21 @@ import type {
   TrendDataPoint,
 } from "@/types/autonomy-dashboard";
 
+function toDisplayText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.title === "string") return record.title;
+    if (typeof record.actionType === "string") return record.actionType;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value ?? "");
+}
+
 // ── Pure helpers (exported for testing) ──────────────────────────
 
 const ALL_MODULES: DecisionType[] = [
@@ -161,14 +176,14 @@ export function useDecisionFeed(limit = 20) {
         .limit(limit) as any);
 
       if (error) throw error;
-      return (data ?? []) as Array<{
+      return ((data ?? []) as Array<{
         id: string;
         decision_type: DecisionType;
         entity_type: string;
         entity_id: string;
         client_id: string;
-        proposed_action: string;
-        actual_action: string;
+        proposed_action: unknown;
+        actual_action: unknown;
         input_confidence: number;
         model_confidence: number;
         outcome_confidence: number;
@@ -176,7 +191,11 @@ export function useDecisionFeed(limit = 20) {
         resolved_by: string | null;
         resolved_at: string | null;
         created_at: string;
-      }>;
+      }>).map((row) => ({
+        ...row,
+        proposed_action: toDisplayText(row.proposed_action),
+        actual_action: toDisplayText(row.actual_action),
+      }));
     },
   });
 }
@@ -255,8 +274,8 @@ export function useCorrectionLog(days = 7) {
         entityId: r.entity_id,
         clientId: r.client_id,
         clientName: r.client_id,
-        proposedAction: r.proposed_action,
-        actualAction: r.actual_action,
+        proposedAction: toDisplayText(r.proposed_action),
+        actualAction: toDisplayText(r.actual_action),
         resolvedBy: r.resolved_by ?? "",
         resolvedAt: r.resolved_at ?? "",
         createdAt: r.created_at,
