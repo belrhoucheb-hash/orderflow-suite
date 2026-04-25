@@ -183,7 +183,7 @@ export default function Inbox() {
               </p>
             </div>
             {autoConfirmCandidates.length > 0 && (
-              <div className="mx-3 mb-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2">
+              <div className="mx-3 mb-2 rounded-2xl border border-emerald-200/80 bg-[linear-gradient(180deg,rgba(236,253,245,0.96),rgba(236,253,245,0.78))] px-3.5 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-emerald-900">Veilige intakekandidaten</p>
@@ -197,15 +197,15 @@ export default function Inbox() {
                       setBulkSelected(new Set(autoConfirmCandidates.map((draft) => draft.id)));
                       handleAutoConfirmAllSafe();
                     }}
-                    className="shrink-0 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                    className="shrink-0 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700"
                   >
                     Bevestig veilig
                   </button>
                 </div>
               </div>
             )}
-            <div className="p-3 space-y-2">
-              <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-3 p-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 {[
                   {
                     key: "actie",
@@ -214,7 +214,7 @@ export default function Inbox() {
                     helper: "Onzeker of onvolledig",
                     icon: AlertCircle,
                     active: sidebarFilter === "actie",
-                    tone: "border-amber-200 bg-amber-50/70 text-amber-900",
+                      tone: "border-amber-200/70 bg-[linear-gradient(180deg,rgba(255,251,235,0.92),rgba(255,251,235,0.72))] text-amber-950",
                   },
                   {
                     key: "autoconfirm",
@@ -223,7 +223,7 @@ export default function Inbox() {
                     helper: "Kan direct door",
                     icon: CheckCheck,
                     active: sidebarFilter === "autoconfirm",
-                    tone: "border-emerald-200 bg-emerald-50/70 text-emerald-900",
+                      tone: "border-emerald-200/70 bg-[linear-gradient(180deg,rgba(236,253,245,0.92),rgba(236,253,245,0.72))] text-emerald-950",
                   },
                   {
                     key: "concepten",
@@ -232,7 +232,7 @@ export default function Inbox() {
                     helper: "Concept klaar voor follow-up",
                     icon: Clock3,
                     active: sidebarFilter === "concepten",
-                    tone: "border-blue-200 bg-blue-50/70 text-blue-900",
+                      tone: "border-sky-200/70 bg-[linear-gradient(180deg,rgba(240,249,255,0.92),rgba(240,249,255,0.72))] text-sky-950",
                   },
                   {
                     key: "verzonden",
@@ -241,44 +241,44 @@ export default function Inbox() {
                     helper: "Wacht op klantreactie",
                     icon: MailCheck,
                     active: sidebarFilter === "verzonden",
-                    tone: "border-slate-200 bg-slate-50/90 text-slate-900",
+                      tone: "border-slate-200/70 bg-[linear-gradient(180deg,rgba(248,250,252,0.95),rgba(248,250,252,0.78))] text-slate-900",
                   },
                 ].map((item) => (
                   <button
                     key={item.key}
                     onClick={() => setSidebarFilter(item.key as typeof sidebarFilter)}
                     className={cn(
-                      "rounded-xl border px-3 py-2 text-left transition-all",
+                      "rounded-2xl border px-3.5 py-3 text-left transition-all",
                       item.tone,
-                      item.active ? "ring-1 ring-primary/30" : "hover:border-primary/30",
+                      item.active ? "ring-1 ring-[hsl(var(--gold)/0.25)] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.08)]" : "hover:border-[hsl(var(--gold)/0.18)]",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[11px] font-semibold">{item.label}</p>
-                        <p className="text-[10px] opacity-75">{item.helper}</p>
+                        <p className="text-[11px] font-semibold tracking-[0.01em]">{item.label}</p>
+                        <p className="mt-0.5 text-[10px] opacity-75">{item.helper}</p>
                       </div>
-                      <item.icon className="h-4 w-4 shrink-0 opacity-80" />
+                      <item.icon className="h-4 w-4 shrink-0 opacity-70" />
                     </div>
-                    <p className="mt-2 text-lg font-semibold tabular-nums">{item.count}</p>
+                    <p className="mt-2.5 text-lg font-semibold tabular-nums">{item.count}</p>
                   </button>
                 ))}
               </div>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--gold-deep)/0.5)]" />
                 <input
                   placeholder="Zoek op order of klant..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-9 pl-9 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white transition-all"
+                  className="h-10 w-full rounded-xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-all focus:bg-white focus:outline-none focus:ring-1 focus:ring-[hsl(var(--gold)/0.2)]"
                 />
               </div>
               {/* Filter dropdowns */}
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 <select
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="h-7 text-xs border border-gray-200 rounded-md bg-white text-gray-600 px-2 focus:ring-1 focus:ring-primary focus:border-primary"
+                  className="h-8 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
                 >
                   <option value="">Datum</option>
                   <option value="today">Vandaag</option>
@@ -288,7 +288,7 @@ export default function Inbox() {
                 <select
                   value={filterClient}
                   onChange={(e) => setFilterClient(e.target.value)}
-                  className="h-7 text-xs border border-gray-200 rounded-md bg-white text-gray-600 px-2 focus:ring-1 focus:ring-primary focus:border-primary"
+                  className="h-8 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
                 >
                   <option value="">Klant</option>
                   {[...new Set(drafts.map((d) => d.client_name).filter(Boolean))].map((name) => (
@@ -300,7 +300,7 @@ export default function Inbox() {
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
-                  className="h-7 text-xs border border-gray-200 rounded-md bg-white text-gray-600 px-2 focus:ring-1 focus:ring-primary focus:border-primary"
+                  className="h-8 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
                 >
                   <option value="">Type</option>
                   <option value="new">Nieuw</option>
