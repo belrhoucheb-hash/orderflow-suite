@@ -17,6 +17,7 @@ import { DocksheetExportButton } from "@/components/planning/v2/DocksheetExportB
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import type { ConsolidationGroup } from "@/types/consolidation";
 import ChauffeursRit from "@/pages/ChauffeursRit";
+import { RoosterTab } from "@/components/planning/rooster/RoosterTab";
 import { cn } from "@/lib/utils";
 
 function isoWeekStart(d: Date): string {
@@ -30,7 +31,7 @@ function PlanningV2() {
   const [daySetupOpen, setDaySetupOpen] = useState(false);
   const [unplacedHints, setUnplacedHints] = useState<UnplacedOrderHint[]>([]);
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
-  const [section, setSection] = useState<"planning" | "ritten">("planning");
+  const [section, setSection] = useState<"planning" | "ritten" | "rooster">("planning");
 
   const { data: drivers = [] } = useDrivers();
   const { data: driverAvailability = [] } = useDriverAvailability(selectedDate);
@@ -136,7 +137,9 @@ function PlanningV2() {
         subtitle={
           section === "planning"
             ? `Dagsetup, auto-plan en swim-lanes per chauffeur voor ${prettyDate}`
-            : "Ritten per chauffeur, samenstellen en dispatchen"
+            : section === "ritten"
+              ? "Ritten per chauffeur, samenstellen en dispatchen"
+              : "Chauffeurs inplannen per dag of week, los van orders"
         }
       />
 
@@ -144,6 +147,7 @@ function PlanningV2() {
         {[
           { value: "planning" as const, label: "Planning" },
           { value: "ritten" as const, label: "Ritten" },
+          { value: "rooster" as const, label: "Rooster" },
         ].map((t) => (
           <button
             key={t.value}
@@ -220,6 +224,8 @@ function PlanningV2() {
       )}
 
       {section === "ritten" && <ChauffeursRit />}
+
+      {section === "rooster" && <RoosterTab />}
     </div>
   );
 }
