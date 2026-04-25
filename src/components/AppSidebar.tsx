@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Map, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
+import { useExceptionCount } from "@/hooks/useExceptionCount";
 
 import {
   Sidebar,
@@ -22,17 +23,25 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const mainItemsDef = [
+const operationsItemsDef = [
   { titleKey: "nav.dashboard", url: "/", icon: LayoutDashboard },
   { titleKey: "nav.inbox", url: "/inbox", icon: Inbox },
   { titleKey: "nav.orders", url: "/orders", icon: Package },
-  { titleKey: "nav.clients", url: "/klanten", icon: Building2 },
   { titleKey: "nav.planning", url: "/planning", icon: Truck },
   { titleKey: "nav.dispatch", url: "/dispatch", icon: Send },
-  { titleKey: "nav.drivers", url: "/chauffeurs", icon: Users },
-  { titleKey: "nav.fleet", url: "/vloot", icon: Container },
+  { title: "Uitzonderingen", url: "/exceptions", icon: AlertTriangle },
+];
+
+const controlItemsDef = [
+  { title: "Autonomie", url: "/autonomie", icon: Activity },
   { titleKey: "nav.invoicing", url: "/facturatie", icon: Receipt },
   { titleKey: "nav.reporting", url: "/rapportage", icon: BarChart3 },
+];
+
+const masterDataItemsDef = [
+  { titleKey: "nav.clients", url: "/klanten", icon: Building2 },
+  { titleKey: "nav.drivers", url: "/chauffeurs", icon: Users },
+  { titleKey: "nav.fleet", url: "/vloot", icon: Container },
 ];
 
 const adminItemsDef = [
@@ -52,23 +61,74 @@ export function AppSidebar() {
   const { t, i18n } = useTranslation();
   const { profile, user, signOut, isAdmin, effectiveRole } = useAuth();
   const { tenant } = useTenant();
+  const { data: exceptionCount } = useExceptionCount();
 
-  const toItems = (defs: typeof mainItemsDef) =>
+  const toItems = (defs: Array<{ titleKey?: string; title?: string; titleFallback?: string; url: string; icon: any }>) =>
     defs.map((d: any) => {
-      const translated = t(d.titleKey);
-      const title = translated === d.titleKey && d.titleFallback ? d.titleFallback : translated;
+      const translated = d.titleKey ? t(d.titleKey) : d.title;
+      const title = d.title ?? (translated === d.titleKey && d.titleFallback ? d.titleFallback : translated);
       return { title, titleKey: d.titleKey, url: d.url, icon: d.icon };
     });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const mainItems = useMemo(() => toItems(mainItemsDef), [t, i18n.language]);
+  const operationsItems = useMemo(() => toItems(operationsItemsDef), [t, i18n.language]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  const controlItems = useMemo(() => toItems(controlItemsDef), [t, i18n.language]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const masterDataItems = useMemo(() => toItems(masterDataItemsDef), [t, i18n.language]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const adminItems = useMemo(() => toItems(adminItemsDef), [t, i18n.language]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const chauffeurItems = useMemo(() => toItems(chauffeurItemsDef), [t, i18n.language]);
 
-  const visibleMainItems = effectiveRole === "chauffeur" ? chauffeurItems : mainItems;
+  const renderNavGroup = (label: string, items: Array<{ title: string; url: string; icon: any }>) => (
+    <SidebarGroup className="mt-4 first:mt-0">
+      <SidebarGroupLabel className="text-sidebar-foreground/30 text-xs uppercase tracking-[0.15em] font-medium mb-1 px-3">
+        {label}
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="space-y-0.5">
+          {items.map((item) => {
+            const active = isActive(item.url);
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild isActive={active}>
+                  <NavLink
+                    to={item.url}
+                    end={item.url === "/"}
+                    aria-label={item.title}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+                      active
+                        ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
+                        : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
+                    )}
+                  >
+                    <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
+                    <span>{item.title}</span>
+                    {item.url === "/exceptions" && (exceptionCount?.total ?? 0) > 0 && (
+                      <span className="ml-auto rounded-full bg-red-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {Math.min(exceptionCount?.total ?? 0, 99)}
+                      </span>
+                    )}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+
+  const visiblePrimaryGroups = effectiveRole === "chauffeur"
+    ? [{ label: t("nav.navigation"), items: chauffeurItems }]
+    : [
+        { label: "Operatie", items: operationsItems },
+        { label: "Controle", items: controlItems },
+        { label: "Stamgegevens", items: masterDataItems },
+      ];
 
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const toggleTheme = () => {
@@ -109,71 +169,10 @@ export function AppSidebar() {
       </div>
 
       <SidebarContent className="px-3">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/30 text-xs uppercase tracking-[0.15em] font-medium mb-1 px-3">
-            {t('nav.navigation')}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-0.5">
-              {visibleMainItems.map((item) => {
-                const active = isActive(item.url);
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={active}>
-                      <NavLink
-                        to={item.url}
-                        end={item.url === "/"}
-                        aria-label={item.title}
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-                          active
-                            ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
-                            : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
-                        )}
-                      >
-                        <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
-                        <span>{item.title}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {visiblePrimaryGroups.map((group) => renderNavGroup(group.label, group.items))}
 
         {isAdmin && (
-          <SidebarGroup className="mt-4">
-            <SidebarGroupLabel className="text-sidebar-foreground/30 text-xs uppercase tracking-[0.15em] font-medium mb-1 px-3">
-              {t('nav.admin')}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {adminItems.map((item) => {
-                  const active = isActive(item.url);
-                  return (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={active}>
-                        <NavLink
-                          to={item.url}
-                          className={cn(
-                            "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-                            active
-                              ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
-                              : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
-                          )}
-                        >
-                          <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
-                          <span>{item.title}</span>
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          renderNavGroup("Beheer", adminItems)
         )}
 
       </SidebarContent>

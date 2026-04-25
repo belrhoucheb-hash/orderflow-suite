@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useExceptionCount } from "@/hooks/useExceptionCount";
 import {
   Sheet,
   SheetContent,
@@ -50,6 +51,7 @@ export function MobileNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
+  const { data: exceptionCount } = useExceptionCount();
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -116,7 +118,14 @@ export function MobileNav() {
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}
                     >
-                      <item.icon className="h-5 w-5" />
+                      <div className="relative">
+                        <item.icon className="h-5 w-5" />
+                        {item.path === "/exceptions" && (exceptionCount?.total ?? 0) > 0 && (
+                          <span className="absolute -right-2.5 -top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                            {Math.min(exceptionCount?.total ?? 0, 99)}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs font-medium text-center leading-tight">{item.label}</span>
                     </button>
                   );
