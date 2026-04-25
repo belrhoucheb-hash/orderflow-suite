@@ -335,6 +335,81 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
     [date, schedules, drivers, vehicles, templates],
   );
 
+  // Vul lege rijen vandaag uit standaard-rooster van de chauffeur. Slaat
+  // chauffeurs over die al een rij voor deze dag hebben.
+  const handleApplyDefaultsToday = useCallback(async () => {
+    setActionsBusy(true);
+    try {
+      const rows = activeDrivers
+        .filter((d) => !scheduleByDriver.has(d.id))
+        .filter((d) => d.default_shift_template_id)
+        .map((d) => ({
+          driver_id: d.id,
+          date,
+          shift_template_id: d.default_shift_template_id,
+          vehicle_id: d.default_vehicle_id ?? null,
+          status: "werkt" as const,
+        }));
+      if (rows.length === 0) {
+        toast.info("Niets te doen", {
+          description:
+            "Alle chauffeurs hebben al een rij of hebben geen standaardrooster.",
+        });
+        return;
+      }
+      await bulkUpsert.mutateAsync(rows);
+      toast.success(`${rows.length} chauffeurs ingepland uit standaardrooster`);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Kon standaardrooster niet toepassen.";
+      toast.error("Toepassen mislukt", { description: msg });
+    } finally {
+      setActionsBusy(false);
+    }
+  }, [activeDrivers, scheduleByDriver, date, bulkUpsert]);
+
+  // Kopieer alle rooster-rijen van gisteren naar vandaag, alleen voor lege
+  // dag-cellen zodat handmatige invoer niet wordt overschreven.
+  const handleCopyYesterday = useCallback(async () => {
+    setActionsBusy(true);
+    try {
+      const yesterday = format(addDays(parseISO(date), -1), "yyyy-MM-dd");
+      const { data, error } = await supabase
+        .from("driver_schedules")
+        .select("*")
+        .eq("date", yesterday);
+      if (error) throw error;
+      const yesterdayRows = (data ?? []) as DriverSchedule[];
+      const rows = yesterdayRows
+        .filter((y) => !scheduleByDriver.has(y.driver_id))
+        .map((y) => ({
+          driver_id: y.driver_id,
+          date,
+          shift_template_id: y.shift_template_id,
+          start_time: y.start_time,
+          end_time: y.end_time,
+          vehicle_id: y.vehicle_id,
+          status: y.status,
+          notitie: y.notitie,
+        }));
+      if (rows.length === 0) {
+        toast.info("Niets gekopieerd", {
+          description:
+            "Gisteren was leeg of alle chauffeurs hebben vandaag al een rij.",
+        });
+        return;
+      }
+      await bulkUpsert.mutateAsync(rows);
+      toast.success(`${rows.length} rijen overgenomen van gisteren`);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Kon gisteren niet kopieren.";
+      toast.error("Kopieren mislukt", { description: msg });
+    } finally {
+      setActionsBusy(false);
+    }
+  }, [date, scheduleByDriver, bulkUpsert]);
+
   const loading =
     driversLoading || templatesLoading || vehiclesLoading || schedulesLoading;
 
@@ -390,16 +465,98 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
         vehicleLabels={vehicleLabels}
       />
 
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-          <Switch
-            checked={showUnplanned}
-            onCheckedChange={setShowUnplanned}
-          />
-          Toon ook niet-geplande chauffeurs
-        </label>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Zoek chauffeur"
+              className="h-9 pl-8 w-44"
+              style={{ fontFamily: "var(--font-display)" }}
+            />
+          </div>
+
+          <Select value={filterTemplate} onValueChange={setFilterTemplate}>
+            <SelectTrigger
+              className={cn(LUXE_TRIGGER_CLASS, "h-9 w-40")}
+              style={LUXE_DISPLAY_STYLE}
+            >
+              <SelectValue placeholder="Alle roosters" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Alle roosters</SelectItem>
+              <SelectItem value="__none__">Geen rooster</SelectItem>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="inline-block w-2 h-2 rounded-full"
+                      style={{ backgroundColor: t.color }}
+                    />
+                    {t.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger
+              className={cn(LUXE_TRIGGER_CLASS, "h-9 w-36")}
+              style={LUXE_DISPLAY_STYLE}
+            >
+              <SelectValue placeholder="Alle statussen" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Alle statussen</SelectItem>
+              {DRIVER_SCHEDULE_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {DRIVER_SCHEDULE_STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer ml-1">
+            <Switch
+              checked={showUnplanned}
+              onCheckedChange={setShowUnplanned}
+            />
+            Ook niet-geplande
+          </label>
+        </div>
 
         <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="btn-luxe"
+                disabled={loading || actionsBusy}
+              >
+                <Wand2 className="h-4 w-4" />
+                Acties
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={handleApplyDefaultsToday}
+                disabled={actionsBusy}
+              >
+                Vul lege rijen uit standaardrooster
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleCopyYesterday}
+                disabled={actionsBusy}
+              >
+                Kopieer rooster van gisteren
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -421,6 +578,45 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <span className="chiplet">
+          <span className="text-[hsl(var(--gold-deep))] font-semibold tabular-nums">
+            {stats.werkt}
+          </span>
+          <span className="text-muted-foreground">werkt</span>
+        </span>
+        {stats.vrij > 0 && (
+          <span className="chiplet">
+            <span className="font-semibold tabular-nums">{stats.vrij}</span>
+            <span className="text-muted-foreground">vrij</span>
+          </span>
+        )}
+        {stats.ziek > 0 && (
+          <span className="chiplet chiplet--warn">
+            <span className="font-semibold tabular-nums">{stats.ziek}</span>
+            <span>ziek</span>
+          </span>
+        )}
+        {stats.verlof > 0 && (
+          <span className="chiplet chiplet--attn">
+            <span className="font-semibold tabular-nums">{stats.verlof}</span>
+            <span>verlof</span>
+          </span>
+        )}
+        {stats.feestdag > 0 && (
+          <span className="chiplet chiplet--attn">
+            <span className="font-semibold tabular-nums">{stats.feestdag}</span>
+            <span>feestdag</span>
+          </span>
+        )}
+        {stats.ongepland > 0 && (
+          <span className="chiplet chiplet--attn">
+            <span className="font-semibold tabular-nums">{stats.ongepland}</span>
+            <span>ongepland</span>
+          </span>
+        )}
       </div>
 
       {loading ? (
@@ -466,6 +662,12 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                     style={LUXE_DISPLAY_STYLE}
                   >
                     Start
+                  </TableHead>
+                  <TableHead
+                    className="w-[110px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                    style={LUXE_DISPLAY_STYLE}
+                  >
+                    Eind
                   </TableHead>
                   <TableHead
                     className="w-[160px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
@@ -581,6 +783,29 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                               schedulePatch(
                                 driver.id,
                                 { start_time: e.target.value || null },
+                                false,
+                              )
+                            }
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            n.v.t.
+                          </span>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        {working ? (
+                          <Input
+                            type="time"
+                            className={LUXE_TIME_CLASS}
+                            style={LUXE_TIME_STYLE}
+                            value={effective.end_time ?? ""}
+                            placeholder={template?.default_end_time ?? ""}
+                            onChange={(e) =>
+                              schedulePatch(
+                                driver.id,
+                                { end_time: e.target.value || null },
                                 false,
                               )
                             }
@@ -826,27 +1051,51 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                     </div>
 
                     {working && (
-                      <div className="flex flex-col gap-1">
-                        <span
-                          className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
-                          style={LUXE_DISPLAY_STYLE}
-                        >
-                          Start
-                        </span>
-                        <Input
-                          type="time"
-                          className={LUXE_TIME_CLASS}
-                          style={LUXE_TIME_STYLE}
-                          value={effective.start_time ?? ""}
-                          placeholder={startPlaceholder}
-                          onChange={(e) =>
-                            schedulePatch(
-                              driver.id,
-                              { start_time: e.target.value || null },
-                              false,
-                            )
-                          }
-                        />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                            style={LUXE_DISPLAY_STYLE}
+                          >
+                            Start
+                          </span>
+                          <Input
+                            type="time"
+                            className={LUXE_TIME_CLASS}
+                            style={LUXE_TIME_STYLE}
+                            value={effective.start_time ?? ""}
+                            placeholder={startPlaceholder}
+                            onChange={(e) =>
+                              schedulePatch(
+                                driver.id,
+                                { start_time: e.target.value || null },
+                                false,
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                            style={LUXE_DISPLAY_STYLE}
+                          >
+                            Eind
+                          </span>
+                          <Input
+                            type="time"
+                            className={LUXE_TIME_CLASS}
+                            style={LUXE_TIME_STYLE}
+                            value={effective.end_time ?? ""}
+                            placeholder={template?.default_end_time ?? ""}
+                            onChange={(e) =>
+                              schedulePatch(
+                                driver.id,
+                                { end_time: e.target.value || null },
+                                false,
+                              )
+                            }
+                          />
+                        </div>
                       </div>
                     )}
 
