@@ -87,9 +87,9 @@ export function AppSidebar() {
     <SidebarGroup
       className="mt-4 first:mt-0 rounded-2xl border px-2.5 py-3"
       style={{
-        borderColor: "hsl(var(--gold) / 0.14)",
-        background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.1) 100%)",
-        boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.04)",
+        borderColor: "hsl(218 24% 22%)",
+        background: "linear-gradient(180deg, hsl(222 27% 14%) 0%, hsl(220 24% 11%) 100%)",
+        boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.03)",
       }}
     >
       <SidebarGroupLabel
@@ -113,13 +113,15 @@ export function AppSidebar() {
                     className={cn(
                       "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150",
                       active
-                        ? "text-foreground"
-                        : "text-sidebar-foreground/68 hover:text-foreground"
+                        ? "text-white"
+                        : "text-white/68 hover:text-white"
                     )}
                     style={active ? {
-                      background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.7) 0%, hsl(var(--gold-soft) / 0.18) 100%)",
-                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.24), 0 8px 20px -16px hsl(var(--gold-deep) / 0.45)",
-                    } : undefined}
+                      background: "linear-gradient(135deg, hsl(217 25% 18%) 0%, hsl(220 22% 15%) 100%)",
+                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.28), 0 10px 20px -18px hsl(220 60% 3% / 0.9)",
+                    } : {
+                      background: "transparent",
+                    }}
                   >
                     <span
                       className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
@@ -128,8 +130,8 @@ export function AppSidebar() {
                         color: "white",
                         boxShadow: "0 8px 18px -12px hsl(var(--gold-deep) / 0.6)",
                       } : {
-                        background: "hsl(var(--gold-soft) / 0.34)",
-                        color: "hsl(var(--gold-deep))",
+                        background: "hsl(218 24% 18%)",
+                        color: "hsl(var(--gold-light))",
                       }}
                     >
                       <item.icon className="h-[16px] w-[16px]" strokeWidth={active ? 2.1 : 1.8} />
@@ -139,9 +141,9 @@ export function AppSidebar() {
                       <span
                         className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
                         style={{
-                          background: active ? "hsl(0 0% 100% / 0.94)" : "hsl(12 92% 58%)",
-                          color: active ? "hsl(var(--gold-deep))" : "white",
-                          boxShadow: active ? "0 0 0 1px hsl(var(--gold) / 0.18)" : "none",
+                          background: active ? "hsl(var(--gold) / 0.22)" : "hsl(12 92% 58%)",
+                          color: "white",
+                          boxShadow: active ? "0 0 0 1px hsl(var(--gold) / 0.24)" : "none",
                         }}
                       >
                         {Math.min(exceptionBadgeValue, 99)}
@@ -195,8 +197,8 @@ export function AppSidebar() {
       <div
         className="mx-3 mt-3 flex items-center gap-3 rounded-2xl border px-4 py-4"
         style={{
-          borderColor: "hsl(var(--gold) / 0.16)",
-          background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.24) 0%, hsl(224 30% 12%) 100%)",
+          borderColor: "hsl(218 24% 22%)",
+          background: "linear-gradient(135deg, hsl(223 27% 16%) 0%, hsl(221 25% 12%) 100%)",
           boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.04)",
         }}
       >
@@ -205,8 +207,8 @@ export function AppSidebar() {
           alt={tenant?.name || "TMS"} 
           className="h-10 w-10 rounded-xl object-contain p-1.5"
           style={{
-            background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.9), hsl(var(--gold-soft) / 0.3))",
-            boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.2)",
+            background: "linear-gradient(135deg, hsl(218 25% 18%) 0%, hsl(220 21% 14%) 100%)",
+            boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)",
           }}
         />
         {!collapsed && (
@@ -236,8 +238,8 @@ export function AppSidebar() {
       <SidebarFooter
         className="mx-3 mb-3 rounded-2xl border px-4 py-4"
         style={{
-          borderColor: "hsl(var(--gold) / 0.12)",
-          background: "linear-gradient(180deg, hsl(var(--card) / 0.14) 0%, hsl(var(--gold-soft) / 0.08) 100%)",
+          borderColor: "hsl(218 24% 22%)",
+          background: "linear-gradient(180deg, hsl(221 24% 13%) 0%, hsl(220 21% 11%) 100%)",
         }}
       >
         <div className="flex items-center gap-3">
