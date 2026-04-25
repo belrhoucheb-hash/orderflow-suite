@@ -41,6 +41,10 @@ import { useDrivers } from "@/hooks/useDrivers";
 import { useDriverSchedules } from "@/hooks/useDriverSchedules";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import {
+  useAllSchedulePatterns,
+  type DayOfWeek,
+} from "@/hooks/useSchedulePatterns";
+import {
   DRIVER_SCHEDULE_STATUSES,
   DRIVER_SCHEDULE_STATUS_LABELS,
   type DriverSchedule,
@@ -87,6 +91,7 @@ export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
     weekStart,
     weekEnd,
   );
+  const { patternsByDriver } = useAllSchedulePatterns();
 
   const [applyMode, setApplyMode] = useState<ApplyMode>("empty-only");
   const [copyOpen, setCopyOpen] = useState(false);
@@ -158,37 +163,67 @@ export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
           default_shift_template_id?: string | null;
           default_vehicle_id?: string | null;
         };
-        const templateId = anyD.default_shift_template_id ?? null;
-        const vehicleId = anyD.default_vehicle_id ?? null;
-        if (!templateId) continue;
+        const fallbackTemplateId = anyD.default_shift_template_id ?? null;
+        const fallbackVehicleId = anyD.default_vehicle_id ?? null;
+        const fallbackTemplate: ShiftTemplate | undefined = fallbackTemplateId
+          ? templates.find((t) => t.id === fallbackTemplateId)
+          : undefined;
 
-        const template: ShiftTemplate | undefined = templates.find(
-          (t) => t.id === templateId,
-        );
+        const driverPatterns = patternsByDriver.get(d.id);
 
         for (let i = 0; i < 7; i++) {
           const date = addDaysStr(weekStart, i);
           const key = `${d.id}|${date}`;
           if (applyMode === "empty-only" && existingKeys.has(key)) continue;
 
-          upserts.push({
-            driver_id: d.id,
-            date,
-            shift_template_id: templateId,
-            start_time: template?.default_start_time ?? null,
-            end_time: template?.default_end_time ?? null,
-            vehicle_id: vehicleId,
-            status: "werkt",
-            notitie: null,
-          });
+          const dow = parseISO(date).getDay() as DayOfWeek;
+          const pattern = driverPatterns?.get(dow);
+
+          // 1) Patroon van laatste 8 weken voor deze dag-van-week.
+          if (pattern) {
+            const patternTemplate = pattern.shift_template_id
+              ? templates.find((t) => t.id === pattern.shift_template_id)
+              : undefined;
+            upserts.push({
+              driver_id: d.id,
+              date,
+              shift_template_id: pattern.shift_template_id,
+              start_time:
+                pattern.start_time ??
+                patternTemplate?.default_start_time ??
+                null,
+              end_time: patternTemplate?.default_end_time ?? null,
+              vehicle_id: pattern.vehicle_id,
+              status: "werkt",
+              notitie: null,
+            });
+            continue;
+          }
+
+          // 2) Val-back: standaardrooster op het chauffeur-profiel.
+          if (fallbackTemplateId) {
+            upserts.push({
+              driver_id: d.id,
+              date,
+              shift_template_id: fallbackTemplateId,
+              start_time: fallbackTemplate?.default_start_time ?? null,
+              end_time: fallbackTemplate?.default_end_time ?? null,
+              vehicle_id: fallbackVehicleId,
+              status: "werkt",
+              notitie: null,
+            });
+            continue;
+          }
+
+          // 3) Geen patroon en geen standaard: dag overslaan.
         }
       }
 
       if (upserts.length === 0) {
         toast.info(
           applyMode === "empty-only"
-            ? "Geen lege dagen gevonden voor chauffeurs met standaardrooster"
-            : "Geen chauffeurs met standaardrooster ingesteld",
+            ? "Geen lege dagen gevonden voor chauffeurs met patroon of standaardrooster"
+            : "Geen chauffeurs met patroon of standaardrooster gevonden",
         );
         setApplyOpen(false);
         return;
@@ -350,9 +385,9 @@ export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>Standaardrooster toepassen</AlertDialogTitle>
             <AlertDialogDescription>
-              Vult {weekRangeLabel} in op basis van het standaardrooster en
-              standaardvoertuig per chauffeur. Alleen chauffeurs met een
-              standaardrooster in hun profiel worden meegenomen.
+              Vult {weekRangeLabel} in. Suggesties worden gebaseerd op de
+              laatste 8 weken planning per chauffeur, met val-back op het
+              standaard-rooster van het chauffeur-profiel.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">
