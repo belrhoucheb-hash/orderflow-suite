@@ -51,6 +51,23 @@ const NONE = "__none__";
 
 const SHOW_END_TIME_LS_KEY = "rooster-day-show-end-time";
 
+// Gedeelde luxe-stijlen voor SelectTrigger en time/text Inputs binnen de tabel.
+// Gold-tint border, subtiele gradient, font-display voor consistentie met
+// PlanningV2. Tijden krijgen extra `tabular-nums` voor uitlijning.
+const LUXE_TRIGGER_CLASS =
+  "h-9 text-xs border-[hsl(var(--gold)/0.25)] bg-gradient-to-b from-[hsl(var(--card))] to-[hsl(var(--gold-soft)/0.2)] hover:border-[hsl(var(--gold)/0.5)] focus:border-[hsl(var(--gold)/0.55)] focus:ring-[hsl(var(--gold)/0.2)]";
+const LUXE_INPUT_CLASS =
+  "h-9 text-xs border-[hsl(var(--gold)/0.25)] bg-gradient-to-b from-[hsl(var(--card))] to-[hsl(var(--gold-soft)/0.2)] hover:border-[hsl(var(--gold)/0.5)] focus-visible:border-[hsl(var(--gold)/0.55)] focus-visible:ring-[hsl(var(--gold)/0.2)]";
+const LUXE_TIME_CLASS =
+  "h-9 text-xs border-[hsl(var(--gold)/0.25)] bg-gradient-to-b from-[hsl(var(--card))] to-[hsl(var(--gold-soft)/0.2)] hover:border-[hsl(var(--gold)/0.5)] focus-visible:border-[hsl(var(--gold)/0.55)] focus-visible:ring-[hsl(var(--gold)/0.2)] tabular-nums";
+
+const LUXE_TIME_STYLE = {
+  fontFamily: "var(--font-display)",
+} as const;
+const LUXE_DISPLAY_STYLE = {
+  fontFamily: "var(--font-display)",
+} as const;
+
 interface RoosterDayViewProps {
   date: string;
 }
@@ -335,7 +352,7 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
   );
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="card--luxe p-5 md:p-6 flex flex-col gap-4">
       <RoosterConflictBanner
         schedules={schedules}
         date={date}
@@ -355,15 +372,14 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
+              <button
+                type="button"
+                className="btn-luxe"
                 title="Weergave-opties"
               >
-                <Settings2 className="h-3.5 w-3.5" />
+                <Settings2 className="h-4 w-4" />
                 Weergave
-              </Button>
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel className="text-xs">
@@ -380,15 +396,14 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
+              <button
+                type="button"
+                className="btn-luxe"
                 disabled={loading || schedules.length === 0}
               >
-                <Printer className="h-3.5 w-3.5" />
+                <Printer className="h-4 w-4" />
                 Print rooster
-              </Button>
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handlePrint(false)}>
@@ -405,11 +420,11 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
       {loading ? (
         <LoadingState message="Rooster laden..." />
       ) : activeDrivers.length === 0 ? (
-        <div className="text-sm text-muted-foreground py-6 text-center border rounded-md">
+        <div className="text-sm text-muted-foreground py-6 text-center border border-[hsl(var(--gold)/0.2)] rounded-md">
           Geen actieve chauffeurs gevonden.
         </div>
       ) : visibleDrivers.length === 0 ? (
-        <div className="text-sm text-muted-foreground py-6 text-center border rounded-md flex flex-col items-center gap-2">
+        <div className="text-sm text-muted-foreground py-6 text-center border border-[hsl(var(--gold)/0.2)] rounded-md flex flex-col items-center gap-2">
           <span>Geen geplande chauffeurs voor deze dag.</span>
           <Button
             variant="ghost"
@@ -423,21 +438,61 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
         </div>
       ) : (
         <>
-          {/* Tabel-view (sm en hoger) */}
-          <div className="hidden sm:block border rounded-lg overflow-hidden bg-background">
+          {/* Tabel-view (sm en hoger) — luxe styling */}
+          <div className="hidden sm:block border border-[hsl(var(--gold)/0.2)] rounded-xl overflow-hidden bg-card">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[180px]">Naam</TableHead>
-                  <TableHead className="w-[180px]">Rooster</TableHead>
-                  <TableHead className="w-[110px]">Start</TableHead>
+              <TableHeader className="bg-[hsl(var(--gold-soft)/0.35)]">
+                <TableRow className="border-b border-[hsl(var(--gold)/0.2)] hover:bg-transparent">
+                  <TableHead
+                    className="w-[180px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                    style={LUXE_DISPLAY_STYLE}
+                  >
+                    Naam
+                  </TableHead>
+                  <TableHead
+                    className="w-[180px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                    style={LUXE_DISPLAY_STYLE}
+                  >
+                    Rooster
+                  </TableHead>
+                  <TableHead
+                    className="w-[110px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                    style={LUXE_DISPLAY_STYLE}
+                  >
+                    Start
+                  </TableHead>
                   {showEndTime && (
-                    <TableHead className="w-[110px]">Eind</TableHead>
+                    <TableHead
+                      className="w-[110px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                      style={LUXE_DISPLAY_STYLE}
+                    >
+                      Eind
+                    </TableHead>
                   )}
-                  <TableHead className="w-[160px]">Voertuig</TableHead>
-                  <TableHead className="w-[140px]">Status</TableHead>
-                  <TableHead>Notitie</TableHead>
-                  <TableHead className="w-[60px] text-right">Actie</TableHead>
+                  <TableHead
+                    className="w-[160px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                    style={LUXE_DISPLAY_STYLE}
+                  >
+                    Voertuig
+                  </TableHead>
+                  <TableHead
+                    className="w-[140px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                    style={LUXE_DISPLAY_STYLE}
+                  >
+                    Status
+                  </TableHead>
+                  <TableHead
+                    className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                    style={LUXE_DISPLAY_STYLE}
+                  >
+                    Notitie
+                  </TableHead>
+                  <TableHead
+                    className="w-[60px] text-right text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                    style={LUXE_DISPLAY_STYLE}
+                  >
+                    Actie
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -453,14 +508,20 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                   return (
                     <TableRow
                       key={driver.id}
-                      className={cn(dimmed && "text-muted-foreground")}
+                      className={cn(
+                        "border-b border-[hsl(var(--gold)/0.12)] last:border-b-0 transition-colors hover:bg-[hsl(var(--gold-soft)/0.25)]",
+                        dimmed && "text-muted-foreground",
+                      )}
                     >
-                      <TableCell className="font-medium">
+                      <TableCell
+                        className="font-semibold"
+                        style={LUXE_DISPLAY_STYLE}
+                      >
                         <div className="flex items-center gap-2">
                           {template && (
                             <span
                               aria-hidden="true"
-                              className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                              className="inline-block h-2.5 w-2.5 rounded-full shrink-0 ring-1 ring-[hsl(var(--gold)/0.25)]"
                               style={{ backgroundColor: template.color }}
                             />
                           )}
@@ -481,7 +542,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                             )
                           }
                         >
-                          <SelectTrigger className="h-9 text-xs">
+                          <SelectTrigger
+                            className={LUXE_TRIGGER_CLASS}
+                            style={LUXE_DISPLAY_STYLE}
+                          >
                             <SelectValue placeholder="Geen" />
                           </SelectTrigger>
                           <SelectContent>
@@ -512,7 +576,8 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                         {working ? (
                           <Input
                             type="time"
-                            className="h-9 text-xs"
+                            className={LUXE_TIME_CLASS}
+                            style={LUXE_TIME_STYLE}
                             value={effective.start_time ?? ""}
                             placeholder={startPlaceholder}
                             onChange={(e) =>
@@ -535,7 +600,8 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                           {working ? (
                             <Input
                               type="time"
-                              className="h-9 text-xs"
+                              className={LUXE_TIME_CLASS}
+                              style={LUXE_TIME_STYLE}
                               value={effective.end_time ?? ""}
                               placeholder={endPlaceholder}
                               onChange={(e) =>
@@ -566,7 +632,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                               )
                             }
                           >
-                            <SelectTrigger className="h-9 text-xs">
+                            <SelectTrigger
+                              className={cn(LUXE_TRIGGER_CLASS, "tabular-nums")}
+                              style={LUXE_DISPLAY_STYLE}
+                            >
                               <SelectValue placeholder="Geen" />
                             </SelectTrigger>
                             <SelectContent>
@@ -603,7 +672,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                             )
                           }
                         >
-                          <SelectTrigger className="h-9 text-xs">
+                          <SelectTrigger
+                            className={LUXE_TRIGGER_CLASS}
+                            style={LUXE_DISPLAY_STYLE}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -622,7 +694,7 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
 
                       <TableCell>
                         <Input
-                          className="h-9 text-xs"
+                          className={LUXE_INPUT_CLASS}
                           value={effective.notitie ?? ""}
                           placeholder="Notitie"
                           onChange={(e) =>
@@ -640,7 +712,7 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDelete(driver.id)}
                           disabled={isEmpty}
                           title="Rij wissen"
@@ -670,7 +742,7 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                 <div
                   key={driver.id}
                   className={cn(
-                    "border rounded-lg p-3 bg-background flex flex-col gap-3",
+                    "border border-[hsl(var(--gold)/0.2)] rounded-xl p-3 bg-gradient-to-b from-[hsl(var(--card))] to-[hsl(var(--gold-soft)/0.15)] flex flex-col gap-3 shadow-[inset_0_1px_0_var(--inset-highlight)]",
                     dimmed && "text-muted-foreground",
                   )}
                 >
@@ -679,16 +751,21 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                       {template && (
                         <span
                           aria-hidden="true"
-                          className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                          className="inline-block h-2.5 w-2.5 rounded-full shrink-0 ring-1 ring-[hsl(var(--gold)/0.25)]"
                           style={{ backgroundColor: template.color }}
                         />
                       )}
-                      <span className="font-medium truncate">{driver.name}</span>
+                      <span
+                        className="font-semibold truncate"
+                        style={LUXE_DISPLAY_STYLE}
+                      >
+                        {driver.name}
+                      </span>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0 hover:bg-destructive/10"
                       onClick={() => handleDelete(driver.id)}
                       disabled={isEmpty}
                       title="Rij wissen"
@@ -699,7 +776,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
 
                   <div className="grid grid-cols-1 gap-2">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span
+                        className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                        style={LUXE_DISPLAY_STYLE}
+                      >
                         Rooster
                       </span>
                       <Select
@@ -714,7 +794,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                           )
                         }
                       >
-                        <SelectTrigger className="h-9 text-xs">
+                        <SelectTrigger
+                          className={LUXE_TRIGGER_CLASS}
+                          style={LUXE_DISPLAY_STYLE}
+                        >
                           <SelectValue placeholder="Geen" />
                         </SelectTrigger>
                         <SelectContent>
@@ -735,7 +818,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span
+                        className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                        style={LUXE_DISPLAY_STYLE}
+                      >
                         Status
                       </span>
                       <Select
@@ -748,7 +834,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                           )
                         }
                       >
-                        <SelectTrigger className="h-9 text-xs">
+                        <SelectTrigger
+                          className={LUXE_TRIGGER_CLASS}
+                          style={LUXE_DISPLAY_STYLE}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -773,12 +862,16 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                         )}
                       >
                         <div className="flex flex-col gap-1">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          <span
+                            className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                            style={LUXE_DISPLAY_STYLE}
+                          >
                             Start
                           </span>
                           <Input
                             type="time"
-                            className="h-9 text-xs"
+                            className={LUXE_TIME_CLASS}
+                            style={LUXE_TIME_STYLE}
                             value={effective.start_time ?? ""}
                             placeholder={startPlaceholder}
                             onChange={(e) =>
@@ -792,12 +885,16 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                         </div>
                         {showEndTime && (
                           <div className="flex flex-col gap-1">
-                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <span
+                              className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                              style={LUXE_DISPLAY_STYLE}
+                            >
                               Eind
                             </span>
                             <Input
                               type="time"
-                              className="h-9 text-xs"
+                              className={LUXE_TIME_CLASS}
+                              style={LUXE_TIME_STYLE}
                               value={effective.end_time ?? ""}
                               placeholder={endPlaceholder}
                               onChange={(e) =>
@@ -815,7 +912,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
 
                     {working && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <span
+                          className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                          style={LUXE_DISPLAY_STYLE}
+                        >
                           Voertuig
                         </span>
                         <Select
@@ -828,7 +928,10 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                             )
                           }
                         >
-                          <SelectTrigger className="h-9 text-xs">
+                          <SelectTrigger
+                            className={LUXE_TRIGGER_CLASS}
+                            style={LUXE_DISPLAY_STYLE}
+                          >
                             <SelectValue placeholder="Geen" />
                           </SelectTrigger>
                           <SelectContent>
@@ -851,11 +954,14 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                     )}
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span
+                        className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                        style={LUXE_DISPLAY_STYLE}
+                      >
                         Notitie
                       </span>
                       <Input
-                        className="h-9 text-xs"
+                        className={LUXE_INPUT_CLASS}
                         value={effective.notitie ?? ""}
                         placeholder="Notitie"
                         onChange={(e) =>

@@ -3,9 +3,6 @@ import { ChevronLeft, ChevronRight, Calendar, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
 
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 
 import { toDateString } from "@/components/planning/PlanningDateNav";
 import { useDriverSchedulesRealtime } from "@/hooks/useDriverSchedulesRealtime";
@@ -72,20 +70,6 @@ function PlaceholderModule({ label }: { label: string }) {
   );
 }
 
-function formatLongDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("nl-NL", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
 /**
  * Wrapper voor de Rooster-module: datum-navigatie, view-switch Dag/Week, slot
  * voor bulk-acties. De zware sub-views (Week en Bulk) worden lazy geladen en
@@ -108,8 +92,6 @@ export function RoosterTab() {
 
   const stepBack = useMemo(() => (mode === "week" ? -7 : -1), [mode]);
   const stepForward = useMemo(() => (mode === "week" ? 7 : 1), [mode]);
-
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   // Data voor week-PDF.
   const weekStart = useMemo(
@@ -154,97 +136,78 @@ export function RoosterTab() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
+          <button
+            type="button"
             onClick={() => shiftDays(stepBack)}
             title={mode === "week" ? "Vorige week" : "Vorige dag"}
+            className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--card))] text-[hsl(var(--gold-deep))] transition-all hover:border-[hsl(var(--gold)/0.55)] hover:bg-[hsl(var(--gold-soft)/0.5)]"
           >
             <ChevronLeft className="h-4 w-4" />
-          </Button>
+          </button>
 
-          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 min-w-[240px] justify-start"
-              >
-                <Calendar className="h-3.5 w-3.5" />
-                <span className="text-sm">{formatLongDate(date)}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarPicker
-                mode="single"
-                selected={new Date(date + "T00:00:00")}
-                onSelect={(d) => {
-                  if (d) {
-                    setDate(toDateString(d));
-                    setDatePickerOpen(false);
-                  }
-                }}
-              />
-            </PopoverContent>
-          </Popover>
+          <div className="min-w-[12rem]">
+            <LuxeDatePicker value={date} onChange={setDate} />
+          </div>
 
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
+          <button
+            type="button"
             onClick={() => shiftDays(stepForward)}
             title={mode === "week" ? "Volgende week" : "Volgende dag"}
+            className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--card))] text-[hsl(var(--gold-deep))] transition-all hover:border-[hsl(var(--gold)/0.55)] hover:bg-[hsl(var(--gold-soft)/0.5)]"
           >
             <ChevronRight className="h-4 w-4" />
-          </Button>
+          </button>
 
           {date !== today && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs gap-1"
+            <button
+              type="button"
               onClick={() => setDate(today)}
+              className="chiplet"
+              style={{ cursor: "pointer" }}
+              title="Spring naar vandaag"
             >
-              <Calendar className="h-3.5 w-3.5" />
+              <Calendar />
               Vandaag
-            </Button>
+            </button>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-lg border border-border/50 overflow-hidden">
-            <button
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium transition-colors",
-                mode === "day"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background text-muted-foreground hover:bg-muted",
-              )}
-              onClick={() => setMode("day")}
-            >
-              Dag
-            </button>
-            <button
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium transition-colors",
-                mode === "week"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background text-muted-foreground hover:bg-muted",
-              )}
-              onClick={() => setMode("week")}
-            >
-              Week
-            </button>
+          <div
+            className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]"
+            role="tablist"
+            aria-label="Weergave"
+          >
+            {[
+              { value: "day" as const, label: "Dag" },
+              { value: "week" as const, label: "Week" },
+            ].map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                role="tab"
+                aria-selected={mode === t.value}
+                onClick={() => setMode(t.value)}
+                className={cn(
+                  "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
+                  mode === t.value
+                    ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
+                    : "text-muted-foreground/70 hover:text-foreground",
+                )}
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
           {mode === "week" && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <Printer className="h-3.5 w-3.5" />
+                <button type="button" className="btn-luxe">
+                  <Printer className="h-4 w-4" />
                   Print weekrooster
-                </Button>
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => handlePrintWeek(false)}>

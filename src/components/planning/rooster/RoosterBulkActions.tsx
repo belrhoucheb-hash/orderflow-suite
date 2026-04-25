@@ -284,10 +284,10 @@ export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
       <div className="flex flex-wrap items-center gap-2">
         <AlertDialog open={clearDayOpen} onOpenChange={setClearDayOpen}>
           <AlertDialogTrigger asChild>
-            <Button variant="outline" size="sm" disabled={isBusy}>
-              <Eraser className="h-3.5 w-3.5 mr-1.5" />
+            <button type="button" className="btn-luxe" disabled={isBusy}>
+              <Eraser className="h-4 w-4" />
               Wis deze dag
-            </Button>
+            </button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -316,10 +316,10 @@ export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
     <div className="flex flex-wrap items-center gap-2">
       <AlertDialog open={copyOpen} onOpenChange={setCopyOpen}>
         <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={isBusy}>
-            <Copy className="h-3.5 w-3.5 mr-1.5" />
+          <button type="button" className="btn-luxe" disabled={isBusy}>
+            <Copy className="h-4 w-4" />
             Kopieer vorige week
-          </Button>
+          </button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -341,10 +341,10 @@ export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
 
       <AlertDialog open={applyOpen} onOpenChange={setApplyOpen}>
         <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={isBusy}>
-            <Wand2 className="h-3.5 w-3.5 mr-1.5" />
+          <button type="button" className="btn-luxe" disabled={isBusy}>
+            <Wand2 className="h-4 w-4" />
             Pas standaardrooster toe
-          </Button>
+          </button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -385,10 +385,10 @@ export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
 
       <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={isBusy}>
-            <CalendarOff className="h-3.5 w-3.5 mr-1.5" />
+          <button type="button" className="btn-luxe" disabled={isBusy}>
+            <CalendarOff className="h-4 w-4" />
             Markeer verlof
-          </Button>
+          </button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
@@ -493,10 +493,10 @@ export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
 
       <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
         <AlertDialogTrigger asChild>
-          <Button variant="outline" size="sm" disabled={isBusy}>
-            <Eraser className="h-3.5 w-3.5 mr-1.5" />
+          <button type="button" className="btn-luxe btn-luxe--danger" disabled={isBusy}>
+            <Eraser className="h-4 w-4" />
             Wis week
-          </Button>
+          </button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
