@@ -11,6 +11,8 @@ import {
   buildSuggestedFollowUpSubject,
   getBlockingFollowUpRecommendations,
   getFollowUpRecommendations,
+  getFollowUpReasonSummary,
+  getRecommendedFollowUpAction,
 } from "@/lib/followUpDraft";
 
 export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
@@ -19,6 +21,8 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
   const suggestedSubject = buildSuggestedFollowUpSubject(selected);
   const recommendations = getFollowUpRecommendations(selected);
   const blockingRecommendations = getBlockingFollowUpRecommendations(selected);
+  const reasonSummary = getFollowUpReasonSummary(selected);
+  const recommendedAction = getRecommendedFollowUpAction(selected);
   const [draft, setDraft] = useState(selected.follow_up_draft || suggestedDraft || "");
   const [isSending, setIsSending] = useState(false);
   
@@ -101,6 +105,24 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
         )}
 
         <div className="space-y-2">
+          <div className="rounded-lg border border-border/40 bg-background px-3 py-2">
+            <p className="text-[11px] font-semibold text-foreground">Waarom dit voorstel</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {reasonSummary.map((reason) => (
+                <span
+                  key={reason}
+                  className="inline-flex items-center rounded-full border border-border/50 bg-muted/30 px-2 py-1 text-[11px] text-foreground"
+                >
+                  {reason}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 px-3 py-2">
+            <p className="text-[11px] font-semibold text-blue-900">Aanbevolen vervolgstap</p>
+            <p className="mt-1 text-xs font-medium text-blue-900">{recommendedAction.label}</p>
+            <p className="mt-1 text-xs text-blue-800">{recommendedAction.description}</p>
+          </div>
           {recommendations.length > 0 && (
             <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
               <div className="flex items-center justify-between gap-2">

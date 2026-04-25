@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Check,
   HelpCircle,
+  MessageSquare,
   MapPin,
   Package,
   ClipboardCheck,
@@ -32,6 +33,7 @@ import type { OrderDraft, FormState } from "./types";
 import { requirementOptions } from "./types";
 import type { AutoConfirmAssessment } from "@/lib/autoConfirm";
 import { FollowUpPanel } from "@/components/inbox/InboxFollowUpPanel";
+import { getRecommendedFollowUpAction } from "@/lib/followUpDraft";
 import { getFollowUpStatus } from "@/lib/followUpStatus";
 import {
   getFilledCount,
@@ -154,12 +156,92 @@ export function InboxReviewPanel({
   const weightAnomaly = anomalies.find((a) => a.field === "weight_kg");
   const followUpStatus = getFollowUpStatus(selected);
   const missingFieldsCount = (selected.missing_fields || []).length;
+  const recommendedFollowUpAction = getRecommendedFollowUpAction(selected);
+  const needsFollowUpGuidance =
+    !autoConfirmAssessment.eligible &&
+    ["request_missing_info", "verify_anomaly", "review_update", "review_cancellation", "answer_question"].includes(
+      recommendedFollowUpAction.key,
+    );
+
+  const primaryActionLabel = autoConfirmAssessment.eligible
+    ? "Auto-confirm en maak order aan"
+    : needsFollowUpGuidance
+      ? recommendedFollowUpAction.label
+      : "Maak order aan";
+
+  const primaryActionDescription = formErrors
+    ? `${requiredFilled} van ${totalRequired} verplichte velden ingevuld`
+    : autoConfirmAssessment.eligible
+      ? autoConfirmAssessment.reason
+      : needsFollowUpGuidance
+        ? recommendedFollowUpAction.description
+        : autoConfirmAssessment.reason;
 
   const totalKg = form.weight
     ? form.perUnit
       ? Number(form.weight) * form.quantity
       : Number(form.weight)
     : 0;
+
+  const handlePrimaryAction = () => {
+    if (autoConfirmAssessment.eligible) {
+      onAutoConfirm();
+      return;
+    }
+
+    if (needsFollowUpGuidance) {
+      document.getElementById("follow-up-workflow")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    onCreateOrder();
+  };
+
+  const ctaVisual = (() => {
+    if (autoConfirmAssessment.eligible) {
+      return {
+        icon: Check,
+        background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+        shadow: "0 4px 12px -2px hsl(var(--gold) / 0.4)",
+        iconColor: "hsl(var(--gold-deep))",
+      };
+    }
+
+    switch (recommendedFollowUpAction.key) {
+      case "request_missing_info":
+      case "answer_question":
+        return {
+          icon: MessageSquare,
+          background: "linear-gradient(180deg, hsl(220 82% 59%) 0%, hsl(221 70% 47%) 100%)",
+          shadow: "0 4px 12px -2px hsl(220 82% 59% / 0.35)",
+          iconColor: "hsl(220 82% 45%)",
+        };
+      case "verify_anomaly":
+      case "review_cancellation":
+        return {
+          icon: AlertTriangle,
+          background: "linear-gradient(180deg, hsl(25 95% 58%) 0%, hsl(18 84% 46%) 100%)",
+          shadow: "0 4px 12px -2px hsl(25 95% 58% / 0.35)",
+          iconColor: "hsl(24 90% 42%)",
+        };
+      case "review_update":
+        return {
+          icon: Pencil,
+          background: "linear-gradient(180deg, hsl(267 76% 62%) 0%, hsl(262 64% 49%) 100%)",
+          shadow: "0 4px 12px -2px hsl(267 76% 62% / 0.35)",
+          iconColor: "hsl(262 64% 45%)",
+        };
+      default:
+        return {
+          icon: Check,
+          background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+          shadow: "0 4px 12px -2px hsl(var(--gold) / 0.4)",
+          iconColor: "hsl(var(--gold-deep))",
+        };
+    }
+  })();
+
+  const PrimaryActionIcon = ctaVisual.icon;
 
   return (
     <div
@@ -737,7 +819,7 @@ export function InboxReviewPanel({
 
           {/* V · Bijlagen */}
           {selected.attachments && selected.attachments.length > 0 && (
-            <section className="mb-5">
+            <section className="mb-5" id="follow-up-workflow">
               <ChapterHead badge="V" title="Bijlagen" sub={`${selected.attachments.length} bestand${selected.attachments.length > 1 ? "en" : ""}`} />
               <div className="flex flex-wrap gap-2">
                 {selected.attachments.map((att: any, i: number) => (
@@ -800,16 +882,12 @@ export function InboxReviewPanel({
           <ClipboardCheck
             className="h-3.5 w-3.5"
             strokeWidth={1.75}
-            style={{ color: formErrors ? "hsl(32 70% 45%)" : "hsl(var(--gold-deep))" }}
+            style={{ color: formErrors ? "hsl(32 70% 45%)" : ctaVisual.iconColor }}
           />
-          <p className="text-[11px] text-muted-foreground">
-            {formErrors
-              ? `${requiredFilled} van ${totalRequired} verplichte velden ingevuld`
-              : "Alle verplichte velden gecontroleerd"}
-          </p>
+          <p className="text-[11px] text-muted-foreground">{primaryActionDescription}</p>
         </div>
         <button
-          onClick={autoConfirmAssessment.eligible ? onAutoConfirm : onCreateOrder}
+          onClick={handlePrimaryAction}
           disabled={isCreatePending || formErrors}
           className={cn(
             "w-full h-11 rounded-xl font-semibold text-[13px] transition-all inline-flex items-center justify-center gap-2",
@@ -819,9 +897,9 @@ export function InboxReviewPanel({
             letterSpacing: "0.02em",
             background: formErrors
               ? "hsl(var(--muted))"
-              : "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+              : ctaVisual.background,
             color: formErrors ? "hsl(var(--muted-foreground))" : "white",
-            boxShadow: formErrors ? undefined : "0 4px 12px -2px hsl(var(--gold) / 0.4)",
+            boxShadow: formErrors ? undefined : ctaVisual.shadow,
             cursor: formErrors ? "not-allowed" : "pointer",
           }}
         >
@@ -829,8 +907,8 @@ export function InboxReviewPanel({
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <>
-              <Check className="h-4 w-4" strokeWidth={2} />
-              {autoConfirmAssessment.eligible ? "Auto-confirm en maak order aan" : "Maak order aan"}
+              <PrimaryActionIcon className="h-4 w-4" strokeWidth={2} />
+              {primaryActionLabel}
             </>
           )}
         </button>

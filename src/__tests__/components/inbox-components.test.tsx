@@ -566,6 +566,50 @@ describe("FollowUpPanel", () => {
     expect(screen.getByText(/Vraag eerst het volledige afleveradres en het gewicht op/i)).toBeInTheDocument();
   });
 
+  it("shows a reason summary and recommended next step", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["delivery_address", "weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    expect(screen.getByText("Waarom dit voorstel")).toBeInTheDocument();
+    expect(screen.getByText("2 ontbrekende velden")).toBeInTheDocument();
+    expect(screen.getByText("bron: mail")).toBeInTheDocument();
+    expect(screen.getByText("Aanbevolen vervolgstap")).toBeInTheDocument();
+    expect(screen.getByText("Vraag ontbrekende info op")).toBeInTheDocument();
+    expect(screen.getByText(/Start met het volledige afleveradres en het gewicht/i)).toBeInTheDocument();
+  });
+
+  it("recommends verifying anomalies when no fields are missing", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel
+          selected={{
+            ...baseDraft,
+            missing_fields: [],
+            anomalies: [{ field: "weight_kg", value: 50000, avg_value: 5000, message: "Gewicht is 10x hoger dan normaal" }],
+            follow_up_draft: null,
+          } as any}
+        />
+      </QWrapper>,
+    );
+    expect(screen.getByText("Verifieer afwijking")).toBeInTheDocument();
+  });
+
+  it("recommends processing an update for update threads", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel
+          selected={{ ...baseDraft, thread_type: "update", missing_fields: ["weight_kg"], follow_up_draft: null } as any}
+        />
+      </QWrapper>,
+    );
+    expect(screen.getByText("Verwerk wijziging")).toBeInTheDocument();
+  });
+
   it("shows already sent badge", async () => {
     const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
     render(
@@ -646,6 +690,49 @@ describe("FollowUpPanel", () => {
     expect(screen.getByText(/Re: Transport aanvraag 2 pallets - aanvulling nodig voor het gewicht/i)).toBeInTheDocument();
   });
 
+  it("adapts the subject preview for update threads", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, thread_type: "update", missing_fields: ["weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    expect(screen.getByText(/Re: Transport aanvraag 2 pallets - aanvulling nodig voor wijziging: het gewicht/i)).toBeInTheDocument();
+  });
+
+  it("adapts the subject preview for question threads", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, thread_type: "question", missing_fields: ["weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    expect(screen.getByText(/Re: Transport aanvraag 2 pallets - aanvulling nodig voor uw vraag: het gewicht/i)).toBeInTheDocument();
+  });
+
+  it("uses a more portal-oriented draft for portal intake", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, source: "PORTAL", source_email_from: null, missing_fields: ["weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect(textarea).toHaveValue(expect.stringContaining("Dank voor uw aanvraag via het klantportaal."));
+    expect(textarea).toHaveValue(expect.stringContaining("Aanvullend op uw transportaanvraag van Amsterdam naar Rotterdam."));
+  });
+
+  it("uses a more integration-oriented draft for api intake", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, source: "API", source_email_from: null, missing_fields: ["weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect(textarea).toHaveValue(expect.stringContaining("Dank voor de doorgestuurde transportaanvraag via de koppeling."));
+  });
+
   it("uses a formal generic salutation when no client name is known", async () => {
     const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
     render(
@@ -672,6 +759,68 @@ describe("FollowUpPanel", () => {
     );
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
     expect(textarea).toHaveValue(expect.stringContaining("Voor we de order kunnen bevestigen hebben we nog graag eerst het volledige afleveradres en het gewicht nodig."));
+  });
+
+  it("adapts the draft tone for update threads", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel
+          selected={{
+            ...baseDraft,
+            thread_type: "update",
+            missing_fields: ["weight_kg"],
+            follow_up_draft: null,
+          } as any}
+        />
+      </QWrapper>,
+    );
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect(textarea).toHaveValue(expect.stringContaining("Dank voor uw wijziging op de transportaanvraag van Amsterdam naar Rotterdam."));
+    expect(textarea).toHaveValue(expect.stringContaining("Om de wijziging goed te verwerken hebben we nog graag eerst het gewicht nodig."));
+    expect(textarea).toHaveValue(expect.stringContaining("verwerken we de wijziging direct verder"));
+  });
+
+  it("adapts the draft tone for question threads", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel
+          selected={{
+            ...baseDraft,
+            thread_type: "question",
+            missing_fields: ["weight_kg"],
+            follow_up_draft: null,
+          } as any}
+        />
+      </QWrapper>,
+    );
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect(textarea).toHaveValue(expect.stringContaining("Dank voor uw bericht over de transportaanvraag van Amsterdam naar Rotterdam."));
+    expect(textarea).toHaveValue(expect.stringContaining("Om uw vraag goed te beantwoorden hebben we nog graag eerst het gewicht nodig."));
+    expect(textarea).toHaveValue(expect.stringContaining("komen we direct bij u terug met een volledig antwoord"));
+  });
+
+  it("turns anomalies into concrete confirmation questions", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel
+          selected={{
+            ...baseDraft,
+            missing_fields: [],
+            anomalies: [
+              { field: "weight_kg", value: 50000, avg_value: 5000, message: "Gewicht is 10x hoger dan normaal" },
+            ],
+            follow_up_draft: null,
+          } as any}
+        />
+      </QWrapper>,
+    );
+    expect(screen.getByText(/kunt u bevestigen of het gewicht inderdaad 50.000 kg is/i)).toBeInTheDocument();
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect(textarea).toHaveValue(expect.stringContaining("kunt u bevestigen of het gewicht inderdaad 50.000 kg is?"));
+    expect(textarea).toHaveValue(expect.stringContaining("ongeveer 5.000 kg"));
   });
 
   it("shows email recipient from source_email_from", async () => {
@@ -753,7 +902,7 @@ describe("FollowUpPanel", () => {
         body: expect.objectContaining({
           orderId: baseDraft.id,
           toEmail: "klant@example.nl",
-          subject: "Re: Transport aanvraag 2 pallets - aanvulling nodig voor gewicht",
+          subject: "Re: Transport aanvraag 2 pallets - aanvulling nodig voor het gewicht",
           body: "mail body",
         }),
       }));
