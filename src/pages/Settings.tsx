@@ -40,8 +40,11 @@ import { StickySaveBar } from "@/components/settings/StickySaveBar";
 import { CostTypeSettings } from "@/components/settings/CostTypeSettings";
 import { FuelPriceSettings } from "@/components/settings/FuelPriceSettings";
 import { InboxSettings } from "@/components/settings/InboxSettings";
+import { EtaNotificationSettings } from "@/components/settings/EtaNotificationSettings";
 import { WebhookSettings } from "@/components/settings/WebhookSettings";
 import { ApiTokenSettings } from "@/components/settings/ApiTokenSettings";
+import { ConnectorCatalog } from "@/components/settings/ConnectorCatalog";
+import { ConnectorDetail } from "@/components/settings/ConnectorDetail";
 import { useTranslation } from "react-i18next";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -80,6 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Communicatie",
     items: [
       { value: "sms", label: "SMS" },
+      { value: "eta-meldingen", label: "ETA en klant-meldingen" },
       { value: "inboxen", label: "Inboxen" },
       { value: "integraties", label: "Integraties" },
       { value: "webhooks", label: "Webhooks" },
@@ -474,6 +478,7 @@ const Settings = () => {
     if (location.pathname.includes("/branding")) return "branding";
     if (location.pathname.includes("/notificaties")) return "notificaties";
     if (location.pathname.includes("/sms")) return "sms";
+    if (location.pathname.includes("/eta-meldingen")) return "eta-meldingen";
     if (location.pathname.includes("/integraties")) return "integraties";
     if (location.pathname.includes("/inboxen")) return "inboxen";
     if (location.pathname.includes("/tarieven")) return "tarieven";
@@ -950,14 +955,35 @@ const Settings = () => {
           </div>
         </TabsContent>
 
-        {/* Integraties Tab */}
+        {/* Integraties Tab , nieuwe connector-platform UI (sprint 8) */}
         <TabsContent value="integraties" className="outline-none">
+          {(() => {
+            const m = location.pathname.match(/\/integraties\/([\w-]+)/);
+            const slug = m?.[1];
+            if (slug) {
+              return (
+                <ConnectorDetail
+                  slug={slug}
+                  onBack={() => navigate("/settings/integraties")}
+                />
+              );
+            }
+            return (
+              <ConnectorCatalog
+                onSelect={(s) => navigate(`/settings/integraties/${s}`)}
+              />
+            );
+          })()}
+        </TabsContent>
+
+        {/* Legacy Integraties Tab (verborgen, blijft staan voor de save-bar logica) */}
+        <TabsContent value="__legacy_integraties_hidden__" className="hidden">
           <div className="card--luxe p-6">
             <div className="pb-4">
               <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
-                Externe integraties
+                Externe integraties (legacy)
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">Koppel externe diensten en systemen aan je TMS-platform.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Vervangen door de connector-catalogus boven.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1157,6 +1183,10 @@ const Settings = () => {
           <InboxSettings />
         </TabsContent>
 
+        <TabsContent value="eta-meldingen" className="outline-none">
+          <EtaNotificationSettings />
+        </TabsContent>
+
         <TabsContent value="tarieven" className="space-y-6">
           <PricingPreview />
           <RateCardSettings />
@@ -1206,7 +1236,8 @@ const Settings = () => {
           label="SMS-instellingen hebben niet-opgeslagen wijzigingen"
         />
       )}
-      {getActiveTab() === "integraties" && (
+      {/* Save-bar uit voor integraties: nieuwe connector-UI heeft per-tab save-knoppen. */}
+      {false && getActiveTab() === "integraties" && (
         <StickySaveBar
           dirty={integrationsDirty || snelstartDirty}
           saving={saveIntegrations.isPending || saveSnelstart.isPending}

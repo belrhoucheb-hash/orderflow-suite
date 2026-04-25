@@ -2,7 +2,7 @@
 
 Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionaliteit wordt opgeleverd. De meest recente toevoegingen staan bovenaan per sectie, en in "Wat is er nieuw sinds de vorige test" hieronder.
 
-**Laatste update**: 2026-04-24, Rooster-module beschikbaar (chauffeurs inplannen per dag/week los van orders, in Planning > Rooster)
+**Laatste update**: 2026-04-28, Connector-platform beschikbaar (nieuwe Integraties-pagina met Snelstart en Exact Online live)
 
 **Hoe dit document te gebruiken**:
 - Kijk eerst naar "Wat is er nieuw sinds de vorige test" voor een snelle samenvatting.
@@ -42,6 +42,17 @@ Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionalitei
 ---
 
 ## Wat is er nieuw sinds de vorige test
+
+**Connector-platform (2026-04-28), nieuwe Integraties-pagina onder Instellingen**:
+- Onder **Instellingen > Integraties** staat nu een **catalogus** van koppelingen, gegroepeerd per categorie (Boekhouding, Telematica, Klantportalen). Per kaart zie je in één oogopslag of de koppeling **verbonden** of **niet verbonden** is.
+- Klik op een kaart om de detail-pagina te openen met vier tabs: **Verbinding**, **Mapping**, **Sync** en **Log**.
+- **Snelstart** en **Exact Online** zijn de eerste twee live koppelingen.
+  - Voor Exact klik je op **"Verbinden met Exact Online"**, je wordt naar Exact gestuurd om in te loggen, en je komt vanzelf terug.
+  - Voor Snelstart vul je je Client Key, Subscription Key en Administratie-ID in. **Mock-modus** kun je aanzetten om te oefenen zonder echte boekingen.
+- In de **Mapping**-tab kun je per koppeling de standaard grootboek-rekening en BTW-rekening voor jouw administratie instellen. Niet ingevuld? Dan gebruikt het systeem de defaults (8000 / 1500).
+- In de **Log**-tab zie je per koppeling de laatste 50 boekingen met tijdstip, status en eventuele foutmelding. Een misgelopen boeking laat een rode markering zien met de exacte foutmelding.
+- **Twinfield, AFAS, Webfleet en Samsara** staan als kaarten klaar maar zijn nog niet activeerbaar (label "Binnenkort").
+- Bij elke factuur die op **verzonden** wordt gezet, gaat er nu automatisch een boeking naar de actieve boekhoud-koppeling. Je hoeft niets te klikken; in de Log-tab zie je dat het is gebeurd.
 
 **Rooster-module (2026-04-24), chauffeurs inplannen los van orders**:
 - Onder **Planning** staat een nieuwe knop **"Rooster"** naast Dag/Week/Map. Hiermee kun je chauffeurs per dag inplannen zonder dat er orders nodig zijn. Dit vervangt de Excel-planning.
