@@ -56,6 +56,8 @@ export interface TripStop {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  predicted_eta?: string | null;
+  predicted_eta_updated_at?: string | null;
   // Joined
   order?: { order_number: number; client_name: string; quantity: number; unit: string; weight_kg: number };
   pod?: ProofOfDelivery;

@@ -485,6 +485,23 @@ const Dispatch = () => {
                         {trip.actual_start_time && (
                           <span className="text-green-600">→ {formatTime(trip.actual_start_time)}</span>
                         )}
+                        {(() => {
+                          const predicted = (trip as any).predicted_eta as string | null | undefined;
+                          if (!predicted || !trip.planned_start_time) return null;
+                          const predictedMs = new Date(predicted).getTime();
+                          const plannedMs = new Date(trip.planned_start_time).getTime();
+                          if (Number.isNaN(predictedMs) || Number.isNaN(plannedMs)) return null;
+                          const diffMin = Math.abs(predictedMs - plannedMs) / 60000;
+                          if (diffMin < 5) return null;
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] bg-[hsl(var(--gold-soft)/0.4)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.3)]"
+                            >
+                              ETA {formatTime(predicted)}
+                            </Badge>
+                          );
+                        })()}
                       </div>
 
                       {/* Spacer */}

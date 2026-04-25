@@ -25,7 +25,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "sonner";
 
 // ── Types ────────────────────────────────────────────────────────────
-type ExceptionType = "Vertraging" | "Data mist" | "Capaciteit" | "SLA";
+type ExceptionType = "Vertraging" | "Data mist" | "Capaciteit" | "SLA" | "Voorspelde vertraging";
 type Urgency = "critical" | "warning" | "info";
 
 interface ExceptionItem {
@@ -64,6 +64,8 @@ const typeBadgeColor: Record<ExceptionType, string> = {
   "Data mist": "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800",
   Capaciteit: "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800",
   SLA: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800",
+  "Voorspelde vertraging":
+    "bg-[hsl(var(--gold-soft)/0.4)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.3)]",
 };
 
 // ── Delivery exceptions from DB ─────────────────────────────────────
@@ -73,7 +75,7 @@ function useDeliveryExceptions() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("delivery_exceptions")
-        .select("id, exception_type, severity, description, order_id, created_at, status")
+        .select("id, exception_type, severity, description, order_id, trip_id, created_at, status")
         .in("status", ["OPEN", "IN_PROGRESS"]);
       if (error) throw error;
       return data ?? [];
@@ -159,18 +161,29 @@ const Exceptions = () => {
       MISSING_DATA: "Data mist",
       CAPACITY: "Capaciteit",
       SLA_BREACH: "SLA",
+      PREDICTED_DELAY: "Voorspelde vertraging",
     };
     for (const dex of deliveryExceptions) {
+      const isPredicted = dex.exception_type === "PREDICTED_DELAY";
+      const tripId = dex.trip_id;
       items.push({
         id: dex.id,
         type: dexTypeMap[dex.exception_type] || "Vertraging",
-        urgency: severityToUrgency[dex.severity] || "warning",
+        urgency: isPredicted ? "info" : (severityToUrgency[dex.severity] || "warning"),
         orderNumber: dex.order_id ? `Order` : "—",
         clientName: "",
         description: dex.description,
         detectedAt: new Date(dex.created_at),
-        actionLabel: dex.order_id ? "Bekijk order" : "Details",
-        actionTo: dex.order_id ? `/orders/${dex.order_id}` : "/exceptions",
+        actionLabel: isPredicted
+          ? "Bekijk rit"
+          : dex.order_id
+            ? "Bekijk order"
+            : "Details",
+        actionTo: isPredicted
+          ? (tripId ? `/dispatch?trip=${tripId}` : "/dispatch")
+          : dex.order_id
+            ? `/orders/${dex.order_id}`
+            : "/exceptions",
         source: "db",
       });
     }

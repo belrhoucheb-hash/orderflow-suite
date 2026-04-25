@@ -91,6 +91,24 @@ export const TRIGGER_EVENT_RECIPIENTS: Record<TriggerEvent, string> = {
   EXCEPTION: "Opdrachtgever",
 };
 
+export interface EtaNotificationSettings {
+  customer_push_lead_minutes: number;
+  customer_update_threshold_minutes: number;
+  predicted_delay_threshold_minutes: number;
+  predicted_delay_severity: "LOW" | "MEDIUM" | "HIGH";
+  eta_min_shift_for_badge_minutes: number;
+  customer_notifications_enabled: boolean;
+}
+
+export const DEFAULT_ETA_NOTIFICATION_SETTINGS: EtaNotificationSettings = {
+  customer_push_lead_minutes: 30,
+  customer_update_threshold_minutes: 15,
+  predicted_delay_threshold_minutes: 15,
+  predicted_delay_severity: "MEDIUM",
+  eta_min_shift_for_badge_minutes: 5,
+  customer_notifications_enabled: true,
+};
+
 export const AVAILABLE_VARIABLES: Array<{ key: keyof TemplateVariables; label: string; example: string }> = [
   { key: "order_number", label: "Ordernummer", example: "1042" },
   { key: "client_name", label: "Klantnaam", example: "Bakkerij De Jong" },

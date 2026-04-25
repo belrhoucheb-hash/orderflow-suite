@@ -200,7 +200,12 @@ const LiveTracking = () => {
 
       const vInfo = vehicleMap.get(pos.vehicleId);
       const dName = st?.driverName || "Onbekend";
-      const etaStr = st?.eta || "--:--";
+      const tripForPos = trips.find((t) => t.id === pos.tripId);
+      const predictedEtaIso = (tripForPos as any)?.predicted_eta as string | null | undefined;
+      const predictedEtaFormatted = predictedEtaIso
+        ? new Date(predictedEtaIso).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })
+        : null;
+      const etaStr = predictedEtaFormatted || st?.eta || "--:--";
       const delayStr =
         st && st.delayMinutes > 0
           ? `<br/><span style="color:${STATUS_COLORS[st.status]};font-weight:600;">+${st.delayMinutes} min vertraging</span>`
@@ -234,7 +239,7 @@ const LiveTracking = () => {
         maxZoom: 11,
       });
     }
-  }, [positions, statuses, vehicleMap, selectedTripId]);
+  }, [positions, statuses, vehicleMap, selectedTripId, trips]);
 
   // Update stop markers + route lines when a trip is selected
   useEffect(() => {
