@@ -383,7 +383,7 @@ export function SourcePanel({
         {/* Header: subject + avatar row */}
         <div className="border-b border-[hsl(var(--gold)/0.08)] px-4 pb-4 pt-4 md:px-6 md:pt-5">
           <h2
-            className="mb-3 text-[18px] font-semibold leading-tight md:text-[20px]"
+            className="mb-3 max-w-[34rem] text-[17px] font-semibold leading-tight sm:text-[18px] md:max-w-none md:text-[20px]"
             style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
           >
             {selected.source_email_subject || "Geen onderwerp"}
@@ -447,7 +447,7 @@ export function SourcePanel({
           <button
             onClick={() => setLinkageOn((v) => !v)}
             className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11.5px] transition-colors",
+              "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[11px] transition-colors sm:text-[11.5px]",
               linkageOn
                 ? "text-foreground border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold-soft)/0.35)]"
                 : "text-muted-foreground border-border hover:text-foreground",
@@ -461,7 +461,7 @@ export function SourcePanel({
           <button
             onClick={handleParseWithAI}
             disabled={isParsing}
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11.5px] border border-[hsl(var(--gold)/0.4)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.5)] transition-colors disabled:opacity-60"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[hsl(var(--gold)/0.4)] px-2.5 text-[11px] text-[hsl(var(--gold-deep))] transition-colors hover:bg-[hsl(var(--gold-soft)/0.5)] disabled:opacity-60 sm:text-[11.5px]"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}
           >
             {isParsing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" strokeWidth={1.75} />}
@@ -470,7 +470,7 @@ export function SourcePanel({
         </div>
 
         {/* Email body */}
-        <div className="px-4 pb-5 text-[14px] leading-[1.7] md:px-6" style={{ color: "hsl(var(--foreground))" }}>
+        <div className="px-4 pb-5 text-[13.5px] leading-[1.72] md:px-6 md:text-[14px]" style={{ color: "hsl(var(--foreground))" }}>
           {body ? (
             linkageOn && Array.isArray(highlightedBody) && typeof highlightedBody[0] !== "string" ? (
               (highlightedBody as any[]).map(({ nodes, i }) => (

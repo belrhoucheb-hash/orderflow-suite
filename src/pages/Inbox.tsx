@@ -159,7 +159,7 @@ export default function Inbox() {
       {/* Resizable 3-column content */}
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         {/* Mail List */}
-        <ResizablePanel defaultSize={22} minSize={15} maxSize={35}>
+        <ResizablePanel defaultSize={22} minSize={16} maxSize={35}>
           <div className="flex flex-col h-full bg-white" style={{ minWidth: 0, overflow: "hidden" }}>
             <div
               className="min-h-14 px-4 py-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b shrink-0"
@@ -205,7 +205,7 @@ export default function Inbox() {
               </div>
             )}
             <div className="space-y-3 p-3">
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(116px,1fr))] gap-2">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(118px,1fr))] gap-2">
                 {[
                   {
                     key: "actie",

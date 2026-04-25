@@ -84,7 +84,7 @@ function ChapterHead({
   sub?: string;
 }) {
   return (
-    <div className="flex items-baseline gap-3 mb-3">
+    <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
       <span
         className="shrink-0 grid place-items-center w-6 h-6 rounded-full text-[10px] font-semibold"
         style={{
@@ -103,7 +103,7 @@ function ChapterHead({
         >
           {title}
         </p>
-        {sub && <p className="text-[12px] text-foreground mt-[2px]">{sub}</p>}
+        {sub && <p className="mt-[2px] text-[11.5px] leading-[1.45] text-foreground/80">{sub}</p>}
       </div>
     </div>
   );
@@ -273,7 +273,7 @@ export function InboxReviewPanel({
                 </span>
               </div>
               <h2
-                className="truncate text-[20px] font-semibold leading-tight md:text-[22px]"
+                className="max-w-[22rem] text-[18px] font-semibold leading-tight sm:text-[19px] md:max-w-none md:text-[22px]"
                 style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
               >
                 {selected.client_name || "Onbekende klant"}
@@ -453,7 +453,7 @@ export function InboxReviewPanel({
                   }}
                 />
               </div>
-              <p className="text-[10.5px] text-muted-foreground mt-2">
+              <p className="mt-2 text-[10.5px] leading-[1.45] text-muted-foreground">
                 {selected.attachments?.length
                   ? `Uit e-mail plus ${selected.attachments.length} bijlage${selected.attachments.length > 1 ? "n" : ""}`
                   : "Uit e-mailtekst"}
@@ -868,7 +868,7 @@ export function InboxReviewPanel({
 
       {/* Sticky CTA footer */}
       <div
-        className="absolute bottom-0 left-0 right-0 p-4 z-20"
+        className="absolute bottom-0 left-0 right-0 z-20 p-4"
         style={{
           background: "linear-gradient(180deg,hsl(var(--card)/0.88),hsl(var(--card)/0.97))",
           backdropFilter: "blur(8px)",
@@ -880,19 +880,19 @@ export function InboxReviewPanel({
           className="hairline"
           style={{ marginBottom: 10 }}
         />
-        <div className="flex items-center gap-2 mb-2">
+        <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
           <ClipboardCheck
             className="h-3.5 w-3.5"
             strokeWidth={1.75}
             style={{ color: formErrors ? "hsl(32 70% 45%)" : ctaVisual.iconColor }}
           />
-          <p className="text-[11px] text-muted-foreground">{primaryActionDescription}</p>
+          <p className="text-[11px] leading-[1.45] text-muted-foreground">{primaryActionDescription}</p>
         </div>
         <button
           onClick={handlePrimaryAction}
           disabled={isCreatePending || formErrors}
           className={cn(
-            "w-full h-11 rounded-xl font-semibold text-[13px] transition-all inline-flex items-center justify-center gap-2",
+            "inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-semibold transition-all sm:text-[13px]",
           )}
           style={{
             fontFamily: "'Space Grotesk', sans-serif",
