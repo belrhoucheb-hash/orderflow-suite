@@ -81,13 +81,25 @@ export function AppSidebar() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const chauffeurItems = useMemo(() => toItems(chauffeurItemsDef), [t, i18n.language]);
 
+  const exceptionBadgeValue = exceptionCount?.total ?? 0;
+
   const renderNavGroup = (label: string, items: Array<{ title: string; url: string; icon: any }>) => (
-    <SidebarGroup className="mt-4 first:mt-0">
-      <SidebarGroupLabel className="text-sidebar-foreground/30 text-xs uppercase tracking-[0.15em] font-medium mb-1 px-3">
+    <SidebarGroup
+      className="mt-4 first:mt-0 rounded-2xl border px-2.5 py-3"
+      style={{
+        borderColor: "hsl(var(--gold) / 0.14)",
+        background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.1) 100%)",
+        boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.04)",
+      }}
+    >
+      <SidebarGroupLabel
+        className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu className="space-y-0.5">
+        <SidebarMenu className="space-y-1">
           {items.map((item) => {
             const active = isActive(item.url);
             return (
@@ -99,17 +111,40 @@ export function AppSidebar() {
                     aria-label={item.title}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+                      "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150",
                       active
-                        ? "bg-white/10 text-white before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-primary"
-                        : "text-sidebar-foreground/60 hover:text-sidebar-foreground/90 hover:bg-white/5"
+                        ? "text-foreground"
+                        : "text-sidebar-foreground/68 hover:text-foreground"
                     )}
+                    style={active ? {
+                      background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.7) 0%, hsl(var(--gold-soft) / 0.18) 100%)",
+                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.24), 0 8px 20px -16px hsl(var(--gold-deep) / 0.45)",
+                    } : undefined}
                   >
-                    <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2 : 1.5} />
+                    <span
+                      className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+                      style={active ? {
+                        background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+                        color: "white",
+                        boxShadow: "0 8px 18px -12px hsl(var(--gold-deep) / 0.6)",
+                      } : {
+                        background: "hsl(var(--gold-soft) / 0.34)",
+                        color: "hsl(var(--gold-deep))",
+                      }}
+                    >
+                      <item.icon className="h-[16px] w-[16px]" strokeWidth={active ? 2.1 : 1.8} />
+                    </span>
                     <span>{item.title}</span>
-                    {item.url === "/exceptions" && (exceptionCount?.total ?? 0) > 0 && (
-                      <span className="ml-auto rounded-full bg-red-500/90 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                        {Math.min(exceptionCount?.total ?? 0, 99)}
+                    {item.url === "/exceptions" && exceptionBadgeValue > 0 && (
+                      <span
+                        className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                        style={{
+                          background: active ? "hsl(0 0% 100% / 0.94)" : "hsl(12 92% 58%)",
+                          color: active ? "hsl(var(--gold-deep))" : "white",
+                          boxShadow: active ? "0 0 0 1px hsl(var(--gold) / 0.18)" : "none",
+                        }}
+                      >
+                        {Math.min(exceptionBadgeValue, 99)}
                       </span>
                     )}
                   </NavLink>
@@ -149,26 +184,47 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r-0">
-      <div className="flex items-center gap-3 px-5 py-6">
+    <Sidebar
+      collapsible="icon"
+      className="border-r-0"
+      style={{
+        background: "linear-gradient(180deg, hsl(224 29% 11%) 0%, hsl(220 25% 9%) 100%)",
+        color: "hsl(45 44% 96%)",
+      }}
+    >
+      <div
+        className="mx-3 mt-3 flex items-center gap-3 rounded-2xl border px-4 py-4"
+        style={{
+          borderColor: "hsl(var(--gold) / 0.16)",
+          background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.24) 0%, hsl(224 30% 12%) 100%)",
+          boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.04)",
+        }}
+      >
         <img 
           src={tenant?.logoUrl || defaultLogo} 
           alt={tenant?.name || "TMS"} 
-          className="h-9 w-9 rounded-lg object-contain bg-white/10 p-1" 
+          className="h-10 w-10 rounded-xl object-contain p-1.5"
+          style={{
+            background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.9), hsl(var(--gold-soft) / 0.3))",
+            boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.2)",
+          }}
         />
         {!collapsed && (
           <div className="flex flex-col min-w-0 pr-2">
-            <span className="text-sm font-semibold text-white tracking-tight leading-tight truncate">
+            <span
+              className="truncate text-sm font-semibold tracking-tight leading-tight text-white"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
               {tenant?.name || DEFAULT_COMPANY.name}
             </span>
-            <span className="text-xs text-white/50 font-light uppercase tracking-wider">
-              TMS Platform
+            <span className="text-[10px] uppercase tracking-[0.22em] text-[hsl(var(--gold-light))]">
+              Autonomous TMS
             </span>
           </div>
         )}
       </div>
 
-      <SidebarContent className="px-3">
+      <SidebarContent className="px-3 py-3">
         {visiblePrimaryGroups.map((group) => renderNavGroup(group.label, group.items))}
 
         {isAdmin && (
@@ -177,34 +233,43 @@ export function AppSidebar() {
 
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-white/5 px-4 py-4">
+      <SidebarFooter
+        className="mx-3 mb-3 rounded-2xl border px-4 py-4"
+        style={{
+          borderColor: "hsl(var(--gold) / 0.12)",
+          background: "linear-gradient(180deg, hsl(var(--card) / 0.14) 0%, hsl(var(--gold-soft) / 0.08) 100%)",
+        }}
+      >
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-xs font-semibold text-white shrink-0">
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+            style={{ background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)" }}
+          >
             {(profile?.display_name || user?.email || "?").slice(0, 2).toUpperCase()}
           </div>
           {!collapsed && (
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-sm font-medium text-white/90 truncate">{profile?.display_name || "Gebruiker"}</span>
-              <span className="text-xs text-sidebar-foreground/40 truncate">{user?.email}</span>
+              <span className="truncate text-sm font-medium text-white/90">{profile?.display_name || "Gebruiker"}</span>
+              <span className="truncate text-xs text-white/45">{user?.email}</span>
             </div>
           )}
           <button
             onClick={() => navigate("/settings")}
-            className="shrink-0 p-1.5 rounded-md text-sidebar-foreground/30 hover:text-white/70 hover:bg-white/5 transition-colors"
+            className="shrink-0 rounded-md p-1.5 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
             aria-label="Instellingen"
           >
             <Settings className="h-4 w-4" />
           </button>
           <button
             onClick={toggleTheme}
-            className="shrink-0 p-1.5 rounded-md text-sidebar-foreground/30 hover:text-white/70 hover:bg-white/5 transition-colors"
+            className="shrink-0 rounded-md p-1.5 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
             aria-label={isDark ? "Licht thema" : "Donker thema"}
           >
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           <button
             onClick={async () => { await signOut(); navigate("/login"); }}
-            className="shrink-0 p-1.5 rounded-md text-sidebar-foreground/30 hover:text-white/70 hover:bg-white/5 transition-colors"
+            className="shrink-0 rounded-md p-1.5 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
             aria-label="Uitloggen"
           >
             <LogOut className="h-4 w-4" />
