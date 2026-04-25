@@ -54,6 +54,7 @@ const chauffeurItemsDef = [
 ];
 
 export function AppSidebar() {
+  const groupStorageKey = "app-sidebar-collapsed-groups";
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
@@ -87,6 +88,24 @@ export function AppSidebar() {
   const chauffeurItems = useMemo(() => toItems(chauffeurItemsDef), [t, i18n.language]);
 
   const exceptionBadgeValue = exceptionCount?.total ?? 0;
+  const showExceptionCount = exceptionBadgeValue >= 4;
+  const showExceptionDot = exceptionBadgeValue > 0 && !showExceptionCount;
+
+  useEffect(() => {
+    const savedGroups = localStorage.getItem(groupStorageKey);
+    if (!savedGroups) return;
+
+    try {
+      const parsed = JSON.parse(savedGroups) as Record<string, boolean>;
+      setCollapsedGroups((current) => ({ ...current, ...parsed }));
+    } catch {
+      localStorage.removeItem(groupStorageKey);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(groupStorageKey, JSON.stringify(collapsedGroups));
+  }, [collapsedGroups]);
 
   const toggleGroup = (label: string) => {
     setCollapsedGroups((current) => ({
@@ -189,7 +208,7 @@ export function AppSidebar() {
                       <item.icon className="h-[15px] w-[15px]" strokeWidth={active ? 2 : 1.85} />
                     </span>
                     <span className="truncate">{item.title}</span>
-                    {item.url === "/exceptions" && exceptionBadgeValue > 0 && (
+                    {item.url === "/exceptions" && showExceptionCount && (
                       <span
                         className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
                         style={active ? {
@@ -200,6 +219,12 @@ export function AppSidebar() {
                       >
                         {Math.min(exceptionBadgeValue, 99)}
                       </span>
+                    )}
+                    {item.url === "/exceptions" && showExceptionDot && (
+                      <span
+                        className="ml-auto h-2 w-2 rounded-full"
+                        style={{ background: "hsl(var(--gold-light))", boxShadow: "0 0 0 3px hsl(var(--gold) / 0.08)" }}
+                      />
                     )}
                   </NavLink>
                 </SidebarMenuButton>

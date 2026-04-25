@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   LayoutDashboard,
   Inbox,
@@ -7,15 +7,14 @@ import {
   MoreHorizontal,
   Building2,
   Send,
-  Route,
   Users,
   Container,
   BarChart3,
-  Shield,
+  AlertTriangle,
   Receipt,
   Settings,
-  Map,
-  X,
+  Activity,
+  ChevronRight,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -29,42 +28,72 @@ import {
 } from "@/components/ui/sheet";
 
 const primaryItems = [
-  { label: "Dashboard", path: "/", icon: LayoutDashboard },
+  { label: "Overzicht", path: "/", icon: LayoutDashboard },
   { label: "Inbox", path: "/inbox", icon: Inbox },
   { label: "Orders", path: "/orders", icon: Package },
   { label: "Planbord", path: "/planning", icon: Truck },
 ];
 
-const moreItems = [
-  { label: "Dispatch", path: "/dispatch", icon: Send },
-  { label: "Ritoverzicht", path: "/ritten", icon: Route },
-  { label: "Klanten", path: "/klanten", icon: Building2 },
-  { label: "Chauffeurs", path: "/chauffeurs", icon: Users },
-  { label: "Vloot", path: "/vloot", icon: Container },
-  { label: "Rapportage", path: "/rapportage", icon: BarChart3 },
-  { label: "Uitzonderingen", path: "/exceptions", icon: Shield },
-  { label: "Facturatie", path: "/facturatie", icon: Receipt },
-  { label: "Instellingen", path: "/settings", icon: Settings },
-];
+const sections = [
+  {
+    label: "Operatie",
+    items: [
+      { label: "Dispatch", path: "/dispatch", icon: Send },
+      { label: "Uitzonderingen", path: "/exceptions", icon: AlertTriangle },
+    ],
+  },
+  {
+    label: "Controle",
+    items: [
+      { label: "Autonomie", path: "/autonomie", icon: Activity },
+      { label: "Finance", path: "/facturatie", icon: Receipt },
+      { label: "Rapportage", path: "/rapportage", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Netwerk",
+    items: [
+      { label: "Klanten", path: "/klanten", icon: Building2 },
+      { label: "Chauffeurs", path: "/chauffeurs", icon: Users },
+      { label: "Vloot", path: "/vloot", icon: Container },
+    ],
+  },
+  {
+    label: "Beheer",
+    items: [
+      { label: "Instellingen", path: "/settings", icon: Settings },
+    ],
+  },
+] as const;
 
 export function MobileNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const { data: exceptionCount } = useExceptionCount();
+  const exceptionBadgeValue = exceptionCount?.total ?? 0;
+  const showExceptionCount = exceptionBadgeValue >= 4;
+  const showExceptionDot = exceptionBadgeValue > 0 && !showExceptionCount;
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
   };
 
-  // Check if any "more" item is active (to highlight the "Meer" button)
+  const moreItems = useMemo(() => sections.flatMap((section) => section.items), []);
   const moreIsActive = moreItems.some((item) => isActive(item.path));
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border/40 md:hidden safe-area-bottom">
-        <div className="flex items-center justify-around h-14 px-2">
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 border-t md:hidden safe-area-bottom"
+        style={{
+          background: "hsl(222 24% 12% / 0.96)",
+          borderColor: "hsl(218 24% 18%)",
+          backdropFilter: "blur(14px)",
+        }}
+      >
+        <div className="flex h-14 items-center justify-around px-2">
           {primaryItems.map((item) => {
             const active = isActive(item.path);
             return (
@@ -72,13 +101,18 @@ export function MobileNav() {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors min-w-0",
-                  active ? "text-primary" : "text-muted-foreground"
+                  "flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 transition-colors",
+                  active ? "text-white" : "text-white/52"
                 )}
+                style={active ? { background: "hsl(219 22% 17%)", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
                 aria-label={item.label}
               >
-                <item.icon className={cn("h-5 w-5", active && "stroke-[2.5px]")} />
-                <span className="text-xs font-medium truncate">{item.label}</span>
+                <item.icon
+                  className="h-5 w-5"
+                  strokeWidth={active ? 2.2 : 1.9}
+                  style={active ? { color: "hsl(var(--gold-light))" } : undefined}
+                />
+                <span className="truncate text-[11px] font-medium">{item.label}</span>
               </NavLink>
             );
           })}
@@ -88,48 +122,110 @@ export function MobileNav() {
             <SheetTrigger asChild>
               <button
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors min-w-0",
-                  moreIsActive ? "text-primary" : "text-muted-foreground"
+                  "flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 transition-colors",
+                  moreIsActive ? "text-white" : "text-white/52"
                 )}
+                style={moreIsActive ? { background: "hsl(219 22% 17%)", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
                 aria-label="Meer navigatie"
               >
-                <MoreHorizontal className={cn("h-5 w-5", moreIsActive && "stroke-[2.5px]")} />
-                <span className="text-xs font-medium truncate">Meer</span>
+                <div className="relative">
+                  <MoreHorizontal
+                    className="h-5 w-5"
+                    strokeWidth={moreIsActive ? 2.2 : 1.9}
+                    style={moreIsActive ? { color: "hsl(var(--gold-light))" } : undefined}
+                  />
+                  {showExceptionDot && (
+                    <span
+                      className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full"
+                      style={{ background: "hsl(var(--gold-light))" }}
+                    />
+                  )}
+                </div>
+                <span className="truncate text-[11px] font-medium">Meer</span>
               </button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="rounded-t-2xl pb-safe max-h-[70vh]">
-              <SheetHeader className="pb-2">
-                <SheetTitle className="text-sm font-semibold">Navigatie</SheetTitle>
+            <SheetContent
+              side="bottom"
+              className="max-h-[75vh] rounded-t-3xl border-0 pb-safe"
+              style={{
+                background: "linear-gradient(180deg, hsl(224 29% 11%) 0%, hsl(220 25% 9%) 100%)",
+              }}
+            >
+              <SheetHeader className="pb-3">
+                <SheetTitle
+                  className="text-sm font-semibold text-white"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  Navigatie
+                </SheetTitle>
               </SheetHeader>
-              <div className="grid grid-cols-3 gap-2 py-2">
-                {moreItems.map((item) => {
-                  const active = isActive(item.path);
-                  return (
-                    <button
-                      key={item.path}
-                      onClick={() => {
-                        setMoreOpen(false);
-                        navigate(item.path);
-                      }}
-                      className={cn(
-                        "flex flex-col items-center gap-1.5 p-3 rounded-xl transition-colors",
-                        active
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      )}
+              <div className="space-y-4 py-1">
+                {sections.map((section) => (
+                  <div key={section.label}>
+                    <p
+                      className="mb-1.5 px-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-white/30"
+                      style={{ fontFamily: "var(--font-display)" }}
                     >
-                      <div className="relative">
-                        <item.icon className="h-5 w-5" />
-                        {item.path === "/exceptions" && (exceptionCount?.total ?? 0) > 0 && (
-                          <span className="absolute -right-2.5 -top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
-                            {Math.min(exceptionCount?.total ?? 0, 99)}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs font-medium text-center leading-tight">{item.label}</span>
-                    </button>
-                  );
-                })}
+                      {section.label}
+                    </p>
+                    <div className="space-y-1">
+                      {section.items.map((item) => {
+                        const active = isActive(item.path);
+                        return (
+                          <button
+                            key={item.path}
+                            onClick={() => {
+                              setMoreOpen(false);
+                              navigate(item.path);
+                            }}
+                            className={cn(
+                              "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors",
+                              active ? "text-white" : "text-white/72",
+                            )}
+                            style={active ? {
+                              background: "hsl(219 22% 17%)",
+                              boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)",
+                            } : {
+                              background: "hsl(222 22% 12%)",
+                            }}
+                          >
+                            <div
+                              className="relative flex h-9 w-9 items-center justify-center rounded-xl"
+                              style={active ? {
+                                background: "hsl(var(--gold) / 0.18)",
+                                color: "hsl(var(--gold-light))",
+                              } : {
+                                background: "hsl(220 20% 15%)",
+                                color: "hsl(0 0% 100% / 0.72)",
+                              }}
+                            >
+                              <item.icon className="h-4 w-4" strokeWidth={active ? 2 : 1.85} />
+                              {item.path === "/exceptions" && showExceptionDot && (
+                                <span
+                                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full"
+                                  style={{ background: "hsl(var(--gold-light))" }}
+                                />
+                              )}
+                            </div>
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.label}</span>
+                            {item.path === "/exceptions" && showExceptionCount && (
+                              <span
+                                className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                                style={{
+                                  background: exceptionBadgeValue >= 10 ? "hsl(8 82% 56%)" : "hsl(var(--gold) / 0.18)",
+                                  color: exceptionBadgeValue >= 10 ? "white" : "hsl(var(--gold-light))",
+                                }}
+                              >
+                                {Math.min(exceptionBadgeValue, 99)}
+                              </span>
+                            )}
+                            <ChevronRight className="h-4 w-4 text-white/28" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </SheetContent>
           </Sheet>
