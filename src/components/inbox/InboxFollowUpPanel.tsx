@@ -6,18 +6,28 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OrderDraft } from "./types";
+import {
+  buildSuggestedFollowUpDraft,
+  buildSuggestedFollowUpSubject,
+  getBlockingFollowUpRecommendations,
+  getFollowUpRecommendations,
+} from "@/lib/followUpDraft";
 
 export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState(selected.follow_up_draft || "");
+  const suggestedDraft = buildSuggestedFollowUpDraft(selected);
+  const suggestedSubject = buildSuggestedFollowUpSubject(selected);
+  const recommendations = getFollowUpRecommendations(selected);
+  const blockingRecommendations = getBlockingFollowUpRecommendations(selected);
+  const [draft, setDraft] = useState(selected.follow_up_draft || suggestedDraft || "");
   const [isSending, setIsSending] = useState(false);
   
   const hasMissing = (selected.missing_fields || []).length > 0;
   const alreadySent = !!selected.follow_up_sent_at;
 
   useEffect(() => {
-    setDraft(selected.follow_up_draft || "");
-  }, [selected.id, selected.follow_up_draft]);
+    setDraft(selected.follow_up_draft || buildSuggestedFollowUpDraft(selected) || "");
+  }, [selected.id, selected.follow_up_draft, selected.missing_fields, selected.anomalies, selected.client_name]);
 
   if (!hasMissing && !draft) return null;
 
@@ -32,7 +42,7 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
     }
     setIsSending(true);
     try {
-      const subject = encodeURIComponent(`Re: ${selected.source_email_subject || "Uw transportaanvraag"} - Aanvullende informatie nodig`);
+      const subject = encodeURIComponent(suggestedSubject);
       const body = encodeURIComponent(draft);
 
       // Try edge function first, fallback to mailto
@@ -91,8 +101,55 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
         )}
 
         <div className="space-y-2">
+          {recommendations.length > 0 && (
+            <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-foreground">Aanbevolen om op te vragen</p>
+                {suggestedDraft && (
+                  <button
+                    type="button"
+                    onClick={() => setDraft(suggestedDraft)}
+                    className="text-[11px] font-medium text-primary hover:underline"
+                  >
+                    Gebruik slim voorstel
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {recommendations.map((item) => (
+                  <span
+                    key={item}
+                    className="inline-flex items-center rounded-full border border-border/50 bg-background px-2 py-1 text-[11px] text-foreground"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {blockingRecommendations.length > 0 && (
+            <div className="rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2">
+              <p className="text-[11px] font-semibold text-amber-900">Eerst nodig voor bevestiging</p>
+              <p className="mt-1 text-xs text-amber-800">
+                Vraag eerst {blockingRecommendations.join(" en ")} op. Daarna kan de order sneller door naar bevestiging.
+              </p>
+            </div>
+          )}
+          <div className="rounded-lg border border-border/40 bg-background px-3 py-2">
+            <p className="text-[11px] font-semibold text-foreground">Onderwerp</p>
+            <p className="mt-1 text-xs text-muted-foreground">{suggestedSubject}</p>
+          </div>
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground font-medium">Concept follow-up mail aan {toEmail || "onbekend"}</p>
+            {suggestedDraft && draft !== suggestedDraft && (
+              <button
+                type="button"
+                onClick={() => setDraft(suggestedDraft)}
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+              >
+                Reset naar voorstel
+              </button>
+            )}
           </div>
           <Textarea
             value={draft}

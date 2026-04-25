@@ -543,6 +543,29 @@ describe("FollowUpPanel", () => {
     expect(screen.getByText("afmetingen")).toBeInTheDocument();
   });
 
+  it("shows recommended follow-up items from missing fields", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["weight_kg", "delivery_address"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    expect(screen.getByText("Aanbevolen om op te vragen")).toBeInTheDocument();
+    expect(screen.getByText("het gewicht")).toBeInTheDocument();
+    expect(screen.getByText("het volledige afleveradres")).toBeInTheDocument();
+  });
+
+  it("shows which details are blocking order confirmation first", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["dimensions", "delivery_address", "weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    expect(screen.getByText("Eerst nodig voor bevestiging")).toBeInTheDocument();
+    expect(screen.getByText(/Vraag eerst het volledige afleveradres en het gewicht op/i)).toBeInTheDocument();
+  });
+
   it("shows already sent badge", async () => {
     const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
     render(
@@ -594,6 +617,61 @@ describe("FollowUpPanel", () => {
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
     expect(textarea).toBeInTheDocument();
     expect(textarea).toHaveValue("Beste klant, stuur ons aub meer info");
+  });
+
+  it("uses generated draft when no follow_up_draft exists", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect(textarea).toHaveValue(expect.stringContaining("Beste team van ACME Corp,"));
+    expect(textarea).toHaveValue(expect.stringContaining("Dank voor uw transportaanvraag van Amsterdam naar Rotterdam."));
+    expect(textarea).toHaveValue(expect.stringContaining("Voor we de order kunnen bevestigen hebben we nog graag eerst het gewicht nodig."));
+    expect(textarea).toHaveValue(expect.stringContaining("het gewicht"));
+    expect(textarea).toHaveValue(expect.stringContaining("Planning Royalty Cargo"));
+    expect(textarea).toHaveValue(expect.stringContaining("planning@royaltycargo.nl"));
+  });
+
+  it("shows a smart subject preview", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    expect(screen.getByText("Onderwerp")).toBeInTheDocument();
+    expect(screen.getByText(/Re: Transport aanvraag 2 pallets - aanvulling nodig voor het gewicht/i)).toBeInTheDocument();
+  });
+
+  it("uses a formal generic salutation when no client name is known", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel selected={{ ...baseDraft, client_name: null, missing_fields: ["weight_kg"], follow_up_draft: null } as any} />
+      </QWrapper>,
+    );
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect(textarea).toHaveValue(expect.stringContaining("Geachte heer/mevrouw,"));
+  });
+
+  it("prioritizes blocking fields before secondary information in the generated draft", async () => {
+    const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
+    render(
+      <QWrapper>
+        <FollowUpPanel
+          selected={{
+            ...baseDraft,
+            missing_fields: ["dimensions", "delivery_address", "weight_kg"],
+            follow_up_draft: null,
+          } as any}
+        />
+      </QWrapper>,
+    );
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect(textarea).toHaveValue(expect.stringContaining("Voor we de order kunnen bevestigen hebben we nog graag eerst het volledige afleveradres en het gewicht nodig."));
   });
 
   it("shows email recipient from source_email_from", async () => {
@@ -675,6 +753,7 @@ describe("FollowUpPanel", () => {
         body: expect.objectContaining({
           orderId: baseDraft.id,
           toEmail: "klant@example.nl",
+          subject: "Re: Transport aanvraag 2 pallets - aanvulling nodig voor gewicht",
           body: "mail body",
         }),
       }));
