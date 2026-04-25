@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Truck, MapPin, Package, CheckCircle2, Navigation, LogOut, Check, Phone, Fingerprint, Camera, X, User, MessageSquare, Image, Clock, Coffee, Play, Square, WifiOff, RefreshCw, Bell } from "lucide-react";
+import { Truck, MapPin, Package, CheckCircle2, Navigation, LogOut, Check, Phone, Fingerprint, Camera, X, User, MessageSquare, Image, Clock, Coffee, Play, Square, WifiOff, RefreshCw, Bell, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,10 +12,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { TripFlow } from "@/components/chauffeur/TripFlow";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
+import { MijnWeekView } from "@/components/chauffeur/MijnWeekView";
 import { useVehicleCheckGate } from "@/hooks/useVehicleCheck";
 import { useDriverTrips, useUpdateStopStatus, useSavePOD } from "@/hooks/useTrips";
+import { useDriverSchedulesRealtime } from "@/hooks/useDriverSchedulesRealtime";
 import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
+import { cn } from "@/lib/utils";
 import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineStore";
 
 /**
@@ -158,6 +161,10 @@ async function checkLockStatus(driverId: string): Promise<{ locked: boolean; loc
 }
 
 export default function ChauffeurApp() {
+  // Realtime: vang wijzigingen op driver_schedules zodat "Mijn week" en de
+  // rooster-context van de chauffeur live blijven, zonder hard refresh.
+  useDriverSchedulesRealtime();
+
   const { data: drivers, isLoading: driversLoading } = useDrivers();
   // activeDriverId mag NIET rechtstreeks uit localStorage komen: anders kan een
   // aanvaller via DevTools een willekeurig driver-id zetten en zo ingelogd raken
@@ -324,6 +331,10 @@ export default function ChauffeurApp() {
       setPinError("Kon PIN niet wijzigen. Probeer opnieuw.");
     }
   };
+
+  // Tabs in het hoofd-dashboard: "vandaag" toont ritten, "week" toont
+  // het persoonlijke weekrooster (read-only). Geen routing, alleen lokaal.
+  const [activeTab, setActiveTab] = useState<"vandaag" | "week">("vandaag");
 
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -1187,8 +1198,42 @@ export default function ChauffeurApp() {
         </div>
       )}
 
+      {/* TAB BAR */}
+      <div className="bg-white border-b border-slate-200 px-3 py-2 flex items-center gap-2">
+        <button
+          onClick={() => setActiveTab("vandaag")}
+          className={cn(
+            "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
+            activeTab === "vandaag"
+              ? "bg-primary text-white shadow-sm"
+              : "bg-slate-50 text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          <Truck className="h-4 w-4" />
+          Vandaag
+        </button>
+        <button
+          onClick={() => setActiveTab("week")}
+          className={cn(
+            "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
+            activeTab === "week"
+              ? "bg-primary text-white shadow-sm"
+              : "bg-slate-50 text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          <CalendarIcon className="h-4 w-4" />
+          Mijn week
+        </button>
+      </div>
+
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
+        {activeTab === "week" ? (
+          activeDriverId ? (
+            <MijnWeekView driverId={activeDriverId} />
+          ) : null
+        ) : (
+        <>
         {/* Clock In/Out & Time Tracking */}
         <Card className="rounded-2xl border-none shadow-sm bg-white ring-1 ring-slate-200">
           <CardContent className="p-4">
@@ -1351,6 +1396,8 @@ export default function ChauffeurApp() {
               </CardContent>
             </Card>
           ))
+        )}
+        </>
         )}
       </div>
 
