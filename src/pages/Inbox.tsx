@@ -312,9 +312,9 @@ export default function Inbox() {
 
             {/* Bulk action bar */}
             {bulkSelected.size > 0 && (
-              <div className="px-3 py-2 bg-primary/5 border-b border-primary/20 flex items-center justify-between">
-                <span className="text-xs font-semibold text-primary">{bulkSelected.size} geselecteerd</span>
-                <div className="flex gap-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--gold)/0.12)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--gold-soft)/0.05))] px-3 py-2.5">
+                <span className="text-xs font-semibold text-[hsl(var(--gold-deep))]">{bulkSelected.size} geselecteerd</span>
+                <div className="flex flex-wrap gap-1.5">
                   <button
                     onClick={() => {
                       Array.from(bulkSelected).forEach((id) => {
@@ -323,11 +323,11 @@ export default function Inbox() {
                       });
                       setBulkSelected(new Set());
                     }}
-                    className="text-xs font-semibold text-green-600 hover:underline"
+                    className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
                   >
                     Goedkeuren
                   </button>
-                  <button onClick={handleAutoConfirmSelected} className="text-xs font-semibold text-emerald-700 hover:underline">
+                  <button onClick={handleAutoConfirmSelected} className="rounded-full border border-[hsl(var(--gold)/0.14)] bg-white px-2.5 py-1 text-xs font-semibold text-[hsl(var(--gold-deep))] transition-colors hover:bg-[hsl(var(--gold-soft)/0.12)]">
                     Auto-confirmeer veilig
                   </button>
                   <button
@@ -335,11 +335,11 @@ export default function Inbox() {
                       Array.from(bulkSelected).forEach((id) => deleteMutation.mutate(id));
                       setBulkSelected(new Set());
                     }}
-                    className="text-xs font-semibold text-red-600 hover:underline"
+                    className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
                   >
                     Verwijder
                   </button>
-                  <button onClick={() => setBulkSelected(new Set())} className="text-xs text-gray-400 hover:underline">
+                  <button onClick={() => setBulkSelected(new Set())} className="px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground">
                     Annuleer
                   </button>
                 </div>
@@ -370,16 +370,18 @@ export default function Inbox() {
                   />
                 ))}
                 {filtered.length === 0 && (
-                  <div className="text-center py-16 px-4">
-                    <InboxIcon className="h-8 w-8 text-gray-200 mx-auto mb-2" />
-                    <p className="text-sm font-medium text-gray-400">Geen berichten</p>
-                    <p className="text-xs text-gray-300 mt-1">Pas je filters aan of importeer een e-mail</p>
+                  <div className="px-4 py-16 text-center">
+                    <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.1)]">
+                      <InboxIcon className="h-6 w-6 text-[hsl(var(--gold-deep)/0.55)]" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground/75">Geen berichten</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Pas je filters aan of importeer een e-mail</p>
                   </div>
                 )}
               </div>
             </ScrollArea>
-            <div className="bg-white border-t border-gray-100 p-2 text-center shrink-0 hidden lg:block">
-              <p className="text-[10px] text-gray-400 font-medium font-mono">
+            <div className="hidden shrink-0 border-t border-[hsl(var(--gold)/0.08)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.06),white)] p-2 text-center lg:block">
+              <p className="font-mono text-[10px] font-medium text-muted-foreground/80">
                 {"\u2191\u2193"} navigeren {"\u00B7"} Enter openen {"\u00B7"} Del archiveren
               </p>
             </div>
