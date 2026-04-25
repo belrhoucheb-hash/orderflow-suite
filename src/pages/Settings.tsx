@@ -785,6 +785,35 @@ const Settings = () => {
         <TabsContent value="algemeen" className="space-y-6 outline-none">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-6">
+              <div className="card--luxe p-4 md:p-5">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                    <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                      Omgeving
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {companyName.trim() || "Bedrijfsnaam instellen"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                    <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                      Taal
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {LANGUAGE_OPTIONS.find((opt) => opt.value === currentLang)?.label ?? "Nederlands"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                    <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                      Status
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {attentionItems.length === 0 ? "Rustig en compleet" : `${attentionItems.length} punt${attentionItems.length === 1 ? "" : "en"} open`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-3">
                 <SettingsStatusCard
                   title="Integraties actief"
@@ -890,7 +919,7 @@ const Settings = () => {
                     Aandacht nodig
                   </p>
                   <p className="mt-1 max-w-[26ch] text-xs leading-relaxed text-muted-foreground">
-                    Alleen de punten die de omgeving nog echt tegenhouden of zichtbaar onaf laten voelen.
+                    Alleen wat de omgeving nu echt tegenhoudt of onaf laat voelen.
                   </p>
                 </div>
                 {attentionItems.length === 0 ? (
@@ -902,7 +931,7 @@ const Settings = () => {
                       <div>
                         <div className="text-sm font-medium text-foreground">Geen directe aandachtspunten</div>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                          De basisconfiguratie oogt compleet. Gebruik de aanbevelingen hieronder alleen voor verdere verfijning.
+                            De basis oogt compleet. Gebruik de aanbevelingen hieronder alleen voor verdere verfijning.
                         </p>
                       </div>
                     </div>
@@ -937,7 +966,7 @@ const Settings = () => {
                     Volgende stappen
                   </p>
                   <p className="mt-1 max-w-[26ch] text-xs leading-relaxed text-muted-foreground">
-                    Kleine aanbevelingen om de omgeving netter, consistenter en toekomstvaster te maken.
+                    Kleine stappen om de omgeving nog netter en consistenter te maken.
                   </p>
                 </div>
                 <div className="space-y-3">
