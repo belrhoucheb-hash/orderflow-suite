@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -236,18 +236,21 @@ export function RoosterWeekView({ date }: Props) {
 
   if (activeDrivers.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border/50 bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+      <div className="rounded-xl border border-dashed border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--gold-soft)/0.2)] p-8 text-center text-sm text-muted-foreground">
         Geen actieve chauffeurs. Voeg eerst chauffeurs toe via Chauffeurs.
       </div>
     );
   }
 
   const matrix = (
-    <div className="rounded-xl border border-border/40 bg-card overflow-x-auto">
+    <div className="rounded-xl border border-[hsl(var(--gold)/0.2)] bg-card overflow-x-auto shadow-[inset_0_1px_0_var(--inset-highlight)]">
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="bg-muted/40">
-            <th className="sticky left-0 z-10 bg-muted/40 text-left px-3 py-2 font-medium text-xs text-muted-foreground border-r border-border/40 min-w-[140px] md:min-w-[180px]">
+          <tr className="bg-[hsl(var(--gold-soft)/0.35)]">
+            <th
+              className="sticky left-0 z-10 bg-[hsl(var(--gold-soft)/0.35)] text-left px-3 py-2.5 border-r border-[hsl(var(--gold)/0.2)] min-w-[140px] md:min-w-[180px] text-xs uppercase tracking-[0.18em] font-semibold text-[hsl(var(--gold-deep))]"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
               Chauffeur
             </th>
             {dayDates.map((d) => {
@@ -256,14 +259,18 @@ export function RoosterWeekView({ date }: Props) {
                 <th
                   key={d}
                   className={cn(
-                    "px-2 py-2 text-xs font-medium text-muted-foreground border-r border-border/40 last:border-r-0 min-w-[120px] md:min-w-[140px]",
-                    weekend && "bg-muted/60",
+                    "px-2 py-2.5 border-r border-[hsl(var(--gold)/0.15)] last:border-r-0 min-w-[120px] md:min-w-[140px] text-[hsl(var(--gold-deep))]",
+                    weekend && "bg-[hsl(var(--gold-soft)/0.65)]",
                   )}
+                  style={{ fontFamily: "var(--font-display)" }}
                 >
-                  <div className="capitalize">
+                  <div className="text-xs uppercase tracking-[0.18em] font-semibold capitalize">
                     {format(parseISO(d), "EEE", { locale: nl })}
                   </div>
-                  <div className="text-[11px] text-muted-foreground/70 font-normal">
+                  <div
+                    className="text-[11px] font-normal text-muted-foreground/80 mt-0.5"
+                    style={{ fontVariantNumeric: "tabular-nums" }}
+                  >
                     {format(parseISO(d), "d MMM", { locale: nl })}
                   </div>
                 </th>
@@ -273,8 +280,14 @@ export function RoosterWeekView({ date }: Props) {
         </thead>
         <tbody>
           {activeDrivers.map((driver) => (
-            <tr key={driver.id} className="border-t border-border/40">
-              <td className="sticky left-0 z-10 bg-card px-3 py-1.5 text-sm font-medium border-r border-border/40 whitespace-nowrap">
+            <tr
+              key={driver.id}
+              className="border-t border-[hsl(var(--gold)/0.12)]"
+            >
+              <td
+                className="sticky left-0 z-10 bg-card px-3 py-1.5 text-sm font-semibold text-[hsl(var(--gold-deep))] border-r border-[hsl(var(--gold)/0.2)] whitespace-nowrap"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
                 {driver.name}
               </td>
               {dayDates.map((cellDate) => (
@@ -310,7 +323,7 @@ export function RoosterWeekView({ date }: Props) {
   );
 
   return (
-    <div className="space-y-2">
+    <div className="card--luxe p-4 md:p-5 space-y-3">
       <RoosterConflictBanner
         schedules={schedules}
         driverNames={driverNames}
@@ -505,11 +518,34 @@ function WeekCellBody({
 
   const bgColor = template?.color ?? null;
 
+  // Cel-achtergrond:
+  // - gevulde "werkt"-cel zonder template-kleur: subtiele gold-gradient.
+  // - status != "werkt": rustiger muted achtergrond.
+  // - met template-kleur: linker 3px strookje + lichte tint van die kleur,
+  //   bovenop een gold-gradient zodat het thema consistent blijft.
+  const cellStyle: CSSProperties | undefined = (() => {
+    if (hasConflict) return undefined;
+    if (showStatusInstead) return undefined;
+    if (bgColor) {
+      return {
+        borderLeft: `3px solid ${bgColor}`,
+        background: `linear-gradient(180deg, hsl(var(--card)) 0%, ${bgColor}1f 100%)`,
+      };
+    }
+    if (schedule) {
+      return {
+        background:
+          "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.18) 100%)",
+      };
+    }
+    return undefined;
+  })();
+
   return (
     <td
       className={cn(
-        "align-top border-r border-border/40 last:border-r-0 p-1 min-w-[120px] md:min-w-[140px]",
-        weekend && "bg-muted/30",
+        "align-top border-r border-[hsl(var(--gold)/0.12)] last:border-r-0 p-1 min-w-[120px] md:min-w-[140px]",
+        weekend && "bg-[hsl(var(--gold-soft)/0.4)]",
       )}
     >
       <Popover open={isOpen} onOpenChange={onOpenChange}>
@@ -521,29 +557,31 @@ function WeekCellBody({
             className={cn(
               "relative group rounded-md border border-transparent px-2 py-1.5 min-h-[52px] cursor-pointer transition",
               schedule
-                ? "hover:border-border/60"
-                : "hover:border-border/40 hover:bg-muted/40",
-              isDragging && "opacity-40",
-              isOver && "ring-2 ring-primary/40 bg-primary/[0.04]",
-              hasConflict && "border-destructive/60 bg-destructive/[0.06]",
+                ? "hover:border-[hsl(var(--gold)/0.35)] hover:shadow-[0_2px_10px_-4px_hsl(var(--gold)/0.25)]"
+                : "hover:border-[hsl(var(--gold)/0.3)] hover:bg-[hsl(var(--gold-soft)/0.35)]",
+              schedule && showStatusInstead && "bg-muted/40",
+              isDragging &&
+                "opacity-50 ring-2 ring-[hsl(var(--gold)/0.5)] ring-offset-1",
+              isOver && "bg-[hsl(var(--gold-soft)/0.5)] border-[hsl(var(--gold)/0.45)]",
+              hasConflict &&
+                "border-destructive/60 bg-[linear-gradient(180deg,hsl(var(--destructive)/0.05)_0%,hsl(var(--gold-soft)/0.2)_100%)]",
             )}
-            style={
-              bgColor && !showStatusInstead && !hasConflict
-                ? {
-                    borderLeft: `3px solid ${bgColor}`,
-                    background: `${bgColor}14`,
-                  }
-                : undefined
-            }
+            style={cellStyle}
           >
             {!schedule && (
-              <div className="text-[11px] text-muted-foreground/60 italic">
-                ,
+              <div
+                className="flex items-center justify-center text-[hsl(var(--gold)/0.35)] opacity-0 group-hover:opacity-100 transition text-base leading-none h-full min-h-[36px]"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                +
               </div>
             )}
             {schedule && showStatusInstead && (
               <div className="flex items-center justify-between gap-1">
-                <span className="text-xs font-semibold text-foreground">
+                <span
+                  className="text-xs font-semibold uppercase tracking-[0.1em] text-foreground"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
                   {statusLabel}
                 </span>
                 {schedule.notitie ? (
@@ -559,17 +597,33 @@ function WeekCellBody({
             {schedule && !showStatusInstead && (
               <div className="space-y-0.5">
                 <div className="flex items-center justify-between gap-1">
-                  <span className="text-xs font-semibold truncate">
+                  <span
+                    className="text-xs font-semibold truncate text-foreground"
+                    style={{ fontFamily: "var(--font-display)" }}
+                  >
                     {template ? abbreviate(template.name) : "Werkt"}
                   </span>
                   {effectiveStart && (
-                    <span className="text-[11px] tabular-nums text-muted-foreground">
+                    <span
+                      className="text-[11px] font-bold text-[hsl(var(--gold-deep))]"
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
                       {effectiveStart.slice(0, 5)}
                     </span>
                   )}
                 </div>
                 {vehicle && (
-                  <div className="text-[11px] text-muted-foreground truncate">
+                  <div
+                    className="text-[11px] text-muted-foreground truncate uppercase"
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontVariantNumeric: "tabular-nums",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
                     {vehicle.code}
                   </div>
                 )}
@@ -587,7 +641,7 @@ function WeekCellBody({
             )}
           </div>
         </PopoverTrigger>
-        <PopoverContent className="w-80" align="start">
+        <PopoverContent className="w-80 p-0 border-0 bg-transparent shadow-none" align="start">
           <RoosterCellEditor
             driver={driver}
             date={date}
@@ -638,7 +692,7 @@ function CellActionsMenu({
           type="button"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
-          className="absolute top-0.5 right-0.5 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-background/60 hover:text-foreground transition"
+          className="absolute top-0.5 right-0.5 rounded p-0.5 text-muted-foreground/70 opacity-0 group-hover:opacity-100 hover:bg-[hsl(var(--gold-soft)/0.6)] hover:text-[hsl(var(--gold-deep))] transition"
           aria-label="Cel-acties"
         >
           <MoreHorizontal className="h-3.5 w-3.5" />

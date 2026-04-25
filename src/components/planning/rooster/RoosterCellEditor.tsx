@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -131,23 +131,44 @@ export function RoosterCellEditor({
 
   const statusAllowsTimes = status === "werkt";
 
+  const luxeTriggerClass =
+    "h-9 text-sm border-[hsl(var(--gold)/0.25)] bg-[linear-gradient(180deg,hsl(var(--card))_0%,hsl(var(--gold-soft)/0.2)_100%)] hover:border-[hsl(var(--gold)/0.5)] hover:shadow-[0_2px_8px_-2px_hsl(var(--gold)/0.2)] focus:ring-[hsl(var(--gold)/0.4)] focus:ring-offset-0 transition";
+  const luxeInputClass =
+    "h-9 text-sm border-[hsl(var(--gold)/0.25)] bg-[linear-gradient(180deg,hsl(var(--card))_0%,hsl(var(--gold-soft)/0.2)_100%)] focus-visible:ring-[hsl(var(--gold)/0.4)] focus-visible:ring-offset-0 transition";
+  const luxeTimeClass = `${luxeInputClass} font-bold text-[hsl(var(--gold-deep))]`;
+  const labelClass =
+    "text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]/80";
+  const displayFont: CSSProperties = {
+    fontFamily: "var(--font-display)",
+  };
+
   return (
-    <div className="space-y-3">
+    <div className="card--luxe p-4 space-y-3">
       <div>
-        <div className="text-sm font-semibold">{driver.name}</div>
-        <div className="text-xs text-muted-foreground capitalize">
+        <div
+          className="text-sm font-semibold text-[hsl(var(--gold-deep))]"
+          style={displayFont}
+        >
+          {driver.name}
+        </div>
+        <div
+          className="text-xs text-muted-foreground capitalize mt-0.5"
+          style={{ ...displayFont, fontVariantNumeric: "tabular-nums" }}
+        >
           {dateLabel}
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <div className="space-y-1">
-          <Label className="text-xs">Status</Label>
+          <Label className={labelClass} style={displayFont}>
+            Status
+          </Label>
           <Select
             value={status}
             onValueChange={(v) => setStatus(v as DriverScheduleStatus)}
           >
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger className={luxeTriggerClass} style={displayFont}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -161,13 +182,15 @@ export function RoosterCellEditor({
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Rooster</Label>
+          <Label className={labelClass} style={displayFont}>
+            Rooster
+          </Label>
           <Select
             value={shiftTemplateId}
             onValueChange={onTemplateChange}
             disabled={!statusAllowsTimes}
           >
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger className={luxeTriggerClass} style={displayFont}>
               <SelectValue placeholder="Geen rooster" />
             </SelectTrigger>
             <SelectContent>
@@ -189,35 +212,43 @@ export function RoosterCellEditor({
 
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            <Label className="text-xs">Starttijd</Label>
+            <Label className={labelClass} style={displayFont}>
+              Starttijd
+            </Label>
             <Input
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               disabled={!statusAllowsTimes}
-              className="h-8 text-sm"
+              className={luxeTimeClass}
+              style={{ ...displayFont, fontVariantNumeric: "tabular-nums" }}
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Eindtijd</Label>
+            <Label className={labelClass} style={displayFont}>
+              Eindtijd
+            </Label>
             <Input
               type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               disabled={!statusAllowsTimes}
-              className="h-8 text-sm"
+              className={luxeTimeClass}
+              style={{ ...displayFont, fontVariantNumeric: "tabular-nums" }}
             />
           </div>
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Voertuig</Label>
+          <Label className={labelClass} style={displayFont}>
+            Voertuig
+          </Label>
           <Select
             value={vehicleId}
             onValueChange={setVehicleId}
             disabled={!statusAllowsTimes}
           >
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger className={luxeTriggerClass} style={displayFont}>
               <SelectValue placeholder="Geen voertuig" />
             </SelectTrigger>
             <SelectContent>
@@ -233,51 +264,55 @@ export function RoosterCellEditor({
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Notitie</Label>
+          <Label className={labelClass} style={displayFont}>
+            Notitie
+          </Label>
           <Input
             value={notitie}
             onChange={(e) => setNotitie(e.target.value)}
             placeholder="Optioneel"
-            className="h-8 text-sm"
+            className={luxeInputClass}
+            style={displayFont}
             maxLength={500}
           />
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-1">
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-[hsl(var(--gold)/0.15)]">
         {existingSchedule?.id ? (
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
             onClick={handleClear}
             disabled={isDeleting || isSaving}
-            className="text-destructive hover:text-destructive"
+            className="inline-flex items-center gap-1 text-xs font-medium text-destructive/80 hover:text-destructive hover:bg-destructive/[0.06] px-2 py-1.5 rounded-md transition disabled:opacity-50 disabled:pointer-events-none"
+            style={displayFont}
           >
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            <Trash2 className="h-3.5 w-3.5" />
             Wis rooster
-          </Button>
+          </button>
         ) : (
           <span />
         )}
         <div className="flex items-center gap-2 ml-auto">
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={onClose}
             disabled={isSaving || isDeleting}
+            className="text-muted-foreground hover:text-foreground"
+            style={displayFont}
           >
             Annuleren
           </Button>
-          <Button
+          <button
             type="button"
-            size="sm"
             onClick={handleSave}
             disabled={isSaving || isDeleting}
+            className="btn-luxe btn-luxe--primary"
           >
             {isSaving ? "Opslaan..." : "Opslaan"}
-          </Button>
+          </button>
         </div>
       </div>
     </div>
