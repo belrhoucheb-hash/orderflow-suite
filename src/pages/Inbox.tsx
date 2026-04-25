@@ -1,5 +1,5 @@
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Search, Upload, FlaskConical, CheckCircle2, Loader2, Inbox as InboxIcon, CircleAlert, Send, FileEdit } from "lucide-react";
+import { Search, Upload, FlaskConical, CheckCircle2, Inbox as InboxIcon, CircleAlert, Send, FileEdit } from "lucide-react";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -82,10 +82,10 @@ export default function Inbox() {
       />
 
       {/* Left Sidebar */}
-      <div className="w-56 bg-white border-r border-gray-200 flex flex-col p-4 gap-2 shrink-0 hidden lg:flex">
+      <div className="hidden w-56 shrink-0 border-r border-[hsl(var(--gold)/0.08)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),white_22%)] p-4 lg:flex lg:flex-col lg:gap-2">
         <div className="mb-4 px-2">
-          <p className="text-primary font-black tracking-tighter text-sm uppercase">AI Inbox</p>
-          <p className="text-[11px] text-gray-400">{tenant?.name || DEFAULT_COMPANY.name}</p>
+          <p className="font-display text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">AI Inbox</p>
+          <p className="mt-1 text-sm font-medium text-foreground">{tenant?.name || DEFAULT_COMPANY.name}</p>
         </div>
         <nav className="flex flex-col gap-0.5 flex-1">
           {[
@@ -100,26 +100,31 @@ export default function Inbox() {
               key={item.key}
               onClick={() => setSidebarFilter(item.key)}
               className={cn(
-                "rounded-lg flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-all w-full whitespace-nowrap",
+                "relative flex w-full items-center gap-2.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium transition-all",
                 sidebarFilter === item.key
-                  ? "bg-gray-100 text-gray-900"
-                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-50",
+                  ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.42),hsl(var(--gold-soft)/0.18))] text-[hsl(var(--gold-deep))] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.08)]"
+                  : "text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-foreground",
               )}
             >
+              {sidebarFilter === item.key && (
+                <span className="absolute left-0 top-2.5 bottom-2.5 w-0.5 rounded-full bg-[hsl(var(--gold-deep))]" aria-hidden="true" />
+              )}
               <item.icon
                 className={cn(
                   "h-4 w-4 shrink-0",
-                  sidebarFilter === item.key && item.key === "actie" && "text-primary",
+                  sidebarFilter === item.key ? "text-[hsl(var(--gold-deep))]" : item.key === "actie" ? "text-primary/80" : "",
                 )}
               />
               <span className="flex-1 text-left truncate">{item.label}</span>
               {item.count > 0 && (
                 <span
                   className={cn(
-                    "text-[10px] font-bold shrink-0 min-w-[20px] text-center",
+                    "min-w-[20px] shrink-0 text-center text-[10px] font-bold",
                     item.key === "actie" && item.count > 0
                       ? "bg-primary text-white px-1.5 py-0.5 rounded-full"
-                      : "text-gray-400",
+                      : sidebarFilter === item.key
+                        ? "text-[hsl(var(--gold-deep))]"
+                        : "text-muted-foreground/70",
                   )}
                 >
                   {item.count}
@@ -128,16 +133,16 @@ export default function Inbox() {
             </button>
           ))}
         </nav>
-        <div className="mt-auto border-t border-gray-100 pt-4 space-y-1">
+        <div className="mt-auto space-y-1 border-t border-[hsl(var(--gold)/0.08)] pt-4">
           <button
-            className="text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-3 px-3 py-2 text-xs font-medium transition-all w-full"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-foreground"
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="h-3.5 w-3.5" />
             Importeer .eml
           </button>
           <button
-            className="text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg flex items-center gap-3 px-3 py-2 text-xs font-medium transition-all w-full"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-[hsl(var(--gold-deep))]"
             disabled={loadingScenario !== null}
             onClick={async () => {
               for (let i = 0; i < TEST_SCENARIOS.length; i++) {
@@ -157,11 +162,11 @@ export default function Inbox() {
         <ResizablePanel defaultSize={22} minSize={15} maxSize={35}>
           <div className="flex flex-col h-full bg-white" style={{ minWidth: 0, overflow: "hidden" }}>
             <div
-              className="h-11 px-4 flex items-baseline justify-between gap-2 border-b shrink-0"
-              style={{ borderColor: "hsl(var(--border) / 0.5)", background: "hsl(var(--card))" }}
+              className="h-14 px-4 flex items-baseline justify-between gap-2 border-b shrink-0"
+              style={{ borderColor: "hsl(var(--gold) / 0.1)", background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.08), hsl(var(--card)))" }}
             >
               <h3
-                className="text-[15px] font-semibold"
+                className="text-[15px] font-semibold text-foreground"
                 style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
               >
                 Inbox
