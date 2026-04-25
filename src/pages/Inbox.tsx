@@ -427,16 +427,16 @@ export default function Inbox() {
           </>
         ) : (
           <ResizablePanel defaultSize={78}>
-            <div className="flex-1 flex items-center justify-center bg-gray-50 h-full">
+            <div className="flex h-full flex-1 items-center justify-center bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.08),hsl(var(--muted)/0.18))]">
               <div className="text-center max-w-xs">
-                <div className="h-16 w-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                  <InboxIcon className="h-8 w-8 text-gray-300" />
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[24px] border border-[hsl(var(--gold)/0.12)] bg-[linear-gradient(180deg,white,hsl(var(--gold-soft)/0.12))]">
+                  <InboxIcon className="h-8 w-8 text-[hsl(var(--gold-deep)/0.38)]" />
                 </div>
-                <p className="text-base font-semibold text-gray-700 mb-1">Selecteer een e-mail</p>
-                <p className="text-sm text-gray-400 leading-relaxed">
+                <p className="mb-1 text-base font-semibold text-foreground/80">Selecteer een e-mail</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   Kies een bericht uit de lijst om de inhoud te bekijken en te reviewen voor orderverwerking.
                 </p>
-                <div className="flex items-center justify-center gap-4 mt-4 text-xs text-gray-300">
+                <div className="mt-4 flex items-center justify-center gap-4 text-xs text-muted-foreground/65">
                   <span>{"\u2191\u2193"} navigeer</span>
                   <span>{"\u00B7"}</span>
                   <span>Enter open</span>

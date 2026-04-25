@@ -309,7 +309,7 @@ export function SourcePanel({
       {/* Top bar */}
       <div
         className="shrink-0 flex min-h-11 flex-wrap items-center gap-2 border-b px-4 py-2"
-        style={{ borderColor: "hsl(var(--gold) / 0.1)", background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.08), hsl(var(--card)))" }}
+        style={{ borderColor: "hsl(var(--gold) / 0.08)", background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.08), hsl(var(--card)))" }}
       >
         <button
           className="h-7 w-7 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 lg:hidden"
@@ -364,15 +364,15 @@ export function SourcePanel({
             </button>
             {showMenu && (
               <div
-                className="absolute right-0 top-full mt-1 w-52 rounded-lg py-1 z-30 shadow-lg"
+                className="absolute right-0 top-full z-30 mt-1 w-52 rounded-xl py-1 shadow-lg"
                 style={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
+                  background: "linear-gradient(180deg, hsl(var(--card)), hsl(var(--gold-soft) / 0.14))",
+                  border: "1px solid hsl(var(--gold) / 0.14)",
                 }}
               >
-                <button className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50">Doorsturen</button>
-                <button className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50">Archiveer</button>
-                <button className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50">Niet een order</button>
+                <button className="w-full px-3 py-1.5 text-left text-xs hover:bg-[hsl(var(--gold-soft)/0.16)]">Doorsturen</button>
+                <button className="w-full px-3 py-1.5 text-left text-xs hover:bg-[hsl(var(--gold-soft)/0.16)]">Archiveer</button>
+                <button className="w-full px-3 py-1.5 text-left text-xs hover:bg-[hsl(var(--gold-soft)/0.16)]">Niet een order</button>
               </div>
             )}
           </div>
@@ -381,7 +381,7 @@ export function SourcePanel({
 
       <ScrollArea className="flex-1" style={{ minWidth: 0 }}>
         {/* Header: subject + avatar row */}
-        <div className="px-4 pb-4 pt-4 md:px-6 md:pt-5">
+        <div className="border-b border-[hsl(var(--gold)/0.08)] px-4 pb-4 pt-4 md:px-6 md:pt-5">
           <h2
             className="mb-3 text-[18px] font-semibold leading-tight md:text-[20px]"
             style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
@@ -422,10 +422,10 @@ export function SourcePanel({
         {/* Thread indicator */}
         {isThreadFollow && (
           <div
-            className="mx-6 mb-4 rounded-lg px-3 py-2 flex items-center gap-2 text-[12px]"
+            className="mx-4 mb-4 flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] md:mx-6"
             style={{
-              background: "hsl(var(--gold-soft) / 0.35)",
-              borderLeft: "2px solid hsl(var(--gold))",
+              background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.32), hsl(var(--gold-soft) / 0.16))",
+              border: "1px solid hsl(var(--gold) / 0.18)",
               color: "hsl(var(--foreground))",
             }}
           >
@@ -499,7 +499,7 @@ export function SourcePanel({
             >
               Bijlagen, <strong className="text-foreground">{attachments.length}</strong>
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {attachments.map((att, i) => {
                 const isPdf = att.type === "application/pdf";
                 const isImage = att.type.startsWith("image/");
@@ -508,18 +508,21 @@ export function SourcePanel({
                     <button
                       key={i}
                       onClick={() => window.open(att.url, "_blank")}
-                      className="w-[180px] rounded-[9px] overflow-hidden border bg-card hover:border-[hsl(var(--gold)/0.45)] transition-colors flex flex-col"
-                      style={{ borderColor: "hsl(var(--border))" }}
+                      className="flex flex-col overflow-hidden rounded-2xl border bg-[linear-gradient(180deg,white,hsl(var(--gold-soft)/0.08))] text-left transition-all hover:border-[hsl(var(--gold)/0.28)] hover:shadow-[0_12px_24px_-20px_hsl(var(--gold)/0.45)]"
+                      style={{ borderColor: "hsl(var(--gold) / 0.12)" }}
                     >
                       <div className="aspect-[4/3] bg-[#f1ebdc] overflow-hidden">
                         <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
                       </div>
                       <div
-                        className="px-[10px] py-[6px] border-t flex flex-col gap-[1px] text-left"
-                        style={{ borderColor: "hsl(var(--border))" }}
+                        className="flex items-center justify-between gap-3 border-t px-3 py-2"
+                        style={{ borderColor: "hsl(var(--gold) / 0.1)" }}
                       >
-                        <span className="text-[12px] font-medium truncate">{att.name}</span>
-                        <span className="text-[10px] tabular-nums text-muted-foreground">Afbeelding</span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-medium">{att.name}</span>
+                          <span className="block text-[10px] tabular-nums text-muted-foreground">Afbeelding</span>
+                        </span>
+                        <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
                       </div>
                     </button>
                   );
@@ -528,8 +531,8 @@ export function SourcePanel({
                   <button
                     key={i}
                     onClick={() => window.open(att.url, "_blank")}
-                    className="inline-flex items-center gap-2.5 pl-[10px] pr-[12px] py-[8px] rounded-[9px] border bg-card hover:border-[hsl(var(--gold)/0.4)] hover:bg-[hsl(var(--gold-soft)/0.3)] transition-colors"
-                    style={{ borderColor: "hsl(var(--border))" }}
+                    className="inline-flex min-w-0 items-center gap-2.5 rounded-2xl border bg-[linear-gradient(180deg,white,hsl(var(--gold-soft)/0.08))] px-3 py-2.5 transition-all hover:border-[hsl(var(--gold)/0.24)] hover:bg-[linear-gradient(180deg,white,hsl(var(--gold-soft)/0.16))]"
+                    style={{ borderColor: "hsl(var(--gold) / 0.12)" }}
                   >
                     <span
                       className="w-[30px] h-[30px] rounded-[7px] grid place-items-center shrink-0"
@@ -541,13 +544,13 @@ export function SourcePanel({
                     >
                       {isPdf ? <FileText className="h-3.5 w-3.5" strokeWidth={1.75} /> : <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.75} />}
                     </span>
-                    <span className="min-w-0 text-left">
-                      <span className="block text-[12.5px] font-medium truncate max-w-[160px]">{att.name}</span>
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block truncate text-[12.5px] font-medium">{att.name}</span>
                       <span className="block text-[10.5px] tabular-nums text-muted-foreground">
                         {isPdf ? "PDF document" : "Bijlage"}
                       </span>
                     </span>
-                    <Download className="h-3 w-3 text-muted-foreground ml-1" strokeWidth={1.75} />
+                    <Download className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
                   </button>
                 );
               })}
@@ -562,7 +565,7 @@ export function SourcePanel({
       {/* Reply, collapsable */}
       <div
         className="shrink-0 border-t"
-        style={{ borderColor: "hsl(var(--border) / 0.5)", background: "hsl(var(--card))" }}
+        style={{ borderColor: "hsl(var(--gold) / 0.08)", background: "hsl(var(--card))" }}
       >
         {!replyOpen ? (
           <button
@@ -571,7 +574,7 @@ export function SourcePanel({
               if (!replyText) setReplyText(selected.follow_up_draft || "");
               setTimeout(() => replyRef.current?.focus(), 50);
             }}
-            className="w-full flex items-center gap-2 px-4 py-3 text-[12.5px] text-left hover:bg-muted/30 transition-colors"
+            className="flex w-full items-center gap-2 px-4 py-3 text-left text-[12.5px] transition-colors hover:bg-[hsl(var(--gold-soft)/0.12)]"
           >
             <Send className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
             <span className="text-muted-foreground">
@@ -585,7 +588,7 @@ export function SourcePanel({
             </span>
           </button>
         ) : (
-          <div className="p-3">
+          <div className="bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.06),white)] p-3">
             <div className="flex items-center justify-between mb-2 px-1">
               <p className="text-[11.5px] text-muted-foreground">
                 Aan, <span className="text-foreground">{selected.source_email_from}</span>

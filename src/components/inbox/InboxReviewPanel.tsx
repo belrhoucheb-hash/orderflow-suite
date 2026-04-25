@@ -251,7 +251,8 @@ export function InboxReviewPanel({
       <ScrollArea className="flex-1" style={{ minWidth: 0 }}>
         <div className="px-4 pt-4 pb-40 md:px-5 md:pt-5">
           {/* Header block */}
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div className="mb-4 rounded-[28px] border border-[hsl(var(--gold)/0.1)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),white)] px-4 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span
@@ -399,6 +400,7 @@ export function InboxReviewPanel({
               </button>
             </div>
           </div>
+          </div>
 
           {/* Duplicate warning */}
           {possibleDuplicate && (
@@ -417,7 +419,7 @@ export function InboxReviewPanel({
             </div>
           )}
 
-          <div className="hairline my-4" />
+          <div className="hairline my-4 opacity-60" />
 
           {/* I · AI-extractie */}
           <section className="mb-5">
@@ -427,7 +429,7 @@ export function InboxReviewPanel({
               sub={`${conf}% zekerheid, ${filledCount}/${totalFields} velden herkend`}
             />
             <div className="card--luxe p-4">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="mb-2 flex items-center gap-2">
                 <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
                 <span
                   className="text-[11px] font-medium"
@@ -458,10 +460,10 @@ export function InboxReviewPanel({
               </p>
               <div
                 className={cn(
-                  "mt-3 rounded-lg px-3 py-2 text-[11.5px] border",
+                  "mt-3 rounded-xl border px-3 py-2 text-[11.5px]",
                   autoConfirmAssessment.eligible
-                    ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-                    : "bg-amber-50 text-amber-900 border-amber-200",
+                    ? "border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.92),rgba(236,253,245,0.74))] text-emerald-900"
+                    : "border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.92),rgba(255,251,235,0.74))] text-amber-900",
                 )}
               >
                 <p className="font-semibold">{autoConfirmAssessment.title}</p>
@@ -748,10 +750,10 @@ export function InboxReviewPanel({
 
               {/* Totals footer */}
               <div
-                className="px-4 py-2 flex items-center justify-between text-[11.5px] border-t"
+                className="flex items-center justify-between border-t px-4 py-2 text-[11.5px]"
                 style={{
-                  borderColor: "hsl(var(--border) / 0.5)",
-                  background: "hsl(var(--gold-soft) / 0.2)",
+                  borderColor: "hsl(var(--gold) / 0.1)",
+                  background: "linear-gradient(180deg,hsl(var(--gold-soft)/0.16),hsl(var(--gold-soft)/0.08))",
                 }}
               >
                 <span className="text-muted-foreground">Totaal</span>
@@ -828,15 +830,15 @@ export function InboxReviewPanel({
                     href={att.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-[5px] rounded-full text-[11.5px] border hover:border-[hsl(var(--gold)/0.5)] transition-colors"
+                    className="inline-flex min-w-0 items-center gap-2 rounded-full border bg-[linear-gradient(180deg,white,hsl(var(--gold-soft)/0.08))] px-3 py-[6px] text-[11.5px] transition-colors hover:border-[hsl(var(--gold)/0.24)] hover:bg-[hsl(var(--gold-soft)/0.16)]"
                     style={{
                       fontFamily: "'Space Grotesk', sans-serif",
-                      borderColor: "hsl(var(--border))",
+                      borderColor: "hsl(var(--gold) / 0.12)",
                       color: "hsl(var(--foreground))",
                     }}
                   >
                     <Paperclip className="h-3 w-3" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
-                    <span className="truncate max-w-[180px]">{att.name}</span>
+                    <span className="truncate">{att.name}</span>
                   </a>
                 ))}
               </div>
@@ -868,9 +870,9 @@ export function InboxReviewPanel({
       <div
         className="absolute bottom-0 left-0 right-0 p-4 z-20"
         style={{
-          background: "hsl(var(--card) / 0.95)",
+          background: "linear-gradient(180deg,hsl(var(--card)/0.88),hsl(var(--card)/0.97))",
           backdropFilter: "blur(8px)",
-          borderTop: "1px solid hsl(var(--gold) / 0.25)",
+          borderTop: "1px solid hsl(var(--gold) / 0.18)",
           boxShadow: "0 -8px 30px rgb(0 0 0 / 0.06)",
         }}
       >

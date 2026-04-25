@@ -29,24 +29,25 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
   const isUnread = !draft.confidence_score;
   const isCancel = threadType === "cancellation";
   const followUpStatus = getFollowUpStatus(draft);
+  const attachmentsCount = draft.attachments?.length || 0;
 
   return (
     <div
       className={cn(
-        "group relative w-full cursor-pointer text-left transition-colors",
+        "group relative w-full cursor-pointer text-left transition-all",
         "border-b",
         isSelected
-          ? "bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.28),hsl(var(--gold-soft)/0.14))]"
+          ? "bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.28),hsl(var(--gold-soft)/0.12))] shadow-[inset_0_1px_0_hsl(var(--gold)/0.08)]"
           : bulkMode && isBulkChecked
-            ? "bg-[hsl(var(--muted)/0.55)]"
-            : "hover:bg-[hsl(var(--muted)/0.35)]",
+            ? "bg-[hsl(var(--gold-soft)/0.16)]"
+            : "hover:bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),transparent)]",
       )}
       style={{
         paddingLeft: bulkMode ? 56 : 36,
         paddingRight: 14,
         paddingTop: 11,
         paddingBottom: 11,
-        borderBottomColor: "hsl(var(--border) / 0.35)",
+        borderBottomColor: "hsl(var(--gold) / 0.08)",
       }}
       onClick={onClick}
     >
@@ -164,6 +165,20 @@ export function InboxListItem({ draft, isSelected, isBulkChecked, onBulkToggle, 
           className="shrink-0"
         />
       </div>
+      {(attachmentsCount > 0 || threadType !== "new") && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {attachmentsCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.12)] px-2 py-[2px] text-[10px] font-medium text-[hsl(var(--gold-deep))]">
+              {attachmentsCount} bijlage{attachmentsCount > 1 ? "n" : ""}
+            </span>
+          )}
+          {threadType !== "new" && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/80 px-2 py-[2px] text-[10px] font-medium text-muted-foreground">
+              {label}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
