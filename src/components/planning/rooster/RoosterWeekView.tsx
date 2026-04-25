@@ -34,6 +34,8 @@ import { useDrivers, type Driver } from "@/hooks/useDrivers";
 import { useDriverSchedules } from "@/hooks/useDriverSchedules";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { useVehiclesRaw, type RawVehicle } from "@/hooks/useVehiclesRaw";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { findVehicleConflictsOnDate } from "@/lib/roosterConflicts";
 import type {
   DriverSchedule,
   DriverScheduleUpsert,
@@ -42,6 +44,7 @@ import type {
 import { DRIVER_SCHEDULE_STATUS_LABELS } from "@/types/rooster";
 
 import { RoosterCellEditor } from "./RoosterCellEditor";
+import { RoosterConflictBanner } from "./RoosterConflictBanner";
 
 interface Props {
   /**
@@ -79,7 +82,11 @@ function isWeekend(date: string): boolean {
   return d === 0 || d === 6;
 }
 
+const FALLBACK_SORT = Number.MAX_SAFE_INTEGER;
+
 export function RoosterWeekView({ date }: Props) {
+  const isMobile = useIsMobile();
+
   const weekStart = useMemo(
     () =>
       format(
@@ -106,14 +113,6 @@ export function RoosterWeekView({ date }: Props) {
   const { data: vehicles = [] } = useVehiclesRaw();
   const { schedules, upsertSchedule } = useDriverSchedules(weekStart, weekEnd);
 
-  const activeDrivers = useMemo(
-    () =>
-      driversAll
-        .filter((d) => d.is_active)
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [driversAll],
-  );
-
   const templateById = useMemo(() => {
     const m = new Map<string, ShiftTemplate>();
     for (const t of templates) m.set(t.id, t);
@@ -131,6 +130,73 @@ export function RoosterWeekView({ date }: Props) {
     for (const s of schedules) m.set(`${s.driver_id}|${s.date}`, s);
     return m;
   }, [schedules]);
+
+  // Per chauffeur het meest voorkomende shift_template_id over zijn 7 cellen
+  // -> daaruit de bijbehorende sort_order. Chauffeurs zonder enige cel of
+  // zonder ingevuld template krijgen een sort_order van FALLBACK_SORT en
+  // belanden onderaan; bij gelijkstand sorteren we alfabetisch op naam.
+  const activeDrivers = useMemo(() => {
+    const onlyActive = driversAll.filter((d) => d.is_active);
+
+    function modeSortOrder(driverId: string): number {
+      const counts = new Map<string, number>();
+      for (const d of dayDates) {
+        const s = scheduleByKey.get(`${driverId}|${d}`);
+        const tplId = s?.shift_template_id ?? null;
+        if (!tplId) continue;
+        counts.set(tplId, (counts.get(tplId) ?? 0) + 1);
+      }
+      if (counts.size === 0) return FALLBACK_SORT;
+      let bestId: string | null = null;
+      let bestCount = -1;
+      for (const [id, c] of counts.entries()) {
+        if (c > bestCount) {
+          bestId = id;
+          bestCount = c;
+        }
+      }
+      const tpl = bestId ? templateById.get(bestId) : null;
+      return tpl ? tpl.sort_order : FALLBACK_SORT;
+    }
+
+    const decorated = onlyActive.map((d) => ({
+      driver: d,
+      sort: modeSortOrder(d.id),
+    }));
+    decorated.sort((a, b) => {
+      if (a.sort !== b.sort) return a.sort - b.sort;
+      return a.driver.name.localeCompare(b.driver.name);
+    });
+    return decorated.map((x) => x.driver);
+  }, [driversAll, dayDates, scheduleByKey, templateById]);
+
+  const driverNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of driversAll) m.set(d.id, d.name);
+    return m;
+  }, [driversAll]);
+
+  const vehicleLabels = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of vehicles) m.set(v.id, v.code);
+    return m;
+  }, [vehicles]);
+
+  // Set met `vehicleId|date` waar een conflict zit, zodat we cellen rood
+  // kunnen randen. Per dag groeperen we via findVehicleConflictsOnDate.
+  const conflictCells = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of dayDates) {
+      const dayRows = schedules.filter((s) => s.date === d);
+      const conflicts = findVehicleConflictsOnDate(dayRows);
+      conflicts.forEach((rows) => {
+        for (const r of rows) {
+          set.add(`${r.driver_id}|${r.date}`);
+        }
+      });
+    }
+    return set;
+  }, [schedules, dayDates]);
 
   const [openCell, setOpenCell] = useState<CellKey | null>(null);
 
@@ -176,68 +242,91 @@ export function RoosterWeekView({ date }: Props) {
     );
   }
 
-  return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="rounded-xl border border-border/40 bg-card overflow-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-muted/40">
-              <th className="sticky left-0 z-10 bg-muted/40 text-left px-3 py-2 font-medium text-xs text-muted-foreground border-r border-border/40 min-w-[180px]">
-                Chauffeur
-              </th>
-              {dayDates.map((d) => {
-                const weekend = isWeekend(d);
-                return (
-                  <th
-                    key={d}
-                    className={cn(
-                      "px-2 py-2 text-xs font-medium text-muted-foreground border-r border-border/40 last:border-r-0 min-w-[140px]",
-                      weekend && "bg-muted/60",
-                    )}
-                  >
-                    <div className="capitalize">
-                      {format(parseISO(d), "EEE", { locale: nl })}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground/70 font-normal">
-                      {format(parseISO(d), "d MMM", { locale: nl })}
-                    </div>
-                  </th>
-                );
-              })}
+  const matrix = (
+    <div className="rounded-xl border border-border/40 bg-card overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-muted/40">
+            <th className="sticky left-0 z-10 bg-muted/40 text-left px-3 py-2 font-medium text-xs text-muted-foreground border-r border-border/40 min-w-[140px] md:min-w-[180px]">
+              Chauffeur
+            </th>
+            {dayDates.map((d) => {
+              const weekend = isWeekend(d);
+              return (
+                <th
+                  key={d}
+                  className={cn(
+                    "px-2 py-2 text-xs font-medium text-muted-foreground border-r border-border/40 last:border-r-0 min-w-[120px] md:min-w-[140px]",
+                    weekend && "bg-muted/60",
+                  )}
+                >
+                  <div className="capitalize">
+                    {format(parseISO(d), "EEE", { locale: nl })}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground/70 font-normal">
+                    {format(parseISO(d), "d MMM", { locale: nl })}
+                  </div>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {activeDrivers.map((driver) => (
+            <tr key={driver.id} className="border-t border-border/40">
+              <td className="sticky left-0 z-10 bg-card px-3 py-1.5 text-sm font-medium border-r border-border/40 whitespace-nowrap">
+                {driver.name}
+              </td>
+              {dayDates.map((cellDate) => (
+                <WeekCell
+                  key={cellDate}
+                  driver={driver}
+                  date={cellDate}
+                  schedule={scheduleByKey.get(`${driver.id}|${cellDate}`)}
+                  templateById={templateById}
+                  vehicleById={vehicleById}
+                  hasConflict={conflictCells.has(`${driver.id}|${cellDate}`)}
+                  isOpen={
+                    openCell?.driverId === driver.id &&
+                    openCell?.date === cellDate
+                  }
+                  onOpenChange={(open) =>
+                    setOpenCell(
+                      open ? { driverId: driver.id, date: cellDate } : null,
+                    )
+                  }
+                  weekStart={weekStart}
+                  weekEnd={weekEnd}
+                  dayDates={dayDates}
+                  onCopyTo={copyScheduleTo}
+                  dragDisabled={isMobile}
+                />
+              ))}
             </tr>
-          </thead>
-          <tbody>
-            {activeDrivers.map((driver) => (
-              <tr key={driver.id} className="border-t border-border/40">
-                <td className="sticky left-0 z-10 bg-card px-3 py-1.5 text-sm font-medium border-r border-border/40 whitespace-nowrap">
-                  {driver.name}
-                </td>
-                {dayDates.map((date) => (
-                  <WeekCell
-                    key={date}
-                    driver={driver}
-                    date={date}
-                    schedule={scheduleByKey.get(`${driver.id}|${date}`)}
-                    templateById={templateById}
-                    vehicleById={vehicleById}
-                    isOpen={
-                      openCell?.driverId === driver.id && openCell?.date === date
-                    }
-                    onOpenChange={(open) =>
-                      setOpenCell(open ? { driverId: driver.id, date } : null)
-                    }
-                    weekStart={weekStart}
-                    weekEnd={weekEnd}
-                    dayDates={dayDates}
-                    onCopyTo={copyScheduleTo}
-                  />
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </DndContext>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      <RoosterConflictBanner
+        schedules={schedules}
+        driverNames={driverNames}
+        vehicleLabels={vehicleLabels}
+      />
+      {isMobile ? (
+        // Op smal scherm: drag-drop uit, alleen horizontaal scrollen + de
+        // "Kopieer naar"-menu in de cel-popover. Dat voorkomt dat een
+        // scroll-gebaar per ongeluk een drag start.
+        matrix
+      ) : (
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          {matrix}
+        </DndContext>
+      )}
+    </div>
   );
 }
 
@@ -247,12 +336,14 @@ interface WeekCellProps {
   schedule: DriverSchedule | undefined;
   templateById: Map<string, ShiftTemplate>;
   vehicleById: Map<string, RawVehicle>;
+  hasConflict: boolean;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   weekStart: string;
   weekEnd: string;
   dayDates: string[];
   onCopyTo: (src: DriverSchedule, target: CellKey) => Promise<void>;
+  dragDisabled: boolean;
 }
 
 function WeekCell({
@@ -261,16 +352,74 @@ function WeekCell({
   schedule,
   templateById,
   vehicleById,
+  hasConflict,
   isOpen,
   onOpenChange,
   weekStart,
   weekEnd,
   dayDates,
   onCopyTo,
+  dragDisabled,
 }: WeekCellProps) {
   const cellId = `${driver.id}|${date}`;
   const weekend = isWeekend(date);
 
+  return dragDisabled ? (
+    <WeekCellInner
+      cellId={cellId}
+      driver={driver}
+      date={date}
+      schedule={schedule}
+      templateById={templateById}
+      vehicleById={vehicleById}
+      hasConflict={hasConflict}
+      weekend={weekend}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      weekStart={weekStart}
+      weekEnd={weekEnd}
+      dayDates={dayDates}
+      onCopyTo={onCopyTo}
+    />
+  ) : (
+    <WeekCellWithDnd
+      cellId={cellId}
+      driver={driver}
+      date={date}
+      schedule={schedule}
+      templateById={templateById}
+      vehicleById={vehicleById}
+      hasConflict={hasConflict}
+      weekend={weekend}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      weekStart={weekStart}
+      weekEnd={weekEnd}
+      dayDates={dayDates}
+      onCopyTo={onCopyTo}
+    />
+  );
+}
+
+interface WeekCellInternalProps {
+  cellId: string;
+  driver: Driver;
+  date: string;
+  schedule: DriverSchedule | undefined;
+  templateById: Map<string, ShiftTemplate>;
+  vehicleById: Map<string, RawVehicle>;
+  hasConflict: boolean;
+  weekend: boolean;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  weekStart: string;
+  weekEnd: string;
+  dayDates: string[];
+  onCopyTo: (src: DriverSchedule, target: CellKey) => Promise<void>;
+}
+
+function WeekCellWithDnd(props: WeekCellInternalProps) {
+  const { cellId, schedule } = props;
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: cellId });
   const {
     attributes,
@@ -282,6 +431,64 @@ function WeekCell({
     disabled: !schedule,
   });
 
+  function setRefs(el: HTMLElement | null) {
+    setDropRef(el);
+    setDragRef(el);
+  }
+
+  return (
+    <WeekCellBody
+      {...props}
+      setRefs={setRefs}
+      dragAttributes={attributes}
+      dragListeners={listeners}
+      isOver={isOver}
+      isDragging={isDragging}
+    />
+  );
+}
+
+function WeekCellInner(props: WeekCellInternalProps) {
+  return (
+    <WeekCellBody
+      {...props}
+      setRefs={() => {}}
+      dragAttributes={{}}
+      dragListeners={{}}
+      isOver={false}
+      isDragging={false}
+    />
+  );
+}
+
+interface WeekCellBodyProps extends WeekCellInternalProps {
+  setRefs: (el: HTMLElement | null) => void;
+  dragAttributes: Record<string, unknown>;
+  dragListeners: Record<string, unknown>;
+  isOver: boolean;
+  isDragging: boolean;
+}
+
+function WeekCellBody({
+  driver,
+  date,
+  schedule,
+  templateById,
+  vehicleById,
+  hasConflict,
+  weekend,
+  isOpen,
+  onOpenChange,
+  weekStart,
+  weekEnd,
+  dayDates,
+  onCopyTo,
+  setRefs,
+  dragAttributes,
+  dragListeners,
+  isOver,
+  isDragging,
+}: WeekCellBodyProps) {
   const template = schedule?.shift_template_id
     ? templateById.get(schedule.shift_template_id) ?? null
     : null;
@@ -298,15 +505,10 @@ function WeekCell({
 
   const bgColor = template?.color ?? null;
 
-  function setRefs(el: HTMLElement | null) {
-    setDropRef(el);
-    setDragRef(el);
-  }
-
   return (
     <td
       className={cn(
-        "align-top border-r border-border/40 last:border-r-0 p-1 min-w-[140px]",
+        "align-top border-r border-border/40 last:border-r-0 p-1 min-w-[120px] md:min-w-[140px]",
         weekend && "bg-muted/30",
       )}
     >
@@ -314,8 +516,8 @@ function WeekCell({
         <PopoverTrigger asChild>
           <div
             ref={setRefs}
-            {...attributes}
-            {...listeners}
+            {...dragAttributes}
+            {...dragListeners}
             className={cn(
               "relative group rounded-md border border-transparent px-2 py-1.5 min-h-[52px] cursor-pointer transition",
               schedule
@@ -323,9 +525,10 @@ function WeekCell({
                 : "hover:border-border/40 hover:bg-muted/40",
               isDragging && "opacity-40",
               isOver && "ring-2 ring-primary/40 bg-primary/[0.04]",
+              hasConflict && "border-destructive/60 bg-destructive/[0.06]",
             )}
             style={
-              bgColor && !showStatusInstead
+              bgColor && !showStatusInstead && !hasConflict
                 ? {
                     borderLeft: `3px solid ${bgColor}`,
                     background: `${bgColor}14`,
