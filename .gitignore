@@ -35,7 +35,9 @@ gcp-service-account.json
 .moat/
 
 # Claude Code configuration
-.claude/
+# Wel committen: gedeelde project-instellingen incl. SessionStart-hook
+.claude/*
+!.claude/settings.json
 
 # Supabase CLI local cache
 supabase/.temp/
