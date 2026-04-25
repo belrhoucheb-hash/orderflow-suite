@@ -59,7 +59,7 @@ export function assessAutoConfirm(draft: OrderDraft, form?: FormState | null): A
       eligible: false,
       confidence,
       title: "Nog niet veilig genoeg",
-      reason: `Confidence is ${confidence}%. Vanaf ${AUTO_CONFIRM_MIN_CONFIDENCE}% kan de order automatisch door.`,
+      reason: `Auto-confirm score is ${confidence}%. Vanaf ${AUTO_CONFIRM_MIN_CONFIDENCE}% kan de order automatisch door.`,
     };
   }
 

@@ -109,6 +109,27 @@ function ChapterHead({
   );
 }
 
+type ReviewFieldTone = "ok" | "review" | "missing";
+
+function normaliseConfidence(raw?: number | null) {
+  if (raw == null || Number.isNaN(raw)) return null;
+  return raw <= 1 ? Math.round(raw * 100) : Math.round(raw);
+}
+
+function FieldStatePill({ tone, label }: { tone: ReviewFieldTone; label: string }) {
+  const tones: Record<ReviewFieldTone, string> = {
+    ok: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    review: "border-amber-200 bg-amber-50 text-amber-800",
+    missing: "border-red-200 bg-red-50 text-red-700",
+  };
+
+  return (
+    <span className={cn("inline-flex items-center rounded-full border px-2 py-[2px] text-[10px] font-semibold", tones[tone])}>
+      {label}
+    </span>
+  );
+}
+
 export function InboxReviewPanel({
   selected,
   form,
@@ -124,9 +145,10 @@ export function InboxReviewPanel({
   const formErrors = getFormErrors(form);
   const filledCount = getFilledCount(form);
   const totalFields = getTotalFields();
-  const conf = computeFieldConfidence(form);
+  const extractionConfidence = computeFieldConfidence(form);
   const requiredFilled = getRequiredFilledCount(form);
   const totalRequired = 4;
+  const autoConfirmConfidence = normaliseConfidence(autoConfirmAssessment.confidence) ?? 0;
 
   const [dept, setDept] = useState<"export" | "operations">("operations");
   const [cargoEdit, setCargoEdit] = useState(false);
@@ -149,13 +171,48 @@ export function InboxReviewPanel({
   const deliveryTimeLinkage = useFieldHoverLinkage("delivery-time");
   const reqLinkage = useFieldHoverLinkage("req");
 
-  const confColor = conf >= 80 ? "hsl(var(--gold-deep))" : conf >= 60 ? "hsl(32 70% 45%)" : "hsl(0 60% 50%)";
+  const confColor =
+    extractionConfidence >= 80
+      ? "hsl(var(--gold-deep))"
+      : extractionConfidence >= 60
+        ? "hsl(32 70% 45%)"
+        : "hsl(0 60% 50%)";
+  const autoConfirmColor =
+    autoConfirmConfidence >= 95
+      ? "hsl(145 63% 34%)"
+      : autoConfirmConfidence >= 80
+        ? "hsl(var(--gold-deep))"
+        : autoConfirmConfidence > 0
+          ? "hsl(32 70% 45%)"
+          : "hsl(0 60% 50%)";
 
   const possibleDuplicate = (selected as any).possible_duplicate as boolean | undefined;
   const anomalies = selected.anomalies || [];
   const weightAnomaly = anomalies.find((a) => a.field === "weight_kg");
   const followUpStatus = getFollowUpStatus(selected);
   const missingFieldsCount = (selected.missing_fields || []).length;
+  const missingFieldSet = new Set((selected.missing_fields || []).map((field) => field.toLowerCase()));
+  const fieldAliases: Record<string, string[]> = {
+    pickupAddress: ["pickup_address", "pickup_time_window"],
+    deliveryAddress: ["delivery_address", "delivery_time_window"],
+    quantity: ["quantity"],
+    weight: ["weight", "weight_kg"],
+    unit: ["unit"],
+    dimensions: ["dimensions"],
+    requirements: ["requirements"],
+    transportType: ["transport_type"],
+  };
+  const hasMissingField = (key: keyof typeof fieldAliases) => fieldAliases[key].some((alias) => missingFieldSet.has(alias));
+  const pickupNeedsAttention = hasMissingField("pickupAddress") || !form.pickupAddress || isAddressIncomplete(form.pickupAddress);
+  const deliveryNeedsAttention = hasMissingField("deliveryAddress") || !form.deliveryAddress || isAddressIncomplete(form.deliveryAddress);
+  const quantityMissing = hasMissingField("quantity") || !form.quantity;
+  const weightMissing = hasMissingField("weight") || !form.weight;
+  const unitMissing = hasMissingField("unit") || !form.unit;
+  const dimensionsMissing = hasMissingField("dimensions") || !form.dimensions;
+  const requirementsMissing = hasMissingField("requirements");
+  const routeNeedsAttention = pickupNeedsAttention || deliveryNeedsAttention;
+  const cargoNeedsAttention = quantityMissing || weightMissing || dimensionsMissing || !!weightAnomaly;
+  const requirementsNeedAttention = requirementsMissing;
   const recommendedFollowUpAction = getRecommendedFollowUpAction(selected);
   const needsFollowUpGuidance =
     !autoConfirmAssessment.eligible &&
@@ -337,7 +394,7 @@ export function InboxReviewPanel({
                     strokeWidth="3"
                     strokeLinecap="round"
                     strokeDasharray={2 * Math.PI * 28}
-                    strokeDashoffset={2 * Math.PI * 28 * (1 - conf / 100)}
+                    strokeDashoffset={2 * Math.PI * 28 * (1 - extractionConfidence / 100)}
                     className="transition-all duration-500"
                   />
                 </svg>
@@ -345,7 +402,7 @@ export function InboxReviewPanel({
                   className="absolute inset-0 flex items-center justify-center text-[14px] font-semibold tabular-nums"
                   style={{ fontFamily: "'Space Grotesk', sans-serif", color: confColor }}
                 >
-                  {conf}%
+                  {extractionConfidence}%
                 </span>
                 {showConfDetail && (
                   <div
@@ -426,7 +483,7 @@ export function InboxReviewPanel({
             <ChapterHead
               badge="I"
               title="AI-extractie"
-              sub={`${conf}% zekerheid, ${filledCount}/${totalFields} velden herkend`}
+              sub={`${extractionConfidence}% extractiezekerheid, ${filledCount}/${totalFields} velden herkend`}
             />
             <div className="card--luxe p-4">
               <div className="mb-2 flex items-center gap-2">
@@ -438,7 +495,7 @@ export function InboxReviewPanel({
                   Automatisch geëxtraheerd
                 </span>
                 <span className="ml-auto text-[11px] tabular-nums font-semibold" style={{ color: confColor }}>
-                  {conf}%
+                  {extractionConfidence}%
                 </span>
               </div>
               <div
@@ -448,7 +505,7 @@ export function InboxReviewPanel({
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
-                    width: `${conf}%`,
+                    width: `${extractionConfidence}%`,
                     background: "linear-gradient(90deg, hsl(var(--gold)), hsl(var(--gold-deep)))",
                   }}
                 />
@@ -458,12 +515,42 @@ export function InboxReviewPanel({
                   ? `Uit e-mail plus ${selected.attachments.length} bijlage${selected.attachments.length > 1 ? "n" : ""}`
                   : "Uit e-mailtekst"}
               </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.18)] px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Extractiezekerheid</p>
+                  <p
+                    className="mt-1 text-[16px] font-semibold tabular-nums"
+                    style={{ fontFamily: "'Space Grotesk', sans-serif", color: confColor }}
+                  >
+                    {extractionConfidence}%
+                  </p>
+                  <p className="mt-1 text-[10.5px] text-muted-foreground">
+                    {filledCount} van {totalFields} ordervelden herkend
+                  </p>
+                </div>
+                <div
+                  className="rounded-xl border px-3 py-2"
+                  style={{
+                    borderColor: autoConfirmAssessment.eligible ? "rgb(167 243 208)" : "rgb(254 202 202)",
+                    background: autoConfirmAssessment.eligible ? "rgba(236,253,245,0.72)" : "rgba(254,242,242,0.72)",
+                  }}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Auto-confirm score</p>
+                  <p
+                    className="mt-1 text-[16px] font-semibold tabular-nums"
+                    style={{ fontFamily: "'Space Grotesk', sans-serif", color: autoConfirmColor }}
+                  >
+                    {autoConfirmConfidence}%
+                  </p>
+                  <p className="mt-1 text-[10.5px] text-muted-foreground">Drempel voor automatisch doorzetten: 95%</p>
+                </div>
+              </div>
               <div
                 className={cn(
                   "mt-3 rounded-xl border px-3 py-2 text-[11.5px]",
                   autoConfirmAssessment.eligible
                     ? "border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.92),rgba(236,253,245,0.74))] text-emerald-900"
-                    : "border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,0.92),rgba(255,251,235,0.74))] text-amber-900",
+                    : "border-red-200 bg-[linear-gradient(180deg,rgba(254,242,242,0.92),rgba(254,242,242,0.74))] text-red-900",
                 )}
               >
                 <p className="font-semibold">{autoConfirmAssessment.title}</p>
@@ -474,8 +561,19 @@ export function InboxReviewPanel({
 
           {/* II · Route */}
           <section className="mb-5">
-            <ChapterHead badge="II" title="Route" sub="Ophalen en afleveren" />
-            <div className="card--luxe p-4">
+            <ChapterHead
+              badge="II"
+              title="Route"
+              sub={routeNeedsAttention ? "Controle nodig op routegegevens" : "Ophalen en afleveren"}
+            />
+            <div
+              className="card--luxe p-4"
+              style={
+                routeNeedsAttention
+                  ? { borderColor: "rgb(254 202 202)", boxShadow: "0 0 0 1px rgba(248,113,113,0.12)" }
+                  : undefined
+              }
+            >
               <div className="relative pl-6 space-y-4">
                 <div
                   className="absolute top-2 bottom-2"
@@ -493,20 +591,21 @@ export function InboxReviewPanel({
                       top: 5,
                       width: 10,
                       height: 10,
-                      background: "hsl(var(--gold))",
+                      background: pickupNeedsAttention ? "rgb(239 68 68)" : "hsl(var(--gold))",
                       border: "2px solid hsl(var(--card))",
-                      boxShadow: "0 0 0 1px hsl(var(--gold) / 0.3)",
+                      boxShadow: pickupNeedsAttention ? "0 0 0 1px rgba(239,68,68,0.24)" : "0 0 0 1px hsl(var(--gold) / 0.3)",
                     }}
                   />
                   <div>
                     <div className="flex items-center gap-1.5 mb-[2px]">
-                      <MapPin className="h-3 w-3" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
+                      <MapPin className="h-3 w-3" strokeWidth={1.75} style={{ color: pickupNeedsAttention ? "rgb(220 38 38)" : "hsl(var(--gold-deep))" }} />
                       <span
                         className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
                         style={{ fontFamily: "'Space Grotesk', sans-serif" }}
                       >
                         Ophalen
                       </span>
+                      <FieldStatePill tone={pickupNeedsAttention ? "missing" : "ok"} label={pickupNeedsAttention ? "Ontbreekt" : "Gevonden"} />
                     </div>
                     <AddressAutocomplete
                       value={form.pickupAddress}
@@ -515,12 +614,13 @@ export function InboxReviewPanel({
                       placeholder="Ophaaladres..."
                       className={cn(
                         "h-auto border-0 shadow-none p-0 text-[13px] font-medium bg-transparent focus-visible:ring-1 focus-visible:ring-[hsl(var(--gold)/0.4)] focus-visible:bg-white focus-visible:rounded focus-visible:px-1",
-                        !form.pickupAddress && "text-destructive italic font-normal",
+                        pickupNeedsAttention && "text-destructive italic font-normal",
                       )}
                     />
-                    {form.pickupAddress && isAddressIncomplete(form.pickupAddress) && (
-                      <p className="text-[10.5px] text-[hsl(32_70%_40%)] mt-1 flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" strokeWidth={1.75} /> Adres onvolledig, straat en nummer nodig
+                    {pickupNeedsAttention && (
+                      <p className="text-[10.5px] text-red-700 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                        {!form.pickupAddress ? "Ophaaladres ontbreekt" : "Adres onvolledig, straat en nummer nodig"}
                       </p>
                     )}
                     <div className="flex items-center gap-2 mt-2" {...pickupTimeLinkage}>
@@ -557,20 +657,27 @@ export function InboxReviewPanel({
                       top: 5,
                       width: 10,
                       height: 10,
-                      background: "hsl(var(--gold-deep))",
+                      background: deliveryNeedsAttention ? "rgb(239 68 68)" : "hsl(var(--gold-deep))",
                       border: "2px solid hsl(var(--card))",
-                      boxShadow: "0 0 0 1px hsl(var(--gold-deep) / 0.3)",
+                      boxShadow: deliveryNeedsAttention
+                        ? "0 0 0 1px rgba(239,68,68,0.24)"
+                        : "0 0 0 1px hsl(var(--gold-deep) / 0.3)",
                     }}
                   />
                   <div>
                     <div className="flex items-center gap-1.5 mb-[2px]">
-                      <MapPin className="h-3 w-3" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
+                      <MapPin
+                        className="h-3 w-3"
+                        strokeWidth={1.75}
+                        style={{ color: deliveryNeedsAttention ? "rgb(220 38 38)" : "hsl(var(--gold-deep))" }}
+                      />
                       <span
                         className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
                         style={{ fontFamily: "'Space Grotesk', sans-serif" }}
                       >
                         Afleveren
                       </span>
+                      <FieldStatePill tone={deliveryNeedsAttention ? "missing" : "ok"} label={deliveryNeedsAttention ? "Ontbreekt" : "Gevonden"} />
                     </div>
                     <AddressAutocomplete
                       value={form.deliveryAddress}
@@ -579,12 +686,13 @@ export function InboxReviewPanel({
                       placeholder="Afleveradres..."
                       className={cn(
                         "h-auto border-0 shadow-none p-0 text-[13px] font-medium bg-transparent focus-visible:ring-1 focus-visible:ring-[hsl(var(--gold)/0.4)] focus-visible:bg-white focus-visible:rounded focus-visible:px-1",
-                        !form.deliveryAddress && "text-destructive italic font-normal",
+                        deliveryNeedsAttention && "text-destructive italic font-normal",
                       )}
                     />
-                    {form.deliveryAddress && isAddressIncomplete(form.deliveryAddress) && (
-                      <p className="text-[10.5px] text-[hsl(32_70%_40%)] mt-1 flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" strokeWidth={1.75} /> Adres onvolledig, straat en nummer nodig
+                    {deliveryNeedsAttention && (
+                      <p className="text-[10.5px] text-red-700 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                        {!form.deliveryAddress ? "Afleveradres ontbreekt" : "Adres onvolledig, straat en nummer nodig"}
                       </p>
                     )}
                     <div className="flex items-center gap-2 mt-2" {...deliveryTimeLinkage}>
@@ -631,32 +739,49 @@ export function InboxReviewPanel({
             <ChapterHead
               badge="III"
               title="Lading"
-              sub={`${form.quantity || 0} ${form.unit || "stuks"}, ${totalKg > 0 ? `${totalKg.toLocaleString("nl-NL")} kg` : "gewicht onbekend"}`}
+              sub={
+                cargoNeedsAttention
+                  ? "Controle nodig op ladinggegevens"
+                  : `${form.quantity || 0} ${form.unit || "stuks"}, ${totalKg > 0 ? `${totalKg.toLocaleString("nl-NL")} kg` : "gewicht onbekend"}`
+              }
             />
-            <div className="card--luxe p-0 overflow-hidden">
+            <div
+              className="card--luxe p-0 overflow-hidden"
+              style={
+                cargoNeedsAttention
+                  ? { borderColor: "rgb(254 202 202)", boxShadow: "0 0 0 1px rgba(248,113,113,0.12)" }
+                  : undefined
+              }
+            >
               {/* Read-only row */}
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <Package className="h-4 w-4 shrink-0" strokeWidth={1.75} style={{ color: "hsl(var(--gold-deep))" }} />
+                  <Package
+                    className="h-4 w-4 shrink-0"
+                    strokeWidth={1.75}
+                    style={{ color: cargoNeedsAttention ? "rgb(220 38 38)" : "hsl(var(--gold-deep))" }}
+                  />
                   <div className="min-w-0" {...qtyLinkage}>
                     <div className="flex items-baseline gap-2">
                       <span
-                        className="text-[14px] font-semibold tabular-nums"
+                        className={cn("text-[14px] font-semibold tabular-nums", quantityMissing && "text-red-700")}
                         style={{ fontFamily: "'Space Grotesk', sans-serif" }}
                       >
                         {form.quantity || 0}
                       </span>
-                      <span className="text-[12.5px] text-muted-foreground">{form.unit || "Pallets"}</span>
+                      <span className={cn("text-[12.5px] text-muted-foreground", unitMissing && "text-red-700")}>{form.unit || "Pallets"}</span>
+                      <FieldStatePill tone={quantityMissing || weightMissing || dimensionsMissing ? "missing" : "ok"} label={quantityMissing || weightMissing || dimensionsMissing ? "Ontbreekt" : "Compleet"} />
                     </div>
                     {form.dimensions && (
-                      <span className="text-[11px] text-muted-foreground tabular-nums" {...dimsLinkage}>
+                      <span className={cn("text-[11px] text-muted-foreground tabular-nums", dimensionsMissing && "text-red-700")} {...dimsLinkage}>
                         {form.dimensions} cm
                       </span>
                     )}
+                    {!form.dimensions && <span className="text-[11px] text-red-700 tabular-nums">Afmetingen ontbreekt</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[12.5px] tabular-nums" {...weightLinkage}>
+                  <span className={cn("text-[12.5px] tabular-nums", weightMissing && "text-red-700")} {...weightLinkage}>
                     {totalKg > 0 ? `${totalKg.toLocaleString("nl-NL")} kg` : "— kg"}
                   </span>
                   <button
@@ -673,17 +798,17 @@ export function InboxReviewPanel({
                 <div className="border-t px-4 py-3 space-y-3" style={{ borderColor: "hsl(var(--border) / 0.5)" }}>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
-                      <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">Aantal</span>
+                      <span className={cn("text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground", quantityMissing && "text-red-700")}>Aantal</span>
                       <Input
                         type="number"
                         value={form.quantity}
                         onChange={(e) => onUpdateField("quantity", Number(e.target.value))}
                         onBlur={onAutoSave}
-                        className="h-8 mt-1"
+                        className={cn("h-8 mt-1", quantityMissing && "border-red-300 focus-visible:ring-red-200")}
                       />
                     </label>
                     <label className="block">
-                      <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">Eenheid</span>
+                      <span className={cn("text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground", unitMissing && "text-red-700")}>Eenheid</span>
                       <Select
                         value={form.unit}
                         onValueChange={(v) => {
@@ -691,7 +816,7 @@ export function InboxReviewPanel({
                           setTimeout(onAutoSave, 0);
                         }}
                       >
-                        <SelectTrigger className="h-8 mt-1">
+                        <SelectTrigger className={cn("h-8 mt-1", unitMissing && "border-red-300 focus:ring-red-200")}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -706,7 +831,7 @@ export function InboxReviewPanel({
                   </div>
 
                   <label className="block">
-                    <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
+                    <span className={cn("text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground", dimensionsMissing && "text-red-700")}>
                       Afmetingen, L × B × H (cm)
                     </span>
                     <Input
@@ -714,12 +839,13 @@ export function InboxReviewPanel({
                       onChange={(e) => onUpdateField("dimensions", e.target.value)}
                       onBlur={onAutoSave}
                       placeholder="120x80x145"
-                      className="h-8 mt-1"
+                      className={cn("h-8 mt-1", dimensionsMissing && "border-red-300 focus-visible:ring-red-200")}
                     />
+                    {dimensionsMissing && <p className="mt-1 text-[10.5px] text-red-700">Afmetingen ontbreekt</p>}
                   </label>
 
                   <label className="block">
-                    <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
+                    <span className={cn("text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground", weightMissing && "text-red-700")}>
                       Gewicht {form.perUnit ? "(per eenheid)" : "(totaal)"}
                     </span>
                     <div className="flex items-center gap-2 mt-1">
@@ -728,10 +854,11 @@ export function InboxReviewPanel({
                         onChange={(e) => onUpdateField("weight", e.target.value)}
                         onBlur={onAutoSave}
                         placeholder="—"
-                        className="h-8"
+                        className={cn("h-8", weightMissing && "border-red-300 focus-visible:ring-red-200")}
                       />
-                      <span className="text-[12px] text-muted-foreground">kg</span>
+                      <span className={cn("text-[12px] text-muted-foreground", weightMissing && "text-red-700")}>kg</span>
                     </div>
+                    {weightMissing && <p className="mt-1 text-[10.5px] text-red-700">Gewicht ontbreekt</p>}
                   </label>
 
                   <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -787,8 +914,21 @@ export function InboxReviewPanel({
             <ChapterHead
               badge="IV"
               title="Vereisten"
-              sub={form.requirements.length > 0 ? form.requirements.join(", ") : "Geen speciale vereisten"}
+              sub={
+                requirementsNeedAttention
+                  ? "Vereisten nog bevestigen"
+                  : form.requirements.length > 0
+                    ? form.requirements.join(", ")
+                    : "Geen speciale vereisten"
+              }
             />
+            <div className="mb-2 flex items-center gap-2">
+              <FieldStatePill
+                tone={requirementsNeedAttention ? "missing" : "ok"}
+                label={requirementsNeedAttention ? "Ontbreekt" : "Compleet"}
+              />
+              {requirementsNeedAttention && <span className="text-[11px] text-red-700">De klant moet speciale vereisten nog bevestigen.</span>}
+            </div>
             <div className="flex flex-wrap gap-2" {...reqLinkage}>
               {requirementOptions.map((req) => {
                 const active = form.requirements.includes(req.id);

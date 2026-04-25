@@ -248,7 +248,6 @@ export const ALL_FIELDS = [
   { key: "unit", confKey: "unit", label: "Eenheid", required: false },
   { key: "transportType", confKey: "transport_type", label: "Type", required: false },
   { key: "dimensions", confKey: "dimensions", label: "Afmetingen", required: false },
-  { key: "clientName", confKey: "client_name", label: "Klantnaam", required: false },
 ] as const;
 
 export function getFilledCount(f: FormState | undefined): number {
@@ -265,7 +264,7 @@ export function getFilledCount(f: FormState | undefined): number {
       }
     } else {
       // Fallback: count fields that have non-default values
-      const val = field.key === "clientName" ? null : (f as any)[field.key];
+      const val = (f as any)[field.key];
       if (field.key === "quantity") {
         if (val != null && val > 0) count++;
       } else if (field.key === "transportType") {
@@ -315,7 +314,7 @@ export function computeFieldConfidence(f: FormState | undefined): number {
       // Fields without confidence data contribute 0
     } else {
       // Fallback: binary filled/not-filled, excluding defaults
-      const val = field.key === "clientName" ? null : (f as any)[field.key];
+      const val = (f as any)[field.key];
       let isFilled = false;
       if (field.key === "quantity") {
         isFilled = val != null && val > 0;
