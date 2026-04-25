@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const operationsItemsDef = [
-  { titleKey: "nav.dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Overzicht", url: "/", icon: LayoutDashboard },
   { titleKey: "nav.inbox", url: "/inbox", icon: Inbox },
   { titleKey: "nav.orders", url: "/orders", icon: Package },
   { titleKey: "nav.planning", url: "/planning", icon: Truck },
@@ -34,7 +34,7 @@ const operationsItemsDef = [
 
 const controlItemsDef = [
   { title: "Autonomie", url: "/autonomie", icon: Activity },
-  { titleKey: "nav.invoicing", url: "/facturatie", icon: Receipt },
+  { title: "Finance", url: "/facturatie", icon: Receipt },
   { titleKey: "nav.reporting", url: "/rapportage", icon: BarChart3 },
 ];
 
@@ -62,6 +62,11 @@ export function AppSidebar() {
   const { profile, user, signOut, isAdmin, effectiveRole } = useAuth();
   const { tenant } = useTenant();
   const { data: exceptionCount } = useExceptionCount();
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    Controle: true,
+    Netwerk: true,
+    Beheer: true,
+  });
 
   const toItems = (defs: Array<{ titleKey?: string; title?: string; titleFallback?: string; url: string; icon: any }>) =>
     defs.map((d: any) => {
@@ -83,15 +88,56 @@ export function AppSidebar() {
 
   const exceptionBadgeValue = exceptionCount?.total ?? 0;
 
-  const renderNavGroup = (label: string, items: Array<{ title: string; url: string; icon: any }>) => (
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups((current) => ({
+      ...current,
+      [label]: !current[label],
+    }));
+  };
+
+  const getExceptionBadgeTone = () => {
+    if (exceptionBadgeValue >= 10) {
+      return {
+        background: "hsl(8 82% 56%)",
+        color: "white",
+        boxShadow: "0 0 0 1px hsl(8 82% 62% / 0.25)",
+      };
+    }
+
+    return {
+      background: "hsl(var(--gold) / 0.18)",
+      color: "hsl(var(--gold-light))",
+      boxShadow: "0 0 0 1px hsl(var(--gold) / 0.2)",
+    };
+  };
+
+  const renderNavGroup = (
+    label: string,
+    items: Array<{ title: string; url: string; icon: any }>,
+    collapsible: boolean = false,
+  ) => (
     <SidebarGroup className="mt-3 first:mt-0 px-1.5 py-0">
-      <SidebarGroupLabel
-        className="mb-1.5 px-2 text-[9px] font-semibold uppercase tracking-[0.24em] text-white/32"
-        style={{ fontFamily: "var(--font-display)" }}
-      >
-        {label}
+      <SidebarGroupLabel asChild>
+        <button
+          type="button"
+          className={cn(
+            "mb-1.5 flex h-auto w-full items-center px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] outline-none transition-colors",
+            collapsible ? "hover:text-white/58" : "cursor-default",
+            collapsedGroups[label] ? "text-white/32" : "text-white/44",
+          )}
+          style={{ fontFamily: "var(--font-display)" }}
+          onClick={collapsible ? () => toggleGroup(label) : undefined}
+        >
+          <span>{label}</span>
+          {collapsible && (
+            <ChevronDown
+              className={cn("ml-auto h-3.5 w-3.5 transition-transform", !collapsedGroups[label] && "rotate-180")}
+              strokeWidth={1.7}
+            />
+          )}
+        </button>
       </SidebarGroupLabel>
-      <SidebarGroupContent>
+      <SidebarGroupContent className={cn(collapsible && collapsedGroups[label] && "hidden")}>
         <SidebarMenu className="space-y-0.5">
           {items.map((item) => {
             const active = isActive(item.url);
@@ -146,11 +192,11 @@ export function AppSidebar() {
                     {item.url === "/exceptions" && exceptionBadgeValue > 0 && (
                       <span
                         className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                        style={{
-                          background: active ? "hsl(var(--gold) / 0.22)" : "hsl(12 92% 58%)",
+                        style={active ? {
+                          background: "hsl(var(--gold) / 0.22)",
                           color: "white",
-                          boxShadow: active ? "0 0 0 1px hsl(var(--gold) / 0.24)" : "none",
-                        }}
+                          boxShadow: "0 0 0 1px hsl(var(--gold) / 0.24)",
+                        } : getExceptionBadgeTone()}
                       >
                         {Math.min(exceptionBadgeValue, 99)}
                       </span>
@@ -168,9 +214,9 @@ export function AppSidebar() {
   const visiblePrimaryGroups = effectiveRole === "chauffeur"
     ? [{ label: t("nav.navigation"), items: chauffeurItems }]
     : [
-        { label: "Operatie", items: operationsItems },
-        { label: "Controle", items: controlItems },
-        { label: "Stamgegevens", items: masterDataItems },
+        { label: "Operatie", items: operationsItems, collapsible: false },
+        { label: "Controle", items: controlItems, collapsible: true },
+        { label: "Netwerk", items: masterDataItems, collapsible: true },
       ];
 
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -201,7 +247,7 @@ export function AppSidebar() {
       }}
     >
       <div
-        className="mx-3 mt-3 flex items-center gap-3 rounded-2xl border px-3 py-3"
+        className="mx-3 mt-2.5 flex items-center gap-2.5 rounded-2xl border px-3 py-2.5"
         style={{
           borderColor: "hsl(218 24% 18%)",
           background: "hsl(222 24% 12%)",
@@ -210,7 +256,7 @@ export function AppSidebar() {
         <img 
           src={tenant?.logoUrl || defaultLogo} 
           alt={tenant?.name || "TMS"} 
-          className="h-9 w-9 rounded-xl object-contain p-1.5"
+          className="h-8 w-8 rounded-xl object-contain p-1"
           style={{
             background: "hsl(219 22% 16%)",
             boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)",
@@ -219,12 +265,12 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="flex flex-col min-w-0 pr-2">
             <span
-              className="truncate text-[15px] font-semibold tracking-tight leading-tight text-white"
+              className="truncate text-[14px] font-semibold tracking-tight leading-tight text-white"
               style={{ fontFamily: "var(--font-display)" }}
             >
               {tenant?.name || DEFAULT_COMPANY.name}
             </span>
-            <span className="text-[9px] uppercase tracking-[0.24em] text-white/36">
+            <span className="text-[8px] uppercase tracking-[0.24em] text-white/30">
               Autonomous TMS
             </span>
           </div>
@@ -232,10 +278,10 @@ export function AppSidebar() {
       </div>
 
       <SidebarContent className="px-3 py-2">
-        {visiblePrimaryGroups.map((group) => renderNavGroup(group.label, group.items))}
+        {visiblePrimaryGroups.map((group) => renderNavGroup(group.label, group.items, group.collapsible))}
 
         {isAdmin && (
-          renderNavGroup("Beheer", adminItems)
+          renderNavGroup("Beheer", adminItems, true)
         )}
 
       </SidebarContent>
