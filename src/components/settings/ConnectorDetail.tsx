@@ -13,6 +13,7 @@ import {
   useSaveConnectorMapping,
   useConnectorSyncLog,
   useTestConnector,
+  usePullConnector,
   buildExactOAuthUrl,
   type SyncLogRow,
 } from "@/hooks/useConnectors";
@@ -98,7 +99,10 @@ function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
 
   if (slug === "exact_online") {
     const oauthUrl = tenant ? buildExactOAuthUrl(tenant.id) : null;
-    const hasCreds = creds.data?.credentials && Object.keys(creds.data.credentials).length > 0;
+    const hasCreds = Boolean(
+      creds.data?.enabled ||
+      (creds.data?.credentials as Record<string, unknown> | undefined)?.__hasStoredSecrets,
+    );
     return (
       <div className="card--luxe p-5 space-y-4">
         <p className="text-sm text-muted-foreground">{connector.setupHint}</p>
@@ -128,6 +132,19 @@ function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
     );
   }
 
+  if (slug === "nostradamus") {
+    return (
+      <NostradamusConnectionForm
+        creds={creds.data?.credentials ?? {}}
+        enabled={creds.data?.enabled ?? false}
+        onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
+        onTest={() => test.mutate()}
+        saving={save.isPending}
+        testing={test.isPending}
+      />
+    );
+  }
+
   // Generieke API-key/credentials-form (Snelstart, AFAS, Samsara)
   return (
     <SnelstartConnectionForm
@@ -138,6 +155,111 @@ function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
       saving={save.isPending}
       testing={test.isPending}
     />
+  );
+}
+
+function NostradamusConnectionForm({
+  creds,
+  enabled,
+  onSave,
+  onTest,
+  saving,
+  testing,
+}: {
+  creds: Record<string, unknown>;
+  enabled: boolean;
+  onSave: (c: Record<string, unknown>, en: boolean) => Promise<void>;
+  onTest: () => void;
+  saving: boolean;
+  testing: boolean;
+}) {
+  const [baseUrl, setBaseUrl] = useState((creds.baseUrl as string) ?? "");
+  const [endpointPath, setEndpointPath] = useState((creds.endpointPath as string) ?? "");
+  const [apiToken, setApiToken] = useState((creds.apiToken as string) ?? "");
+  const [tokenHeader, setTokenHeader] = useState((creds.tokenHeader as string) ?? "Authorization");
+  const [tokenPrefix, setTokenPrefix] = useState((creds.tokenPrefix as string) ?? "Bearer");
+  const [sinceParam, setSinceParam] = useState((creds.sinceParam as string) ?? "since");
+  const [untilParam, setUntilParam] = useState((creds.untilParam as string) ?? "until");
+  const [mockMode, setMockMode] = useState(creds.mockMode === true);
+  const [active, setActive] = useState(enabled);
+
+  const save = async () => {
+    try {
+      await onSave(
+        {
+          baseUrl,
+          endpointPath,
+          apiToken,
+          tokenHeader,
+          tokenPrefix,
+          sinceParam,
+          untilParam,
+          mockMode,
+        },
+        active,
+      );
+      toast.success("Opgeslagen");
+    } catch (e) {
+      toast.error("Opslaan mislukt", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
+  return (
+    <div className="card--luxe p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <Label>Actief</Label>
+        <Switch checked={active} onCheckedChange={setActive} />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="nostra-base-url">Basis-URL</Label>
+        <Input id="nostra-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="nostra-endpoint">Endpoint-pad</Label>
+        <Input id="nostra-endpoint" value={endpointPath} onChange={(e) => setEndpointPath(e.target.value)} placeholder="/hours/worked" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="nostra-token">API-token</Label>
+        <Input id="nostra-token" type="password" value={apiToken} onChange={(e) => setApiToken(e.target.value)} />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="nostra-token-header">Token-header</Label>
+          <Input id="nostra-token-header" value={tokenHeader} onChange={(e) => setTokenHeader(e.target.value)} placeholder="Authorization" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="nostra-token-prefix">Token-prefix</Label>
+          <Input id="nostra-token-prefix" value={tokenPrefix} onChange={(e) => setTokenPrefix(e.target.value)} placeholder="Bearer" />
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="nostra-since-param">Queryparam vanaf</Label>
+          <Input id="nostra-since-param" value={sinceParam} onChange={(e) => setSinceParam(e.target.value)} placeholder="since" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="nostra-until-param">Queryparam t/m</Label>
+          <Input id="nostra-until-param" value={untilParam} onChange={(e) => setUntilParam(e.target.value)} placeholder="until" />
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <Label>Mock-modus</Label>
+          <p className="text-xs text-muted-foreground">Importeert voorbeelduren zonder externe call, handig voor eerste validatie.</p>
+        </div>
+        <Switch checked={mockMode} onCheckedChange={setMockMode} />
+      </div>
+      <div className="flex gap-2 pt-2">
+        <Button onClick={save} disabled={saving}>
+          {saving ? "Opslaan..." : "Opslaan"}
+        </Button>
+        <Button variant="outline" onClick={onTest} disabled={testing}>
+          {testing ? "Testen..." : "Test verbinding"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -262,6 +384,31 @@ function MappingTab({ slug }: { slug: string }) {
 
 function SyncTab({ slug }: { slug: string }) {
   const connector = findConnector(slug)!;
+  const pull = usePullConnector(slug);
+
+  if (slug === "nostradamus") {
+    return (
+      <div className="card--luxe p-5 space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Haal gewerkte uren op uit Nostradamus en koppel records via het personeelsnummer van de chauffeur.
+        </p>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => pull.mutate()}
+            disabled={pull.isPending}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${pull.isPending ? "animate-spin" : ""}`} />
+            {pull.isPending ? "Uren ophalen..." : "Uren ophalen"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          De pull importeert standaard de laatste 14 dagen en overschrijft bestaande dagtotalen voor dezelfde chauffeur/datum.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="card--luxe p-5 space-y-4">
       <p className="text-sm text-muted-foreground">

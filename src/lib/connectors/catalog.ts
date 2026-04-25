@@ -127,6 +127,31 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     mappingKeys: [],
     setupHint: "Deze connector is in voorbereiding.",
   },
+  {
+    slug: "nostradamus",
+    name: "Nostradamus",
+    description: "Gewerkte uren per chauffeur importeren uit Nostradamus tijdregistratie.",
+    category: "telematica",
+    status: "beta",
+    brandColor: "164A7A",
+    brandInitial: "No",
+    authType: "api_key",
+    supportedEvents: [],
+    mappingKeys: [
+      { key: "response_array_path", label: "Array-pad in response", placeholder: "data.records" },
+      { key: "personnel_number_field", label: "Veld personeelsnummer", placeholder: "employeeNumber" },
+      { key: "work_date_field", label: "Veld werkdatum", placeholder: "date" },
+      { key: "hours_field", label: "Veld uren", placeholder: "workedHours" },
+      { key: "details_path", label: "Pad details-tab", placeholder: "details" },
+      { key: "contract_path", label: "Pad contract-tab", placeholder: "contract" },
+      { key: "hours_path", label: "Pad uren-tab", placeholder: "hours" },
+      { key: "leave_path", label: "Pad verlof-tab", placeholder: "leave" },
+      { key: "sickness_path", label: "Pad ziekte-tab", placeholder: "sickness" },
+      { key: "files_path", label: "Pad bestanden-tab", placeholder: "files" },
+    ],
+    setupHint:
+      "Vul de API-basis-URL, endpoint-pad en token in. Mapping gebruikt het personeelsnummer op de chauffeurkaart om Nostradamus-records te koppelen.",
+  },
 ];
 
 export function findConnector(slug: string): ConnectorDefinition | undefined {

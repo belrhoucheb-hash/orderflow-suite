@@ -70,14 +70,15 @@ export async function loadConfig(
   tenantId: string,
   provider: string,
 ): Promise<ConnectorConfig> {
-  const { data: cred, error: credErr } = await supabase
-    .from("integration_credentials")
-    .select("credentials, enabled")
-    .eq("tenant_id", tenantId)
-    .eq("provider", provider)
-    .maybeSingle();
+  const { data, error: credErr } = await supabase.rpc("get_integration_credentials_runtime", {
+    p_tenant_id: tenantId,
+    p_provider: provider,
+  });
 
   if (credErr) throw new Error(`credentials lookup failed: ${credErr.message}`);
+  const cred = (Array.isArray(data) ? data[0] : data) as
+    | { credentials?: Record<string, unknown>; enabled?: boolean }
+    | null;
   if (!cred) throw new Error(`provider ${provider} niet geconfigureerd voor tenant`);
   if (!cred.enabled) throw new Error(`provider ${provider} staat uit voor tenant`);
 

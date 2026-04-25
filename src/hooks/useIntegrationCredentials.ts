@@ -6,7 +6,8 @@ export type IntegrationProvider =
   | "snelstart"
   | "exact_online"
   | "twinfield"
-  | "samsara";
+  | "samsara"
+  | "nostradamus";
 
 export interface IntegrationCredentialRow<T = Record<string, unknown>> {
   enabled: boolean;
@@ -23,17 +24,15 @@ export function useIntegrationCredentials<T = Record<string, unknown>>(
     enabled: !!tenant?.id,
     staleTime: 60_000,
     queryFn: async (): Promise<IntegrationCredentialRow<T>> => {
-      const { data, error } = await supabase
-        .from("integration_credentials" as any)
-        .select("enabled, credentials")
-        .eq("tenant_id", tenant!.id)
-        .eq("provider", provider)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("get_integration_credentials_ui" as any, {
+        p_provider: provider,
+      });
 
       if (error) throw error;
+      const row = (Array.isArray(data) ? data[0] : data) as any;
       return {
-        enabled: (data as any)?.enabled ?? false,
-        credentials: ((data as any)?.credentials ?? {}) as T,
+        enabled: row?.enabled ?? false,
+        credentials: (row?.credentials ?? {}) as T,
       };
     },
   });
@@ -49,18 +48,11 @@ export function useSaveIntegrationCredentials<T = Record<string, unknown>>(
     mutationFn: async (input: { enabled: boolean; credentials: T }) => {
       if (!tenant?.id) throw new Error("Geen tenant gevonden");
 
-      const { error } = await supabase
-        .from("integration_credentials" as any)
-        .upsert(
-          {
-            tenant_id: tenant.id,
-            provider,
-            enabled: input.enabled,
-            credentials: input.credentials as unknown as Record<string, unknown>,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "tenant_id,provider" },
-        );
+      const { error } = await supabase.rpc("save_integration_credentials_secure" as any, {
+        p_provider: provider,
+        p_enabled: input.enabled,
+        p_credentials: input.credentials as unknown as Record<string, unknown>,
+      });
 
       if (error) throw error;
     },

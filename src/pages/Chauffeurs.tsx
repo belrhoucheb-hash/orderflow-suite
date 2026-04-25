@@ -74,6 +74,7 @@ import { QueryError } from "@/components/QueryError";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { useDrivers, type Driver } from "@/hooks/useDrivers";
 import { useDriverCertifications } from "@/hooks/useDriverCertifications";
+import { useDriverExternalHoursThisWeek } from "@/hooks/useDriverExternalHours";
 import { useFleetVehicles } from "@/hooks/useFleet";
 import { NewDriverDialog } from "@/components/drivers/NewDriverDialog";
 import { DriverCertificationsSection } from "@/components/drivers/DriverCertificationsSection";
@@ -181,6 +182,7 @@ export default function Chauffeurs() {
   } = useDrivers();
   const { data: certifications = [] } = useDriverCertifications();
   const { data: vehicles = [] } = useFleetVehicles();
+  const { hoursByDriver: actualHoursByDriver } = useDriverExternalHoursThisWeek();
 
   const [search, setSearch] = useState("");
 
@@ -1226,6 +1228,7 @@ export default function Chauffeurs() {
                 drivers={filtered}
                 vehicleMap={vehicleMap}
                 certLabels={certLabels}
+                actualHoursByDriver={actualHoursByDriver}
                 sortConfig={sortConfig}
                 onSort={handleSort}
                 onEdit={handleEdit}
@@ -1240,6 +1243,7 @@ export default function Chauffeurs() {
               <CompactList
                 drivers={filtered}
                 vehicleMap={vehicleMap}
+                actualHoursByDriver={actualHoursByDriver}
                 onEdit={handleEdit}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelection}
@@ -1263,6 +1267,7 @@ export default function Chauffeurs() {
                         driver={d}
                         vehicleMap={vehicleMap}
                         certLabels={certLabels}
+                        actualHours={actualHoursByDriver.get(d.id) ?? null}
                         onEdit={() => handleEdit(d)}
                         onArchive={() => setPendingAction({ driver: d, action: "archive" })}
                         onReactivate={() => handleReactivate(d)}
@@ -1501,6 +1506,7 @@ interface DriverCardProps {
   driver: Driver;
   vehicleMap: Record<string, { name: string; plate: string }>;
   certLabels: Record<string, string>;
+  actualHours: number | null;
   onEdit: () => void;
   onArchive: () => void;
   onReactivate: () => void;
@@ -1514,6 +1520,7 @@ function DriverCard({
   driver: d,
   vehicleMap,
   certLabels,
+  actualHours,
   onEdit,
   onArchive,
   onReactivate,
@@ -1690,6 +1697,13 @@ function DriverCard({
           )}
         </div>
 
+        <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.18)] px-3 py-2 text-xs">
+          <span className="text-muted-foreground">Nostradamus deze week</span>
+          <span className="font-semibold tabular-nums text-foreground">
+            {actualHours == null ? "Nog geen import" : `${actualHours.toFixed(1)} u`}
+          </span>
+        </div>
+
         <div className="flex flex-wrap gap-1.5 min-h-[1.5rem]">
           {d.certifications.length > 0 ? (
             d.certifications.map((cert) => (
@@ -1745,12 +1759,14 @@ function DriverCard({
 function CompactList({
   drivers,
   vehicleMap,
+  actualHoursByDriver,
   onEdit,
   selectedIds,
   onToggleSelect,
 }: {
   drivers: Driver[];
   vehicleMap: Record<string, { name: string; plate: string }>;
+  actualHoursByDriver: Map<string, number>;
   onEdit: (d: Driver) => void;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -1763,6 +1779,7 @@ function CompactList({
           const vehicle = d.current_vehicle_id ? vehicleMap[d.current_vehicle_id] : null;
           const expiry = nextExpiry(d);
           const archived = isArchived(d);
+          const actualHours = actualHoursByDriver.get(d.id);
           return (
             <li
               key={d.id}
@@ -1796,6 +1813,9 @@ function CompactList({
                 >
                   {statusCfg.label}
                 </span>
+                <span className="text-[10px] tabular-nums text-muted-foreground">
+                  {actualHours == null ? "geen import" : `${actualHours.toFixed(1)}u`}
+                </span>
               </div>
               <span className="text-xs text-muted-foreground font-mono tabular-nums w-[90px] text-right">
                 {vehicle ? vehicle.plate : "—"}
@@ -1824,6 +1844,7 @@ function DriversTable({
   drivers,
   vehicleMap,
   certLabels,
+  actualHoursByDriver,
   sortConfig,
   onSort,
   onEdit,
@@ -1837,6 +1858,7 @@ function DriversTable({
   drivers: Driver[];
   vehicleMap: Record<string, { name: string; plate: string }>;
   certLabels: Record<string, string>;
+  actualHoursByDriver: Map<string, number>;
   sortConfig: SortConfig | null;
   onSort: (field: string) => void;
   onEdit: (d: Driver) => void;
@@ -1897,6 +1919,7 @@ function DriversTable({
               const vehicle = d.current_vehicle_id ? vehicleMap[d.current_vehicle_id] : null;
               const expiry = nextExpiry(d);
               const archived = isArchived(d);
+              const actualHours = actualHoursByDriver.get(d.id);
               return (
                 <tr
                   key={d.id}
@@ -1951,6 +1974,9 @@ function DriversTable({
                     <span className="tabular-nums text-xs">
                       {d.contract_hours_per_week ?? "—"}
                     </span>
+                    <div className="text-[11px] tabular-nums text-muted-foreground mt-1">
+                      {actualHours == null ? "Nostradamus: —" : `Nostradamus: ${actualHours.toFixed(1)} u`}
+                    </div>
                   </Td>
                   <Td>
                     <div className="flex flex-wrap gap-1 max-w-[160px]">

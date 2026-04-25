@@ -181,6 +181,46 @@ export function useTestConnector(provider: string) {
   });
 }
 
+export function usePullConnector(provider: string) {
+  const { tenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params?: { since?: string | null; until?: string | null }) => {
+      if (!tenant?.id) throw new Error("Geen tenant");
+      const { data, error } = await supabase.functions.invoke(`connector-${provider}`, {
+        body: {
+          action: "pull",
+          tenant_id: tenant.id,
+          since: params?.since ?? null,
+          until: params?.until ?? null,
+        },
+      });
+      if (error) throw error;
+      return data as { ok: boolean; recordsCount?: number; imported?: number; skipped?: number; message?: string; error?: string };
+    },
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success(res.message ?? "Gegevens opgehaald");
+        qc.invalidateQueries({ queryKey: ["connector_sync_log"] });
+        qc.invalidateQueries({ queryKey: ["drivers"] });
+        qc.invalidateQueries({ queryKey: ["driver_actual_hours_per_week"] });
+        qc.invalidateQueries({ queryKey: ["driver_availability_range"] });
+        qc.invalidateQueries({ queryKey: ["driver_availability"] });
+        qc.invalidateQueries({ queryKey: ["driver_personnel_card"] });
+      } else {
+        toast.error("Ophalen mislukt", {
+          description: res.error ?? res.message ?? "Onbekende fout",
+        });
+      }
+    },
+    onError: (err) => {
+      toast.error("Pull mislukt", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+}
+
 // ─── OAuth-flow start (Exact) ───────────────────────────────────────
 
 export function buildExactOAuthUrl(tenantId: string): string | null {
