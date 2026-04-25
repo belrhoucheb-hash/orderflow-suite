@@ -12,3 +12,22 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npx tsc --noEmit
       - run: npx vitest run
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Secret-leak scan op edge functions
+        run: npm run check:secret-leaks
+      - name: Security-suite (HMAC, token-format, tenant-scoping)
+        run: npx vitest run src/__tests__/security
+      - name: npm audit (high+critical)
+        # Niet-blokkerend voor merges. Inspecteer rapport in CI-log.
+        # Zet continue-on-error op false zodra de baseline schoon is.
+        continue-on-error: true
+        run: npm audit --audit-level=high --omit=dev

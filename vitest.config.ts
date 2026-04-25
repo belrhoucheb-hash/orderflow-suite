@@ -9,6 +9,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    benchmark: {
+      include: ["src/**/*.bench.{ts,tsx}"],
+    },
     // Stub-env zodat Supabase client module-load slaagt op CI (zonder .env).
     // Hooks die echt de client aanroepen moeten supabase mocken per testfile.
     env: {
