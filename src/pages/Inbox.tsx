@@ -162,7 +162,7 @@ export default function Inbox() {
         <ResizablePanel defaultSize={22} minSize={15} maxSize={35}>
           <div className="flex flex-col h-full bg-white" style={{ minWidth: 0, overflow: "hidden" }}>
             <div
-              className="h-14 px-4 flex items-baseline justify-between gap-2 border-b shrink-0"
+              className="min-h-14 px-4 py-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b shrink-0"
               style={{ borderColor: "hsl(var(--gold) / 0.1)", background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.08), hsl(var(--card)))" }}
             >
               <h3
@@ -172,7 +172,7 @@ export default function Inbox() {
                 Inbox
               </h3>
               <p
-                className="text-[11px] tabular-nums text-muted-foreground"
+                className="text-[11px] tabular-nums text-muted-foreground min-w-0"
                 style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "0.01em" }}
               >
                 <strong className="text-foreground font-semibold">{drafts.length}</strong>
@@ -205,7 +205,7 @@ export default function Inbox() {
               </div>
             )}
             <div className="space-y-3 p-3">
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(116px,1fr))] gap-2">
                 {[
                   {
                     key: "actie",
@@ -248,14 +248,14 @@ export default function Inbox() {
                     key={item.key}
                     onClick={() => setSidebarFilter(item.key as typeof sidebarFilter)}
                     className={cn(
-                      "rounded-2xl border px-3 py-2.5 text-left transition-all",
+                      "min-w-0 rounded-2xl border px-3 py-2.5 text-left transition-all",
                       item.tone,
                       item.active ? "ring-1 ring-[hsl(var(--gold)/0.22)] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.08)]" : "hover:border-[hsl(var(--gold)/0.16)]",
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[11px] font-semibold tracking-[0.01em]">{item.label}</p>
+                        <p className="text-[11px] font-semibold leading-snug tracking-[0.01em]">{item.label}</p>
                         <p className="mt-0.5 text-[10px] opacity-70">{item.helper}</p>
                       </div>
                       <item.icon className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-55" />
@@ -274,11 +274,11 @@ export default function Inbox() {
                 />
               </div>
               {/* Filter dropdowns */}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <select
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="h-8 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
+                  className="h-8 min-w-0 flex-1 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
                 >
                   <option value="">Datum</option>
                   <option value="today">Vandaag</option>
@@ -288,7 +288,7 @@ export default function Inbox() {
                 <select
                   value={filterClient}
                   onChange={(e) => setFilterClient(e.target.value)}
-                  className="h-8 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
+                  className="h-8 min-w-0 flex-1 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
                 >
                   <option value="">Klant</option>
                   {[...new Set(drafts.map((d) => d.client_name).filter(Boolean))].map((name) => (
@@ -300,7 +300,7 @@ export default function Inbox() {
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
-                  className="h-8 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
+                  className="h-8 min-w-0 flex-1 rounded-lg border border-[hsl(var(--gold)/0.1)] bg-white px-2.5 text-xs text-muted-foreground focus:border-[hsl(var(--gold)/0.18)] focus:ring-1 focus:ring-[hsl(var(--gold)/0.18)]"
                 >
                   <option value="">Type</option>
                   <option value="new">Nieuw</option>
