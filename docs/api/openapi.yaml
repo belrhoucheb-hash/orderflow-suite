@@ -1,0 +1,325 @@
+openapi: 3.0.3
+info:
+  title: OrderFlow Suite REST API
+  version: "1.0.0"
+  description: |
+    Publieke REST API van OrderFlow. Read-only voor orders, ritten, facturen en klanten,
+    plus POST voor orders. Bearer-token authenticatie, rate-limited op 300 requests per
+    minuut per token.
+servers:
+  - url: https://{project}.functions.supabase.co/api-v1
+    variables:
+      project:
+        default: your-project
+        description: Supabase project-reference
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: OrderFlow token (ofs_...)
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, default: 0, minimum: 0 }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }
+    Pagination:
+      type: object
+      properties:
+        limit: { type: integer }
+        offset: { type: integer }
+        total: { type: integer }
+    Order:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        order_number: { oneOf: [{ type: integer }, { type: string }] }
+        status: { type: string }
+        client_name: { type: string, nullable: true }
+        client_id: { type: string, format: uuid, nullable: true }
+        pickup_address: { type: string, nullable: true }
+        delivery_address: { type: string, nullable: true }
+        delivery_date: { type: string, format: date, nullable: true }
+        weight_kg: { type: number, nullable: true }
+        quantity: { type: integer, nullable: true }
+        unit: { type: string, nullable: true }
+        transport_type: { type: string, nullable: true }
+        reference: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time, nullable: true }
+    OrderCreate:
+      type: object
+      description: |
+        Velden voor POST /orders. Bij klant-tokens wordt client_id overschreven
+        met de client_id van de token.
+      properties:
+        client_name: { type: string }
+        client_id: { type: string, format: uuid }
+        pickup_address: { type: string }
+        delivery_address: { type: string }
+        delivery_date: { type: string, format: date }
+        transport_type: { type: string }
+        weight_kg: { type: number }
+        quantity: { type: integer }
+        unit: { type: string }
+        reference: { type: string }
+        notes: { type: string }
+    Trip:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        trip_number: { oneOf: [{ type: integer }, { type: string }] }
+        status: { type: string }
+        dispatch_status: { type: string, nullable: true }
+        planned_date: { type: string, format: date, nullable: true }
+        driver_id: { type: string, format: uuid, nullable: true }
+        vehicle_id: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+    Invoice:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        invoice_number: { type: string }
+        status: { type: string }
+        client_id: { type: string, format: uuid, nullable: true }
+        client_name: { type: string, nullable: true }
+        invoice_date: { type: string, format: date, nullable: true }
+        due_date: { type: string, format: date, nullable: true }
+        subtotal: { type: number }
+        btw_amount: { type: number }
+        btw_percentage: { type: number, nullable: true }
+        total: { type: number }
+        created_at: { type: string, format: date-time }
+    Client:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        kvk_number: { type: string, nullable: true }
+        btw_number: { type: string, nullable: true }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+  responses:
+    Unauthorized:
+      description: Ongeldige of ontbrekende token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Token mist benodigde scope
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource niet gevonden
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Te veel requests
+      headers:
+        X-RateLimit-Limit: { schema: { type: integer } }
+        X-RateLimit-Remaining: { schema: { type: integer } }
+        X-RateLimit-Reset: { schema: { type: string, format: date-time } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+paths:
+  /orders:
+    get:
+      summary: Lijst orders
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Order" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      summary: Maak een order aan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderCreate" }
+      responses:
+        "201":
+          description: Aangemaakt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Order" }
+        "400":
+          description: Ongeldige input
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /orders/{id}:
+    get:
+      summary: Haal een order op
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Order" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /trips:
+    get:
+      summary: Lijst ritten (alleen tenant-tokens)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Trip" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /trips/{id}:
+    get:
+      summary: Haal een rit op (alleen tenant-tokens)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Trip" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /invoices:
+    get:
+      summary: Lijst facturen
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Invoice" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+  /invoices/{id}:
+    get:
+      summary: Haal een factuur op
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Invoice" }
+  /clients:
+    get:
+      summary: Lijst klanten (klant-token ziet alleen zichzelf)
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Client" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+  /clients/{id}:
+    get:
+      summary: Haal een klant op
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Client" }
