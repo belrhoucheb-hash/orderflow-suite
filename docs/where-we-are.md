@@ -2,7 +2,7 @@
 
 **Bestand-doel**: aan het begin van elke sessie weet Claude waar we zijn gebleven, en aan het einde van elke sessie wordt dit bestand bijgewerkt zodat de volgende sessie ook weet waar we staan. Bron van waarheid voor harde feiten blijft `git log` en het Supabase-dashboard; dit bestand vult de zachte context aan (waarom, blokkers, openstaande beslissingen).
 
-**Laatste update**: 2026-04-25 (sprint-8 ETA-engine herbouwd in deze tak, cron-config wacht op Supabase Vault)
+**Laatste update**: 2026-04-29 (Snelstart-werking in prod verhelderd; legacy pad werkt, nieuwe pad is dood-code tot deploy + design-fix)
 
 ---
 
@@ -53,7 +53,14 @@
 
 ## Recente sessies-samenvatting
 
-### 2026-04-25 (deze sessie)
+### 2026-04-29 (Snelstart-werking-analyse)
+
+- **Verheldering Snelstart-pad in prod**: configureren én auto-boeken werkt al in prod via legacy edge function `snelstart-sync`, aangeroepen vanuit `src/hooks/useInvoices.ts:430` zodra een factuur op `verzonden` gaat. Dit pad is onafhankelijk van het nieuwe connector-platform en heeft geen DB-webhook of dispatcher nodig.
+- Het nieuwe connector-platform (sprint 8) is parallel gebouwd en gemerged maar **dood-code in prod tot deploy**. Test-verbinding-knop, sync-log en mapping-tab in de nieuwe Settings > Integraties UI zijn cosmetisch tot `connector-snelstart` is deployed.
+- **Risico bij volledige deploy** zonder design-fix: het nieuwe pad neemt het over via `connector-dispatcher`, maar die dispatcher hangt aan `webhook_deliveries` die alleen vult bij klant-subscriptions. Zonder klant-subscription op `invoice.sent` zou Snelstart-push stoppen na deploy. Voorgestelde fix (optie 1, dispatcher rechtstreeks aanroepen vanuit pipeline-trigger) staat klaar in "Bekende issues" maar wacht op gebruikers-akkoord.
+- Twee paden voor de gebruiker geïdentificeerd: (a) niets deployen, legacy snelstart-sync blijft werken; (b) volledige deploy + design-fix (optie 1) doorvoeren zodat het nieuwe pad de legacy zonder breuk vervangt.
+
+### 2026-04-25 (sprint-8 ETA-engine herbouwd)
 
 - Sprint-8 ETA-engine herbouwd op deze tak (begin-sessie was sprint-8 nog niet aanwezig in tree, in tegenstelling tot wat where-we-are eerder suggereerde): migratie `20260428000000_predicted_eta.sql`, edge function `eta-watcher` (index.ts + eta.ts), `EtaNotificationSettings.tsx` settings-tab, ETA-badge in Dispatch, "Voorspelde vertraging"-categorie in Exceptions, marker-popup leest predicted_eta. 27 vitest-tests groen, typecheck en build groen.
 - Een productiebug gevonden en gefixt tijdens review: `>` → `>=` op de PREDICTED_DELAY-boundary in `eta-watcher/index.ts:425`, consistent met LEAD/UPDATE-drempels.
@@ -73,10 +80,11 @@
 
 ## Volgende concrete stap
 
-1. Gebruiker doet de 7 deploy-acties hierboven.
-2. Gebruiker rapporteert wat zichtbaar wordt in productie (Settings > Integraties moet zes connector-tiles tonen, Snelstart/Exact klikbaar met gekleurde brand-tile).
-3. Beslissen of we de connector-trigger design-fix (optie 1) doorvoeren, of dat we accepteren dat klant-subscription-aanmaak een vereiste is.
-4. Eventueel sprint 9: full CRUD op orders, of de eerste extra connector (Twinfield).
+1. **Beslissen pad voor Snelstart**: blijven op legacy `snelstart-sync` (geen actie nodig) of overstappen naar nieuw connector-platform pad (vereist deploy + design-fix optie 1).
+2. Bij keuze (b): design-fix optie 1 doorvoeren (`connector-dispatcher` rechtstreeks aanroepen vanuit `pipeline-trigger` en `financial-trigger`, los van klant-outbox), dan deploy van migraties + edge functions + DB-webhook + cron.
+3. Gebruiker doet de 7 deploy-acties uit "Openstaande deploy-acties" hierboven.
+4. Gebruiker rapporteert wat zichtbaar wordt in productie (Settings > Integraties moet zes connector-tiles tonen, Snelstart/Exact klikbaar met gekleurde brand-tile).
+5. Eventueel sprint 9: full CRUD op orders, of de eerste extra connector (Twinfield).
 
 ---
 
