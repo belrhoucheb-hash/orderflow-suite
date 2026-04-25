@@ -72,9 +72,7 @@ function ConnectorCard({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="h-10 w-10 rounded-md bg-muted/30 border border-border flex items-center justify-center text-xs text-muted-foreground">
-          {connector.name.slice(0, 2).toUpperCase()}
-        </div>
+        <BrandTile connector={connector} />
         <StatusBadge connector={connector} live={isLive} />
       </div>
       <h4 className="mt-3 text-base font-semibold text-foreground">{connector.name}</h4>
@@ -89,6 +87,28 @@ function ConnectorCard({
         </div>
       )}
     </button>
+  );
+}
+
+function BrandTile({ connector }: { connector: ConnectorWithStatus }) {
+  if (connector.logoUrl) {
+    return (
+      <div
+        className="h-10 w-10 rounded-md bg-white border border-border flex items-center justify-center overflow-hidden"
+        aria-hidden="true"
+      >
+        <img src={connector.logoUrl} alt="" className="h-7 w-7 object-contain" />
+      </div>
+    );
+  }
+  return (
+    <div
+      className="h-10 w-10 rounded-md flex items-center justify-center text-white text-[12px] font-semibold tracking-tight shadow-sm"
+      style={{ backgroundColor: `#${connector.brandColor}` }}
+      aria-hidden="true"
+    >
+      {connector.brandInitial}
+    </div>
   );
 }
 

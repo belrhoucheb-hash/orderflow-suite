@@ -21,8 +21,12 @@ export interface ConnectorDefinition {
   description: string;
   category: ConnectorCategory;
   status: ConnectorStatus;
-  /** Pad naar logo (publieke URL of /logos/...). */
-  logoUrl: string;
+  /** Optioneel pad of URL naar officieel logo. Leeg = brand-tile fallback. */
+  logoUrl?: string;
+  /** Hex-kleur voor de brand-tile fallback (zonder #). */
+  brandColor: string;
+  /** Korte tekst (1-3 chars) op de brand-tile. */
+  brandInitial: string;
   authType: ConnectorAuthType;
   /** Webhook-events waar deze connector op kan reageren bij push. */
   supportedEvents: string[];
@@ -39,7 +43,8 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     description: "Boek facturen automatisch in als verkoopboeking in je Snelstart-administratie.",
     category: "boekhouding",
     status: "live",
-    logoUrl: "/logos/snelstart.svg",
+    brandColor: "E63312",
+    brandInitial: "S",
     authType: "client_credentials",
     supportedEvents: ["invoice.sent"],
     mappingKeys: [
@@ -57,7 +62,8 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     description: "OAuth2-koppeling met Exact Online voor verkoopboekingen en debiteurenstatus.",
     category: "boekhouding",
     status: "live",
-    logoUrl: "/logos/exact.svg",
+    brandColor: "ED1C24",
+    brandInitial: "E",
     authType: "oauth2",
     supportedEvents: ["invoice.sent"],
     mappingKeys: [
@@ -75,7 +81,8 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     description: "Verkoopboekingen exporteren naar Twinfield (binnenkort beschikbaar).",
     category: "boekhouding",
     status: "soon",
-    logoUrl: "/logos/twinfield.svg",
+    brandColor: "0066B3",
+    brandInitial: "Tw",
     authType: "oauth2",
     supportedEvents: ["invoice.sent"],
     mappingKeys: [],
@@ -87,7 +94,8 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     description: "AFAS Profit-koppeling voor financiële sync (binnenkort).",
     category: "boekhouding",
     status: "soon",
-    logoUrl: "/logos/afas.svg",
+    brandColor: "00529F",
+    brandInitial: "AF",
     authType: "api_key",
     supportedEvents: ["invoice.sent"],
     mappingKeys: [],
@@ -99,7 +107,8 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     description: "Voertuigposities en ritregistratie ophalen uit Webfleet.",
     category: "telematica",
     status: "soon",
-    logoUrl: "/logos/webfleet.svg",
+    brandColor: "E2231A",
+    brandInitial: "Wf",
     authType: "api_key",
     supportedEvents: [],
     mappingKeys: [],
@@ -111,7 +120,8 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     description: "Voertuigposities, kilometerstanden en chauffeur-uren uit Samsara.",
     category: "telematica",
     status: "soon",
-    logoUrl: "/logos/samsara.svg",
+    brandColor: "1F2D55",
+    brandInitial: "Sa",
     authType: "api_key",
     supportedEvents: [],
     mappingKeys: [],
