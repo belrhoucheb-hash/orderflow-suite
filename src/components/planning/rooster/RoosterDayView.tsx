@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Printer, Settings2, Trash2 } from "lucide-react";
+import { Eye, Printer, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,10 +21,8 @@ import {
 } from "@/components/ui/table";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
@@ -48,8 +46,6 @@ import { RoosterConflictBanner } from "./RoosterConflictBanner";
 
 // Radix Select staat geen lege string toe als item-value, dus sentinel.
 const NONE = "__none__";
-
-const SHOW_END_TIME_LS_KEY = "rooster-day-show-end-time";
 
 // Gedeelde luxe-stijlen voor SelectTrigger en time/text Inputs binnen de tabel.
 // Gold-tint border, subtiele gradient, font-display voor consistentie met
@@ -99,25 +95,6 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
 
   // Filter-toggle: ook chauffeurs zonder rooster-rij tonen?
   const [showUnplanned, setShowUnplanned] = useState(false);
-
-  // Eind-kolom is opt-in en persist in localStorage.
-  const [showEndTime, setShowEndTime] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.localStorage.getItem(SHOW_END_TIME_LS_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(SHOW_END_TIME_LS_KEY, String(showEndTime));
-    } catch {
-      // Stil falen, localStorage kan geblokkeerd zijn.
-    }
-  }, [showEndTime]);
 
   // Debounce-timers per driver_id voor field-level updates
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -375,30 +352,6 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
               <button
                 type="button"
                 className="btn-luxe"
-                title="Weergave-opties"
-              >
-                <Settings2 className="h-4 w-4" />
-                Weergave
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel className="text-xs">
-                Kolommen
-              </DropdownMenuLabel>
-              <DropdownMenuCheckboxItem
-                checked={showEndTime}
-                onCheckedChange={(v) => setShowEndTime(v === true)}
-              >
-                Toon eindtijd
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="btn-luxe"
                 disabled={loading || schedules.length === 0}
               >
                 <Printer className="h-4 w-4" />
@@ -461,14 +414,6 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                   >
                     Start
                   </TableHead>
-                  {showEndTime && (
-                    <TableHead
-                      className="w-[110px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
-                      style={LUXE_DISPLAY_STYLE}
-                    >
-                      Eind
-                    </TableHead>
-                  )}
                   <TableHead
                     className="w-[160px] text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
                     style={LUXE_DISPLAY_STYLE}
@@ -501,7 +446,6 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                     driver.id,
                   );
                   const startPlaceholder = template?.default_start_time ?? "";
-                  const endPlaceholder = template?.default_end_time ?? "";
                   const working = effective.status === "werkt";
                   const dimmed = !working && !isEmpty;
 
@@ -594,31 +538,6 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                           </span>
                         )}
                       </TableCell>
-
-                      {showEndTime && (
-                        <TableCell>
-                          {working ? (
-                            <Input
-                              type="time"
-                              className={LUXE_TIME_CLASS}
-                              style={LUXE_TIME_STYLE}
-                              value={effective.end_time ?? ""}
-                              placeholder={endPlaceholder}
-                              onChange={(e) =>
-                                schedulePatch(
-                                  driver.id,
-                                  { end_time: e.target.value || null },
-                                  false,
-                                )
-                              }
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              n.v.t.
-                            </span>
-                          )}
-                        </TableCell>
-                      )}
 
                       <TableCell>
                         {working ? (
@@ -734,7 +653,6 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                 driver.id,
               );
               const startPlaceholder = template?.default_start_time ?? "";
-              const endPlaceholder = template?.default_end_time ?? "";
               const working = effective.status === "werkt";
               const dimmed = !working && !isEmpty;
 
@@ -855,58 +773,27 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                     </div>
 
                     {working && (
-                      <div
-                        className={cn(
-                          "grid gap-2",
-                          showEndTime ? "grid-cols-2" : "grid-cols-1",
-                        )}
-                      >
-                        <div className="flex flex-col gap-1">
-                          <span
-                            className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
-                            style={LUXE_DISPLAY_STYLE}
-                          >
-                            Start
-                          </span>
-                          <Input
-                            type="time"
-                            className={LUXE_TIME_CLASS}
-                            style={LUXE_TIME_STYLE}
-                            value={effective.start_time ?? ""}
-                            placeholder={startPlaceholder}
-                            onChange={(e) =>
-                              schedulePatch(
-                                driver.id,
-                                { start_time: e.target.value || null },
-                                false,
-                              )
-                            }
-                          />
-                        </div>
-                        {showEndTime && (
-                          <div className="flex flex-col gap-1">
-                            <span
-                              className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
-                              style={LUXE_DISPLAY_STYLE}
-                            >
-                              Eind
-                            </span>
-                            <Input
-                              type="time"
-                              className={LUXE_TIME_CLASS}
-                              style={LUXE_TIME_STYLE}
-                              value={effective.end_time ?? ""}
-                              placeholder={endPlaceholder}
-                              onChange={(e) =>
-                                schedulePatch(
-                                  driver.id,
-                                  { end_time: e.target.value || null },
-                                  false,
-                                )
-                              }
-                            />
-                          </div>
-                        )}
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[hsl(var(--gold-deep))]"
+                          style={LUXE_DISPLAY_STYLE}
+                        >
+                          Start
+                        </span>
+                        <Input
+                          type="time"
+                          className={LUXE_TIME_CLASS}
+                          style={LUXE_TIME_STYLE}
+                          value={effective.start_time ?? ""}
+                          placeholder={startPlaceholder}
+                          onChange={(e) =>
+                            schedulePatch(
+                              driver.id,
+                              { start_time: e.target.value || null },
+                              false,
+                            )
+                          }
+                        />
                       </div>
                     )}
 
