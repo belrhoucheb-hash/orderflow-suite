@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Printer, Trash2 } from "lucide-react";
+import { Eye, Printer, Settings2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { cn } from "@/lib/utils";
 
 import { useDrivers } from "@/hooks/useDrivers";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
@@ -30,15 +39,17 @@ import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 import {
   DRIVER_SCHEDULE_STATUSES,
   DRIVER_SCHEDULE_STATUS_LABELS,
-  resolveSchedule,
   type DriverSchedule,
   type DriverScheduleStatus,
 } from "@/types/rooster";
 
 import { exportDayRosterPdf } from "./RoosterPdfExport";
+import { RoosterConflictBanner } from "./RoosterConflictBanner";
 
 // Radix Select staat geen lege string toe als item-value, dus sentinel.
 const NONE = "__none__";
+
+const SHOW_END_TIME_LS_KEY = "rooster-day-show-end-time";
 
 interface RoosterDayViewProps {
   date: string;
@@ -69,7 +80,27 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
     deleteSchedule,
   } = useDriverSchedules(date, date);
 
-  const [includeFreeDays, setIncludeFreeDays] = useState(false);
+  // Filter-toggle: ook chauffeurs zonder rooster-rij tonen?
+  const [showUnplanned, setShowUnplanned] = useState(false);
+
+  // Eind-kolom is opt-in en persist in localStorage.
+  const [showEndTime, setShowEndTime] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(SHOW_END_TIME_LS_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(SHOW_END_TIME_LS_KEY, String(showEndTime));
+    } catch {
+      // Stil falen, localStorage kan geblokkeerd zijn.
+    }
+  }, [showEndTime]);
 
   // Debounce-timers per driver_id voor field-level updates
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -93,10 +124,59 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
     return map;
   }, [schedules]);
 
+  const driverNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of drivers) map.set(d.id, d.name);
+    return map;
+  }, [drivers]);
+
+  const vehicleLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of vehicles) {
+      const label = v.plate ? `${v.plate} (${v.code})` : v.code;
+      map.set(v.id, label);
+    }
+    return map;
+  }, [vehicles]);
+
   const activeDrivers = useMemo(
     () => drivers.filter((d) => d.is_active !== false),
     [drivers],
   );
+
+  // Sorteer op rooster-template sort_order, daarna op naam. Chauffeurs zonder
+  // rooster-rij komen onderaan.
+  const sortedDrivers = useMemo(() => {
+    const sortOrderById = new Map<string, number>();
+    for (const t of templates) sortOrderById.set(t.id, t.sort_order ?? 0);
+
+    return [...activeDrivers].sort((a, b) => {
+      const sa = scheduleByDriver.get(a.id);
+      const sb = scheduleByDriver.get(b.id);
+
+      const aHasSchedule = !!sa;
+      const bHasSchedule = !!sb;
+      if (aHasSchedule !== bHasSchedule) {
+        return aHasSchedule ? -1 : 1;
+      }
+
+      const aOrder = sa?.shift_template_id
+        ? sortOrderById.get(sa.shift_template_id) ?? Number.MAX_SAFE_INTEGER
+        : Number.MAX_SAFE_INTEGER;
+      const bOrder = sb?.shift_template_id
+        ? sortOrderById.get(sb.shift_template_id) ?? Number.MAX_SAFE_INTEGER
+        : Number.MAX_SAFE_INTEGER;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+
+      return a.name.localeCompare(b.name, "nl");
+    });
+  }, [activeDrivers, scheduleByDriver, templates]);
+
+  // Filter op zichtbare rijen: standaard alleen chauffeurs met een rij.
+  const visibleDrivers = useMemo(() => {
+    if (showUnplanned) return sortedDrivers;
+    return sortedDrivers.filter((d) => scheduleByDriver.has(d.id));
+  }, [sortedDrivers, scheduleByDriver, showUnplanned]);
 
   const runUpsert = useCallback(
     (driverId: string, patch: Patch) => {
@@ -193,43 +273,133 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
     [deleteSchedule, scheduleByDriver],
   );
 
-  const handlePrint = useCallback(async () => {
-    try {
-      await exportDayRosterPdf(date, schedules, drivers, vehicles, templates, {
-        includeFreeDays,
-      });
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Kon PDF niet genereren.";
-      toast.error("PDF mislukt", { description: msg });
-    }
-  }, [date, schedules, drivers, vehicles, templates, includeFreeDays]);
+  const handlePrint = useCallback(
+    async (includeFreeDays: boolean) => {
+      try {
+        await exportDayRosterPdf(date, schedules, drivers, vehicles, templates, {
+          includeFreeDays,
+        });
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Kon PDF niet genereren.";
+        toast.error("PDF mislukt", { description: msg });
+      }
+    },
+    [date, schedules, drivers, vehicles, templates],
+  );
 
   const loading =
     driversLoading || templatesLoading || vehiclesLoading || schedulesLoading;
 
+  // Helper: bouwt de "effective" view-state per chauffeur (DB + lokale patch).
+  const computeEffective = useCallback(
+    (driverId: string) => {
+      const dbSchedule = scheduleByDriver.get(driverId);
+      const patch = localPatches[driverId] ?? {};
+
+      const effective = {
+        shift_template_id:
+          "shift_template_id" in patch
+            ? (patch.shift_template_id ?? null)
+            : dbSchedule?.shift_template_id ?? null,
+        start_time:
+          "start_time" in patch
+            ? (patch.start_time ?? null)
+            : dbSchedule?.start_time ?? null,
+        end_time:
+          "end_time" in patch
+            ? (patch.end_time ?? null)
+            : dbSchedule?.end_time ?? null,
+        vehicle_id:
+          "vehicle_id" in patch
+            ? (patch.vehicle_id ?? null)
+            : dbSchedule?.vehicle_id ?? null,
+        status: (patch.status ??
+          dbSchedule?.status ??
+          "werkt") as DriverScheduleStatus,
+        notitie:
+          "notitie" in patch
+            ? (patch.notitie ?? null)
+            : dbSchedule?.notitie ?? null,
+      };
+
+      const template = effective.shift_template_id
+        ? templates.find((t) => t.id === effective.shift_template_id) ?? null
+        : null;
+
+      const isEmpty = !dbSchedule && Object.keys(patch).length === 0;
+
+      return { dbSchedule, effective, template, isEmpty };
+    },
+    [scheduleByDriver, localPatches, templates],
+  );
+
   return (
     <div className="flex flex-col gap-3">
+      <RoosterConflictBanner
+        schedules={schedules}
+        date={date}
+        driverNames={driverNames}
+        vehicleLabels={vehicleLabels}
+      />
+
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-            <Checkbox
-              checked={includeFreeDays}
-              onCheckedChange={(v) => setIncludeFreeDays(v === true)}
-            />
-            Toon vrije dagen in PDF
-          </label>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+          <Switch
+            checked={showUnplanned}
+            onCheckedChange={setShowUnplanned}
+          />
+          Toon ook niet-geplande chauffeurs
+        </label>
+
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                title="Weergave-opties"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                Weergave
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="text-xs">
+                Kolommen
+              </DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={showEndTime}
+                onCheckedChange={(v) => setShowEndTime(v === true)}
+              >
+                Toon eindtijd
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={loading || schedules.length === 0}
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Print rooster
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handlePrint(false)}>
+                Print rooster (alleen werkende chauffeurs)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handlePrint(true)}>
+                Print volledig rooster (incl. vrij/ziek)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          onClick={handlePrint}
-          disabled={loading || schedules.length === 0}
-        >
-          <Printer className="h-3.5 w-3.5" />
-          Print rooster
-        </Button>
       </div>
 
       {loading ? (
@@ -238,81 +408,300 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
         <div className="text-sm text-muted-foreground py-6 text-center border rounded-md">
           Geen actieve chauffeurs gevonden.
         </div>
+      ) : visibleDrivers.length === 0 ? (
+        <div className="text-sm text-muted-foreground py-6 text-center border rounded-md flex flex-col items-center gap-2">
+          <span>Geen geplande chauffeurs voor deze dag.</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setShowUnplanned(true)}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Toon alle chauffeurs
+          </Button>
+        </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden bg-background">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[180px]">Naam</TableHead>
-                <TableHead className="w-[180px]">Rooster</TableHead>
-                <TableHead className="w-[110px]">Start</TableHead>
-                <TableHead className="w-[110px]">Eind</TableHead>
-                <TableHead className="w-[160px]">Voertuig</TableHead>
-                <TableHead className="w-[140px]">Status</TableHead>
-                <TableHead>Notitie</TableHead>
-                <TableHead className="w-[60px] text-right">Actie</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {activeDrivers.map((driver) => {
-                const dbSchedule = scheduleByDriver.get(driver.id);
-                const patch = localPatches[driver.id] ?? {};
+        <>
+          {/* Tabel-view (sm en hoger) */}
+          <div className="hidden sm:block border rounded-lg overflow-hidden bg-background">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[180px]">Naam</TableHead>
+                  <TableHead className="w-[180px]">Rooster</TableHead>
+                  <TableHead className="w-[110px]">Start</TableHead>
+                  {showEndTime && (
+                    <TableHead className="w-[110px]">Eind</TableHead>
+                  )}
+                  <TableHead className="w-[160px]">Voertuig</TableHead>
+                  <TableHead className="w-[140px]">Status</TableHead>
+                  <TableHead>Notitie</TableHead>
+                  <TableHead className="w-[60px] text-right">Actie</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleDrivers.map((driver) => {
+                  const { effective, template, isEmpty } = computeEffective(
+                    driver.id,
+                  );
+                  const startPlaceholder = template?.default_start_time ?? "";
+                  const endPlaceholder = template?.default_end_time ?? "";
+                  const working = effective.status === "werkt";
+                  const dimmed = !working && !isEmpty;
 
-                // Merge DB + lokale patch voor weergave.
-                const effective = {
-                  shift_template_id:
-                    "shift_template_id" in patch
-                      ? (patch.shift_template_id ?? null)
-                      : dbSchedule?.shift_template_id ?? null,
-                  start_time:
-                    "start_time" in patch
-                      ? (patch.start_time ?? null)
-                      : dbSchedule?.start_time ?? null,
-                  end_time:
-                    "end_time" in patch
-                      ? (patch.end_time ?? null)
-                      : dbSchedule?.end_time ?? null,
-                  vehicle_id:
-                    "vehicle_id" in patch
-                      ? (patch.vehicle_id ?? null)
-                      : dbSchedule?.vehicle_id ?? null,
-                  status: (patch.status ??
-                    dbSchedule?.status ??
-                    "werkt") as DriverScheduleStatus,
-                  notitie:
-                    "notitie" in patch
-                      ? (patch.notitie ?? null)
-                      : dbSchedule?.notitie ?? null,
-                };
+                  return (
+                    <TableRow
+                      key={driver.id}
+                      className={cn(dimmed && "text-muted-foreground")}
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {template && (
+                            <span
+                              aria-hidden="true"
+                              className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: template.color }}
+                            />
+                          )}
+                          <span className="truncate">{driver.name}</span>
+                        </div>
+                      </TableCell>
 
-                const template = effective.shift_template_id
-                  ? templates.find((t) => t.id === effective.shift_template_id) ??
-                    null
-                  : null;
+                      <TableCell>
+                        <Select
+                          value={effective.shift_template_id ?? NONE}
+                          onValueChange={(v) =>
+                            schedulePatch(
+                              driver.id,
+                              {
+                                shift_template_id: v === NONE ? null : v,
+                              },
+                              false,
+                            )
+                          }
+                        >
+                          <SelectTrigger className="h-9 text-xs">
+                            <SelectValue placeholder="Geen" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NONE} className="text-xs">
+                              Geen rooster
+                            </SelectItem>
+                            {templates.map((t) => (
+                              <SelectItem
+                                key={t.id}
+                                value={t.id}
+                                className="text-xs"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    aria-hidden="true"
+                                    className="inline-block h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: t.color }}
+                                  />
+                                  {t.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
 
-                // Effectieve starttijd: user-value, anders template-default.
-                const startPlaceholder = template?.default_start_time ?? "";
-                const endPlaceholder = template?.default_end_time ?? "";
-
-                const working = effective.status === "werkt";
-                const isEmpty = !dbSchedule && Object.keys(patch).length === 0;
-
-                return (
-                  <TableRow key={driver.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {template && (
-                          <span
-                            aria-hidden="true"
-                            className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                            style={{ backgroundColor: template.color }}
+                      <TableCell>
+                        {working ? (
+                          <Input
+                            type="time"
+                            className="h-9 text-xs"
+                            value={effective.start_time ?? ""}
+                            placeholder={startPlaceholder}
+                            onChange={(e) =>
+                              schedulePatch(
+                                driver.id,
+                                { start_time: e.target.value || null },
+                                false,
+                              )
+                            }
                           />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            n.v.t.
+                          </span>
                         )}
-                        <span className="truncate">{driver.name}</span>
-                      </div>
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell>
+                      {showEndTime && (
+                        <TableCell>
+                          {working ? (
+                            <Input
+                              type="time"
+                              className="h-9 text-xs"
+                              value={effective.end_time ?? ""}
+                              placeholder={endPlaceholder}
+                              onChange={(e) =>
+                                schedulePatch(
+                                  driver.id,
+                                  { end_time: e.target.value || null },
+                                  false,
+                                )
+                              }
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              n.v.t.
+                            </span>
+                          )}
+                        </TableCell>
+                      )}
+
+                      <TableCell>
+                        {working ? (
+                          <Select
+                            value={effective.vehicle_id ?? NONE}
+                            onValueChange={(v) =>
+                              schedulePatch(
+                                driver.id,
+                                { vehicle_id: v === NONE ? null : v },
+                                false,
+                              )
+                            }
+                          >
+                            <SelectTrigger className="h-9 text-xs">
+                              <SelectValue placeholder="Geen" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NONE} className="text-xs">
+                                Geen voertuig
+                              </SelectItem>
+                              {vehicles.map((v) => (
+                                <SelectItem
+                                  key={v.id}
+                                  value={v.id}
+                                  className="text-xs"
+                                >
+                                  {v.code}
+                                  {v.plate ? ` (${v.plate})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            n.v.t.
+                          </span>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        <Select
+                          value={effective.status}
+                          onValueChange={(v) =>
+                            schedulePatch(
+                              driver.id,
+                              { status: v as DriverScheduleStatus },
+                              true,
+                            )
+                          }
+                        >
+                          <SelectTrigger className="h-9 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DRIVER_SCHEDULE_STATUSES.map((s) => (
+                              <SelectItem
+                                key={s}
+                                value={s}
+                                className="text-xs"
+                              >
+                                {DRIVER_SCHEDULE_STATUS_LABELS[s]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+
+                      <TableCell>
+                        <Input
+                          className="h-9 text-xs"
+                          value={effective.notitie ?? ""}
+                          placeholder="Notitie"
+                          onChange={(e) =>
+                            schedulePatch(
+                              driver.id,
+                              { notitie: e.target.value || null },
+                              false,
+                            )
+                          }
+                          maxLength={500}
+                        />
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDelete(driver.id)}
+                          disabled={isEmpty}
+                          title="Rij wissen"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Kaart-view (mobiel, kleiner dan sm) */}
+          <div className="sm:hidden flex flex-col gap-3">
+            {visibleDrivers.map((driver) => {
+              const { effective, template, isEmpty } = computeEffective(
+                driver.id,
+              );
+              const startPlaceholder = template?.default_start_time ?? "";
+              const endPlaceholder = template?.default_end_time ?? "";
+              const working = effective.status === "werkt";
+              const dimmed = !working && !isEmpty;
+
+              return (
+                <div
+                  key={driver.id}
+                  className={cn(
+                    "border rounded-lg p-3 bg-background flex flex-col gap-3",
+                    dimmed && "text-muted-foreground",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {template && (
+                        <span
+                          aria-hidden="true"
+                          className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: template.color }}
+                        />
+                      )}
+                      <span className="font-medium truncate">{driver.name}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => handleDelete(driver.id)}
+                      disabled={isEmpty}
+                      title="Rij wissen"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Rooster
+                      </span>
                       <Select
                         value={effective.shift_template_id ?? NONE}
                         onValueChange={(v) =>
@@ -333,63 +722,102 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                             Geen rooster
                           </SelectItem>
                           {templates.map((t) => (
-                            <SelectItem key={t.id} value={t.id} className="text-xs">
-                              <span className="flex items-center gap-2">
-                                <span
-                                  aria-hidden="true"
-                                  className="inline-block h-2 w-2 rounded-full"
-                                  style={{ backgroundColor: t.color }}
-                                />
-                                {t.name}
-                              </span>
+                            <SelectItem
+                              key={t.id}
+                              value={t.id}
+                              className="text-xs"
+                            >
+                              {t.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </TableCell>
+                    </div>
 
-                    <TableCell>
-                      {working ? (
-                        <Input
-                          type="time"
-                          className="h-9 text-xs"
-                          value={effective.start_time ?? ""}
-                          placeholder={startPlaceholder}
-                          onChange={(e) =>
-                            schedulePatch(
-                              driver.id,
-                              { start_time: e.target.value || null },
-                              false,
-                            )
-                          }
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">n.v.t.</span>
-                      )}
-                    </TableCell>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Status
+                      </span>
+                      <Select
+                        value={effective.status}
+                        onValueChange={(v) =>
+                          schedulePatch(
+                            driver.id,
+                            { status: v as DriverScheduleStatus },
+                            true,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DRIVER_SCHEDULE_STATUSES.map((s) => (
+                            <SelectItem
+                              key={s}
+                              value={s}
+                              className="text-xs"
+                            >
+                              {DRIVER_SCHEDULE_STATUS_LABELS[s]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                    <TableCell>
-                      {working ? (
-                        <Input
-                          type="time"
-                          className="h-9 text-xs"
-                          value={effective.end_time ?? ""}
-                          placeholder={endPlaceholder}
-                          onChange={(e) =>
-                            schedulePatch(
-                              driver.id,
-                              { end_time: e.target.value || null },
-                              false,
-                            )
-                          }
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">n.v.t.</span>
-                      )}
-                    </TableCell>
+                    {working && (
+                      <div
+                        className={cn(
+                          "grid gap-2",
+                          showEndTime ? "grid-cols-2" : "grid-cols-1",
+                        )}
+                      >
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Start
+                          </span>
+                          <Input
+                            type="time"
+                            className="h-9 text-xs"
+                            value={effective.start_time ?? ""}
+                            placeholder={startPlaceholder}
+                            onChange={(e) =>
+                              schedulePatch(
+                                driver.id,
+                                { start_time: e.target.value || null },
+                                false,
+                              )
+                            }
+                          />
+                        </div>
+                        {showEndTime && (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              Eind
+                            </span>
+                            <Input
+                              type="time"
+                              className="h-9 text-xs"
+                              value={effective.end_time ?? ""}
+                              placeholder={endPlaceholder}
+                              onChange={(e) =>
+                                schedulePatch(
+                                  driver.id,
+                                  { end_time: e.target.value || null },
+                                  false,
+                                )
+                              }
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                    <TableCell>
-                      {working ? (
+                    {working && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Voertuig
+                        </span>
                         <Select
                           value={effective.vehicle_id ?? NONE}
                           onValueChange={(v) =>
@@ -419,36 +847,13 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                             ))}
                           </SelectContent>
                         </Select>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">n.v.t.</span>
-                      )}
-                    </TableCell>
+                      </div>
+                    )}
 
-                    <TableCell>
-                      <Select
-                        value={effective.status}
-                        onValueChange={(v) =>
-                          schedulePatch(
-                            driver.id,
-                            { status: v as DriverScheduleStatus },
-                            true,
-                          )
-                        }
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DRIVER_SCHEDULE_STATUSES.map((s) => (
-                            <SelectItem key={s} value={s} className="text-xs">
-                              {DRIVER_SCHEDULE_STATUS_LABELS[s]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-
-                    <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Notitie
+                      </span>
                       <Input
                         className="h-9 text-xs"
                         value={effective.notitie ?? ""}
@@ -462,26 +867,13 @@ export function RoosterDayView({ date }: RoosterDayViewProps) {
                         }
                         maxLength={500}
                       />
-                    </TableCell>
-
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDelete(driver.id)}
-                        disabled={isEmpty}
-                        title="Rij wissen"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

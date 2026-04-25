@@ -1,3 +1,6 @@
+import { addDays, format, parseISO, startOfWeek } from "date-fns";
+import { nl } from "date-fns/locale";
+
 import type {
   DriverSchedule,
   DriverScheduleStatus,
@@ -167,6 +170,165 @@ function triggerDownload(blob: Blob, filename: string): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Genereert een A4-liggend PDF met het rooster voor een hele week. Eén kolom
+ * per dag (Ma t/m Zo), één rij per actieve chauffeur. Cellen tonen rooster-
+ * naam, starttijd en voertuig-code (compact).
+ */
+export async function exportWeekRosterPdf(
+  weekStart: string,
+  schedules: DriverSchedule[],
+  drivers: Driver[],
+  vehicles: RawVehicle[],
+  templates: ShiftTemplate[],
+  options?: { includeFreeDays?: boolean },
+): Promise<void> {
+  const includeFreeDays = options?.includeFreeDays ?? false;
+
+  const monday = format(
+    startOfWeek(parseISO(weekStart), { weekStartsOn: 1 }),
+    "yyyy-MM-dd",
+  );
+  const days: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    days.push(format(addDays(parseISO(monday), i), "yyyy-MM-dd"));
+  }
+
+  // Map: driver_id -> date -> schedule
+  const byDriverDate = new Map<string, Map<string, DriverSchedule>>();
+  for (const s of schedules) {
+    if (!days.includes(s.date)) continue;
+    if (!byDriverDate.has(s.driver_id)) {
+      byDriverDate.set(s.driver_id, new Map());
+    }
+    byDriverDate.get(s.driver_id)!.set(s.date, s);
+  }
+
+  const activeDrivers = drivers.filter((d) => d.is_active !== false);
+
+  // Filter chauffeurs die deze week minstens iets hebben staan (anders rij overslaan).
+  const driversWithRows = activeDrivers.filter((d) => {
+    const map = byDriverDate.get(d.id);
+    if (!map) return false;
+    if (includeFreeDays) return map.size > 0;
+    for (const s of map.values()) {
+      if (s.status !== "vrij") return true;
+    }
+    return false;
+  });
+
+  const { default: jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+  const pageWidth = 297;
+  const pageHeight = 210;
+  const ml = 10;
+  const mr = 10;
+  const cw = pageWidth - ml - mr;
+
+  const nameColW = 45;
+  const dayColW = (cw - nameColW) / 7;
+
+  const weekEnd = format(addDays(parseISO(monday), 6), "yyyy-MM-dd");
+  const weekLabel = `${format(parseISO(monday), "d MMM", { locale: nl })} , ${format(parseISO(weekEnd), "d MMM yyyy", { locale: nl })}`;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(30, 30, 30);
+  doc.text(`Weekrooster ${weekLabel}`, ml, 14);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text(
+    `Gegenereerd op ${new Date().toLocaleString("nl-NL")}`,
+    pageWidth - mr,
+    14,
+    { align: "right" },
+  );
+
+  // Header met dagen.
+  let y = 22;
+  doc.setFillColor(245, 245, 247);
+  doc.rect(ml, y - 4, cw, 8, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(80, 80, 80);
+  doc.text("Chauffeur", ml + 1, y + 1);
+  for (let i = 0; i < 7; i++) {
+    const dx = ml + nameColW + i * dayColW;
+    const d = parseISO(days[i]);
+    const label = format(d, "EEE d MMM", { locale: nl });
+    doc.text(label, dx + 1, y + 1);
+  }
+
+  y += 8;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(30, 30, 30);
+
+  if (driversWithRows.length === 0) {
+    doc.setTextColor(140, 140, 140);
+    doc.text("Geen geplande chauffeurs voor deze week.", ml, y + 4);
+  } else {
+    const rowHeight = 10;
+    for (const driver of driversWithRows) {
+      if (y > pageHeight - 12) {
+        doc.addPage();
+        y = 14;
+      }
+
+      // Chauffeur-naam
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 30, 30);
+      doc.text(truncate(driver.name, 28), ml + 1, y + 4);
+
+      // Cellen per dag
+      doc.setFont("helvetica", "normal");
+      for (let i = 0; i < 7; i++) {
+        const dx = ml + nameColW + i * dayColW;
+        const date = days[i];
+        const schedule = byDriverDate.get(driver.id)?.get(date);
+        if (!schedule) continue;
+
+        if (schedule.status !== "werkt") {
+          if (!includeFreeDays && schedule.status === "vrij") continue;
+          doc.setTextColor(140, 140, 140);
+          doc.text(
+            DRIVER_SCHEDULE_STATUS_LABELS[schedule.status],
+            dx + 1,
+            y + 4,
+          );
+          doc.setTextColor(30, 30, 30);
+          continue;
+        }
+
+        const resolved = resolveSchedule(schedule, templates);
+        const vehicle = schedule.vehicle_id
+          ? vehicles.find((v) => v.id === schedule.vehicle_id)
+          : null;
+
+        const line1 = resolved.template?.name ?? "";
+        const start = resolved.effectiveStartTime ?? "";
+        const vehLabel = vehicle?.code || vehicle?.plate || "";
+        const line2 = [start, vehLabel].filter(Boolean).join(" , ");
+
+        if (line1) doc.text(truncate(line1, 14), dx + 1, y + 3.5);
+        if (line2) doc.text(truncate(line2, 16), dx + 1, y + 7.5);
+      }
+
+      // Rij-scheidingslijn
+      y += rowHeight;
+      doc.setDrawColor(230, 230, 230);
+      doc.setLineWidth(0.1);
+      doc.line(ml, y - 2, pageWidth - mr, y - 2);
+    }
+  }
+
+  const blob = doc.output("blob");
+  triggerDownload(blob, `weekrooster-${monday}.pdf`);
 }
 
 // Kleine re-export zodat consumers ook het status-type en de resolver kunnen

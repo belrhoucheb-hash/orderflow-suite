@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { addDays, format, parseISO, startOfWeek } from "date-fns";
+import { addDays, eachDayOfInterval, format, parseISO, startOfWeek } from "date-fns";
 import { nl } from "date-fns/locale";
-import { Copy, Eraser, Wand2 } from "lucide-react";
+import { CalendarOff, Copy, Eraser, Wand2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -24,16 +33,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useDriverSchedules } from "@/hooks/useDriverSchedules";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
-import type {
-  DriverSchedule,
-  DriverScheduleUpsert,
-  ShiftTemplate,
+import {
+  DRIVER_SCHEDULE_STATUSES,
+  DRIVER_SCHEDULE_STATUS_LABELS,
+  type DriverSchedule,
+  type DriverScheduleStatus,
+  type DriverScheduleUpsert,
+  type ShiftTemplate,
 } from "@/types/rooster";
+
+type RoosterMode = "day" | "week";
 
 interface Props {
   /**
@@ -41,6 +57,8 @@ interface Props {
    * zelf de maandag van die week uit voor bulk-acties.
    */
   date: string;
+  /** Bepaalt welke knoppen zichtbaar zijn. Default: "week". */
+  mode?: RoosterMode;
   onDone?: () => void;
 }
 
@@ -50,7 +68,7 @@ function addDaysStr(d: string, days: number): string {
   return format(addDays(parseISO(d), days), "yyyy-MM-dd");
 }
 
-export function RoosterBulkActions({ date, onDone }: Props) {
+export function RoosterBulkActions({ date, mode = "week", onDone }: Props) {
   const weekStart = useMemo(
     () =>
       format(
@@ -75,9 +93,20 @@ export function RoosterBulkActions({ date, onDone }: Props) {
   const [applyOpen, setApplyOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [clearDayOpen, setClearDayOpen] = useState(false);
+
+  // Verlof-dialoog state
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveDriverId, setLeaveDriverId] = useState<string>("");
+  const [leaveStatus, setLeaveStatus] =
+    useState<DriverScheduleStatus>("verlof");
+  const [leaveFrom, setLeaveFrom] = useState<string>(date);
+  const [leaveTo, setLeaveTo] = useState<string>(date);
+  const [leaveNote, setLeaveNote] = useState<string>("");
 
   const weekRangeLabel = `${format(parseISO(weekStart), "d MMM", { locale: nl })} , ${format(parseISO(weekEnd), "d MMM yyyy", { locale: nl })}`;
   const prevWeekRangeLabel = `${format(parseISO(prevWeekStart), "d MMM", { locale: nl })} , ${format(parseISO(prevWeekEnd), "d MMM yyyy", { locale: nl })}`;
+  const dayLabel = format(parseISO(date), "EEEE d MMMM yyyy", { locale: nl });
 
   async function handleCopyPreviousWeek() {
     try {
@@ -188,7 +217,100 @@ export function RoosterBulkActions({ date, onDone }: Props) {
     }
   }
 
+  async function handleClearDay() {
+    try {
+      await deleteRange.mutateAsync({ from: date, to: date });
+      toast.success("Dag gewist");
+      setClearDayOpen(false);
+      onDone?.();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "onbekende fout";
+      toast.error("Wissen mislukt: " + msg);
+    }
+  }
+
+  async function handleApplyLeave() {
+    try {
+      if (!leaveDriverId) {
+        toast.error("Kies een chauffeur");
+        return;
+      }
+      if (!leaveFrom || !leaveTo) {
+        toast.error("Vul een geldige periode in");
+        return;
+      }
+      if (parseISO(leaveTo) < parseISO(leaveFrom)) {
+        toast.error("Tot-datum ligt voor de Van-datum");
+        return;
+      }
+
+      const range = eachDayOfInterval({
+        start: parseISO(leaveFrom),
+        end: parseISO(leaveTo),
+      });
+      const upserts: DriverScheduleUpsert[] = range.map((d) => ({
+        driver_id: leaveDriverId,
+        date: format(d, "yyyy-MM-dd"),
+        shift_template_id: null,
+        start_time: null,
+        end_time: null,
+        vehicle_id: null,
+        status: leaveStatus,
+        notitie: leaveNote.trim() ? leaveNote.trim() : null,
+      }));
+
+      await bulkUpsert.mutateAsync(upserts);
+
+      const driverName =
+        drivers.find((d) => d.id === leaveDriverId)?.name ?? "chauffeur";
+      const statusLabel =
+        DRIVER_SCHEDULE_STATUS_LABELS[leaveStatus].toLowerCase();
+      toast.success(
+        `${upserts.length} dagen gemarkeerd als ${statusLabel} voor ${driverName}`,
+      );
+      setLeaveOpen(false);
+      setLeaveNote("");
+      onDone?.();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "onbekende fout";
+      toast.error("Verlof toepassen mislukt: " + msg);
+    }
+  }
+
   const isBusy = bulkUpsert.isPending || deleteRange.isPending;
+
+  if (mode === "day") {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <AlertDialog open={clearDayOpen} onOpenChange={setClearDayOpen}>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" disabled={isBusy}>
+              <Eraser className="h-3.5 w-3.5 mr-1.5" />
+              Wis deze dag
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Dag wissen?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Dit verwijdert alle rooster-rijen van {dayLabel}. Deze actie
+                kan niet ongedaan gemaakt worden.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuleren</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleClearDay}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Ja, wissen
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -260,6 +382,114 @@ export function RoosterBulkActions({ date, onDone }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" disabled={isBusy}>
+            <CalendarOff className="h-3.5 w-3.5 mr-1.5" />
+            Markeer verlof
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verlof markeren</DialogTitle>
+            <DialogDescription>
+              Markeer een aaneengesloten periode als verlof, ziek of feestdag
+              voor een chauffeur. Bestaande rooster-rijen in dit bereik worden
+              overschreven.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs">Chauffeur</Label>
+              <Select
+                value={leaveDriverId}
+                onValueChange={setLeaveDriverId}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Kies chauffeur" />
+                </SelectTrigger>
+                <SelectContent>
+                  {drivers
+                    .filter((d) => d.is_active !== false)
+                    .map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Status</Label>
+              <Select
+                value={leaveStatus}
+                onValueChange={(v) =>
+                  setLeaveStatus(v as DriverScheduleStatus)
+                }
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DRIVER_SCHEDULE_STATUSES.filter((s) => s !== "werkt").map(
+                    (s) => (
+                      <SelectItem key={s} value={s}>
+                        {DRIVER_SCHEDULE_STATUS_LABELS[s]}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs">Van</Label>
+                <Input
+                  type="date"
+                  value={leaveFrom}
+                  onChange={(e) => setLeaveFrom(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Tot (incl.)</Label>
+                <Input
+                  type="date"
+                  value={leaveTo}
+                  onChange={(e) => setLeaveTo(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Notitie (optioneel)</Label>
+              <Textarea
+                value={leaveNote}
+                onChange={(e) => setLeaveNote(e.target.value)}
+                placeholder="Bijv. familiebezoek, doktersafspraak"
+                maxLength={500}
+                className="min-h-[60px]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLeaveOpen(false)}
+              disabled={isBusy}
+            >
+              Annuleren
+            </Button>
+            <Button onClick={handleApplyLeave} disabled={isBusy}>
+              Toepassen
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
         <AlertDialogTrigger asChild>

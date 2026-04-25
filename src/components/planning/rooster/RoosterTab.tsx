@@ -1,14 +1,28 @@
 import { lazy, Suspense, useState, useMemo, useCallback, type ComponentType } from "react";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Printer } from "lucide-react";
+import { toast } from "sonner";
+import { addDays, format, parseISO, startOfWeek } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/LoadingState";
 
 import { toDateString } from "@/components/planning/PlanningDateNav";
+import { useDriverSchedulesRealtime } from "@/hooks/useDriverSchedulesRealtime";
+import { useDrivers } from "@/hooks/useDrivers";
+import { useShiftTemplates } from "@/hooks/useShiftTemplates";
+import { useDriverSchedules } from "@/hooks/useDriverSchedules";
+import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 import { RoosterDayView } from "./RoosterDayView";
+import { exportWeekRosterPdf } from "./RoosterPdfExport";
 
 type RoosterMode = "day" | "week";
 
@@ -19,11 +33,12 @@ type RoosterMode = "day" | "week";
  * die niet resolveerbaar is, die vangen we hier af.
  */
 type DatedComponent = ComponentType<{ date: string }>;
+type BulkActionsComponent = ComponentType<{ date: string; mode?: RoosterMode }>;
 
 type MaybeModule = {
   default?: DatedComponent;
   RoosterWeekView?: DatedComponent;
-  RoosterBulkActions?: DatedComponent;
+  RoosterBulkActions?: BulkActionsComponent;
 };
 
 const RoosterWeekView = lazy<DatedComponent>(() =>
@@ -38,13 +53,14 @@ const RoosterWeekView = lazy<DatedComponent>(() =>
     })),
 );
 
-const RoosterBulkActions = lazy<DatedComponent>(() =>
+const RoosterBulkActions = lazy<BulkActionsComponent>(() =>
   (import("./RoosterBulkActions") as Promise<MaybeModule>)
     .then((m) => ({
-      default: (m.RoosterBulkActions ?? m.default) as DatedComponent,
+      default: (m.RoosterBulkActions ?? m.default) as BulkActionsComponent,
     }))
     .catch(() => ({
-      default: ((_: { date: string }) => null) as DatedComponent,
+      default: ((_: { date: string; mode?: RoosterMode }) =>
+        null) as BulkActionsComponent,
     })),
 );
 
@@ -76,6 +92,7 @@ function formatLongDate(dateStr: string): string {
  * mogen ontbreken zonder de Dag-view te breken.
  */
 export function RoosterTab() {
+  useDriverSchedulesRealtime();
   const [mode, setMode] = useState<RoosterMode>("day");
   const [date, setDate] = useState<string>(toDateString(new Date()));
   const today = toDateString(new Date());
@@ -93,6 +110,45 @@ export function RoosterTab() {
   const stepForward = useMemo(() => (mode === "week" ? 7 : 1), [mode]);
 
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+
+  // Data voor week-PDF.
+  const weekStart = useMemo(
+    () =>
+      format(
+        startOfWeek(parseISO(date), { weekStartsOn: 1 }),
+        "yyyy-MM-dd",
+      ),
+    [date],
+  );
+  const weekEnd = useMemo(
+    () => format(addDays(parseISO(weekStart), 6), "yyyy-MM-dd"),
+    [weekStart],
+  );
+
+  const { data: drivers = [] } = useDrivers();
+  const { templates } = useShiftTemplates();
+  const { data: vehicles = [] } = useVehiclesRaw();
+  const { schedules: weekSchedules } = useDriverSchedules(weekStart, weekEnd);
+
+  const handlePrintWeek = useCallback(
+    async (includeFreeDays: boolean) => {
+      try {
+        await exportWeekRosterPdf(
+          weekStart,
+          weekSchedules,
+          drivers,
+          vehicles,
+          templates,
+          { includeFreeDays },
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Kon PDF niet genereren.";
+        toast.error("PDF mislukt", { description: msg });
+      }
+    },
+    [weekStart, weekSchedules, drivers, vehicles, templates],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -182,8 +238,27 @@ export function RoosterTab() {
             </button>
           </div>
 
+          {mode === "week" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Printer className="h-3.5 w-3.5" />
+                  Print weekrooster
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handlePrintWeek(false)}>
+                  Print weekrooster (alleen werkende chauffeurs)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handlePrintWeek(true)}>
+                  Print volledig weekrooster (incl. vrij/ziek)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           <Suspense fallback={null}>
-            <RoosterBulkActions date={date} />
+            <RoosterBulkActions date={date} mode={mode} />
           </Suspense>
         </div>
       </div>
