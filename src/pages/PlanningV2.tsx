@@ -8,6 +8,8 @@ import { Calendar as CalendarIcon, Settings2 } from "lucide-react";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useDriverAvailability } from "@/hooks/useDriverAvailability";
+import { useDriverSchedulesForDate } from "@/hooks/useDriverScheduleForDate";
+import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 import { DaySetupDialog } from "@/components/planning/v2/DaySetupDialog";
 import { PlanningDriverLane } from "@/components/planning/v2/PlanningDriverLane";
 import { UnplacedOrdersLane, type UnplacedOrderHint } from "@/components/planning/v2/UnplacedOrdersLane";
@@ -15,7 +17,9 @@ import { AutoPlanButton } from "@/components/planning/v2/AutoPlanButton";
 import { ClusterDetailPanel } from "@/components/planning/v2/ClusterDetailPanel";
 import { DocksheetExportButton } from "@/components/planning/v2/DocksheetExportButton";
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
+import { RoosterConflictBanner } from "@/components/planning/rooster/RoosterConflictBanner";
 import type { ConsolidationGroup } from "@/types/consolidation";
+import type { DriverSchedule } from "@/types/rooster";
 import ChauffeursRit from "@/pages/ChauffeursRit";
 import { RoosterTab } from "@/components/planning/rooster/RoosterTab";
 import { cn } from "@/lib/utils";
@@ -35,6 +39,8 @@ function PlanningV2() {
 
   const { data: drivers = [] } = useDrivers();
   const { data: driverAvailability = [] } = useDriverAvailability(selectedDate);
+  const { data: schedulesForDate = [] } = useDriverSchedulesForDate(selectedDate);
+  const { data: vehiclesRaw = [] } = useVehiclesRaw();
 
   // Consolidation groups voor de datum
   const { data: groups = [] } = useQuery<ConsolidationGroup[]>({
@@ -102,6 +108,24 @@ function PlanningV2() {
     driverAvailability.forEach((a) => m.set(a.driver_id, a.status));
     return m;
   }, [driverAvailability]);
+
+  const scheduleByDriver = useMemo(() => {
+    const m = new Map<string, DriverSchedule>();
+    (schedulesForDate as DriverSchedule[]).forEach((s) => m.set(s.driver_id, s));
+    return m;
+  }, [schedulesForDate]);
+
+  const driverNames = useMemo(() => {
+    const m = new Map<string, string>();
+    drivers.forEach((d: any) => m.set(d.id, d.name));
+    return m;
+  }, [drivers]);
+
+  const vehicleLabels = useMemo(() => {
+    const m = new Map<string, string>();
+    vehiclesRaw.forEach((v) => m.set(v.id, v.plate || v.code || v.name));
+    return m;
+  }, [vehiclesRaw]);
 
   const groupsByDriver = useMemo(() => {
     const m = new Map<string, ConsolidationGroup[]>();
@@ -190,6 +214,13 @@ function PlanningV2() {
             </div>
           </div>
 
+          <RoosterConflictBanner
+            schedules={schedulesForDate as DriverSchedule[]}
+            date={selectedDate}
+            driverNames={driverNames}
+            vehicleLabels={vehicleLabels}
+          />
+
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-5">
             <div className="space-y-4">
               {activeDrivers.length === 0 && (
@@ -208,6 +239,8 @@ function PlanningV2() {
                   }}
                   groups={groupsByDriver.get(driver.id) ?? []}
                   plannedHoursThisWeek={plannedHoursByDriver.get(driver.id) ?? 0}
+                  schedule={scheduleByDriver.get(driver.id) ?? null}
+                  vehicleLabels={vehicleLabels}
                   onSelectGroup={setSelectedClusterId}
                 />
               ))}

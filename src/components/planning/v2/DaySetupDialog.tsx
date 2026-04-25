@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { format, subDays } from "date-fns";
 import { nl } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Clock, Truck, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { useDrivers, type Driver } from "@/hooks/useDrivers";
@@ -21,6 +22,8 @@ import {
   useBulkUpsertVehicleAvailability,
   type VehicleAvailabilityStatus,
 } from "@/hooks/useVehicleAvailability";
+import { useDriverSchedulesForDate } from "@/hooks/useDriverScheduleForDate";
+import { DRIVER_SCHEDULE_STATUS_LABELS, type DriverSchedule, type DriverScheduleStatus } from "@/types/rooster";
 
 interface VehicleFleetRow {
   id: string;
@@ -73,6 +76,30 @@ interface DriverRow {
   reason: string;
 }
 
+/**
+ * Mapt een rooster-status naar de bijbehorende driver_availability-status,
+ * voor zover die mapping eenduidig is. "vrij" en "feestdag" hebben geen
+ * 1:1-equivalent en worden niet geprefilled — die geven we alleen visueel
+ * weer als waarschuwing.
+ */
+function mapScheduleStatusToAvailability(
+  status: DriverScheduleStatus,
+): DriverAvailabilityStatus | null {
+  switch (status) {
+    case "werkt":
+      return "werkt";
+    case "ziek":
+      return "ziek";
+    case "verlof":
+      return "verlof";
+    case "vrij":
+    case "feestdag":
+      return null;
+    default:
+      return null;
+  }
+}
+
 interface VehicleRow {
   id: string;
   name: string;
@@ -90,6 +117,21 @@ export function DaySetupDialog({ open, onOpenChange, date }: DaySetupDialogProps
   const { data: vehiclesData = [] } = useFleetVehiclesRaw();
   const { data: driverAvailabilityToday = [] } = useDriverAvailability(open ? date : null);
   const { data: vehicleAvailabilityToday = [] } = useVehicleAvailability(open ? date : null);
+  const { data: schedulesForDate = [] } = useDriverSchedulesForDate(open ? date : null);
+
+  const scheduleByDriver = useMemo(() => {
+    const m = new Map<string, DriverSchedule>();
+    (schedulesForDate as DriverSchedule[]).forEach((s) => m.set(s.driver_id, s));
+    return m;
+  }, [schedulesForDate]);
+
+  const vehicleNamesById = useMemo(() => {
+    const m = new Map<string, string>();
+    vehiclesData.forEach((v) =>
+      m.set(v.id, v.plate || v.name || v.code || "Voertuig"),
+    );
+    return m;
+  }, [vehiclesData]);
 
   const yesterday = format(subDays(new Date(date + "T00:00:00"), 1), "yyyy-MM-dd");
   const { data: driverAvailabilityYesterday = [] } = useDriverAvailability(open ? yesterday : null);
@@ -101,8 +143,18 @@ export function DaySetupDialog({ open, onOpenChange, date }: DaySetupDialogProps
   const [driverRows, setDriverRows] = useState<DriverRow[]>([]);
   const [vehicleRows, setVehicleRows] = useState<VehicleRow[]>([]);
 
+  /**
+   * Houdt per (driver, date, schedule.id)-combinatie bij of we de status al
+   * geprefilled hebben. Voorkomt dat we de keuze van de planner overschrijven
+   * bij elke re-render of nadat hij de status handmatig heeft gewijzigd.
+   */
+  const prefilledKeysRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      prefilledKeysRef.current = new Set();
+      return;
+    }
     const activeDrivers = drivers.filter((d) => d.is_active);
     const availByDriver = new Map(driverAvailabilityToday.map((a) => [a.driver_id, a]));
     setDriverRows(
@@ -116,6 +168,57 @@ export function DaySetupDialog({ open, onOpenChange, date }: DaySetupDialogProps
       }),
     );
   }, [open, drivers, driverAvailabilityToday]);
+
+  /**
+   * Prefill driver-availability-status vanuit het rooster zodra schedules
+   * binnenkomen. We schrijven alleen als er nog geen handmatige avail-rij
+   * voor die dag is (zodat een explicit gekozen status van de planner
+   * gerespecteerd blijft) en alleen voor 1:1 mapbare statussen.
+   */
+  useEffect(() => {
+    if (!open) return;
+    if (driverRows.length === 0) return;
+    if (schedulesForDate.length === 0) return;
+    const availByDriver = new Map(
+      driverAvailabilityToday.map((a) => [a.driver_id, a]),
+    );
+
+    setDriverRows((rows) => {
+      let changed = false;
+      const next = rows.map((row) => {
+        const schedule = scheduleByDriver.get(row.driver.id);
+        if (!schedule) return row;
+        const key = `${row.driver.id}|${date}|${schedule.id}`;
+        if (prefilledKeysRef.current.has(key)) return row;
+        const mapped = mapScheduleStatusToAvailability(schedule.status);
+        if (!mapped) {
+          prefilledKeysRef.current.add(key);
+          return row;
+        }
+        // Niet overschrijven als de planner al een avail-rij in de DB heeft
+        // staan voor vandaag (dan vertrouwen we zijn keuze).
+        if (availByDriver.has(row.driver.id)) {
+          prefilledKeysRef.current.add(key);
+          return row;
+        }
+        if (row.status === mapped) {
+          prefilledKeysRef.current.add(key);
+          return row;
+        }
+        prefilledKeysRef.current.add(key);
+        changed = true;
+        return { ...row, status: mapped };
+      });
+      return changed ? next : rows;
+    });
+  }, [
+    open,
+    date,
+    driverRows.length,
+    schedulesForDate,
+    scheduleByDriver,
+    driverAvailabilityToday,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -229,35 +332,91 @@ export function DaySetupDialog({ open, onOpenChange, date }: DaySetupDialogProps
             <p className="text-sm text-muted-foreground">Geen actieve chauffeurs gevonden.</p>
           )}
           <div className="grid gap-2">
-            {driverRows.map((row, idx) => (
-              <div key={row.driver.id} className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-4 text-sm font-medium">{row.driver.name}</div>
-                <div className="col-span-3">
-                  <Select
-                    value={row.status}
-                    onValueChange={(v) =>
-                      setDriverRows((rows) => rows.map((r, i) => (i === idx ? { ...r, status: v as DriverAvailabilityStatus } : r)))
-                    }
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {DRIVER_STATUS_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {driverRows.map((row, idx) => {
+              const schedule = scheduleByDriver.get(row.driver.id);
+              const scheduleStartTime =
+                schedule?.start_time ? schedule.start_time.slice(0, 5) : null;
+              const scheduleVehicleLabel =
+                schedule?.vehicle_id
+                  ? vehicleNamesById.get(schedule.vehicle_id) ?? null
+                  : null;
+              const scheduleNotWorking =
+                schedule && schedule.status !== "werkt"
+                  ? DRIVER_SCHEDULE_STATUS_LABELS[schedule.status]
+                  : null;
+              return (
+                <div
+                  key={row.driver.id}
+                  className="grid grid-cols-12 gap-2 items-start"
+                >
+                  <div className="col-span-4 text-sm">
+                    <div className="font-medium">{row.driver.name}</div>
+                    {(scheduleStartTime || scheduleVehicleLabel) && !scheduleNotWorking && (
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {scheduleStartTime && (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {scheduleStartTime}
+                          </span>
+                        )}
+                        {scheduleVehicleLabel && (
+                          <span className="inline-flex items-center gap-1">
+                            <Truck className="h-3 w-3" />
+                            {scheduleVehicleLabel}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {scheduleNotWorking && (
+                      <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
+                        <AlertTriangle className="h-3 w-3" />
+                        Rooster: {scheduleNotWorking}
+                      </div>
+                    )}
+                  </div>
+                  <div className="col-span-3">
+                    <Select
+                      value={row.status}
+                      onValueChange={(v) =>
+                        setDriverRows((rows) =>
+                          rows.map((r, i) =>
+                            i === idx
+                              ? { ...r, status: v as DriverAvailabilityStatus }
+                              : r,
+                          ),
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DRIVER_STATUS_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-5">
+                    <Input
+                      placeholder={
+                        row.status === "werkt" ? "Opmerking (optioneel)" : "Reden"
+                      }
+                      value={row.reason}
+                      onChange={(e) =>
+                        setDriverRows((rows) =>
+                          rows.map((r, i) =>
+                            i === idx ? { ...r, reason: e.target.value } : r,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
                 </div>
-                <div className="col-span-5">
-                  <Input
-                    placeholder={row.status === "werkt" ? "Opmerking (optioneel)" : "Reden"}
-                    value={row.reason}
-                    onChange={(e) =>
-                      setDriverRows((rows) => rows.map((r, i) => (i === idx ? { ...r, reason: e.target.value } : r)))
-                    }
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
