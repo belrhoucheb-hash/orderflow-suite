@@ -97,7 +97,11 @@ export function AppSidebar() {
             const active = isActive(item.url);
             return (
               <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton asChild isActive={active}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={active}
+                  className="hover:bg-transparent active:bg-transparent data-[active=true]:bg-transparent"
+                >
                   <NavLink
                     to={item.url}
                     end={item.url === "/"}
@@ -114,6 +118,16 @@ export function AppSidebar() {
                       boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.22)",
                     } : {
                       background: "transparent",
+                    }}
+                    onMouseEnter={(event) => {
+                      if (!active) {
+                        event.currentTarget.style.background = "hsl(220 20% 14%)";
+                      }
+                    }}
+                    onMouseLeave={(event) => {
+                      if (!active) {
+                        event.currentTarget.style.background = "transparent";
+                      }
                     }}
                   >
                     <span
@@ -248,21 +262,39 @@ export function AppSidebar() {
           )}
           <button
             onClick={() => navigate("/settings")}
-            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
+            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:text-white/80"
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = "hsl(220 20% 15%)";
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "transparent";
+            }}
             aria-label="Instellingen"
           >
             <Settings className="h-4 w-4" />
           </button>
           <button
             onClick={toggleTheme}
-            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
+            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:text-white/80"
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = "hsl(220 20% 15%)";
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "transparent";
+            }}
             aria-label={isDark ? "Licht thema" : "Donker thema"}
           >
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           <button
             onClick={async () => { await signOut(); navigate("/login"); }}
-            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:bg-white/5 hover:text-white/80"
+            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:text-white/80"
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = "hsl(220 20% 15%)";
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "transparent";
+            }}
             aria-label="Uitloggen"
           >
             <LogOut className="h-4 w-4" />
