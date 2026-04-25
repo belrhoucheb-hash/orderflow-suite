@@ -10,6 +10,16 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "WHERE=docs/where-we-are.md; if [ -f \"$WHERE\" ]; then WT=$(git log -1 --format=%ct -- \"$WHERE\" 2>/dev/null); HT=$(git log -1 --format=%ct 2>/dev/null); if [ -n \"$WT\" ] && [ -n \"$HT\" ] && [ \"$HT\" -gt \"$WT\" ]; then echo \"[reminder] docs/where-we-are.md is verouderd, er zijn commits sinds de laatste update. Werk het bestand bij vóór je deze sessie afsluit.\"; fi; fi"
+          }
+        ]
+      }
     ]
   }
 }
