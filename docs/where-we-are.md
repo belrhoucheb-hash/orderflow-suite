@@ -2,7 +2,7 @@
 
 **Bestand-doel**: aan het begin van elke sessie weet Claude waar we zijn gebleven, en aan het einde van elke sessie wordt dit bestand bijgewerkt zodat de volgende sessie ook weet waar we staan. Bron van waarheid voor harde feiten blijft `git log` en het Supabase-dashboard; dit bestand vult de zachte context aan (waarom, blokkers, openstaande beslissingen).
 
-**Laatste update**: 2026-04-29 (connector-platform, brand-tiles, sessie-continuïteit-mechanisme en trigger-woord `noteer`)
+**Laatste update**: 2026-04-25 (sprint-8 ETA-engine herbouwd in deze tak, cron-config wacht op Supabase Vault)
 
 ---
 
@@ -47,12 +47,20 @@
 - **`snelstart_*`-kolommen op `invoices`** zijn snelstart-specifiek; bij meer connectoren generiek maken (`external_invoice_status`, `external_id`). Niet in scope nu.
 - **Geen idempotentie** bij dubbele `invoice.sent`-emit: tweede push naar Snelstart of Exact maakt tweede boeking. Klant moet dedupliceren op factuurnummer aan hun kant. Documenteren als bekende beperking.
 - **Plain JSONB credentials**: niet versleuteld at-rest. `pgsodium` of Supabase Vault staat op v2-roadmap.
+- **pg_cron eta-watcher faalt op productie**: `current_setting('app.settings.supabase_url', true)` is leeg, `ALTER DATABASE ... SET app.settings.*` mag niet door SQL-Editor-rol op gehoste Supabase. Fix-route ligt klaar (Supabase Vault: `vault.create_secret` + `cron.schedule` herregistreren met `(SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = '...')`), gebruiker heeft hem geparkeerd als "te ingewikkeld voor nu". Zelfde issue raakt `notify-expiring-certificates`. Zonder fix: geen klant-SMS'en, geen voorspelde-vertraging exceptions, geen ETA-badge in Dispatch.
 
 ---
 
 ## Recente sessies-samenvatting
 
-### 2026-04-29 (deze sessie)
+### 2026-04-25 (deze sessie)
+
+- Sprint-8 ETA-engine herbouwd op deze tak (begin-sessie was sprint-8 nog niet aanwezig in tree, in tegenstelling tot wat where-we-are eerder suggereerde): migratie `20260428000000_predicted_eta.sql`, edge function `eta-watcher` (index.ts + eta.ts), `EtaNotificationSettings.tsx` settings-tab, ETA-badge in Dispatch, "Voorspelde vertraging"-categorie in Exceptions, marker-popup leest predicted_eta. 27 vitest-tests groen, typecheck en build groen.
+- Een productiebug gevonden en gefixt tijdens review: `>` → `>=` op de PREDICTED_DELAY-boundary in `eta-watcher/index.ts:425`, consistent met LEAD/UPDATE-drempels.
+- Docs-agent hallucineerde dat hij drie pre-existerende connector-bestanden in `docs/sprint-8/` overschreef. Bevestigd dat dat niet zo was, connector-docs in `docs/connectors/` en `docs/api/` zijn intact, sprint-8 dir was nieuw aangemaakt.
+- Cron-job faalt op productie omdat `app.settings.*` GUC's leeg zijn en SQL-Editor-rol geen `ALTER DATABASE` mag. Vault-route ligt klaar maar is geparkeerd, zie nieuwe entry in "Bekende issues".
+
+### 2026-04-29 (eerdere sessie volgens dit bestand)
 
 - Sprint 8 connector-platform afgerond en gemerged in 7 commits (`13c2536` t/m `bb7f9ca`), plus brand-tiles als 8e commit (`11a580f`).
 - ETA-engine van parallel agent ook gecommit en gemerged.
