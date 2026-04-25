@@ -818,7 +818,7 @@ const Settings = () => {
                 <SettingsStatusCard
                   title="Integraties actief"
                   value={String(connectorSummary.connected)}
-                  note={`${connectorSummary.total} beschikbaar`}
+                  note={`${connectorSummary.total} beschikbaar in de omgeving`}
                   statusLabel={connectorSummary.connected > 0 ? "Verbonden" : "Nog leeg"}
                   tone={connectorSummary.connected > 0 ? "default" : "warning"}
                   icon={ShieldCheck}
@@ -834,7 +834,7 @@ const Settings = () => {
                 <SettingsStatusCard
                   title="Open aandachtspunten"
                   value={String(attentionItems.length)}
-                  note={attentionItems.length === 0 ? "Omgeving oogt stabiel" : "Vraagt nog afronding"}
+                  note={attentionItems.length === 0 ? "Omgeving oogt rustig" : "Vraagt nog afronding"}
                   statusLabel={attentionItems.length === 0 ? "Stabiel" : "Controleren"}
                   tone={attentionItems.length === 0 ? "default" : "warning"}
                   icon={AlertTriangle}
@@ -888,26 +888,30 @@ const Settings = () => {
                 />
               </div>
 
-              <div className="card--luxe p-5">
-                <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
-                  {t('settings.language')}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                  {t('settings.languageDescription')}
-                </p>
-                <div className="max-w-xs mt-4">
-                  <Select value={currentLang} onValueChange={handleLanguageChange}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LANGUAGE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="card--luxe p-5 md:p-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                  <div className="max-w-sm">
+                    <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
+                      {t('settings.language')}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      Houd de taalinstelling centraal, zodat labels en flows overal gelijk blijven.
+                    </p>
+                  </div>
+                  <div className="w-full max-w-xs">
+                    <Select value={currentLang} onValueChange={handleLanguageChange}>
+                      <SelectTrigger className="h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </div>
