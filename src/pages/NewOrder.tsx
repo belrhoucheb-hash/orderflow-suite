@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route, ChevronDown } from "lucide-react";
 import { AddressAutocomplete as LegacyAddressAutocomplete } from "@/components/AddressAutocomplete";
@@ -6,6 +6,7 @@ import {
   AddressAutocomplete,
   EMPTY_ADDRESS,
   type AddressValue,
+  type AddressResolvedSelection,
   type AddressSuggestionOption,
 } from "@/components/clients/AddressAutocomplete";
 import { composeAddressString } from "@/lib/validation/clientSchema";
@@ -33,6 +34,7 @@ import {
   useClients,
   useClientLocations,
   useClientOrders,
+  useTenantLocationSearch,
   type Client,
   type ClientLocation,
 } from "@/hooks/useClients";
@@ -41,6 +43,7 @@ import { createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
+import { learnAddress, resolveClientAddress } from "@/lib/addressResolver";
 import { orderFormSchema } from "@/lib/validation/orderSchema";
 import { useAddressSuggestions } from "@/hooks/useAddressSuggestions";
 // Orders-audit is server-side via trigger `audit_orders`.
@@ -168,6 +171,16 @@ function normalizeLookup(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
+function composeSearchLabel(address: AddressValue): string {
+  return [address.street, address.house_number, address.house_number_suffix].filter(Boolean).join(" ");
+}
+
+function shouldLearnAlias(alias: string, resolvedAddress: string): boolean {
+  const normalizedAlias = normalizeLookup(alias);
+  if (normalizedAlias.length < 3) return false;
+  return normalizedAlias !== normalizeLookup(resolvedAddress);
+}
+
 function bestEffortAddressValue(address: string | null | undefined, fallbackCountry = "NL"): AddressValue {
   if (!address) return { ...EMPTY_ADDRESS, country: fallbackCountry };
   const trimmed = address.trim();
@@ -258,14 +271,14 @@ const NewOrder = () => {
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const clearError = (field: string) => {
+  const clearError = useCallback((field: string) => {
     setErrors(prev => {
       if (!prev[field]) return prev;
       const next = { ...prev };
       delete next[field];
       return next;
     });
-  };
+  }, []);
 
   // Form state
   const [clientName, setClientName] = useState("");
@@ -291,6 +304,8 @@ const NewOrder = () => {
   const [referentie, setReferentie] = useState("");
   const [draftRestored, setDraftRestored] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
+  const [pickupLookup, setPickupLookup] = useState("");
+  const [deliveryLookup, setDeliveryLookup] = useState("");
 
   // Detailed freight entry
   const [quantity, setQuantity] = useState("");
@@ -347,6 +362,10 @@ const NewOrder = () => {
   // via lat/lng exact weten waar ze moeten zijn (Jaimy's Webfleet/TomTom-issue).
   const [pickupAddr, setPickupAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
   const [deliveryAddr, setDeliveryAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
+  const { data: pickupClientMatches = [] } = useClients(pickupLookup.trim() || undefined);
+  const { data: deliveryClientMatches = [] } = useClients(deliveryLookup.trim() || undefined);
+  const { data: pickupLocationMatches = [] } = useTenantLocationSearch(pickupLookup);
+  const { data: deliveryLocationMatches = [] } = useTenantLocationSearch(deliveryLookup);
   const draftStorageKey = useMemo(() => {
     if (!tenant?.id || initialClientId || fromOrderId) return null;
     return `new-order-draft:${tenant.id}`;
@@ -360,42 +379,13 @@ const NewOrder = () => {
   // zou silent errors verbergen.
   const prefillApplied = useRef(false);
   const clientDefaultsAppliedRef = useRef<string | null>(null);
+  const learnedAliasKeysRef = useRef(new Set<string>());
   const { data: prefillClient } = useClient(initialClientId);
   const { data: prefillOrders } = useClientOrders(initialClientId);
 
   useEffect(() => {
     if (!clientId) clientDefaultsAppliedRef.current = null;
   }, [clientId]);
-
-  const applyPlannerLocation = (
-    kind: "pickup" | "delivery",
-    option: PlannerLocationOption,
-  ) => {
-    if (kind === "pickup") {
-      handlePickupAddrChange(option.value);
-      if (primaryLadenId) {
-        setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? {
-          ...line,
-          contactLocatie: line.contactLocatie || option.contactHint || "",
-          opmerkingen: line.opmerkingen || option.notesHint || "",
-          tijd: line.tijd || option.timeWindowStart || "",
-          tijdTot: line.tijdTot || option.timeWindowEnd || "",
-        } : line));
-      }
-      return;
-    }
-
-    handleDeliveryAddrChange(option.value);
-    if (primaryLossenId) {
-      setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? {
-        ...line,
-        contactLocatie: line.contactLocatie || option.contactHint || "",
-        opmerkingen: line.opmerkingen || option.notesHint || "",
-        tijd: line.tijd || option.timeWindowStart || "",
-        tijdTot: line.tijdTot || option.timeWindowEnd || "",
-      } : line));
-    }
-  };
 
   const addFreightLine = () => {
     setFreightLines(prev => [...prev, {
@@ -420,6 +410,64 @@ const NewOrder = () => {
     [freightLines],
   );
 
+  const handlePickupAddrChange = useCallback((v: AddressValue) => {
+    setPickupAddr(v);
+    clearError("pickup_address");
+    const composed = composeAddressString(v, { includeLocality: true });
+    // Sync plain-string locatie zodat trajectRouter-preview, isValidAddress
+    // en afdeling-inferentie blijven werken zonder aanpassingen. Daarnaast
+    // ook lat/lng/coords_manual op de leg zetten voor toekomstige hub-routing
+    // en Webfleet-export per stop.
+    if (primaryLadenId) {
+      setFreightLines(prev => prev.map(l => l.id === primaryLadenId ? {
+        ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
+      } : l));
+    }
+  }, [clearError, primaryLadenId]);
+
+  const handleDeliveryAddrChange = useCallback((v: AddressValue) => {
+    setDeliveryAddr(v);
+    clearError("delivery_address");
+    const composed = composeAddressString(v, { includeLocality: true });
+    if (primaryLossenId) {
+      setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? {
+        ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
+      } : l));
+    }
+  }, [clearError, primaryLossenId]);
+
+  const applyPlannerLocation = useCallback((
+    kind: "pickup" | "delivery",
+    option: PlannerLocationOption,
+  ) => {
+    if (kind === "pickup") {
+      handlePickupAddrChange(option.value);
+      setPickupLookup(option.label);
+      if (primaryLadenId) {
+        setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? {
+          ...line,
+          contactLocatie: line.contactLocatie || option.contactHint || "",
+          opmerkingen: line.opmerkingen || option.notesHint || "",
+          tijd: line.tijd || option.timeWindowStart || "",
+          tijdTot: line.tijdTot || option.timeWindowEnd || "",
+        } : line));
+      }
+      return;
+    }
+
+    handleDeliveryAddrChange(option.value);
+    setDeliveryLookup(option.label);
+    if (primaryLossenId) {
+      setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? {
+        ...line,
+        contactLocatie: line.contactLocatie || option.contactHint || "",
+        opmerkingen: line.opmerkingen || option.notesHint || "",
+        tijd: line.tijd || option.timeWindowStart || "",
+        tijdTot: line.tijdTot || option.timeWindowEnd || "",
+      } : line));
+    }
+  }, [handleDeliveryAddrChange, handlePickupAddrChange, primaryLadenId, primaryLossenId]);
+
   const updateFreightLine = (id: string, field: keyof FreightLine, value: string) => {
     setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
     // Wanneer iets de locatie-string van de primaire Laden/Lossen-regel wijzigt
@@ -435,31 +483,57 @@ const NewOrder = () => {
     }
   };
 
-  const handlePickupAddrChange = (v: AddressValue) => {
-    setPickupAddr(v);
-    clearError("pickup_address");
-    const composed = composeAddressString(v, { includeLocality: true });
-    // Sync plain-string locatie zodat trajectRouter-preview, isValidAddress
-    // en afdeling-inferentie blijven werken zonder aanpassingen. Daarnaast
-    // ook lat/lng/coords_manual op de leg zetten voor toekomstige hub-routing
-    // en Webfleet-export per stop.
-    if (primaryLadenId) {
-      setFreightLines(prev => prev.map(l => l.id === primaryLadenId ? {
-        ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
-      } : l));
-    }
-  };
+  const maybeLearnClientAlias = useCallback(async (selection: AddressResolvedSelection) => {
+    if (!tenant?.id || !clientId) return;
+    const alias = selection.searchTerm.trim();
+    const resolvedAddress = composeAddressString(selection.value, { includeLocality: true });
+    if (!shouldLearnAlias(alias, resolvedAddress)) return;
 
-  const handleDeliveryAddrChange = (v: AddressValue) => {
-    setDeliveryAddr(v);
-    clearError("delivery_address");
-    const composed = composeAddressString(v, { includeLocality: true });
-    if (primaryLossenId) {
-      setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? {
-        ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
-      } : l));
+    const cacheKey = `${clientId}:${normalizeLookup(alias)}:${normalizeLookup(resolvedAddress)}`;
+    if (learnedAliasKeysRef.current.has(cacheKey)) return;
+    learnedAliasKeysRef.current.add(cacheKey);
+
+    try {
+      await learnAddress(
+        supabase,
+        tenant.id,
+        clientId,
+        alias,
+        resolvedAddress,
+        selection.value.lat,
+        selection.value.lng,
+      );
+    } catch (error) {
+      learnedAliasKeysRef.current.delete(cacheKey);
+      console.warn("Failed to learn client address alias", error);
     }
-  };
+  }, [clientId, tenant?.id]);
+
+  const tryResolveLearnedAddress = useCallback(async (
+    kind: "pickup" | "delivery",
+    searchTerm: string,
+  ) => {
+    if (!tenant?.id || !clientId) return;
+    const alias = searchTerm.trim();
+    if (alias.length < 3) return;
+
+    const resolved = await resolveClientAddress(supabase, tenant.id, clientId, alias);
+    if (!resolved) return;
+
+    const nextValue = {
+      ...bestEffortAddressValue(resolved.resolved_address),
+      lat: resolved.resolved_lat,
+      lng: resolved.resolved_lng,
+      coords_manual: false,
+    };
+
+    if (kind === "pickup") {
+      handlePickupAddrChange(nextValue);
+      return;
+    }
+
+    handleDeliveryAddrChange(nextValue);
+  }, [clientId, handleDeliveryAddrChange, handlePickupAddrChange, tenant?.id]);
 
   // Bij blur checken we of de drie kritische velden gevuld zijn. Zo niet,
   // dan zetten we meteen een error neer zodat de gebruiker niet pas bij
@@ -478,6 +552,54 @@ const NewOrder = () => {
     const err = validateStructuredAddress(deliveryAddr);
     if (err) setErrors(prev => ({ ...prev, delivery_address: err }));
   };
+
+  useEffect(() => {
+    if (!tenant?.id || !clientId) return;
+    const term = pickupLookup.trim();
+    if (term.length < 3) return;
+
+    const currentSearch = composeSearchLabel(pickupAddr);
+    const currentResolved = composeAddressString(pickupAddr, { includeLocality: true });
+    if ([currentSearch, currentResolved].some(value => normalizeLookup(value) === normalizeLookup(term))) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void tryResolveLearnedAddress("pickup", term).catch((error) => {
+        if (!cancelled) console.warn("Failed to resolve learned pickup address", error);
+      });
+    }, 280);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [clientId, pickupAddr, pickupLookup, tenant?.id, tryResolveLearnedAddress]);
+
+  useEffect(() => {
+    if (!tenant?.id || !clientId) return;
+    const term = deliveryLookup.trim();
+    if (term.length < 3) return;
+
+    const currentSearch = composeSearchLabel(deliveryAddr);
+    const currentResolved = composeAddressString(deliveryAddr, { includeLocality: true });
+    if ([currentSearch, currentResolved].some(value => normalizeLookup(value) === normalizeLookup(term))) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void tryResolveLearnedAddress("delivery", term).catch((error) => {
+        if (!cancelled) console.warn("Failed to resolve learned delivery address", error);
+      });
+    }, 280);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [clientId, deliveryAddr, deliveryLookup, tenant?.id, tryResolveLearnedAddress]);
 
   const pickupQuickOptions = useMemo<PlannerLocationOption[]>(() => {
     const options: PlannerLocationOption[] = [];
@@ -538,6 +660,38 @@ const NewOrder = () => {
       });
     });
 
+    pickupClientMatches.forEach((client) => {
+      const shipping = addressFromClientRecord(client, "shipping");
+      const shippingComposed = composeAddressString(shipping, { includeLocality: true });
+      if (shippingComposed) {
+        options.push({
+          id: `pickup-client-match-${client.id}`,
+          label: client.name,
+          subtitle: shippingComposed,
+          badge: "Bedrijf",
+          value: shipping,
+          addressString: shippingComposed,
+          contactHint: client.contact_person || undefined,
+        });
+      }
+    });
+
+    pickupLocationMatches.forEach((location) => {
+      const value = addressFromClientLocation(location);
+      const composed = composeAddressString(value, { includeLocality: true }) || location.address;
+      options.push({
+        id: `pickup-global-location-${location.id}`,
+        label: location.client_name ? `${location.client_name} · ${location.label}` : location.label,
+        subtitle: composed,
+        badge: "Locatie",
+        value,
+        addressString: composed,
+        notesHint: location.notes || undefined,
+        timeWindowStart: location.time_window_start,
+        timeWindowEnd: location.time_window_end,
+      });
+    });
+
     const seen = new Set<string>();
     return options.filter((option) => {
       const key = normalizeLookup(option.addressString || option.label);
@@ -545,7 +699,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.pickup, clientLocations, selectedClient]);
+  }, [addressSuggestions?.pickup, clientLocations, pickupClientMatches, pickupLocationMatches, selectedClient]);
 
   const deliveryQuickOptions = useMemo<PlannerLocationOption[]>(() => {
     const options: PlannerLocationOption[] = [];
@@ -576,6 +730,38 @@ const NewOrder = () => {
       });
     });
 
+    deliveryClientMatches.forEach((client) => {
+      const shipping = addressFromClientRecord(client, "shipping");
+      const shippingComposed = composeAddressString(shipping, { includeLocality: true });
+      if (shippingComposed) {
+        options.push({
+          id: `delivery-client-match-${client.id}`,
+          label: client.name,
+          subtitle: shippingComposed,
+          badge: "Bedrijf",
+          value: shipping,
+          addressString: shippingComposed,
+          contactHint: client.contact_person || undefined,
+        });
+      }
+    });
+
+    deliveryLocationMatches.forEach((location) => {
+      const value = addressFromClientLocation(location);
+      const composed = composeAddressString(value, { includeLocality: true }) || location.address;
+      options.push({
+        id: `delivery-global-location-${location.id}`,
+        label: location.client_name ? `${location.client_name} · ${location.label}` : location.label,
+        subtitle: composed,
+        badge: "Locatie",
+        value,
+        addressString: composed,
+        notesHint: location.notes || undefined,
+        timeWindowStart: location.time_window_start,
+        timeWindowEnd: location.time_window_end,
+      });
+    });
+
     const seen = new Set<string>();
     return options.filter((option) => {
       const key = normalizeLookup(option.addressString || option.label);
@@ -583,7 +769,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.delivery, clientLocations]);
+  }, [addressSuggestions?.delivery, clientLocations, deliveryClientMatches, deliveryLocationMatches]);
 
   const addToFreightSummary = () => {
     const ladenLine = freightLines.find(f => f.activiteit === "Laden");
@@ -1691,10 +1877,14 @@ const NewOrder = () => {
                      error={errors.pickup_address}
                      searchLabel="Zoek ophaaladres"
                      searchPlaceholder="Typ bedrijfsnaam, straat of dockadres"
+                     onSearchInputChange={setPickupLookup}
                      quickOptions={pickupQuickOptions.map(toAddressSuggestionOption)}
                      onQuickSelect={(option) => {
                        const selected = pickupQuickOptions.find(item => item.id === option.id);
                        if (selected) applyPlannerLocation("pickup", selected);
+                     }}
+                     onResolvedSelection={(selection) => {
+                       void maybeLearnClientAlias(selection);
                      }}
                     />
                   </div>
@@ -1709,10 +1899,14 @@ const NewOrder = () => {
                       error={errors.delivery_address}
                       searchLabel="Zoek afleveradres"
                       searchPlaceholder="Typ bedrijfsnaam, straat of warehouse"
+                      onSearchInputChange={setDeliveryLookup}
                       quickOptions={deliveryQuickOptions.map(toAddressSuggestionOption)}
                       onQuickSelect={(option) => {
                         const selected = deliveryQuickOptions.find(item => item.id === option.id);
                         if (selected) applyPlannerLocation("delivery", selected);
+                      }}
+                      onResolvedSelection={(selection) => {
+                        void maybeLearnClientAlias(selection);
                       }}
                     />
                   </div>

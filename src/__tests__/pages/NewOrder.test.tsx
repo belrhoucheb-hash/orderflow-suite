@@ -27,6 +27,7 @@ vi.mock("@/hooks/useClients", () => ({
   useClients: () => ({ data: [] }),
   useClientLocations: () => ({ data: [] }),
   useClientOrders: () => ({ data: [] }),
+  useTenantLocationSearch: () => ({ data: [] }),
 }));
 
 vi.mock("@/hooks/useAddressSuggestions", () => ({

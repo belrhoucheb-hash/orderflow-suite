@@ -35,6 +35,13 @@ export interface AddressSuggestionOption {
   value: AddressValue;
 }
 
+export interface AddressResolvedSelection {
+  value: AddressValue;
+  searchTerm: string;
+  source: "google" | "quick_option";
+  optionId?: string;
+}
+
 interface Props {
   value: AddressValue;
   onChange: (v: AddressValue) => void;
@@ -44,6 +51,8 @@ interface Props {
   searchPlaceholder?: string;
   quickOptions?: AddressSuggestionOption[];
   onQuickSelect?: (option: AddressSuggestionOption) => void;
+  onSearchInputChange?: (value: string) => void;
+  onResolvedSelection?: (selection: AddressResolvedSelection) => void;
 }
 
 const NL_CENTER = { lat: 52.1326, lng: 5.2913 };
@@ -84,6 +93,8 @@ export function AddressAutocomplete({
   searchPlaceholder = "Typ straat + huisnummer, bijv. Winthontlaan 30B Utrecht",
   quickOptions = [],
   onQuickSelect,
+  onSearchInputChange,
+  onResolvedSelection,
 }: Props) {
   const { isLoaded, loadError, missingKey } = useGoogleMaps();
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -100,10 +111,19 @@ export function AddressAutocomplete({
     const place = autocompleteRef.current?.getPlace();
     if (!place || !place.geometry) return;
     const parsed = parsePlace(place);
-    onChange({ ...value, ...parsed } as AddressValue);
+    const previousSearchTerm = searchInput.trim();
+    const nextAddress = { ...value, ...parsed } as AddressValue;
+    onChange(nextAddress);
     const parts = [parsed.street, parsed.house_number, parsed.house_number_suffix].filter(Boolean);
-    setSearchInput(parts.join(" "));
-  }, [onChange, value]);
+    const nextValue = parts.join(" ");
+    setSearchInput(nextValue);
+    onSearchInputChange?.(nextValue);
+    onResolvedSelection?.({
+      value: nextAddress,
+      searchTerm: previousSearchTerm,
+      source: "google",
+    });
+  }, [onChange, onResolvedSelection, onSearchInputChange, searchInput, value]);
 
   const onMarkerDragEnd = useCallback(
     async (e: google.maps.MapMouseEvent) => {
@@ -134,6 +154,7 @@ export function AddressAutocomplete({
     const composed = parts.join(" ");
     if (composed && composed !== searchInput) {
       setSearchInput(composed);
+      onSearchInputChange?.(composed);
     }
   }, [value.street, value.house_number, value.house_number_suffix]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -185,7 +206,10 @@ export function AddressAutocomplete({
           <input
             type="text"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              onSearchInputChange?.(e.target.value);
+            }}
             onBlur={onBlur}
             placeholder={searchPlaceholder}
             className="field-luxe w-full"
@@ -202,9 +226,17 @@ export function AddressAutocomplete({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
+                  const previousSearchTerm = searchInput.trim();
                   onChange(option.value);
                   setSearchInput(option.title);
+                  onSearchInputChange?.(option.title);
                   onQuickSelect?.(option);
+                  onResolvedSelection?.({
+                    value: option.value,
+                    searchTerm: previousSearchTerm,
+                    source: "quick_option",
+                    optionId: option.id,
+                  });
                 }}
                 className="flex w-full items-start justify-between gap-3 border-b border-border/40 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-[hsl(var(--gold-soft)_/_0.25)]"
               >

@@ -86,6 +86,7 @@ export interface ClientLocation {
   lat: number | null;
   lng: number | null;
   coords_manual: boolean;
+  client_name?: string | null;
 }
 
 export interface ClientRate {
@@ -442,6 +443,34 @@ export function useClientLocations(clientId: string | null) {
         .order("label");
       if (error) throw error;
       return data as ClientLocation[];
+    },
+  });
+}
+
+export function useTenantLocationSearch(search?: string) {
+  const { tenant } = useTenant();
+  const term = search?.trim() ?? "";
+  return useQuery({
+    queryKey: ["tenant_location_search", tenant?.id, term],
+    enabled: !!tenant?.id && term.length >= 2,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_locations")
+        .select("*, client:clients(name)")
+        .eq("tenant_id", tenant!.id)
+        .or([
+          `label.ilike.%${term}%`,
+          `address.ilike.%${term}%`,
+          `city.ilike.%${term}%`,
+        ].join(","))
+        .order("label")
+        .limit(12);
+      if (error) throw error;
+      return ((data ?? []) as any[]).map((row) => ({
+        ...row,
+        client_name: row.client?.name ?? null,
+      })) as ClientLocation[];
     },
   });
 }
