@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantOptional } from "@/contexts/TenantContext";
+import { getEffectiveLocalUserId } from "@/lib/devSession";
 
 function useCurrentUserId(): string | null {
   const [userId, setUserId] = useState<string | null>(null);
@@ -9,7 +10,7 @@ function useCurrentUserId(): string | null {
   useEffect(() => {
     let cancelled = false;
     supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setUserId(data.user?.id ?? null);
+      if (!cancelled) setUserId(data.user?.id ?? getEffectiveLocalUserId());
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserId(session?.user?.id ?? null);

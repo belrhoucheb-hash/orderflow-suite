@@ -138,7 +138,7 @@ describe("Dispatch", () => {
 
   it("shows Dispatch button for concept trips", () => {
     renderDispatch();
-    expect(screen.getByRole("button", { name: /Dispatch/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Dispatch/i }).length).toBeGreaterThanOrEqual(2);
   });
 
   it("shows today button", () => {
@@ -154,7 +154,7 @@ describe("Dispatch", () => {
   it("shows dispatch confirmation dialog (setConfirmDispatch)", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    await user.click(screen.getByRole("button", { name: /Dispatch/i }));
+    await user.click(screen.getAllByRole("button", { name: /Dispatch/i })[1]);
     await waitFor(() => {
       expect(screen.getByText("Rit dispatchen")).toBeInTheDocument();
     });
@@ -163,7 +163,7 @@ describe("Dispatch", () => {
   it("confirms dispatch and calls dispatchTrip", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    await user.click(screen.getByRole("button", { name: /Dispatch/i }));
+    await user.click(screen.getAllByRole("button", { name: /Dispatch/i })[1]);
     await waitFor(() => {
       expect(screen.getByText("Rit dispatchen")).toBeInTheDocument();
     });
@@ -362,7 +362,7 @@ describe("Dispatch", () => {
   it("cancels dispatch dialog", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    await user.click(screen.getByRole("button", { name: /Dispatch/i }));
+    await user.click(screen.getAllByRole("button", { name: /Dispatch/i })[1]);
     await waitFor(() => {
       expect(screen.getByText("Rit dispatchen")).toBeInTheDocument();
     });

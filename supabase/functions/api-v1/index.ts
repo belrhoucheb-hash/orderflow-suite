@@ -177,6 +177,37 @@ function scopeClient<T extends { client_id?: string | null }>(
   return token.client_id ? q.eq("client_id", token.client_id) : q;
 }
 
+async function validateOrderClientId(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string,
+  clientId: unknown,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (clientId === undefined || clientId === null || clientId === "") {
+    return { ok: true };
+  }
+
+  if (typeof clientId !== "string") {
+    return { ok: false, message: "client_id moet een string zijn" };
+  }
+
+  const { data, error } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("id", clientId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, message: "Kon client_id niet valideren" };
+  }
+
+  if (!data) {
+    return { ok: false, message: "client_id hoort niet bij deze tenant" };
+  }
+
+  return { ok: true };
+}
+
 // ─── Orders ─────────────────────────────────────────────────────────
 
 async function listOrders(ctx: RouteCtx): Promise<Response> {
@@ -263,6 +294,15 @@ async function createOrder(ctx: RouteCtx): Promise<Response> {
     if (ALLOWED_ORDER_FIELDS.has(k)) orderData[k] = v;
   }
   if (!orderData.status) orderData.status = "DRAFT";
+
+  const clientValidation = await validateOrderClientId(
+    supabase,
+    token.tenant_id,
+    orderData.client_id,
+  );
+  if (!clientValidation.ok) {
+    return errors.badRequest(clientValidation.message);
+  }
 
   const { data, error } = await supabase
     .from("orders")

@@ -19,6 +19,11 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+function isLocalDevHost() {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
+
 // Helper to convert HEX to HSL for Tailwind CSS variables
 function hexToHSL(hex: string): string {
   // Remove # if present
@@ -114,7 +119,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         
         // 3. Ultimate Fallback for Development: Just grab ANY active tenant if we STILL have no tenant
         if (!tenantData) {
-          console.warn("Could not accurately resolve tenant via JWT or Hostname. Falling back to first available tenant.");
+          if (!import.meta.env.DEV || !isLocalDevHost()) {
+            console.warn("Could not accurately resolve tenant via JWT or Hostname. Falling back to first available tenant.");
+          }
           const { data: rawData } = await supabase.from('tenants' as any).select('*').limit(1).maybeSingle();
           const data = rawData as any;
           if (data) {
@@ -126,10 +133,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               primaryColor: data.primary_color || '#dc2626'
             };
           } else {
-             console.error("CRITICAL: No tenants exist in the database! Overriding with hardcoded Development tenant.");
              tenantData = {
                id: "00000000-0000-0000-0000-000000000001",
-               name: `Dev Mode ${DEFAULT_COMPANY.name}`,
+               name: DEFAULT_COMPANY.name,
                slug: "localhost-dev",
                logoUrl: null,
                primaryColor: "#dc2626"

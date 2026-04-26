@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getEffectiveLocalUserId, DEV_BYPASS_USER_ID } from "@/lib/devSession";
 
 export interface Notification {
   id: string;
@@ -21,7 +22,7 @@ export function useNotifications() {
   // Get current user id on mount
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
+      setUserId(data.user?.id ?? getEffectiveLocalUserId());
     });
   }, []);
 
@@ -123,8 +124,12 @@ export async function createNotification(params: {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData?.user;
 
-    let targetUserId = params.user_id || user?.id;
+    let targetUserId = params.user_id || user?.id || getEffectiveLocalUserId();
     let tenantId = params.tenant_id;
+
+    if (targetUserId === DEV_BYPASS_USER_ID && !tenantId) {
+      return;
+    }
 
     // Resolve tenant_id if not provided
     if (!tenantId && user) {

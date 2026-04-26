@@ -23,19 +23,82 @@ vi.mock("react-i18next", () => ({
 }));
 
 const mockSaveMutateAsync = vi.fn().mockResolvedValue(undefined);
+const mockSaveSmsMutateAsync = vi.fn().mockResolvedValue(undefined);
+const mockSaveIntegrationCredentialsMutateAsync = vi.fn().mockResolvedValue(undefined);
+const mockUpdateBrandingMutateAsync = vi.fn().mockResolvedValue(undefined);
+const tenantValue = { id: "t1", name: "Test BV", slug: "test", logoUrl: null, primaryColor: "#3b82f6" };
+const tenantContextValue = {
+  tenant: tenantValue,
+  loading: false,
+  refresh: vi.fn().mockResolvedValue(undefined),
+};
+const emptySettingsData = {};
+const savedSmsData = {
+  smsProvider: "twilio",
+  twilioAccountSid: "",
+  twilioAuthToken: "",
+  twilioFromNumber: "",
+  messageBirdApiKey: "",
+  messageBirdOriginator: "",
+  smsEvents: { onderweg: true, afgeleverd: true, vertraging: false },
+  smsTemplate: "",
+};
+const integrationCredentialsData = { enabled: false, credentials: {} };
 
 vi.mock("@/contexts/TenantContext", () => ({
-  useTenant: () => ({ tenant: { id: "t1", name: "Test BV", slug: "test", logoUrl: null, primaryColor: "#3b82f6" }, loading: false }),
-  useTenantOptional: () => ({ tenant: { id: "t1" } }),
+  useTenant: () => tenantContextValue,
+  useTenantOptional: () => ({ tenant: tenantValue }),
 }));
 
 vi.mock("@/hooks/useSettings", () => ({
-  useLoadSettings: () => ({ data: {}, isLoading: false }),
+  useLoadSettings: () => ({ data: emptySettingsData, isLoading: false }),
   useSaveSettings: () => ({ mutateAsync: mockSaveMutateAsync, isPending: false }),
 }));
 
 vi.mock("@/components/settings/MasterDataSection", () => ({
   MasterDataSection: () => <div data-testid="master-data">Master Data</div>,
+}));
+
+vi.mock("@/components/settings/ShiftTemplateSettings", () => ({
+  ShiftTemplateSettings: () => <div>Shift templates</div>,
+}));
+
+vi.mock("@/components/fleet/VehicleDocumentTypesSection", () => ({
+  VehicleDocumentTypesSection: () => <div>Vehicle document types</div>,
+}));
+
+vi.mock("@/components/settings/WebhookSettings", () => ({
+  WebhookSettings: () => (
+    <div>
+      <button type="button">Opslaan</button>
+      <button type="button">Genereer</button>
+      <button type="button" role="switch" aria-checked="false">Webhook switch</button>
+    </div>
+  ),
+}));
+
+vi.mock("@/components/settings/ApiTokenSettings", () => ({
+  ApiTokenSettings: () => (
+    <div>
+      <button type="button">Kopieer</button>
+      <button type="button">Hernieuw</button>
+    </div>
+  ),
+}));
+
+vi.mock("@/components/settings/ConnectorCatalog", () => ({
+  ConnectorCatalog: ({ onSelect }: { onSelect?: (slug: string) => void }) => (
+    <div>
+      <button type="button" onClick={() => onSelect?.("snelstart")}>Open Snelstart</button>
+      <button type="button" role="switch" aria-checked="false">Integration switch 1</button>
+      <button type="button" role="switch" aria-checked="false">Integration switch 2</button>
+      <input aria-label="Integration field" />
+    </div>
+  ),
+}));
+
+vi.mock("@/components/settings/ConnectorDetail", () => ({
+  ConnectorDetail: () => <div>Connector detail</div>,
 }));
 
 // Mock supabase helpers and hooks that depend on DB tables not in the generated types
@@ -97,6 +160,67 @@ vi.mock("@/hooks/useTenantInboxes", () => ({
   }),
 }));
 
+vi.mock("@/hooks/useSmsSettings", () => ({
+  useSmsSettings: () => ({ data: savedSmsData }),
+  useSaveSmsSettings: () => ({ mutateAsync: mockSaveSmsMutateAsync, isPending: false }),
+}));
+
+vi.mock("@/hooks/useIntegrationCredentials", () => ({
+  useIntegrationCredentials: () => ({ data: integrationCredentialsData }),
+  useSaveIntegrationCredentials: () => ({
+    mutateAsync: mockSaveIntegrationCredentialsMutateAsync,
+    isPending: false,
+  }),
+}));
+
+vi.mock("@/hooks/useUpdateTenant", () => ({
+  useUpdateTenantBranding: () => ({
+    mutateAsync: mockUpdateBrandingMutateAsync,
+    isPending: false,
+  }),
+}));
+
+vi.mock("@/components/settings/InboxSettings", () => ({
+  InboxSettings: () => (
+    <div>
+      <p>Nog geen inboxen gekoppeld</p>
+      <button type="button">Nieuwe inbox</button>
+    </div>
+  ),
+}));
+
+vi.mock("@/components/settings/EtaNotificationSettings", () => ({
+  EtaNotificationSettings: () => <div>ETA meldingen</div>,
+}));
+
+vi.mock("@/components/settings/RateCardSettings", () => ({
+  RateCardSettings: () => <div>Rate cards</div>,
+}));
+
+vi.mock("@/components/settings/SurchargeSettings", () => ({
+  SurchargeSettings: () => <div>Surcharges</div>,
+}));
+
+vi.mock("@/components/settings/PricingPreview", () => ({
+  PricingPreview: () => <div>Pricing preview</div>,
+}));
+
+vi.mock("@/components/settings/CostTypeSettings", () => ({
+  CostTypeSettings: () => <div>Cost types</div>,
+}));
+
+vi.mock("@/components/settings/FuelPriceSettings", () => ({
+  FuelPriceSettings: () => <div>Fuel prices</div>,
+}));
+
+vi.mock("@/components/settings/SettingsCommandPalette", () => ({
+  SettingsCommandPalette: () => null,
+}));
+
+vi.mock("@/components/settings/StickySaveBar", () => ({
+  StickySaveBar: () => null,
+}));
+
 // Mock clipboard API and toast
 const mockClipboard = vi.fn().mockResolvedValue(undefined);
 Object.assign(navigator, { clipboard: { writeText: mockClipboard } });
@@ -114,12 +238,22 @@ function renderSettings(initialPath = "/settings") {
   );
 }
 
+function queryButton(name: string | RegExp) {
+  return screen.queryAllByRole("button", { name })[0] ?? null;
+}
+
+function getButton(name: string | RegExp) {
+  const button = queryButton(name);
+  if (!button) throw new Error(`Button not found: ${String(name)}`);
+  return button;
+}
+
 describe("Settings", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("renders without crashing", () => {
     renderSettings();
-    expect(screen.getByText(/Instellingen/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Instellingen$/i })).toBeInTheDocument();
   });
 
   it("has content sections", () => {
@@ -129,7 +263,7 @@ describe("Settings", () => {
 
   it("shows tabs for different settings sections", () => {
     renderSettings();
-    expect(screen.getByText("Algemeen")).toBeInTheDocument();
+    expect(getButton(/^Algemeen$/i)).toBeInTheDocument();
   });
 
   // ── handleTabChange ──
@@ -162,7 +296,7 @@ describe("Settings", () => {
   it("switches to SMS tab", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
@@ -175,7 +309,7 @@ describe("Settings", () => {
   it("switches to integraties tab", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const integTab = screen.queryByText(/Integraties/i);
+    const integTab = queryButton(/^Integraties$/i);
     if (integTab) {
       await user.click(integTab);
       await waitFor(() => {
@@ -202,7 +336,7 @@ describe("Settings", () => {
   it("switches to Webhooks tab (handleTabChange)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const webhookTab = screen.queryByText(/Webhooks/i);
+    const webhookTab = queryButton(/^Webhooks$/i);
     if (webhookTab) {
       await user.click(webhookTab);
       await waitFor(() => {
@@ -215,7 +349,7 @@ describe("Settings", () => {
   it("switches to API tab (handleTabChange)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const apiTab = screen.queryByText(/API/i);
+    const apiTab = queryButton(/^API-tokens$/i);
     if (apiTab) {
       await user.click(apiTab);
       await waitFor(() => {
@@ -410,43 +544,37 @@ describe("Settings", () => {
         expect(screen.getByText("Opslaan")).toBeInTheDocument();
       });
       await user.click(screen.getByText("Opslaan"));
+      await waitFor(() => {
+        expect(mockUpdateBrandingMutateAsync).toHaveBeenCalled();
+      });
     }
     expect(document.body.textContent).toBeTruthy();
   });
 
-  // ── handleSaveIntegrations ──
-  it("saves integration settings (handleSaveIntegrations)", async () => {
+  it("shows connector catalog on integraties tab", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const integTab = screen.queryByText(/Integraties/i);
+    const integTab = queryButton(/^Integraties$/i);
     if (integTab) {
       await user.click(integTab);
-      const saveBtn = await screen.findByText(/Integraties Opslaan/i);
-      if (saveBtn) {
-        await user.click(saveBtn);
-        await waitFor(() => {
-          expect(mockSaveMutateAsync).toHaveBeenCalled();
-        });
-      }
+      await waitFor(() => {
+        expect(screen.getByText("Open Snelstart")).toBeInTheDocument();
+      });
     }
     expect(document.body.textContent).toBeTruthy();
   });
 
-  // ── handleSaveIntegrations error path ──
-  it("handles integration save error", async () => {
-    mockSaveMutateAsync.mockRejectedValueOnce(new Error("fail"));
+  it("opens connector detail from integraties tab", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const integTab = screen.queryByText(/Integraties/i);
+    const integTab = queryButton(/^Integraties$/i);
     if (integTab) {
       await user.click(integTab);
-      const saveBtn = await screen.findByText(/Integraties Opslaan/i);
-      if (saveBtn) {
-        await user.click(saveBtn);
-        await waitFor(() => {
-          expect(mockSaveMutateAsync).toHaveBeenCalled();
-        });
-      }
+      const openConnectorBtn = await screen.findByText("Open Snelstart");
+      await user.click(openConnectorBtn);
+      await waitFor(() => {
+        expect(screen.getByText("Connector detail")).toBeInTheDocument();
+      });
     }
     expect(document.body.textContent).toBeTruthy();
   });
@@ -455,7 +583,7 @@ describe("Settings", () => {
   it("toggles integration switch (toggleIntegration)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const integTab = screen.queryByText(/Integraties/i);
+    const integTab = queryButton(/^Integraties$/i);
     if (integTab) {
       await user.click(integTab);
       await waitFor(() => {
@@ -476,7 +604,7 @@ describe("Settings", () => {
   it("toggles multiple integration switches", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const integTab = screen.queryByText(/Integraties/i);
+    const integTab = queryButton(/^Integraties$/i);
     if (integTab) {
       await user.click(integTab);
       await waitFor(() => {
@@ -495,7 +623,7 @@ describe("Settings", () => {
   it("updates integration webhook URL (updateIntegration)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const integTab = screen.queryByText(/Integraties/i);
+    const integTab = queryButton(/^Integraties$/i);
     if (integTab) {
       await user.click(integTab);
       await waitFor(() => {
@@ -527,7 +655,7 @@ describe("Settings", () => {
   it("saves SMS settings (handleSaveSms)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       // Find the Opslaan button in SMS tab (not "Verstuur test SMS")
@@ -541,7 +669,7 @@ describe("Settings", () => {
       if (saveBtn) {
         await user.click(saveBtn);
         await waitFor(() => {
-          expect(mockSaveMutateAsync).toHaveBeenCalled();
+          expect(mockSaveSmsMutateAsync).toHaveBeenCalled();
         });
       }
     }
@@ -550,10 +678,10 @@ describe("Settings", () => {
 
   // ── handleSaveSms error path ──
   it("handles SMS save error", async () => {
-    mockSaveMutateAsync.mockRejectedValueOnce(new Error("fail"));
+    mockSaveSmsMutateAsync.mockRejectedValueOnce(new Error("fail"));
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
@@ -566,7 +694,7 @@ describe("Settings", () => {
       if (saveBtn) {
         await user.click(saveBtn);
         await waitFor(() => {
-          expect(mockSaveMutateAsync).toHaveBeenCalled();
+          expect(mockSaveSmsMutateAsync).toHaveBeenCalled();
         });
       }
     }
@@ -577,7 +705,7 @@ describe("Settings", () => {
   it("toggles SMS event (toggleSmsEvent)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
@@ -598,7 +726,7 @@ describe("Settings", () => {
   it("toggles all SMS event switches", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
@@ -617,13 +745,13 @@ describe("Settings", () => {
   it("clicks Twilio provider button (setSmsProvider twilio)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
-        expect(screen.getByText("Twilio")).toBeInTheDocument();
+        expect(getButton(/^Twilio$/i)).toBeInTheDocument();
       });
-      await user.click(screen.getByText("Twilio"));
+      await user.click(getButton(/^Twilio$/i));
     }
     expect(document.body.textContent).toBeTruthy();
   });
@@ -631,17 +759,17 @@ describe("Settings", () => {
   it("clicks MessageBird provider button (setSmsProvider messagebird)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
-        expect(screen.getByText("MessageBird")).toBeInTheDocument();
+        expect(getButton(/^MessageBird$/i)).toBeInTheDocument();
       });
-      await user.click(screen.getByText("MessageBird"));
+      await user.click(getButton(/^MessageBird$/i));
       // After switching, MessageBird fields should appear
       await waitFor(() => {
-        expect(screen.getByLabelText("API Key")).toBeInTheDocument();
-        expect(screen.getByLabelText("Originator")).toBeInTheDocument();
+        expect(screen.getByLabelText("API-key")).toBeInTheDocument();
+        expect(screen.getByLabelText("Afzender")).toBeInTheDocument();
       });
     }
     expect(document.body.textContent).toBeTruthy();
@@ -651,13 +779,13 @@ describe("Settings", () => {
   it("changes SMS template (setSmsTemplate)", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
-        expect(screen.getByLabelText("SMS Template")).toBeInTheDocument();
+        expect(screen.getByLabelText("SMS-template")).toBeInTheDocument();
       });
-      const textarea = screen.getByLabelText("SMS Template");
+      const textarea = screen.getByLabelText("SMS-template");
       await user.type(textarea, "Hello {name}");
     }
     expect(document.body.textContent).toBeTruthy();
@@ -667,7 +795,7 @@ describe("Settings", () => {
   it("fills in Twilio credentials", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
@@ -684,18 +812,18 @@ describe("Settings", () => {
   it("fills in MessageBird credentials after switching provider", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
-        expect(screen.getByText("MessageBird")).toBeInTheDocument();
+        expect(getButton(/^MessageBird$/i)).toBeInTheDocument();
       });
-      await user.click(screen.getByText("MessageBird"));
+      await user.click(getButton(/^MessageBird$/i));
       await waitFor(() => {
-        expect(screen.getByLabelText("API Key")).toBeInTheDocument();
+        expect(screen.getByLabelText("API-key")).toBeInTheDocument();
       });
-      await user.type(screen.getByLabelText("API Key"), "mbkey123");
-      await user.type(screen.getByLabelText("Originator"), "MyCompany");
+      await user.type(screen.getByLabelText("API-key"), "mbkey123");
+      await user.type(screen.getByLabelText("Afzender"), "MyCompany");
     }
     expect(document.body.textContent).toBeTruthy();
   });
@@ -704,13 +832,13 @@ describe("Settings", () => {
   it("clicks Verstuur test SMS button", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const smsTab = screen.queryByText(/SMS/i);
+    const smsTab = queryButton(/^SMS$/i);
     if (smsTab) {
       await user.click(smsTab);
       await waitFor(() => {
-        expect(screen.getByText("Verstuur test SMS")).toBeInTheDocument();
+        expect(screen.getByText("Verstuur test-SMS")).toBeInTheDocument();
       });
-      await user.click(screen.getByText("Verstuur test SMS"));
+      await user.click(screen.getByText("Verstuur test-SMS"));
     }
     expect(document.body.textContent).toBeTruthy();
   });
@@ -742,9 +870,9 @@ describe("Settings", () => {
   it("clicks Branding & Kleuren card on Algemeen tab", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const card = screen.getByText("Branding & Kleuren");
+    const card = screen.getByText("Branding en kleuren");
     if (card) {
-      const clickTarget = card.closest('[class*="cursor-pointer"]');
+      const clickTarget = card.closest("button");
       if (clickTarget) await user.click(clickTarget);
     }
     expect(document.body.textContent).toBeTruthy();
@@ -754,7 +882,7 @@ describe("Settings", () => {
   it("toggles webhook switches on Webhooks tab", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const webhookTab = screen.queryByText(/Webhooks/i);
+    const webhookTab = queryButton(/^Webhooks$/i);
     if (webhookTab) {
       await user.click(webhookTab);
       await waitFor(() => {
@@ -772,7 +900,7 @@ describe("Settings", () => {
   it("clicks Webhook URL Opslaan button", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const webhookTab = screen.queryByText(/Webhooks/i);
+    const webhookTab = queryButton(/^Webhooks$/i);
     if (webhookTab) {
       await user.click(webhookTab);
       await waitFor(() => {
@@ -789,7 +917,7 @@ describe("Settings", () => {
   it("clicks Genereer webhook secret button", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const webhookTab = screen.queryByText(/Webhooks/i);
+    const webhookTab = queryButton(/^Webhooks$/i);
     if (webhookTab) {
       await user.click(webhookTab);
       await waitFor(() => {
@@ -804,7 +932,7 @@ describe("Settings", () => {
   it("clicks Kopieer API key button", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const apiTab = screen.queryByText(/API/i);
+    const apiTab = queryButton(/^API-tokens$/i);
     if (apiTab) {
       await user.click(apiTab);
       await waitFor(() => {
@@ -818,7 +946,7 @@ describe("Settings", () => {
   it("clicks Hernieuw API key button", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const apiTab = screen.queryByText(/API/i);
+    const apiTab = queryButton(/^API-tokens$/i);
     if (apiTab) {
       await user.click(apiTab);
       await waitFor(() => {
@@ -854,7 +982,7 @@ describe("Settings", () => {
   it("switches to Inboxen tab and shows empty state", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const inboxTab = screen.queryByText(/Inboxen/i);
+    const inboxTab = queryButton(/^Inboxen$/i);
     expect(inboxTab).toBeTruthy();
     if (inboxTab) {
       await user.click(inboxTab);

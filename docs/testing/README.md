@@ -14,7 +14,8 @@ Dit is het overzicht van alle automatische tests die op deze codebase draaien, w
 | Algoritmische bench | Vitest bench | `src/__bench__/` | Nightly (`nightly.yml` job `bench`) |
 | Lighthouse (LCP/TBT/CLS) | Lighthouse CI | `lighthouserc.json` | Nightly (`nightly.yml` job `lighthouse`) |
 | Load-test API v1 | k6 | `tests/load/` | Handmatig + nightly als secrets gezet zijn |
-| OWASP ZAP baseline | nog niet ingericht | fase 3 | nog niet |
+| OWASP ZAP baseline (DAST) | ZAP action | `.github/workflows/zap.yml` | Wekelijks zondagnacht + handmatig |
+| RLS integratietests | Vitest tegen Supabase | `src/__tests__/integration/rls/` | Lokaal als `SUPABASE_TEST_*` gezet is |
 
 ## Lokaal draaien
 
@@ -41,6 +42,16 @@ Bevriest het API-token formaat (`ofs_` + 40 base64url chars), de hash-stabilitei
 
 ### 3. `apiV1TenantScoping.test.ts`
 Statische analyse van `supabase/functions/api-v1/index.ts`. De gateway gebruikt service-role en omzeilt RLS, dus elke handler MOET expliciet op `token.tenant_id` filteren. Deze test parsed de source en faalt zodra een handler die check mist. Vangt 95% van de cross-tenant lekkage-regressies, goedkoop.
+
+### 4. `webhookReplayProtection.test.ts`
+Bevriest de replay-window helper (±5 min default) die we aan klanten meegeven. Check of een (timestamp, signature, body)-tripel hergebruikt kan worden buiten het toegestane venster. Plus contract-test op het delivery-id formaat (UUIDv4) dat klanten als idempotency-key gebruiken.
+
+### 5. `inboundWebhookAuth.test.ts`
+Statische audit van inbound webhook-endpoints. Bewaakt dat `webhook-dispatcher` fail-closed is via `isTrustedCaller` en dat `api-v1` `verifyToken` aanroept vóór de routing. Bij elke nieuwe inbound endpoint hier een test toevoegen.
+
+## RLS integratielaag (`src/__tests__/integration/rls/`)
+
+Tests tegen een echte Supabase-instance die bewijzen dat row-level-security cross-tenant data echt blokkeert (de statische audit bewijst alleen dat de gateway-code de filters bevat). Skipt automatisch als `SUPABASE_TEST_URL`, `SUPABASE_TEST_ANON_KEY` en `SUPABASE_TEST_SERVICE_KEY` ontbreken. Zie [src/__tests__/integration/README.md](../../src/__tests__/integration/README.md) voor lokale setup.
 
 ## CI-jobs
 
@@ -94,6 +105,12 @@ Draait in nightly tegen `npm run preview`. Budgetten:
 ### k6 (`tests/load/api-v1-orders.js`)
 Load-scenario tegen REST API v1. Drempels: p95 lijst < 600ms, p95 detail < 400ms, error-rate < 1%. Vereist twee secrets in GitHub: `API_BASE_URL` en `API_TOKEN_STAGING` (read-only token tegen een staging-tenant).
 
-## Wat er nog niet in zit (roadmap)
+## OWASP ZAP baseline (DAST)
 
-- **Fase 3** — OWASP ZAP baseline tegen preview build, integratietests tegen lokale Supabase-branch met echte RLS-checks (negatieve cases per tenant), webhook-replay protection test.
+Wekelijks zondagnacht 04:00 UTC plus handmatig. Bouwt de SPA, start `vite preview` op poort 4173, en draait `zaproxy/action-baseline` ertegen. Rapporteert HTTP-headers, CORS-misconfigs, mixed-content en common web-vulns die statische tests missen. Niet-blokkerend (`fail_action: false`); rapport komt als artifact uit de run. Rule-overrides in `.zap/rules.tsv`.
+
+## Wat er nog niet in zit (roadmap sprint-7)
+
+- Supabase CLI in CI runner zodat RLS integratietests automatisch draaien op PRs die `supabase/migrations/` raken
+- Migratie van `xlsx` naar `exceljs` of `xlsx-populate` (audit-baseline schoon maken)
+- Custom ZAP-policies voor onze API-routes (active scan, niet alleen baseline)

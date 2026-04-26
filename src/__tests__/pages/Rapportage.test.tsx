@@ -9,6 +9,8 @@ const { mockSupabase } = vi.hoisted(() => {
   const makeChain = (data: any[] = []) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lt: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
     then: vi.fn().mockImplementation((cb: any) => cb({ data, error: null })),
@@ -18,17 +20,44 @@ const { mockSupabase } = vi.hoisted(() => {
       from: vi.fn().mockImplementation((table: string) => {
         if (table === "orders") {
           return makeChain([
-            { id: "o1", created_at: "2025-01-10T10:00:00Z", status: "DELIVERED", updated_at: "2025-01-10T14:00:00Z", client_name: "Acme BV", vehicle_id: "v1" },
-            { id: "o2", created_at: "2025-01-11T09:00:00Z", status: "PENDING", updated_at: "2025-01-11T10:00:00Z", client_name: "Widget NL", vehicle_id: null },
-            { id: "o3", created_at: "2025-01-10T08:00:00Z", status: "IN_TRANSIT", updated_at: "2025-01-10T12:00:00Z", client_name: "Acme BV", vehicle_id: "v1" },
-            { id: "o4", created_at: "2025-01-12T11:00:00Z", status: "CANCELLED", updated_at: "2025-01-12T11:30:00Z", client_name: "Test Corp", vehicle_id: null },
-            { id: "o5", created_at: "2025-01-13T07:00:00Z", status: "DRAFT", updated_at: "2025-01-13T07:00:00Z", client_name: "Draft Client", vehicle_id: null },
+            { id: "o1", order_number: 1, created_at: "2025-01-10T10:00:00Z", status: "DELIVERED", updated_at: "2025-01-10T14:00:00Z", client_name: "Acme BV", vehicle_id: "v1", pickup_address: "A", delivery_address: "B", weight_kg: 120 },
+            { id: "o2", order_number: 2, created_at: "2025-01-11T09:00:00Z", status: "PENDING", updated_at: "2025-01-11T10:00:00Z", client_name: "Widget NL", vehicle_id: null, pickup_address: "C", delivery_address: "D", weight_kg: 80 },
+            { id: "o3", order_number: 3, created_at: "2025-01-10T08:00:00Z", status: "IN_TRANSIT", updated_at: "2025-01-10T12:00:00Z", client_name: "Acme BV", vehicle_id: "v1", pickup_address: "E", delivery_address: "F", weight_kg: 50 },
           ]);
         }
-        if (table === "clients") return makeChain([{ id: "c1", name: "Acme BV" }, { id: "c2", name: "Widget NL" }]);
         if (table === "vehicles") return makeChain([{ id: "v1", code: "V01", name: "Truck 1" }]);
-        if (table === "vehicle_availability") return makeChain([{ vehicle_id: "v1", date: "2025-01-10", status: "beschikbaar" }]);
+        if (table === "vehicle_availability") return makeChain([{ vehicle_id: "v1", date: "2025-01-10", status: "available" }]);
         return makeChain([]);
+      }),
+      rpc: vi.fn().mockImplementation((fnName: string) => {
+        if (fnName === "report_orders_overview_v1") {
+          return Promise.resolve({
+            data: {
+              kpis: { totalOrders: 5, avgDeliveryDays: 1.2 },
+              ordersPerWeek: [
+                { week_start: "2025-01-06", orders: 2, previous_orders: 1 },
+                { week_start: "2025-01-13", orders: 3, previous_orders: 2 },
+              ],
+              ordersPerMonth: [
+                { month_start: "2024-12-01", orders: 2, previous_orders: 1 },
+                { month_start: "2025-01-01", orders: 3, previous_orders: 2 },
+              ],
+              topClients: [
+                { name: "Acme BV", count: 2 },
+                { name: "Widget NL", count: 1 },
+              ],
+              statusDistribution: [
+                { status: "DELIVERED", value: 2 },
+                { status: "PENDING", value: 1 },
+              ],
+              vehicleOrders: [
+                { vehicle_id: "v1", count: 2 },
+              ],
+            },
+            error: null,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
       }),
     },
   };
@@ -74,7 +103,7 @@ describe("Rapportage", () => {
   it("renders without crashing", async () => {
     renderRapportage();
     await waitFor(() => {
-      expect(screen.getByText(/Rapportage|Rapporten/i)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Rapportage" })).toBeInTheDocument();
     });
   });
 
@@ -113,14 +142,14 @@ describe("Rapportage", () => {
   it("shows status distribution section", async () => {
     renderRapportage();
     await waitFor(() => {
-      expect(screen.getByText(/Status|Verdeling/i)).toBeInTheDocument();
+      expect(screen.getByText("Statusverdeling orders")).toBeInTheDocument();
     });
   });
 
   it("shows client top list", async () => {
     renderRapportage();
     await waitFor(() => {
-      expect(screen.getByText(/Klanten|Top klanten/i)).toBeInTheDocument();
+      expect(screen.getByText("Top klanten (meeste orders)")).toBeInTheDocument();
     });
   });
 
@@ -191,10 +220,7 @@ describe("Rapportage", () => {
   it("toggles compare mode (setCompareEnabled)", async () => {
     const user = userEvent.setup();
     renderRapportage();
-    const compareSwitch = document.querySelector('[role="switch"]');
-    if (compareSwitch) {
-      await user.click(compareSwitch as HTMLElement);
-    }
+    await user.click(screen.getByLabelText("Vergelijk met vorige periode"));
     expect(document.body.textContent).toBeTruthy();
   });
 

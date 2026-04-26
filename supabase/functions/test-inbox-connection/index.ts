@@ -24,6 +24,30 @@ interface TestRequest {
   folder?: string;
 }
 
+function isUnsafeImapHost(host: string): boolean {
+  const value = host.trim().toLowerCase();
+  if (!value) return true;
+  if (value === "localhost" || value.endsWith(".localhost") || value.endsWith(".local")) return true;
+  if (value.includes("/") || value.includes("\\") || value.includes("@")) return true;
+
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(value)) {
+    const octets = value.split(".").map(Number);
+    if (octets.some((part) => Number.isNaN(part) || part < 0 || part > 255)) return true;
+    if (
+      octets[0] === 10 ||
+      octets[0] === 127 ||
+      octets[0] === 0 ||
+      (octets[0] === 169 && octets[1] === 254) ||
+      (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] === 192 && octets[1] === 168)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function jsonWith(corsHeaders: Record<string, string>, status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -123,14 +147,20 @@ serve(async (req) => {
       folder = body.folder || "INBOX";
     }
 
-    // Tenant-toegang valideren via de user-JWT client (respect RLS)
-    const userClient = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: access, error: accessErr } = await userClient.rpc("user_has_tenant_access", {
-      p_tenant_id: tenantId,
-    });
-    if (accessErr || !access) return json(403, { ok: false, error: "Geen toegang tot deze tenant" });
+    const { data: membership, error: membershipErr } = await admin
+      .from("tenant_members")
+      .select("role")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", user.id)
+      .in("role", ["owner", "admin"])
+      .maybeSingle();
+    if (membershipErr || !membership) {
+      return json(403, { ok: false, error: "Alleen owner/admin mag inboxen testen" });
+    }
+
+    if (!body.inboxId && isUnsafeImapHost(host)) {
+      return json(400, { ok: false, error: "Alleen publieke IMAP-hostnamen zijn toegestaan" });
+    }
 
     // Rate limit: 5 pogingen per minuut per tenant
     const rlKey = `test-inbox-connection:${tenantId}`;

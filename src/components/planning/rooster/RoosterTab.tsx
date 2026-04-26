@@ -33,48 +33,17 @@ type RoosterMode = "day" | "week";
 type DatedComponent = ComponentType<{ date: string }>;
 type BulkActionsComponent = ComponentType<{ date: string; mode?: RoosterMode }>;
 
-type MaybeModule = {
-  default?: DatedComponent;
-  RoosterWeekView?: DatedComponent;
-  RoosterBulkActions?: BulkActionsComponent;
-};
-
 const RoosterWeekView = lazy<DatedComponent>(() =>
-  (import("./RoosterWeekView") as Promise<MaybeModule>)
-    .then((m) => ({
-      default: (m.RoosterWeekView ?? m.default) as DatedComponent,
-    }))
-    .catch(() => ({
-      default: ((_: { date: string }) => (
-        <PlaceholderModule label="Week-weergave" />
-      )) as DatedComponent,
-    })),
+  import("./RoosterWeekView").then((m) => ({
+    default: m.RoosterWeekView as DatedComponent,
+  })),
 );
 
 const RoosterBulkActions = lazy<BulkActionsComponent>(() =>
-  (import("./RoosterBulkActions") as Promise<MaybeModule>)
-    .then((m) => ({
-      default: (m.RoosterBulkActions ?? m.default) as BulkActionsComponent,
-    }))
-    .catch(() => ({
-      default: ((_: { date: string; mode?: RoosterMode }) =>
-        null) as BulkActionsComponent,
-    })),
+  import("./RoosterBulkActions").then((m) => ({
+    default: m.RoosterBulkActions as BulkActionsComponent,
+  })),
 );
-
-function PlaceholderModule({ label }: { label: string }) {
-  return (
-    <div className="border border-dashed rounded-lg p-8 text-center text-sm text-muted-foreground">
-      {label} is nog niet beschikbaar. Wordt binnenkort toegevoegd.
-    </div>
-  );
-}
-
-/**
- * Wrapper voor de Rooster-module: datum-navigatie, view-switch Dag/Week, slot
- * voor bulk-acties. De zware sub-views (Week en Bulk) worden lazy geladen en
- * mogen ontbreken zonder de Dag-view te breken.
- */
 export function RoosterTab() {
   useDriverSchedulesRealtime();
   const [mode, setMode] = useState<RoosterMode>("day");

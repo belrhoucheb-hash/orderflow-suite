@@ -75,12 +75,13 @@ Deno.serve(async (req) => {
     { auth: { autoRefreshToken: false, persistSession: false } },
   );
 
-  const { data: existing } = await supabase
-    .from("integration_credentials")
-    .select("credentials")
-    .eq("tenant_id", tenantId)
-    .eq("provider", "exact_online")
-    .maybeSingle();
+  const { data: existingRuntime } = await supabase.rpc("get_integration_credentials_runtime", {
+    p_tenant_id: tenantId,
+    p_provider: "exact_online",
+  });
+  const existing = (Array.isArray(existingRuntime) ? existingRuntime[0] : existingRuntime) as
+    | { credentials?: Record<string, unknown> }
+    | null;
 
   const newCreds = {
     ...((existing?.credentials as Record<string, unknown>) ?? {}),
@@ -91,18 +92,12 @@ Deno.serve(async (req) => {
     accessTokenExpiresAt: expiresAt,
   };
 
-  const { error: upErr } = await supabase
-    .from("integration_credentials")
-    .upsert(
-      {
-        tenant_id: tenantId,
-        provider: "exact_online",
-        enabled: true,
-        credentials: newCreds,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "tenant_id,provider" },
-    );
+  const { error: upErr } = await supabase.rpc("save_integration_credentials_secure", {
+    p_provider: "exact_online",
+    p_enabled: true,
+    p_credentials: newCreds,
+    p_tenant_id: tenantId,
+  });
 
   if (upErr) {
     return htmlPage(`Opslaan mislukt: ${upErr.message}`, false);

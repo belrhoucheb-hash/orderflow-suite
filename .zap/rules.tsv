@@ -1,0 +1,7 @@
+# ZAP baseline rule overrides. Format: PLUGIN_ID<tab>THRESHOLD<tab>NOTE.
+# Threshold: IGNORE | LOW | MEDIUM | HIGH (default).
+# Lijst plugin-ids: https://www.zaproxy.org/docs/alerts/.
+#
+# Voorbeelden voor SPAs (laat staan tot ze concreet uit de eerste run komen):
+# 10038	IGNORE	CSP header op localhost-preview, niet representatief voor productie
+# 10063	IGNORE	Permissions-Policy ontbreekt op preview, productie levert via host-headers

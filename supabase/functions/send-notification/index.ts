@@ -454,15 +454,15 @@ serve(async (req) => {
             continue;
           }
           if (!twilioSid || !twilioToken || !twilioFrom) {
-            // Try tenant-level settings from tenant_settings
-            const { data: smsSettings } = await supabase
-              .from("tenant_settings")
-              .select("settings")
-              .eq("tenant_id", tenant_id)
-              .eq("category", "sms")
-              .maybeSingle();
+            const { data: smsSettings, error: smsSettingsError } = await supabase.rpc(
+              "get_sms_settings_runtime",
+              { p_tenant_id: tenant_id },
+            );
+            if (smsSettingsError) {
+              throw new Error(`SMS-config ophalen mislukt: ${smsSettingsError.message}`);
+            }
 
-            const ts = smsSettings?.settings as any;
+            const ts = (Array.isArray(smsSettings) ? smsSettings[0] : smsSettings) as any;
             const sid = ts?.twilioAccountSid || twilioSid;
             const token = ts?.twilioAuthToken || twilioToken;
             const from = ts?.twilioFromNumber || twilioFrom;

@@ -356,9 +356,15 @@ export default function PortalOrders() {
                       Track & Trace
                     </a>
                     {canCreateOrders && order.status === "DELIVERED" && (
-                      <Button variant="outline" size="sm" className="gap-1 text-xs h-7">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-xs h-7"
+                        disabled
+                        title="Retouren via het klantportaal volgen in een volgende stap."
+                      >
                         <ArrowLeftRight className="h-3 w-3" />
-                        Retour
+                        Retour binnenkort
                       </Button>
                     )}
                   </div>

@@ -51,7 +51,10 @@ export function ConnectorDetail({ slug, onBack }: Props) {
         </Button>
         <h2 className="text-xl font-semibold">{connector.name}</h2>
         <p className="text-sm text-muted-foreground">{connector.description}</p>
-        <Badge variant="secondary">Binnenkort beschikbaar</Badge>
+        <Badge variant="secondary">Roadmap</Badge>
+        <p className="text-sm text-muted-foreground">
+          Deze koppeling staat al op de productroadmap, maar is nog geen actieve integratie. Daarom tonen we hier nog geen verbinding-, mapping- of syncinstellingen.
+        </p>
       </div>
     );
   }
@@ -423,7 +426,7 @@ function SyncTab({ slug }: { slug: string }) {
         ))}
       </div>
       <p className="text-xs text-muted-foreground pt-2">
-        Per-event aan/uit-toggles komen in een latere versie. Voor nu kun je de hele koppeling op inactief zetten in de Verbinding-tab als je geen sync wilt.
+        Event-selectie wordt op dit moment per connector beheerd. Wil je tijdelijk geen sync, zet dan de koppeling uit in de tab Verbinding.
       </p>
     </div>
   );

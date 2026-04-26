@@ -191,16 +191,17 @@ async function loadCredentials(
   supabase: SupabaseClient,
   tenantId: string,
 ): Promise<SnelstartCredentials | null> {
-  const { data, error } = await supabase
-    .from("integration_credentials")
-    .select("credentials, enabled")
-    .eq("tenant_id", tenantId)
-    .eq("provider", "snelstart")
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("get_integration_credentials_runtime", {
+    p_tenant_id: tenantId,
+    p_provider: "snelstart",
+  });
 
   if (error) throw new Error(`Credentials ophalen mislukt: ${error.message}`);
-  if (!data || !data.enabled) return null;
-  return (data.credentials as SnelstartCredentials) ?? {};
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { credentials?: SnelstartCredentials; enabled?: boolean }
+    | null;
+  if (!row || !row.enabled) return null;
+  return row.credentials ?? {};
 }
 
 async function setStatus(

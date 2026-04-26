@@ -24,6 +24,8 @@ export const AVAILABLE_SCOPES = [
   { value: "clients:read", label: "Klanten lezen" },
 ] as const;
 
+export const TENANT_ONLY_SCOPES = new Set(["trips:read"]);
+
 const TOKEN_PREFIX = "ofs_";
 
 async function sha256Hex(plaintext: string): Promise<string> {
@@ -84,6 +86,9 @@ export function useCreateApiToken() {
       const userId = userRes.user?.id ?? null;
       const tenantId = (userRes.user?.app_metadata as { tenant_id?: string })?.tenant_id;
       if (!tenantId) throw new Error("Geen tenant-id in sessie");
+      if (input.client_id && input.scopes.some((scope) => TENANT_ONLY_SCOPES.has(scope))) {
+        throw new Error("Klant-tokens mogen geen tenant-brede scopes bevatten");
+      }
 
       const plaintext = generatePlaintext();
       const token_hash = await sha256Hex(plaintext);

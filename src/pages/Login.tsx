@@ -9,6 +9,19 @@ import { Truck, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Mail } from "
 import { cn } from "@/lib/utils";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
+const DEV_BYPASS_STORAGE_KEY = "debug_bypass";
+const DEV_BYPASS_EMAIL = "test@orderflow.nl";
+const DEV_BYPASS_PASSWORD = "Test1234!";
+
+function isLocalDevHost() {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
+
+function isGoogleAuthEnabled() {
+  return import.meta.env.VITE_GOOGLE_AUTH_ENABLED === "true";
+}
+
 const Login = () => {
   const navigate = useNavigate();
   const { tenant } = useTenant();
@@ -44,8 +57,25 @@ const Login = () => {
     setLoading(false);
 
     if (error) {
+      if (
+        import.meta.env.DEV &&
+        isLocalDevHost() &&
+        loginEmail.trim().toLowerCase() === DEV_BYPASS_EMAIL &&
+        loginPassword === DEV_BYPASS_PASSWORD
+      ) {
+        localStorage.setItem(
+          DEV_BYPASS_STORAGE_KEY,
+          JSON.stringify({
+            email: DEV_BYPASS_EMAIL,
+            display_name: "Local Admin",
+          }),
+        );
+        navigate("/");
+        return;
+      }
       setErrorText("Ongeldig e-mailadres of wachtwoord");
     } else {
+      localStorage.removeItem(DEV_BYPASS_STORAGE_KEY);
       navigate("/");
     }
   };
@@ -231,11 +261,13 @@ const Login = () => {
                 </div>
               </div>
 
-              <Button type="button" variant="outline" onClick={handleGoogleLogin}
-                className="w-full rounded-sm h-11 border-slate-200 text-slate-600 font-medium hover:bg-slate-50">
-                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-4 w-4 mr-2" />
-                Inloggen met Google
-              </Button>
+              {isGoogleAuthEnabled() && (
+                <Button type="button" variant="outline" onClick={handleGoogleLogin}
+                  className="w-full rounded-sm h-11 border-slate-200 text-slate-600 font-medium hover:bg-slate-50">
+                  <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-4 w-4 mr-2" />
+                  Inloggen met Google
+                </Button>
+              )}
 
               <div className="pt-2 text-center">
                 <button
@@ -358,11 +390,13 @@ const Login = () => {
                 </div>
               </div>
 
-              <Button type="button" variant="outline" onClick={handleGoogleLogin}
-                className="w-full rounded-sm h-11 border-slate-200 text-slate-600 font-medium hover:bg-slate-50">
-                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-4 w-4 mr-2" />
-                Registreren met Google
-              </Button>
+              {isGoogleAuthEnabled() && (
+                <Button type="button" variant="outline" onClick={handleGoogleLogin}
+                  className="w-full rounded-sm h-11 border-slate-200 text-slate-600 font-medium hover:bg-slate-50">
+                  <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-4 w-4 mr-2" />
+                  Registreren met Google
+                </Button>
+              )}
             </form>
           )}
 

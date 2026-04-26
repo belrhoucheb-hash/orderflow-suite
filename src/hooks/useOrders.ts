@@ -53,16 +53,17 @@ export interface UseOrdersOptions {
    */
   countMode?: "estimated" | "exact" | "planned";
   /**
-   * Keyset-cursor: wanneer gezet wordt `.range()` (offset-paginatie) niet
-   * gebruikt maar een keyset-filter op `(created_at, id) < (cursor)` voor
-   * stabiele O(log N) paginatie bij diepe pages. Alleen actief bij de
-   * default sort (createdAt). Bij een andere sortkolom wordt de cursor
-   * genegeerd en valt de hook terug op offset.
+   * Keyset-cursor voor de huidige sortering. Gebruik in combinatie met
+   * `nextCursor` uit de vorige pagina voor stabiele O(log N) paginatie,
+   * ook bij niet-standaard sorts via server-side RPC.
    */
-  cursor?: { createdAt: string; id: string } | null;
+  cursor?: OrderListCursor | null;
 }
 
 export interface OrderListCursor {
+  sortField: OrderListSortField;
+  sortDirection: OrderListSortDirection;
+  sortValue: string | number;
   createdAt: string;
   id: string;
 }
@@ -77,8 +78,66 @@ const SORT_FIELD_TO_DB: Record<OrderListSortField, string> = {
   createdAt: "created_at",
 };
 
+const DB_FIELD_TO_SORT: Record<string, OrderListSortField> = {
+  client_name: "customer",
+  weight_kg: "totalWeight",
+  status: "status",
+  created_at: "createdAt",
+};
+
 // RFC4122 v1-v5 UUID validator (simple shape check)
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function applyOrderListFilters(query: any, options: {
+  statusFilter?: string;
+  orderTypeFilter?: string;
+  departmentFilter?: string;
+  createdBefore?: string;
+  search?: string;
+}) {
+  const { statusFilter, orderTypeFilter, departmentFilter, createdBefore, search } = options;
+
+  if (statusFilter && statusFilter !== "alle") {
+    if (statusFilter === "PENDING") {
+      query = query.in("status", ["PENDING", "OPEN", "WAITING", "CONFIRMED"]);
+    } else {
+      query = query.eq("status", statusFilter);
+    }
+  }
+
+  if (orderTypeFilter) {
+    query = query.eq("order_type", orderTypeFilter);
+  }
+
+  if (departmentFilter && UUID_RE.test(departmentFilter)) {
+    query = query.eq("department_id", departmentFilter);
+  }
+
+  if (createdBefore) {
+    query = query.lt("created_at", createdBefore);
+  }
+
+  if (search) {
+    const parts = [
+      `client_name.ilike.%${search}%`,
+      `pickup_address.ilike.%${search}%`,
+      `delivery_address.ilike.%${search}%`,
+    ];
+    const numericFromFormatted = search
+      .replace(/^rcs-/i, "")
+      .replace(/^\d{4}-/, "")
+      .replace(/^0+/, "");
+    if (/^\d+$/.test(numericFromFormatted) && numericFromFormatted.length > 0) {
+      const asNum = Number(numericFromFormatted);
+      if (Number.isSafeInteger(asNum)) {
+        parts.push(`order_number.eq.${asNum}`);
+      }
+    }
+    query = query.or(parts.join(","));
+  }
+
+  return query;
+}
 
 export function useOrders(options: UseOrdersOptions = {}) {
   const { page = 0, pageSize = 25, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, createdBefore, countMode = "estimated", cursor = null } = options;
@@ -120,84 +179,98 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
       const sortColumn = sortField ? SORT_FIELD_TO_DB[sortField] : "created_at";
       const sortAscending = sortDirection === "asc";
-      // Cursor-modus is alleen veilig op de default-sort (created_at DESC).
-      // Andere kolommen (status/weight_kg/client_name) hebben duplicaten en
-      // asc/desc-varianten die ingewikkelder keyset-vormen vereisen. Voor
-      // nu: bij non-default sort zwijgend terugvallen op offset-paginatie.
-      const useCursor = cursor && sortColumn === "created_at" && !sortAscending;
+      const useNativeKeyset = sortColumn === "created_at" && !sortAscending;
 
-      let query = (supabase as any)
-        .from("orders")
-        .select(LIST_COLUMNS, { count: countMode })
-        .order(sortColumn, { ascending: sortAscending, nullsFirst: false });
+      const countQuery = applyOrderListFilters(
+        (supabase as any)
+          .from("orders")
+          .select("id", { count: countMode, head: true }),
+        { statusFilter, orderTypeFilter, departmentFilter, createdBefore, search },
+      );
 
-      if (useCursor && cursor) {
+      let ordersPromise: Promise<{ data: any[]; error: any; nextCursor: OrderListCursor | null }>;
+
+      if (useNativeKeyset) {
+        let query = applyOrderListFilters(
+          (supabase as any)
+            .from("orders")
+            .select(LIST_COLUMNS)
+            .order(sortColumn, { ascending: sortAscending, nullsFirst: false }),
+          { statusFilter, orderTypeFilter, departmentFilter, createdBefore, search },
+        );
+
+        if (cursor) {
         // (created_at, id) < (cursor.createdAt, cursor.id) in DESC-volgorde.
         // PostgREST ondersteunt geen tuple-vergelijking, dus gesimuleerd via:
         //   created_at < cursor.createdAt
         //   OR (created_at = cursor.createdAt AND id < cursor.id)
-        query = query
-          .or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`)
-          .order("id", { ascending: false })
-          .limit(pageSize);
-      } else {
-        query = query.range(page * pageSize, (page + 1) * pageSize - 1);
-        if (sortColumn !== "created_at") {
-          query = query.order("created_at", { ascending: false });
-        }
-      }
-
-      if (statusFilter && statusFilter !== "alle") {
-        // Account for legacy statuses that map to PENDING
-        if (statusFilter === "PENDING") {
-          query = query.in("status", ["PENDING", "OPEN", "WAITING", "CONFIRMED"]);
+          query = query
+            .or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`)
+            .order("id", { ascending: false })
+            .limit(pageSize);
         } else {
-          query = query.eq("status", statusFilter);
+          query = query.range(page * pageSize, (page + 1) * pageSize - 1);
         }
-      }
 
-      if (orderTypeFilter) {
-        query = query.eq("order_type", orderTypeFilter);
-      }
-
-      if (departmentFilter && UUID_RE.test(departmentFilter)) {
-        query = query.eq("department_id", departmentFilter);
-      }
-
-      if (createdBefore) {
-        query = query.lt("created_at", createdBefore);
-      }
-
-      if (search) {
-        const parts = [
-          `client_name.ilike.%${search}%`,
-          `pickup_address.ilike.%${search}%`,
-          `delivery_address.ilike.%${search}%`,
-        ];
-        // order_number is een integer-kolom, PostgREST ondersteunt geen
-        // ilike/::text-cast. Daarom het zoektje normaliseren naar een int:
-        // "RCS-2026-0042" / "2026-0042" / "0042" / "42" → 42. Alles dat
-        // overblijft aan niet-digits betekent dat de intentie geen
-        // ordernummer was (dan alleen tekstzoek gebruiken).
+        ordersPromise = (async () => {
+          const { data, error } = await query;
+          const lastRow = data?.[data.length - 1];
+          const nextCursor: OrderListCursor | null =
+            lastRow && (data?.length ?? 0) >= pageSize
+              ? {
+                  sortField: "createdAt",
+                  sortDirection: "desc",
+                  sortValue: lastRow.created_at,
+                  createdAt: lastRow.created_at,
+                  id: lastRow.id,
+                }
+              : null;
+          return { data: data ?? [], error, nextCursor };
+        })();
+      } else {
         const numericFromFormatted = search
-          .replace(/^rcs-/i, "")
-          .replace(/^\d{4}-/, "")
-          .replace(/^0+/, "");
-        if (/^\d+$/.test(numericFromFormatted) && numericFromFormatted.length > 0) {
-          const asNum = Number(numericFromFormatted);
-          if (Number.isSafeInteger(asNum)) {
-            parts.push(`order_number.eq.${asNum}`);
-          }
-        }
-        query = query.or(parts.join(","));
+          ? search.replace(/^rcs-/i, "").replace(/^\d{4}-/, "").replace(/^0+/, "")
+          : "";
+        const searchOrderNumber =
+          /^\d+$/.test(numericFromFormatted) && numericFromFormatted.length > 0
+            ? Number(numericFromFormatted)
+            : null;
+
+        ordersPromise = (async () => {
+          const { data, error } = await (supabase.rpc as any)("orders_page_v1", {
+            p_page_size: pageSize,
+            p_status_filter: statusFilter && statusFilter !== "alle" ? statusFilter : null,
+            p_order_type_filter: orderTypeFilter ?? null,
+            p_department_filter: departmentFilter && UUID_RE.test(departmentFilter) ? departmentFilter : null,
+            p_search: search ?? null,
+            p_search_order_number: Number.isSafeInteger(searchOrderNumber) ? searchOrderNumber : null,
+            p_created_before: createdBefore ?? null,
+            p_sort_field: sortColumn,
+            p_sort_direction: sortAscending ? "asc" : "desc",
+            p_cursor_text: typeof cursor?.sortValue === "string" ? cursor.sortValue : null,
+            p_cursor_numeric: typeof cursor?.sortValue === "number" ? cursor.sortValue : null,
+            p_cursor_created_at: cursor?.createdAt ?? null,
+            p_cursor_id: cursor?.id ?? null,
+          });
+          return {
+            data: (data?.rows as any[]) ?? [],
+            error,
+            nextCursor: data?.next_cursor
+              ? {
+                  sortField: DB_FIELD_TO_SORT[(data.next_cursor as any).sortField] ?? (sortField ?? "createdAt"),
+                  sortDirection: ((data.next_cursor as any).sortDirection === "asc" ? "asc" : "desc") as OrderListSortDirection,
+                  sortValue: (data.next_cursor as any).sortValue as string | number,
+                  createdAt: String((data.next_cursor as any).createdAt),
+                  id: String((data.next_cursor as any).id),
+                }
+              : null,
+          };
+        })();
       }
 
-      // Perf: departments via gedeelde cache (1x per tenant per 60s).
-      // Fault-tolerant: faalt de departments-fetch, dan nog steeds orders tonen
-      // (met lege departmentCode). Zo blokkeert een RLS/seed-probleem niet de
-      // hele dashboard.
-      const [ordersResult, departments] = await Promise.all([
-        query,
+      const [ordersResult, countResult, departments] = await Promise.all([
+        ordersPromise,
+        countQuery,
         tenant?.id
           ? fetchDepartmentsCached(queryClient, tenant.id).catch((e) => {
               console.warn("[useOrders] departments fetch failed, continuing without codes:", e);
@@ -206,8 +279,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
           : Promise.resolve([]),
       ]);
 
-      const { data, error, count } = ordersResult;
+      const { data, error, nextCursor } = ordersResult;
+      const { count, error: countError } = countResult;
       if (error) throw error;
+      if (countError) throw countError;
 
       const deptCodeById: Record<string, string> = {};
       departments.forEach((d) => {
@@ -259,15 +334,6 @@ export function useOrders(options: UseOrdersOptions = {}) {
         };
       });
 
-      // nextCursor: alleen aanbieden als we op de default-sort draaien en
-      // een volle pagina teruggekregen hebben. Anders is er geen "volgende".
-      const lastRow = data?.[data.length - 1];
-      const canUseCursor = sortColumn === "created_at" && !sortAscending;
-      const nextCursor: OrderListCursor | null =
-        canUseCursor && lastRow && (data?.length ?? 0) >= pageSize
-          ? { createdAt: lastRow.created_at, id: lastRow.id }
-          : null;
-
       return { orders, totalCount: count ?? 0, nextCursor };
     },
   });
@@ -276,8 +342,10 @@ export function useOrders(options: UseOrdersOptions = {}) {
 /**
  * Telt DRAFT-orders die langer dan 2 uur open staan, tenant-gescoped via RLS.
  * Gebruikt een aparte count-query (head: true) zodat de teller over de hele
- * tabel gaat en niet alleen binnen de huidige 25-rij-pagina. Refresht elke 60s
- * zodat nieuwe drafts die de drempel passeren vanzelf in de strip verschijnen.
+ * tabel gaat en niet alleen binnen de huidige 25-rij-pagina. Voor deze
+ * waarschuwingsbadge is een planner-estimate voldoende; dat voorkomt een dure
+ * exact count scan bij grote tenants. Refresht elke 60s zodat nieuwe drafts
+ * die de drempel passeren vanzelf in de strip verschijnen.
  */
 export function useStaleDraftCount(thresholdHours: number = 2) {
   const { tenant } = useTenantOptional();
@@ -289,7 +357,7 @@ export function useStaleDraftCount(thresholdHours: number = 2) {
       const cutoffIso = new Date(Date.now() - thresholdHours * 60 * 60 * 1000).toISOString();
       const { count, error } = await supabase
         .from("orders")
-        .select("id", { count: "exact", head: true })
+        .select("id", { count: "planned", head: true })
         .eq("status", "DRAFT")
         .lt("created_at", cutoffIso);
 

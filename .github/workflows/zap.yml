@@ -1,0 +1,43 @@
+name: OWASP ZAP Baseline
+# DAST-scan tegen de production-build van de SPA. Vangt headers,
+# CORS-misconfigs, mixed-content, en common web vulns die statische
+# tests missen. Niet-blokkerend op high; rapporteert via artefact.
+#
+# Trigger: handmatig en wekelijks (zondagnacht).
+on:
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build
+      - name: Start preview server
+        run: |
+          nohup npx vite preview --port 4173 --host 127.0.0.1 > preview.log 2>&1 &
+          for i in {1..30}; do
+            if curl -sf http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.13.0
+        with:
+          target: "http://127.0.0.1:4173"
+          rules_file_name: ".zap/rules.tsv"
+          cmd_options: "-a -j -m 5 -T 10"
+          fail_action: false
+          allow_issue_writing: false
+      - name: Upload preview log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-preview-log
+          path: preview.log

@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import * as XLSX from "xlsx";
 import {
   parseCSV,
   parseExcel,
@@ -279,75 +278,10 @@ describe("mapRowsToImportData", () => {
 
 // ── Excel Parsing ───────────────────────────────────────────────────
 
-/** Helper: create an in-memory .xlsx ArrayBuffer from an array-of-arrays */
-function createExcelBuffer(aoa: string[][]): ArrayBuffer {
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-  const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-  return buf as ArrayBuffer;
-}
-
 describe("parseExcel", () => {
-  it("parses a basic Excel file with headers and data rows", () => {
-    const buffer = createExcelBuffer([
-      ["klant", "ophaaladres", "afleveradres", "gewicht"],
-      ["Janssen BV", "Keizersgracht 12, Amsterdam", "Stationsweg 3, Utrecht", "1500"],
-      ["De Vries", "Havenweg 5, Rotterdam", "Industrieweg 10, Eindhoven", "2000"],
-    ]);
-    const { headers, rows } = parseExcel(buffer);
-    expect(headers).toEqual(["klant", "ophaaladres", "afleveradres", "gewicht"]);
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual(["Janssen BV", "Keizersgracht 12, Amsterdam", "Stationsweg 3, Utrecht", "1500"]);
-    expect(rows[1][0]).toBe("De Vries");
-  });
-
-  it("returns empty for an empty workbook", () => {
-    const ws = XLSX.utils.aoa_to_sheet([]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-    const { headers, rows } = parseExcel(buf);
-    expect(headers).toEqual([]);
-    expect(rows).toEqual([]);
-  });
-
-  it("skips blank rows in the data", () => {
-    const buffer = createExcelBuffer([
-      ["klant", "gewicht"],
-      ["A", "100"],
-      ["", ""],
-      ["B", "200"],
-    ]);
-    const { rows } = parseExcel(buffer);
-    expect(rows).toHaveLength(2);
-    expect(rows[0][0]).toBe("A");
-    expect(rows[1][0]).toBe("B");
-  });
-
-  it("trims whitespace from headers and cells", () => {
-    const buffer = createExcelBuffer([
-      ["  klant  ", " gewicht "],
-      [" Janssen BV ", " 1500 "],
-    ]);
-    const { headers, rows } = parseExcel(buffer);
-    expect(headers).toEqual(["klant", "gewicht"]);
-    expect(rows[0]).toEqual(["Janssen BV", "1500"]);
-  });
-
-  it("integrates with autoDetectColumns and mapRowsToImportData", () => {
-    const buffer = createExcelBuffer([
-      ["klant", "ophaaladres", "afleveradres", "gewicht", "aantal"],
-      ["Test BV", "Straat 1, Amsterdam", "Weg 2, Rotterdam", "500", "10"],
-    ]);
-    const { headers, rows } = parseExcel(buffer);
-    const mappings = autoDetectColumns(headers);
-    const importRows = mapRowsToImportData(rows, mappings);
-    expect(importRows).toHaveLength(1);
-    expect(importRows[0].clientName).toBe("Test BV");
-    expect(importRows[0].pickupAddress).toBe("Straat 1, Amsterdam");
-    expect(importRows[0].deliveryAddress).toBe("Weg 2, Rotterdam");
-    expect(importRows[0].weight).toBe("500");
-    expect(importRows[0].quantity).toBe("10");
+  it("throws because Excel import is disabled", () => {
+    expect(() => parseExcel(new ArrayBuffer(8))).toThrow(
+      "Excel-import is tijdelijk uitgeschakeld. Gebruik een CSV-bestand.",
+    );
   });
 });

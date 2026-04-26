@@ -17,20 +17,23 @@ export function ConnectorCatalog({ onSelect }: Props) {
     return <div className="card--luxe p-6 text-sm text-muted-foreground">Laden...</div>;
   }
 
+  const availableConnectors = (list.data ?? []).filter((c) => c.status !== "soon");
+  const roadmapConnectors = (list.data ?? []).filter((c) => c.status === "soon");
+
   const grouped: Record<ConnectorCategory, ConnectorWithStatus[]> = {
     boekhouding: [],
     telematica: [],
     klantportaal: [],
     overig: [],
   };
-  for (const c of list.data ?? []) grouped[c.category].push(c);
+  for (const c of availableConnectors) grouped[c.category].push(c);
 
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-xl font-semibold text-foreground">Integraties</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Koppel OrderFlow aan je boekhouding, telematica of klantportaal. Per koppeling beheer je verbinding, mapping en sync-log op één plek.
+          Koppel OrderFlow aan je boekhouding, telematica of klantportaal. Per koppeling beheer je verbinding, mapping en sync-log op een plek.
         </p>
       </div>
 
@@ -48,6 +51,24 @@ export function ConnectorCatalog({ onSelect }: Props) {
             </div>
           </section>
         ))}
+
+      {roadmapConnectors.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.18em]">
+              Roadmap
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Deze koppelingen zijn zichtbaar als planning, maar maken nog geen deel uit van de actieve integratieflow.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {roadmapConnectors.map((connector) => (
+              <RoadmapCard key={connector.slug} connector={connector} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -59,17 +80,13 @@ function ConnectorCard({
   connector: ConnectorWithStatus;
   onSelect: () => void;
 }) {
-  const isSoon = connector.status === "soon";
   const isLive = connector.enabled && connector.hasCredentials;
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      disabled={isSoon}
-      className={`card--luxe p-5 text-left transition-all group ${
-        isSoon ? "opacity-60 cursor-not-allowed" : "hover:shadow-md"
-      }`}
+      className="card--luxe p-5 text-left transition-all group hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">
         <BrandTile connector={connector} />
@@ -87,6 +104,24 @@ function ConnectorCard({
         </div>
       )}
     </button>
+  );
+}
+
+function RoadmapCard({ connector }: { connector: ConnectorWithStatus }) {
+  return (
+    <div className="card--luxe p-4 text-left opacity-80">
+      <div className="flex items-start justify-between gap-3">
+        <BrandTile connector={connector} />
+        <Badge variant="secondary" className="gap-1 text-[10px]">
+          <Clock className="h-3 w-3" />
+          Roadmap
+        </Badge>
+      </div>
+      <h4 className="mt-3 text-sm font-semibold text-foreground">{connector.name}</h4>
+      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+        {connector.description}
+      </p>
+    </div>
   );
 }
 
@@ -119,14 +154,6 @@ function StatusBadge({
   connector: ConnectorWithStatus;
   live: boolean;
 }) {
-  if (connector.status === "soon") {
-    return (
-      <Badge variant="secondary" className="gap-1 text-[10px]">
-        <Clock className="h-3 w-3" />
-        Binnenkort
-      </Badge>
-    );
-  }
   if (live) {
     return (
       <Badge variant="default" className="gap-1 text-[10px] bg-emerald-600 hover:bg-emerald-700">

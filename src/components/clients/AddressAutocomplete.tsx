@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Autocomplete, GoogleMap, Marker } from "@react-google-maps/api";
 import { useGoogleMaps } from "@/hooks/useGoogleMaps";
-import { MapPin, Loader2 } from "lucide-react";
+import { MapPin, Loader2, Crosshair } from "lucide-react";
 
 export interface AddressValue {
   street: string;
@@ -245,10 +245,34 @@ function ManualAddressFields({
     onChange({ ...value, [key]: next, lat: null, lng: null, coords_manual: false });
   };
 
+  const updateCoordinate = (key: "lat" | "lng", next: string) => {
+    const parsed = next.trim() === "" ? null : Number(next);
+    onChange({
+      ...value,
+      [key]: Number.isFinite(parsed) ? parsed : null,
+      coords_manual:
+        key === "lat"
+          ? Number.isFinite(parsed) && value.lng != null
+          : value.lat != null && Number.isFinite(parsed),
+    });
+  };
+
   return (
     <div className="space-y-3" onBlur={onBlur}>
-      <div className="rounded border border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold)/0.08)] p-3 text-xs text-[hsl(var(--gold-deep))]">
-        Adres-autocomplete is niet beschikbaar. Vul het adres handmatig in, coordinaten worden later bijgewerkt.
+      <div className="rounded-xl border border-[hsl(var(--gold)/0.35)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.45),hsl(var(--background)))] p-4">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 rounded-full bg-[hsl(var(--gold-soft)/0.8)] p-2 text-[hsl(var(--gold-deep))]">
+            <MapPin className="h-4 w-4" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-[hsl(var(--gold-deep))]">
+              Handmatige adresinvoer actief
+            </p>
+            <p className="text-xs text-[hsl(var(--gold-deep))]">
+              Google Maps is hier nu niet beschikbaar. Je kunt het adres volledig invullen en desgewenst meteen coordinaten meegeven voor exacte navigatie.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-2">
@@ -288,6 +312,33 @@ function ManualAddressFields({
           onChange={(v) => update("country", v)}
           className="col-span-2"
         />
+      </div>
+
+      <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Crosshair className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+          <p className="text-sm font-medium text-foreground">Exacte locatie</p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Optioneel: vul latitude en longitude in als de chauffeur exact naar een dock, magazijnpoort of achteringang moet navigeren.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <InputField
+            label="Latitude"
+            value={value.lat?.toString() ?? ""}
+            onChange={(v) => updateCoordinate("lat", v)}
+          />
+          <InputField
+            label="Longitude"
+            value={value.lng?.toString() ?? ""}
+            onChange={(v) => updateCoordinate("lng", v)}
+          />
+        </div>
+        {value.lat != null && value.lng != null && (
+          <p className="text-xs text-[hsl(var(--gold-deep))]">
+            Coordinaten opgeslagen. Chauffeurs navigeren naar deze exacte locatie.
+          </p>
+        )}
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}

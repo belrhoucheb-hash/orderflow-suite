@@ -1,0 +1,234 @@
+// Helpers voor de exhaustive smoke-test.
+//
+// Verzamelt per route: console-errors, 4xx/5xx, navigatie- en
+// netwerk-timings. Klikt veilige knoppen + sluit dialogs.
+
+import type { Page, Request, Response } from "@playwright/test";
+
+export interface PageReport {
+  path: string;
+  loadMs: number;
+  consoleErrors: string[];
+  networkErrors: { url: string; status: number; method: string }[];
+  slowRequests: { url: string; durationMs: number }[];
+  buttonsClicked: number;
+  buttonsSkipped: number;
+  dialogsOpened: number;
+  finalUrl: string;
+  notes: string[];
+}
+
+export interface SmokeReport {
+  startedAt: string;
+  totalMs: number;
+  pages: PageReport[];
+}
+
+const SLOW_REQUEST_MS = 2000;
+
+const BUTTON_BLOCKLIST = [
+  /verwijder/i,
+  /delete/i,
+  /annule/i,
+  /cancel/i,
+  /void/i,
+  /storneer/i,
+  /verzend/i,
+  /dispatch/i,
+  /publiceer/i,
+  /regenereer/i,
+  /regenerate/i,
+  /uitloggen/i,
+  /logout/i,
+  /sign\s*out/i,
+  /verstuur/i,
+  /send/i,
+  /opslaan/i,
+  /bewaar/i,
+  /save/i,
+  /aanmaken/i,
+  /create/i,
+  /betaald/i,
+  /factuur/i,
+  /uitvoeren/i,
+  /bevestig/i,
+  /confirm/i,
+];
+
+const SAFE_TEXT_HINTS = [
+  /sluit/i,
+  /annuleer/i,
+  /terug/i,
+  /tab/i,
+  /filter/i,
+  /sort/i,
+  /toon/i,
+  /weergave/i,
+  /uitvouwen/i,
+  /inklappen/i,
+  /detail/i,
+];
+
+export function isSafeButton(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (BUTTON_BLOCKLIST.some((re) => re.test(t))) return false;
+  return true;
+}
+
+export function attachListeners(page: Page) {
+  const consoleErrors: string[] = [];
+  const networkErrors: { url: string; status: number; method: string }[] = [];
+  const requestTimings = new Map<Request, number>();
+  const slowRequests: { url: string; durationMs: number }[] = [];
+
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      const text = msg.text();
+      // Filter ruis: source-map warnings, react-router future flags
+      if (/Future Flag|sourcemap|favicon/i.test(text)) return;
+      consoleErrors.push(text.slice(0, 300));
+    }
+  });
+  page.on("pageerror", (err) => {
+    consoleErrors.push(`pageerror: ${err.message.slice(0, 300)}`);
+  });
+  page.on("request", (req) => requestTimings.set(req, Date.now()));
+  page.on("requestfailed", (req) => {
+    networkErrors.push({
+      url: req.url().slice(0, 200),
+      status: 0,
+      method: req.method(),
+    });
+  });
+  page.on("response", (res: Response) => {
+    const req = res.request();
+    const start = requestTimings.get(req);
+    if (start) {
+      const duration = Date.now() - start;
+      if (duration > SLOW_REQUEST_MS && /\/(rest|functions|auth)\/v1\//.test(res.url())) {
+        slowRequests.push({ url: res.url().slice(0, 200), durationMs: duration });
+      }
+    }
+    if (res.status() >= 400 && /\/(rest|functions|auth)\/v1\//.test(res.url())) {
+      networkErrors.push({
+        url: res.url().slice(0, 200),
+        status: res.status(),
+        method: req.method(),
+      });
+    }
+  });
+
+  return { consoleErrors, networkErrors, slowRequests };
+}
+
+export async function visitAndProbe(
+  page: Page,
+  path: string,
+): Promise<PageReport> {
+  const { consoleErrors, networkErrors, slowRequests } = attachListeners(page);
+  const start = Date.now();
+
+  let buttonsClicked = 0;
+  let buttonsSkipped = 0;
+  let dialogsOpened = 0;
+  const notes: string[] = [];
+
+  try {
+    await page.goto(path, { waitUntil: "networkidle", timeout: 20_000 });
+  } catch (e) {
+    notes.push(`goto faalde: ${(e as Error).message.slice(0, 150)}`);
+  }
+  const loadMs = Date.now() - start;
+
+  // Klik elke zichtbare safe-button maximaal één keer.
+  try {
+    const buttons = await page.locator("button:visible, [role='button']:visible").all();
+    for (const btn of buttons.slice(0, 25)) {
+      const text = (await btn.textContent({ timeout: 500 }).catch(() => ""))?.slice(0, 80) ?? "";
+      if (!isSafeButton(text)) {
+        buttonsSkipped++;
+        continue;
+      }
+      try {
+        await btn.click({ timeout: 1500, trial: false });
+        buttonsClicked++;
+        // Probeer een geopende dialog te sluiten via Escape, anders Annuleer/Sluit
+        const dialogVisible = await page.locator("[role='dialog']:visible").first().isVisible().catch(() => false);
+        if (dialogVisible) {
+          dialogsOpened++;
+          await page.keyboard.press("Escape").catch(() => {});
+          await page.waitForTimeout(150);
+        }
+      } catch {
+        buttonsSkipped++;
+      }
+    }
+  } catch (e) {
+    notes.push(`buttons-iter: ${(e as Error).message.slice(0, 150)}`);
+  }
+
+  return {
+    path,
+    loadMs,
+    consoleErrors: dedupe(consoleErrors).slice(0, 10),
+    networkErrors: dedupe(networkErrors.map((n) => `${n.method} ${n.status} ${n.url}`))
+      .slice(0, 10)
+      .map((s) => {
+        const [method, status, ...rest] = s.split(" ");
+        return { method, status: Number(status), url: rest.join(" ") };
+      }),
+    slowRequests: slowRequests.slice(0, 10),
+    buttonsClicked,
+    buttonsSkipped,
+    dialogsOpened,
+    finalUrl: page.url(),
+    notes,
+  };
+}
+
+function dedupe<T>(arr: T[]): T[] {
+  return Array.from(new Set(arr.map((v) => JSON.stringify(v)))).map((s) => JSON.parse(s)) as T[];
+}
+
+export function summarize(report: SmokeReport): string {
+  const total = report.pages.length;
+  const withErrors = report.pages.filter((p) => p.consoleErrors.length > 0 || p.networkErrors.length > 0);
+  const slowPages = report.pages.filter((p) => p.loadMs > 3000);
+  const lines: string[] = [];
+  lines.push(`# Smoke-rapport`);
+  lines.push(`Gestart: ${report.startedAt}`);
+  lines.push(`Totale duur: ${(report.totalMs / 1000).toFixed(1)}s`);
+  lines.push(`Routes getest: ${total}`);
+  lines.push(`Routes met errors: ${withErrors.length}`);
+  lines.push(`Routes > 3s laadtijd: ${slowPages.length}`);
+  lines.push("");
+  lines.push("| Route | Laad | Console | Netwerk | Traag | Knoppen | Dialogs |");
+  lines.push("|---|---|---|---|---|---|---|");
+  for (const p of report.pages) {
+    lines.push(
+      `| ${p.path} | ${p.loadMs}ms | ${p.consoleErrors.length} | ${p.networkErrors.length} | ${p.slowRequests.length} | ${p.buttonsClicked}/${p.buttonsClicked + p.buttonsSkipped} | ${p.dialogsOpened} |`,
+    );
+  }
+  lines.push("");
+  if (withErrors.length > 0) {
+    lines.push("## Pagina's met errors");
+    for (const p of withErrors) {
+      lines.push(`### ${p.path}`);
+      if (p.consoleErrors.length) {
+        lines.push("**Console errors:**");
+        for (const e of p.consoleErrors) lines.push(`- ${e}`);
+      }
+      if (p.networkErrors.length) {
+        lines.push("**Network 4xx/5xx:**");
+        for (const e of p.networkErrors) lines.push(`- ${e.method} ${e.status} ${e.url}`);
+      }
+      if (p.slowRequests.length) {
+        lines.push("**Trage requests:**");
+        for (const e of p.slowRequests) lines.push(`- ${e.durationMs}ms ${e.url}`);
+      }
+      lines.push("");
+    }
+  }
+  return lines.join("\n");
+}

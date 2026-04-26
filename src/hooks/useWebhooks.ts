@@ -23,7 +23,7 @@ export interface WebhookDelivery {
   subscription_id: string;
   event_type: string;
   event_id: string;
-  status: "PENDING" | "DELIVERED" | "FAILED" | "DEAD";
+  status: "PENDING" | "PROCESSING" | "DELIVERED" | "FAILED" | "DEAD";
   attempt_count: number;
   next_attempt_at: string | null;
   last_attempt_at: string | null;
@@ -236,23 +236,18 @@ export function useTestWebhook() {
   return useMutation({
     mutationFn: async (subscriptionId: string) => {
       const { data: userRes } = await supabase.auth.getUser();
-      const tenantId = (userRes.user?.app_metadata as { tenant_id?: string })?.tenant_id;
-      if (!tenantId) throw new Error("Geen tenant-id in sessie");
+      const userId = userRes.user?.id;
+      if (!userId) throw new Error("Geen actieve sessie");
 
       const { data: sub, error: subErr } = await supabase
         .from("webhook_subscriptions" as any)
-        .select("id, url")
+        .select("id")
         .eq("id", subscriptionId)
         .single();
       if (subErr || !sub) throw subErr ?? new Error("Subscription niet gevonden");
 
-      const { error: emitErr } = await supabase.rpc("emit_webhook_event" as any, {
-        p_tenant_id: tenantId,
-        p_event_type: "webhook.test",
-        p_payload: {
-          message: "Test-event vanuit OrderFlow Settings",
-          occurred_at: new Date().toISOString(),
-        },
+      const { error: emitErr } = await supabase.rpc("enqueue_test_webhook_delivery" as any, {
+        p_subscription_id: subscriptionId,
       });
       if (emitErr) throw emitErr;
     },

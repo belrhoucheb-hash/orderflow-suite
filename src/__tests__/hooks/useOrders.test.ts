@@ -13,6 +13,7 @@ const { mockFrom, mockChannel, mockSupabase } = vi.hoisted(() => {
   });
   const mockSupabase = {
     from: mockFrom,
+    rpc: vi.fn(),
     auth: {
       getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
       onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
@@ -48,6 +49,29 @@ import {
   useStaleDraftCount,
 } from "@/hooks/useOrders";
 
+function createOrdersQueryMock(
+  data: any[],
+  count: number,
+  calls?: Array<{ method: string; args: unknown[] }>,
+) {
+  let isHead = false;
+  const chain: any = {};
+  chain.select = vi.fn((...args: unknown[]) => {
+    calls?.push({ method: "select", args });
+    isHead = Boolean((args[1] as any)?.head);
+    return chain;
+  });
+  chain.order = vi.fn((...args: unknown[]) => { calls?.push({ method: "order", args }); return chain; });
+  chain.range = vi.fn((...args: unknown[]) => { calls?.push({ method: "range", args }); return chain; });
+  chain.eq = vi.fn((...args: unknown[]) => { calls?.push({ method: "eq", args }); return chain; });
+  chain.in = vi.fn((...args: unknown[]) => { calls?.push({ method: "in", args }); return chain; });
+  chain.or = vi.fn((...args: unknown[]) => { calls?.push({ method: "or", args }); return chain; });
+  chain.lt = vi.fn((...args: unknown[]) => { calls?.push({ method: "lt", args }); return chain; });
+  chain.limit = vi.fn((...args: unknown[]) => { calls?.push({ method: "limit", args }); return chain; });
+  chain.then = vi.fn((cb: any) => cb(isHead ? { count, error: null } : { data, count, error: null }));
+  return chain;
+}
+
 describe("useOrders", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -68,26 +92,7 @@ describe("useOrders", () => {
       internal_note: "test note",
     };
 
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      or: vi.fn().mockResolvedValue({ data: [orderRow], error: null, count: 1 }),
-      then: vi.fn().mockImplementation((cb: any) => cb({ data: [orderRow], error: null, count: 1 })),
-    }));
-
-    // Need to make the query actually resolve
-    mockFrom.mockImplementation(() => {
-      const chain: any = {
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockResolvedValue({ data: [orderRow], error: null, count: 1 }),
-        eq: vi.fn().mockReturnThis(),
-        or: vi.fn().mockReturnThis(),
-      };
-      return chain;
-    });
+    mockFrom.mockImplementation(() => createOrdersQueryMock([orderRow], 1));
 
     const { result } = renderHook(() => useOrders({ page: 0, pageSize: 25 }), { wrapper: createWrapper() });
 
@@ -108,14 +113,7 @@ describe("useOrders", () => {
       weight_kg: null, vehicle_id: null, internal_note: null,
     };
 
-    mockFrom.mockImplementation(() => {
-      const chain: any = {
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockResolvedValue({ data: [orderRow], error: null, count: 1 }),
-      };
-      return chain;
-    });
+    mockFrom.mockImplementation(() => createOrdersQueryMock([orderRow], 1));
 
     const { result } = renderHook(() => useOrders(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -131,11 +129,7 @@ describe("useOrders", () => {
       weight_kg: null, vehicle_id: null, internal_note: null,
     };
 
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockResolvedValue({ data: [orderRow], error: null, count: 1 }),
-    }));
+    mockFrom.mockImplementation(() => createOrdersQueryMock([orderRow], 1));
 
     const { result } = renderHook(() => useOrders(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -147,16 +141,7 @@ describe("useOrders", () => {
   });
 
   it("applies status filter", async () => {
-    mockFrom.mockImplementation(() => {
-      const chain: any = {
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-      };
-      chain.eq.mockResolvedValue({ data: [], error: null, count: 0 });
-      return chain;
-    });
+    mockFrom.mockImplementation(() => createOrdersQueryMock([], 0));
 
     const { result } = renderHook(
       () => useOrders({ statusFilter: "DELIVERED" }),
@@ -166,15 +151,7 @@ describe("useOrders", () => {
   });
 
   it("applies search filter", async () => {
-    mockFrom.mockImplementation(() => {
-      const chain: any = {
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        or: vi.fn().mockResolvedValue({ data: [], error: null, count: 0 }),
-      };
-      return chain;
-    });
+    mockFrom.mockImplementation(() => createOrdersQueryMock([], 0));
 
     const { result } = renderHook(
       () => useOrders({ search: "Acme" }),
@@ -186,15 +163,11 @@ describe("useOrders", () => {
   it("parseert geformatteerd ordernummer RCS-2026-0042 naar integer in de or()-clause", async () => {
     const orCalls: string[] = [];
     mockFrom.mockImplementation(() => {
-      const chain: any = {
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        or: vi.fn().mockImplementation((expr: string) => {
-          orCalls.push(expr);
-          return Promise.resolve({ data: [], error: null, count: 0 });
-        }),
-      };
+      const chain = createOrdersQueryMock([], 0);
+      chain.or = vi.fn((expr: string) => {
+        orCalls.push(expr);
+        return chain;
+      });
       return chain;
     });
 
@@ -211,15 +184,11 @@ describe("useOrders", () => {
   it("parseert kaal ordernummer 0042 naar integer 42", async () => {
     const orCalls: string[] = [];
     mockFrom.mockImplementation(() => {
-      const chain: any = {
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        or: vi.fn().mockImplementation((expr: string) => {
-          orCalls.push(expr);
-          return Promise.resolve({ data: [], error: null, count: 0 });
-        }),
-      };
+      const chain = createOrdersQueryMock([], 0);
+      chain.or = vi.fn((expr: string) => {
+        orCalls.push(expr);
+        return chain;
+      });
       return chain;
     });
 
@@ -234,15 +203,11 @@ describe("useOrders", () => {
   it("slaat order_number.eq over voor zuiver tekst-zoektje", async () => {
     const orCalls: string[] = [];
     mockFrom.mockImplementation(() => {
-      const chain: any = {
-        select: vi.fn().mockReturnThis(),
-        order: vi.fn().mockReturnThis(),
-        range: vi.fn().mockReturnThis(),
-        or: vi.fn().mockImplementation((expr: string) => {
-          orCalls.push(expr);
-          return Promise.resolve({ data: [], error: null, count: 0 });
-        }),
-      };
+      const chain = createOrdersQueryMock([], 0);
+      chain.or = vi.fn((expr: string) => {
+        orCalls.push(expr);
+        return chain;
+      });
       return chain;
     });
 
@@ -256,11 +221,7 @@ describe("useOrders", () => {
   });
 
   it("skips status filter for 'alle'", async () => {
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      range: vi.fn().mockResolvedValue({ data: [], error: null, count: 0 }),
-    }));
+    mockFrom.mockImplementation(() => createOrdersQueryMock([], 0));
 
     const { result } = renderHook(
       () => useOrders({ statusFilter: "alle" }),
@@ -478,7 +439,7 @@ describe("useStaleDraftCount", () => {
     expect(result.current.data!.cutoffIso).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
     const selectCall = calls.find(c => c.method === "select");
-    expect(selectCall?.args[1]).toMatchObject({ count: "exact", head: true });
+    expect(selectCall?.args[1]).toMatchObject({ count: "planned", head: true });
     const eqCall = calls.find(c => c.method === "eq");
     expect(eqCall?.args).toEqual(["status", "DRAFT"]);
     const ltCall = calls.find(c => c.method === "lt");
@@ -491,18 +452,7 @@ describe("useOrders > createdBefore", () => {
 
   it("voegt .lt('created_at', iso) toe wanneer createdBefore is gezet", async () => {
     const calls: Array<{ method: string; args: unknown[] }> = [];
-    mockFrom.mockImplementation(() => {
-      const chain: any = {};
-      chain.select = vi.fn((...args: unknown[]) => { calls.push({ method: "select", args }); return chain; });
-      chain.order = vi.fn((...args: unknown[]) => { calls.push({ method: "order", args }); return chain; });
-      chain.range = vi.fn((...args: unknown[]) => { calls.push({ method: "range", args }); return chain; });
-      chain.eq = vi.fn((...args: unknown[]) => { calls.push({ method: "eq", args }); return chain; });
-      chain.lt = vi.fn((...args: unknown[]) => {
-        calls.push({ method: "lt", args });
-        return Promise.resolve({ data: [], error: null, count: 0 });
-      });
-      return chain;
-    });
+    mockFrom.mockImplementation(() => createOrdersQueryMock([], 0, calls));
 
     const cutoff = "2026-04-22T17:00:00.000Z";
     const { result } = renderHook(

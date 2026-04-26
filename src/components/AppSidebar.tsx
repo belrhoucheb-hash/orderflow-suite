@@ -307,7 +307,11 @@ export function AppSidebar() {
       </div>
 
       <SidebarContent className="px-3 py-2">
-        {visiblePrimaryGroups.map((group) => renderNavGroup(group.label, group.items, group.collapsible))}
+        {visiblePrimaryGroups.map((group) => (
+          <div key={group.label}>
+            {renderNavGroup(group.label, group.items, group.collapsible)}
+          </div>
+        ))}
 
         {isAdmin && (
           renderNavGroup("Beheer", adminItems, true)

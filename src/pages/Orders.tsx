@@ -156,11 +156,11 @@ const Orders = () => {
   // als createdBefore-filter zodra de stale-toggle actief is.
   const { data: staleDraft } = useStaleDraftCount(2);
 
-  // Cursor-mode actief bij default sort (createdAt DESC). Anders offset.
-  const isCursorMode =
-    !sortConfig || (sortConfig.field === "createdAt" && sortConfig.direction === "desc");
-  const currentCursor = isCursorMode ? (cursorStack[cursorStack.length - 1] ?? null) : null;
-  const displayedPage = isCursorMode ? cursorStack.length : page;
+  // De orderlijst gebruikt keyset-paginatie voor alle ondersteunde sorts.
+  // Daardoor vermijden we offset-skips op grote tenants, ook bij klant/status/gewicht.
+  const isCursorMode = true;
+  const currentCursor = cursorStack[cursorStack.length - 1] ?? null;
+  const displayedPage = cursorStack.length;
 
   const { data, isLoading, isError, refetch } = useOrders({
     page,
@@ -172,15 +172,13 @@ const Orders = () => {
     sortField: sortConfig?.field as ("customer" | "totalWeight" | "status" | "createdAt") | undefined,
     sortDirection: sortConfig?.direction,
     createdBefore: staleDraftOnly ? staleDraft?.cutoffIso : undefined,
-    // In offset-mode is het exacte totaal nodig voor "pagina X van Y".
-    // In cursor-mode tonen we "pagina X" en gebruiken estimated voor de subtitle.
-    countMode: isCursorMode ? "estimated" : "exact",
+    // Keyset-paginatie gebruikt een planner-estimate voor de globale teller.
+    countMode: "estimated",
     cursor: currentCursor,
   } as any);
   const { unreadOrderIds } = useUnreadNoteOrderIds();
   const rawOrders = data?.orders ?? [];
   const totalCount = data?.totalCount ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const filteredByInfo = useMemo(() => {
     let list = rawOrders;
@@ -893,14 +891,12 @@ const Orders = () => {
               onClick={() => {
                 if (isCursorMode) {
                   setCursorStack((s) => s.slice(0, -1));
-                } else {
-                  setPage((p) => Math.max(0, p - 1));
                 }
               }}
-              disabled={isCursorMode ? cursorStack.length === 0 : page === 0}
+              disabled={cursorStack.length === 0}
               className={cn(
                 "inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors",
-                (isCursorMode ? cursorStack.length === 0 : page === 0)
+                cursorStack.length === 0
                   ? "text-muted-foreground/30 cursor-not-allowed"
                   : "text-muted-foreground/80 hover:text-[hsl(var(--gold-deep))]",
               )}
@@ -909,25 +905,17 @@ const Orders = () => {
               Vorige
             </button>
             <span className="tabular-nums text-[hsl(var(--gold-deep))] font-semibold">
-              {isCursorMode ? `Pagina ${displayedPage + 1}` : `${page + 1} / ${totalPages}`}
+              {`Pagina ${displayedPage + 1}`}
             </span>
             <button
               onClick={() => {
-                if (isCursorMode) {
-                  const next = (data as any)?.nextCursor as OrderListCursor | null | undefined;
-                  if (next) setCursorStack((s) => [...s, next]);
-                } else {
-                  setPage((p) => Math.min(totalPages - 1, p + 1));
-                }
+                const next = (data as any)?.nextCursor as OrderListCursor | null | undefined;
+                if (next) setCursorStack((s) => [...s, next]);
               }}
-              disabled={
-                isCursorMode
-                  ? !(data as any)?.nextCursor
-                  : page >= totalPages - 1
-              }
+              disabled={!(data as any)?.nextCursor}
               className={cn(
                 "inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors",
-                (isCursorMode ? !(data as any)?.nextCursor : page >= totalPages - 1)
+                !(data as any)?.nextCursor
                   ? "text-muted-foreground/30 cursor-not-allowed"
                   : "text-muted-foreground/80 hover:text-[hsl(var(--gold-deep))]",
               )}

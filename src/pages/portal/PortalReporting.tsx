@@ -108,7 +108,7 @@ export default function PortalReporting() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Rapportage</h1>
-          <p className="text-gray-500 mt-1">Inzicht in uw transportprestaties</p>
+          <p className="text-gray-500 mt-1">Inzicht in volume, afleveringen en gewichten</p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={period} onValueChange={(v) => setPeriod(v as "week" | "month" | "quarter")}>
@@ -148,7 +148,8 @@ export default function PortalReporting() {
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               <p className="text-sm text-gray-500">Op tijd</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{onTimePercentage}%</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">Nog niet beschikbaar</p>
+            <p className="text-xs text-gray-400 mt-1">We tonen dit zodra werkelijke aflevertijden worden vastgelegd.</p>
           </CardContent>
         </Card>
         <Card>
@@ -173,7 +174,7 @@ export default function PortalReporting() {
           ) : (
             <div className="text-sm text-gray-600 space-y-1">
               <p>{stats.total} orders in de geselecteerde periode</p>
-              <p>{stats.onTime} op tijd afgeleverd, {stats.late} te laat</p>
+              <p>Op-tijd prestatie volgt zodra aflevertijden per order beschikbaar zijn</p>
               <p>Totaal gewicht: {orders.reduce((s, o) => s + (o.weight_kg ?? 0), 0).toFixed(0)} kg</p>
               <p>Totaal stuks: {orders.reduce((s, o) => s + (o.quantity ?? 0), 0)}</p>
             </div>

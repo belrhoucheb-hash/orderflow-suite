@@ -10,11 +10,11 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { ProfitabilityReport } from "@/components/rapportage/ProfitabilityReport";
 import Autonomie from "@/pages/Autonomie";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
   exportOrderReport,
   exportOrdersCSV,
-  exportOrdersExcel,
   type ReportOrder,
 } from "@/utils/reportExporter";
 import {
@@ -26,30 +26,131 @@ import {
 /*  Data hooks                                                         */
 /* ------------------------------------------------------------------ */
 
-function useRawOrders() {
-  return useQuery({
-    queryKey: ["rapportage-orders"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("id, created_at, status, updated_at, client_name, vehicle_id")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+interface ReportOverviewKpis {
+  totalOrders: number;
+  avgDeliveryDays: number | null;
 }
 
-function useClients() {
+interface ReportOverviewChartItem {
+  orders: number;
+  previous_orders: number | null;
+}
+
+interface ReportOverviewWeekItem extends ReportOverviewChartItem {
+  week_start: string;
+}
+
+interface ReportOverviewMonthItem extends ReportOverviewChartItem {
+  month_start: string;
+}
+
+interface ReportOverviewTopClient {
+  name: string;
+  count: number;
+}
+
+interface ReportOverviewStatusItem {
+  status: string;
+  value: number;
+}
+
+interface ReportOverviewVehicleItem {
+  vehicle_id: string;
+  count: number;
+}
+
+interface ReportOverviewPayload {
+  kpis: ReportOverviewKpis;
+  ordersPerWeek: ReportOverviewWeekItem[];
+  ordersPerMonth: ReportOverviewMonthItem[];
+  topClients: ReportOverviewTopClient[];
+  statusDistribution: ReportOverviewStatusItem[];
+  vehicleOrders: ReportOverviewVehicleItem[];
+}
+
+const MONTH_NAMES = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
+function toInt(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toDateOnlyIso(value: string): string {
+  return value.includes("T") ? value.slice(0, 10) : value;
+}
+
+function getNextDateStr(dateStr: string): string {
+  const next = new Date(`${dateStr}T00:00:00`);
+  next.setDate(next.getDate() + 1);
+  return toDateStr(next);
+}
+
+function formatMonthLabel(monthStart: string): string {
+  const d = new Date(`${toDateOnlyIso(monthStart)}T00:00:00`);
+  return `${MONTH_NAMES[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
+}
+
+function parseReportOverview(value: unknown): ReportOverviewPayload {
+  const raw = (value ?? {}) as Record<string, any>;
+  const kpis = (raw.kpis ?? {}) as Record<string, unknown>;
+
+  return {
+    kpis: {
+      totalOrders: toInt(kpis.totalOrders),
+      avgDeliveryDays: toNullableNumber(kpis.avgDeliveryDays),
+    },
+    ordersPerWeek: Array.isArray(raw.ordersPerWeek)
+      ? raw.ordersPerWeek.map((item) => ({
+          week_start: String(item.week_start ?? ""),
+          orders: toInt(item.orders),
+          previous_orders: toNullableNumber(item.previous_orders),
+        }))
+      : [],
+    ordersPerMonth: Array.isArray(raw.ordersPerMonth)
+      ? raw.ordersPerMonth.map((item) => ({
+          month_start: String(item.month_start ?? ""),
+          orders: toInt(item.orders),
+          previous_orders: toNullableNumber(item.previous_orders),
+        }))
+      : [],
+    topClients: Array.isArray(raw.topClients)
+      ? raw.topClients.map((item) => ({
+          name: String(item.name ?? "Onbekend"),
+          count: toInt(item.count),
+        }))
+      : [],
+    statusDistribution: Array.isArray(raw.statusDistribution)
+      ? raw.statusDistribution.map((item) => ({
+          status: String(item.status ?? "UNKNOWN"),
+          value: toInt(item.value),
+        }))
+      : [],
+    vehicleOrders: Array.isArray(raw.vehicleOrders)
+      ? raw.vehicleOrders.map((item) => ({
+          vehicle_id: String(item.vehicle_id ?? ""),
+          count: toInt(item.count),
+        }))
+      : [],
+  };
+}
+
+function useReportOverview(startDate: string, endDate: string, compareEnabled: boolean) {
   return useQuery({
-    queryKey: ["rapportage-clients"],
+    queryKey: ["rapportage-overview", startDate, endDate, compareEnabled],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, name")
-        .eq("is_active", true);
+      const { data, error } = await (supabase.rpc as any)("report_orders_overview_v1", {
+        p_start_date: startDate,
+        p_end_date: endDate,
+        p_compare_enabled: compareEnabled,
+      });
       if (error) throw error;
-      return data ?? [];
+      return parseReportOverview(data);
     },
   });
 }
@@ -126,6 +227,30 @@ function exportToCSV(data: any[], filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+async function fetchReportOrdersForExport(startDate: string, endDate: string): Promise<ReportOrder[]> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, order_number, created_at, status, client_name, pickup_address, delivery_address, weight_kg, vehicle_id, updated_at")
+    .gte("created_at", `${startDate}T00:00:00`)
+    .lt("created_at", `${getNextDateStr(endDate)}T00:00:00`)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((order) => ({
+    id: order.id,
+    order_number: order.order_number ?? undefined,
+    created_at: order.created_at,
+    status: order.status,
+    client_name: order.client_name,
+    pickup_address: (order as any).pickup_address ?? null,
+    delivery_address: (order as any).delivery_address ?? null,
+    weight_kg: (order as any).weight_kg ?? null,
+    vehicle_id: order.vehicle_id,
+    updated_at: order.updated_at,
+  }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -205,8 +330,6 @@ function getDatePresets(): DatePreset[] {
 /* ------------------------------------------------------------------ */
 
 const Rapportage = () => {
-  const today = new Date();
-
   /* ---------- Date range state (default: last 30 days) ---------- */
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
@@ -216,160 +339,42 @@ const Rapportage = () => {
   const [endDate, setEndDate] = useState<string>(() => toDateStr(new Date()));
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [section, setSection] = useState<"rapportage" | "autonomie">("rapportage");
+  const [exportMode, setExportMode] = useState<"generic" | "pdf" | "csv" | null>(null);
+  const { toast } = useToast();
 
   const datePresets = useMemo(() => getDatePresets(), []);
 
-  const { data: orders = [], isLoading: ordersLoading, isError: ordersError, refetch: refetchOrders } = useRawOrders();
-  const { data: clients = [], isLoading: clientsLoading } = useClients();
+  const { data: overview, isLoading: overviewLoading, isError: overviewError, refetch: refetchOverview } = useReportOverview(startDate, endDate, compareEnabled);
   const { data: vehicles = [], isLoading: vehiclesLoading } = useVehicles();
   const { data: aiUsage = [], isLoading: aiLoading } = useAiUsage();
   const { data: availability = [], isLoading: availLoading } = useVehicleAvailability();
 
-  const isLoading = ordersLoading || clientsLoading || vehiclesLoading || aiLoading || availLoading;
-  const isError = ordersError;
-
-  /* ---------- Filtered orders by date range ---------- */
-  const filteredOrders = useMemo(() => {
-    const start = new Date(startDate + "T00:00:00");
-    const end = new Date(endDate + "T23:59:59");
-    return orders.filter((o) => {
-      const d = new Date(o.created_at);
-      return d >= start && d <= end;
-    });
-  }, [orders, startDate, endDate]);
-
-  /* ---------- Previous period orders (for comparison) ---------- */
-  const prevPeriodOrders = useMemo(() => {
-    if (!compareEnabled) return [];
-    const start = new Date(startDate + "T00:00:00");
-    const end = new Date(endDate + "T23:59:59");
-    const durationMs = end.getTime() - start.getTime();
-    const prevStart = new Date(start.getTime() - durationMs - 86400000); // shift back by duration + 1 day
-    const prevEnd = new Date(start.getTime() - 86400000); // day before current start
-    return orders.filter((o) => {
-      const d = new Date(o.created_at);
-      return d >= prevStart && d <= prevEnd;
-    });
-  }, [orders, startDate, endDate, compareEnabled]);
+  const isLoading = overviewLoading || vehiclesLoading || aiLoading || availLoading;
+  const isError = overviewError;
 
   /* ---------- Orders per week ---------- */
   const ordersPerWeek = useMemo(() => {
-    const weeks: Record<string, number> = {};
-    const prevWeeks: Record<string, number> = {};
-    const now = new Date();
-    // Initialise last 12 weeks
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i * 7);
-      const label = `W${getISOWeek(d)}`;
-      weeks[label] = 0;
-      prevWeeks[label] = 0;
-    }
-    filteredOrders.forEach((o) => {
-      const d = new Date(o.created_at);
-      const diffWeeks = Math.floor((now.getTime() - d.getTime()) / (7 * 86400000));
-      if (diffWeeks < 12) {
-        const label = `W${getISOWeek(d)}`;
-        if (label in weeks) weeks[label]++;
-      }
+    return (overview?.ordersPerWeek ?? []).map((item) => {
+      const weekDate = new Date(`${toDateOnlyIso(item.week_start)}T00:00:00`);
+      return {
+        week: `W${getISOWeek(weekDate)}`,
+        orders: item.orders,
+        ...(compareEnabled ? { vorige: item.previous_orders ?? 0 } : {}),
+      };
     });
-    if (compareEnabled) {
-      prevPeriodOrders.forEach((o) => {
-        const d = new Date(o.created_at);
-        const diffWeeks = Math.floor((now.getTime() - d.getTime()) / (7 * 86400000));
-        if (diffWeeks < 24 && diffWeeks >= 12) {
-          // Map to the corresponding current-period week slot
-          const mappedDate = new Date(d);
-          mappedDate.setDate(mappedDate.getDate() + 12 * 7);
-          const label = `W${getISOWeek(mappedDate)}`;
-          if (label in prevWeeks) prevWeeks[label]++;
-        }
-      });
-    }
-    return Object.entries(weeks).map(([week, count]) => ({
-      week,
-      orders: count,
-      ...(compareEnabled ? { vorige: prevWeeks[week] || 0 } : {}),
-    }));
-  }, [filteredOrders, prevPeriodOrders, compareEnabled]);
+  }, [overview, compareEnabled]);
 
   /* ---------- Orders per maand (last 6 months) ---------- */
   const ordersPerMonth = useMemo(() => {
-    const months: Record<string, number> = {};
-    const prevMonths: Record<string, number> = {};
-    const monthNames = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const label = `${monthNames[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
-      months[label] = 0;
-      prevMonths[label] = 0;
-    }
-    filteredOrders.forEach((o) => {
-      const d = new Date(o.created_at);
-      const label = `${monthNames[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
-      if (label in months) months[label]++;
-    });
-    if (compareEnabled) {
-      // Map previous period orders to same month slots shifted back
-      prevPeriodOrders.forEach((o) => {
-        const d = new Date(o.created_at);
-        // Shift month forward by 6 to map to current slot
-        const shifted = new Date(d);
-        shifted.setMonth(shifted.getMonth() + 6);
-        const label = `${monthNames[shifted.getMonth()]} '${String(shifted.getFullYear()).slice(2)}`;
-        if (label in prevMonths) prevMonths[label]++;
-      });
-    }
-    return Object.entries(months).map(([month, count]) => ({
-      month,
-      orders: count,
-      ...(compareEnabled ? { vorige: prevMonths[month] || 0 } : {}),
+    return (overview?.ordersPerMonth ?? []).map((item) => ({
+      month: formatMonthLabel(item.month_start),
+      orders: item.orders,
+      ...(compareEnabled ? { vorige: item.previous_orders ?? 0 } : {}),
     }));
-  }, [filteredOrders, prevPeriodOrders, compareEnabled]);
+  }, [overview, compareEnabled]);
 
   /* ---------- Gemiddelde levertijd ---------- */
-  const avgDeliveryDays = useMemo(() => {
-    const delivered = filteredOrders.filter((o) => o.status === "DELIVERED" && o.updated_at && o.created_at);
-    if (delivered.length === 0) return null;
-    const totalDays = delivered.reduce((sum, o) => {
-      const created = new Date(o.created_at).getTime();
-      const updated = new Date(o.updated_at).getTime();
-      return sum + (updated - created) / 86400000;
-    }, 0);
-    return (totalDays / delivered.length).toFixed(1);
-  }, [filteredOrders]);
-
-  /* ---------- Voertuigbenutting ---------- */
-  const vehicleUtilisation = useMemo(() => {
-    if (vehicles.length === 0) return [];
-    const start = new Date(startDate + "T00:00:00");
-    const end = new Date(endDate + "T23:59:59");
-    const durationDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
-    const recentOrders = filteredOrders.filter((o) => o.vehicle_id);
-    const countByVehicle: Record<string, number> = {};
-    recentOrders.forEach((o) => {
-      if (o.vehicle_id) countByVehicle[o.vehicle_id] = (countByVehicle[o.vehicle_id] || 0) + 1;
-    });
-
-    // Also check availability table for non-available days
-    const unavailDays: Record<string, number> = {};
-    availability
-      .filter((a) => {
-        const d = new Date(a.date);
-        return d >= start && d <= end && a.status !== "available";
-      })
-      .forEach((a) => {
-        unavailDays[a.vehicle_id] = (unavailDays[a.vehicle_id] || 0) + 1;
-      });
-
-    return vehicles.map((v) => {
-      const orderCount = countByVehicle[v.id] || 0;
-      const unavailCount = unavailDays[v.id] || 0;
-      const availableDays = durationDays - unavailCount;
-      const pct = availableDays > 0 ? Math.min(100, Math.round((orderCount / availableDays) * 100)) : 0;
-      return { name: v.code || v.name, pct, orders: orderCount };
-    });
-  }, [vehicles, filteredOrders, availability, startDate, endDate]);
+  const avgDeliveryDays = overview?.kpis.avgDeliveryDays?.toFixed(1) ?? null;
 
   /* ---------- AI kosten ---------- */
   const aiStats = useMemo(() => {
@@ -395,80 +400,104 @@ const Rapportage = () => {
 
   /* ---------- Top klanten ---------- */
   const topClients = useMemo(() => {
-    const countMap: Record<string, number> = {};
-    filteredOrders.forEach((o) => {
-      const name = o.client_name || "Onbekend";
-      countMap[name] = (countMap[name] || 0) + 1;
-    });
-    return Object.entries(countMap)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-  }, [filteredOrders]);
+    return overview?.topClients ?? [];
+  }, [overview]);
 
   /* ---------- Status distribution for pie chart ---------- */
   const statusDistribution = useMemo(() => {
-    const countMap: Record<string, number> = {};
-    filteredOrders.forEach((o) => {
-      const status = o.status || "onbekend";
-      countMap[status] = (countMap[status] || 0) + 1;
+    return (overview?.statusDistribution ?? []).map((item) => ({
+      name: STATUS_LABELS[item.status] || item.status,
+      value: item.value,
+      color: getStatusColor(item.status),
+    }));
+  }, [overview]);
+
+  /* ---------- Voertuigbenutting ---------- */
+  const vehicleUtilisation = useMemo(() => {
+    if (vehicles.length === 0) return [];
+    const start = new Date(startDate + "T00:00:00");
+    const end = new Date(endDate + "T23:59:59");
+    const durationDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+
+    const unavailDays: Record<string, number> = {};
+    availability
+      .filter((a) => {
+        const d = new Date(a.date);
+        return d >= start && d <= end && a.status !== "available";
+      })
+      .forEach((a) => {
+        unavailDays[a.vehicle_id] = (unavailDays[a.vehicle_id] || 0) + 1;
+      });
+
+    const countByVehicle = Object.fromEntries(
+      (overview?.vehicleOrders ?? []).map((item) => [item.vehicle_id, item.count]),
+    );
+
+    return vehicles.map((v) => {
+      const orderCount = countByVehicle[v.id] || 0;
+      const unavailCount = unavailDays[v.id] || 0;
+      const availableDays = durationDays - unavailCount;
+      const pct = availableDays > 0 ? Math.min(100, Math.round((orderCount / availableDays) * 100)) : 0;
+      return { name: v.code || v.name, pct, orders: orderCount };
     });
-    return Object.entries(countMap)
-      .map(([status, count]) => ({
-        name: STATUS_LABELS[status] || status,
-        value: count,
-        color: getStatusColor(status),
-      }))
-      .sort((a, b) => b.value - a.value);
-  }, [filteredOrders]);
+  }, [vehicles, availability, startDate, endDate, overview]);
 
   /* ---------- Export handlers ---------- */
-  const handleExport = () => {
-    const exportData = filteredOrders.map((o) => ({
-      id: o.id,
-      created_at: o.created_at,
-      status: o.status,
-      updated_at: o.updated_at || "",
-      client_name: o.client_name || "",
-      vehicle_id: o.vehicle_id || "",
-    }));
-    exportToCSV(exportData, `rapportage-orders-${startDate}-tot-${endDate}.csv`);
+  const handleExport = async () => {
+    try {
+      setExportMode("generic");
+      const reportOrders = await fetchReportOrdersForExport(startDate, endDate);
+      const exportData = reportOrders.map((order) => ({
+        id: order.id,
+        order_number: order.order_number ?? "",
+        created_at: order.created_at,
+        status: order.status,
+        updated_at: order.updated_at || "",
+        client_name: order.client_name || "",
+        vehicle_id: order.vehicle_id || "",
+      }));
+      exportToCSV(exportData, `rapportage-orders-${startDate}-tot-${endDate}.csv`);
+    } catch (error) {
+      toast({
+        title: "Export mislukt",
+        description: error instanceof Error ? error.message : "Kon orderexport niet genereren.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportMode(null);
+    }
   };
 
-  const handleExportPDF = () => {
-    const reportOrders: ReportOrder[] = filteredOrders.map((o) => ({
-      id: o.id,
-      created_at: o.created_at,
-      status: o.status,
-      client_name: o.client_name,
-      vehicle_id: o.vehicle_id,
-      updated_at: o.updated_at,
-    }));
-    exportOrderReport(reportOrders, { startDate, endDate });
+  const handleExportPDF = async () => {
+    try {
+      setExportMode("pdf");
+      const reportOrders = await fetchReportOrdersForExport(startDate, endDate);
+      await exportOrderReport(reportOrders, { startDate, endDate });
+    } catch (error) {
+      toast({
+        title: "PDF-export mislukt",
+        description: error instanceof Error ? error.message : "Kon PDF-export niet genereren.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportMode(null);
+    }
   };
 
-  const handleExportCSV = () => {
-    const reportOrders: ReportOrder[] = filteredOrders.map((o) => ({
-      id: o.id,
-      created_at: o.created_at,
-      status: o.status,
-      client_name: o.client_name,
-      vehicle_id: o.vehicle_id,
-      updated_at: o.updated_at,
-    }));
-    exportOrdersCSV(reportOrders);
-  };
-
-  const handleExportExcel = () => {
-    const reportOrders: ReportOrder[] = filteredOrders.map((o) => ({
-      id: o.id,
-      created_at: o.created_at,
-      status: o.status,
-      client_name: o.client_name,
-      vehicle_id: o.vehicle_id,
-      updated_at: o.updated_at,
-    }));
-    exportOrdersExcel(reportOrders);
+  const handleExportCSV = async () => {
+    try {
+      setExportMode("csv");
+      const reportOrders = await fetchReportOrdersForExport(startDate, endDate);
+      exportOrdersCSV(reportOrders);
+    } catch (error) {
+      toast({
+        title: "CSV-export mislukt",
+        description: error instanceof Error ? error.message : "Kon CSV-export niet genereren.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportMode(null);
+    }
   };
 
   return (
@@ -524,31 +553,27 @@ const Rapportage = () => {
             />
             <button
               onClick={handleExport}
+              disabled={exportMode !== null}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
             >
-              <Download className="h-3.5 w-3.5" />
+              {exportMode === "generic" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               Exporteer
             </button>
             <button
               onClick={handleExportPDF}
+              disabled={exportMode !== null}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-foreground text-xs font-medium hover:bg-muted transition-colors"
             >
-              <FileText className="h-3.5 w-3.5" />
+              {exportMode === "pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
               Exporteer PDF
             </button>
             <button
               onClick={handleExportCSV}
+              disabled={exportMode !== null}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-foreground text-xs font-medium hover:bg-muted transition-colors"
             >
-              <FileSpreadsheet className="h-3.5 w-3.5" />
+              {exportMode === "csv" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
               Exporteer CSV
-            </button>
-            <button
-              onClick={handleExportExcel}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-foreground text-xs font-medium hover:bg-muted transition-colors"
-            >
-              <FileSpreadsheet className="h-3.5 w-3.5" />
-              Exporteer Excel
             </button>
           </div>
 
@@ -593,7 +618,7 @@ const Rapportage = () => {
         <div className="flex flex-col items-center justify-center h-64 text-center">
           <p className="text-sm font-semibold text-foreground mb-1">Kan gegevens niet laden</p>
           <p className="text-xs text-muted-foreground mb-3">Controleer je verbinding</p>
-          <button onClick={() => refetchOrders()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
+          <button onClick={() => refetchOverview()} className="text-xs text-primary hover:underline">Opnieuw proberen</button>
         </div>
       )}
 
@@ -602,7 +627,7 @@ const Rapportage = () => {
       {/* KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Totaal orders", value: filteredOrders.length, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
+          { label: "Totaal orders", value: overview?.kpis.totalOrders ?? 0, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
           { label: "Gem. levertijd", value: avgDeliveryDays ? `${avgDeliveryDays} d` : "\u2014", icon: Clock, color: "text-amber-600", bg: "bg-amber-500/8" },
           { label: "Voertuigen", value: vehicles.length, icon: Truck, color: "text-primary", bg: "bg-primary/8" },
           { label: "AI aanroepen", value: aiStats.totalCalls, icon: Brain, color: "text-violet-600", bg: "bg-violet-500/8" },
@@ -874,7 +899,7 @@ const Rapportage = () => {
                         <td className="px-4 py-2 text-sm font-medium text-foreground">{c.name}</td>
                         <td className="px-4 py-2 text-sm text-right tabular-nums font-semibold">{c.count}</td>
                         <td className="px-4 py-2 text-sm text-right tabular-nums text-muted-foreground">
-                          {filteredOrders.length > 0 ? ((c.count / filteredOrders.length) * 100).toFixed(1) : 0}%
+                          {(overview?.kpis.totalOrders ?? 0) > 0 ? ((c.count / (overview?.kpis.totalOrders ?? 1)) * 100).toFixed(1) : 0}%
                         </td>
                       </tr>
                     ))}

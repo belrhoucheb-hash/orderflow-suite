@@ -169,11 +169,15 @@ async function ensureAccessToken(
     accessTokenExpiresAt: newExpiresAt,
   };
 
-  await supabase
-    .from("integration_credentials")
-    .update({ credentials: updatedCreds, updated_at: new Date().toISOString() })
-    .eq("tenant_id", config.tenantId)
-    .eq("provider", "exact_online");
+  const { error } = await supabase.rpc("save_integration_credentials_secure", {
+    p_provider: "exact_online",
+    p_enabled: true,
+    p_credentials: updatedCreds,
+    p_tenant_id: config.tenantId,
+  });
+  if (error) {
+    throw new Error(`Exact credentials opslaan mislukt: ${error.message}`);
+  }
 
   config.credentials = updatedCreds;
   return newAccess;

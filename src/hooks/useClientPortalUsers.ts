@@ -62,67 +62,14 @@ export function useInvitePortalUser() {
       tenant_id: string;
       portal_role: PortalRole;
     }) => {
-      const { email, client_id, tenant_id, portal_role } = params;
-
-      // 1. Create the user via Supabase auth (invite / magic link)
-      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-        email,
-        {
-          data: {
-            client_id,
-            portal_role,
-            is_portal_user: true,
-          },
-          redirectTo: `${window.location.origin}/portal`,
-        }
-      );
-
-      // If admin.inviteUserByEmail fails (no admin access), fallback to
-      // calling the edge function or creating a magic link OTP
-      if (inviteError) {
-        // Fallback: send magic link via signInWithOtp
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            data: {
-              client_id,
-              portal_role,
-              is_portal_user: true,
-            },
-            emailRedirectTo: `${window.location.origin}/portal`,
-            shouldCreateUser: true,
-          },
-        });
-        if (otpError) throw otpError;
-      }
-
-      // 2. Get the user_id (either from invite or by looking up)
-      // Since the user may not exist yet (magic link pending), we store a placeholder
-      // and update user_id on first login via the auth hook
-      const userId = inviteData?.user?.id;
-
-      if (userId) {
-        // 3. Insert the client_portal_users record
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-
-        const { data, error } = await supabase
-          .from("client_portal_users" as any)
-          .insert({
-            tenant_id,
-            client_id,
-            user_id: userId,
-            portal_role,
-            invited_by: currentUser?.id ?? null,
-            invited_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data as ClientPortalUser;
-      }
-
-      return null; // Will be linked on first login
+      const { data, error } = await supabase.functions.invoke("invite-portal-user", {
+        body: {
+          ...params,
+          redirect_to: `${window.location.origin}/portal`,
+        },
+      });
+      if (error) throw error;
+      return (data?.user ?? null) as ClientPortalUser | null;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });

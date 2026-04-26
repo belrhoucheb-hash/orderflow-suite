@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { DEV_BYPASS_USER_ID, DEV_BYPASS_TENANT_ID, readDevBypassUser } from "@/lib/devSession";
 
 type AppRole = "admin" | "medewerker";
 type EffectiveRole = "admin" | "planner" | "chauffeur";
@@ -18,41 +19,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const DEV_BYPASS_STORAGE_KEY = "debug_bypass";
-
-function isLocalDevHost() {
-  if (typeof window === "undefined") return false;
-  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-}
-
-function readDevBypassUser(): User | null {
-  if (!import.meta.env.DEV || !isLocalDevHost() || typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(DEV_BYPASS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { email?: string; display_name?: string } | null;
-    if (!parsed?.email) return null;
-    return {
-      id: "dev-local-user",
-      app_metadata: { tenant_id: "00000000-0000-0000-0000-000000000001", debug_bypass: true },
-      user_metadata: { display_name: parsed.display_name ?? "Local Admin" },
-      aud: "authenticated",
-      confirmation_sent_at: "",
-      created_at: new Date().toISOString(),
-      email: parsed.email,
-      factors: null,
-      identities: [],
-      is_anonymous: false,
-      last_sign_in_at: new Date().toISOString(),
-      phone: "",
-      role: "authenticated",
-      updated_at: new Date().toISOString(),
-    } as User;
-  } catch {
-    return null;
-  }
-}
 
 function createDevBypassSession(user: User): Session {
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -75,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfileAndRoles = async (userId: string) => {
-    if (userId === "dev-local-user") {
+    if (userId === DEV_BYPASS_USER_ID) {
       setProfile({ display_name: "Local Admin", avatar_url: null });
       setRoles(["admin"]);
       setIsLinkedDriver(false);
@@ -147,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem('debug_bypass');
+    localStorage.removeItem("debug_bypass");
     localStorage.removeItem('chauffeur_mode');
     setSession(null);
     setUser(null);

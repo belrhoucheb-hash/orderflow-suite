@@ -14,7 +14,7 @@ import { TripFlow } from "@/components/chauffeur/TripFlow";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
 import { MijnWeekView } from "@/components/chauffeur/MijnWeekView";
 import { useVehicleCheckGate } from "@/hooks/useVehicleCheck";
-import { useDriverTrips, useUpdateStopStatus, useSavePOD } from "@/hooks/useTrips";
+import { useDriverTrips, useUpdateStopStatus } from "@/hooks/useTrips";
 import { useDriverSchedulesRealtime } from "@/hooks/useDriverSchedulesRealtime";
 import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
@@ -56,9 +56,9 @@ async function hashPin(pin: string, driverId: string): Promise<string> {
  * - After 6 failed attempts: lock for 30 minutes
  * - After 10 failed attempts: lock permanently until admin resets
  *
- * TODO: Requires `failed_pin_attempts` (integer, default 0) and
- *       `pin_locked_until` (timestamptz, nullable) columns on the drivers table.
- *       Create a migration to add these columns if they don't exist yet.
+ * De lockout staat op databasekolommen zodat beveiliging niet client-side te
+ * omzeilen is. Als een query of update faalt, vallen we veilig terug zonder de
+ * loginflow te blokkeren.
  */
 async function recordFailedAttempt(driverId: string): Promise<{ locked: boolean; lockUntil?: Date; attempts: number }> {
   try {
@@ -108,7 +108,7 @@ async function recordFailedAttempt(driverId: string): Promise<{ locked: boolean;
       attempts: currentAttempts,
     };
   } catch {
-    // If columns don't exist yet, fall back to local tracking only
+    // Bij een tijdelijke queryfout laten we de loginflow doorgaan.
     return { locked: false, attempts: 0 };
   }
 }
@@ -123,7 +123,7 @@ async function resetFailedAttempts(driverId: string): Promise<void> {
       .update({ failed_pin_attempts: 0, pin_locked_until: null })
       .eq("id", driverId);
   } catch {
-    // If columns don't exist yet, ignore silently
+    // Reset is ondersteunend; een mislukte reset mag de chauffeur niet blokkeren.
   }
 }
 
@@ -336,8 +336,9 @@ export default function ChauffeurApp() {
   // het persoonlijke weekrooster (read-only). Geen routing, alleen lokaal.
   const [activeTab, setActiveTab] = useState<"vandaag" | "week">("vandaag");
 
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
+  const showLegacyOrders = false;
+  const orders: any[] = [];
+  const loadingOrders = false;
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [isSigning, setIsSigning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -575,38 +576,10 @@ export default function ChauffeurApp() {
       // Alleen een UI-hint voor preselect in de driver-picker bij de volgende
       // sessie. Deze waarde geeft GEEN login, de PIN-flow blijft verplicht.
       localStorage.setItem("orderflow_last_driver_id", activeDriverId);
-      fetchDriverOrders(activeDriverId);
-    } else {
-      setOrders([]);
     }
   }, [activeDriverId]);
 
   const activeDriver = drivers?.find(d => d.id === activeDriverId);
-
-  const fetchDriverOrders = async (driverId: string) => {
-    setLoadingOrders(true);
-    try {
-      const driver = drivers?.find(d => d.id === driverId);
-      if (!driver?.current_vehicle_id) {
-        setOrders([]);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("orders" as any)
-        .select("*")
-        .eq("vehicle_id", driver.current_vehicle_id)
-        .in("status", ["PLANNED", "IN_TRANSIT", "DELIVERED"])
-        .order("stop_sequence", { ascending: true });
-
-      if (error) throw error;
-      setOrders(data || []);
-    } catch (err: any) {
-      toast.error("Fout bij ophalen rittenlijst");
-    } finally {
-      setLoadingOrders(false);
-    }
-  };
 
   const handleLogout = () => {
     setActiveDriverId(null);
@@ -615,6 +588,8 @@ export default function ChauffeurApp() {
     setPinError("");
     setShowChangePin(false);
   };
+
+  const [viewingPod, setViewingPod] = useState<any | null>(null);
 
   // -- Reset PoD state --
   const resetPodState = () => {
@@ -818,7 +793,6 @@ export default function ChauffeurApp() {
       });
       resetPodState();
       setSelectedOrder(null);
-      if (activeDriverId) fetchDriverOrders(activeDriverId);
     } catch(err) {
       console.error("Online POD submit failed, saving offline:", err);
 
@@ -854,9 +828,6 @@ export default function ChauffeurApp() {
       setIsSubmitting(false);
     }
   };
-
-  // --- View Delivered PoD ---
-  const [viewingPod, setViewingPod] = useState<any | null>(null);
 
   // --- RENDERS ---
 
@@ -1322,11 +1293,8 @@ export default function ChauffeurApp() {
           }} />
         )}
 
-        <div className="px-4 mt-4 mb-2">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Directe orders (legacy)</p>
-        </div>
 
-        {loadingOrders ? (
+        {showLegacyOrders && (loadingOrders ? (
           <div className="text-center py-10 text-muted-foreground animate-pulse">Laden...</div>
         ) : orders.length === 0 ? (
           <div className="text-center py-20 bg-white mx-4 rounded-3xl border border-slate-100 shadow-sm mt-10">
@@ -1396,13 +1364,13 @@ export default function ChauffeurApp() {
               </CardContent>
             </Card>
           ))
-        )}
+        ))}
         </>
         )}
       </div>
 
       {/* MODAL - PoD VIEWER for delivered orders */}
-      {viewingPod && (
+      {showLegacyOrders && viewingPod && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 flex flex-col justify-end backdrop-blur-sm" onClick={() => setViewingPod(null)}>
           <div className="bg-white rounded-t-[32px] max-h-[80vh] w-full flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-300 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">

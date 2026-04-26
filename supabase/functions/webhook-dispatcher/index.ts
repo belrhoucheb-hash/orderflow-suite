@@ -82,21 +82,13 @@ Deno.serve(async (req) => {
     // geen body, cron-call
   }
 
-  const now = new Date().toISOString();
-
-  const query = supabase
-    .from("webhook_deliveries")
-    .select("id, tenant_id, subscription_id, event_type, event_id, payload, attempt_count")
-    .eq("status", "PENDING")
-    .lte("next_attempt_at", now)
-    .order("next_attempt_at", { ascending: true })
-    .limit(BATCH_SIZE);
-
-  if (specificId) {
-    query.eq("id", specificId);
-  }
-
-  const { data: deliveries, error: fetchErr } = await query;
+  const { data: deliveries, error: fetchErr } = await supabase.rpc(
+    "claim_pending_webhook_deliveries" as any,
+    {
+      p_specific_id: specificId,
+      p_limit: BATCH_SIZE,
+    },
+  );
 
   if (fetchErr) {
     return new Response(JSON.stringify({ error: fetchErr.message }), {
@@ -156,6 +148,7 @@ async function dispatchOne(
       .update({
         status: "DEAD",
         last_attempt_at: new Date().toISOString(),
+        processing_started_at: null,
       })
       .eq("id", delivery.id);
     return { id: delivery.id, outcome: "skipped" };
@@ -223,6 +216,7 @@ async function dispatchOne(
         attempt_count: attemptNumber,
         last_attempt_at: new Date().toISOString(),
         delivered_at: new Date().toISOString(),
+        processing_started_at: null,
       })
       .eq("id", delivery.id);
 
@@ -249,6 +243,7 @@ async function dispatchOne(
       attempt_count: attemptNumber,
       last_attempt_at: new Date().toISOString(),
       next_attempt_at: isDead ? null : nextAttempt,
+      processing_started_at: null,
     })
     .eq("id", delivery.id);
 
