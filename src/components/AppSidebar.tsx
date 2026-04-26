@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown, Sparkles } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -350,71 +350,49 @@ export function AppSidebar() {
             </div>
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate text-[13px] font-semibold tracking-tight text-white">{displayName}</span>
-                  <span
-                    className="inline-flex h-5 items-center gap-1 rounded-full px-2 text-[9px] font-semibold uppercase tracking-[0.16em]"
-                    style={{
-                      background: "hsl(var(--gold-soft) / 0.18)",
-                      color: "hsl(var(--gold-light))",
-                    }}
-                  >
-                    <Sparkles className="h-2.5 w-2.5" strokeWidth={2} />
-                    Live
-                  </span>
-                </div>
+                <span className="block truncate text-[13px] font-semibold tracking-tight text-white">{displayName}</span>
                 <p className="truncate text-[11px] text-white/42">{userEmail}</p>
               </div>
             )}
           </div>
 
           {!collapsed && (
-            <div className="grid grid-cols-3 gap-1.5">
+            <div
+              className="flex items-center gap-1 rounded-2xl border p-1"
+              style={{
+                borderColor: "hsl(0 0% 100% / 0.05)",
+                background: "hsl(220 18% 13% / 0.72)",
+              }}
+            >
               <button
                 onClick={() => navigate("/settings")}
-                className="group flex min-h-[64px] flex-col items-start justify-between rounded-2xl border px-3 py-2.5 text-left transition-all hover:-translate-y-0.5"
-                style={{
-                  borderColor: "hsl(0 0% 100% / 0.05)",
-                  background: "linear-gradient(180deg, hsl(220 18% 15%) 0%, hsl(220 18% 13%) 100%)",
-                }}
+                className="group inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[11px] font-medium text-white/70 transition-all hover:bg-white/5 hover:text-white"
                 aria-label="Instellingen"
               >
-                <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/5 text-white/72 transition-colors group-hover:bg-[hsl(var(--gold-soft)/0.16)] group-hover:text-white">
-                  <Settings className="h-4 w-4" />
-                </span>
-                <span className="text-[11px] font-medium text-white/84">Instellingen</span>
+                <Settings className="h-3.5 w-3.5" />
+                <span>Instellingen</span>
               </button>
 
               <button
                 onClick={toggleTheme}
-                className="group flex min-h-[64px] flex-col items-start justify-between rounded-2xl border px-3 py-2.5 text-left transition-all hover:-translate-y-0.5"
+                className="group inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[11px] font-medium transition-all hover:text-white"
                 style={{
-                  borderColor: "hsl(0 0% 100% / 0.05)",
-                  background: isDark
-                    ? "linear-gradient(180deg, hsl(220 18% 15%) 0%, hsl(220 18% 13%) 100%)"
-                    : "linear-gradient(180deg, hsl(var(--gold-soft) / 0.16), hsl(220 18% 13%) 100%)",
+                  color: isDark ? "hsl(var(--gold-light))" : "hsl(0 0% 100% / 0.7)",
+                  background: isDark ? "hsl(var(--gold-soft) / 0.14)" : "transparent",
                 }}
                 aria-label={isDark ? "Licht thema" : "Donker thema"}
               >
-                <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/5 text-white/72 transition-colors group-hover:bg-[hsl(var(--gold-soft)/0.16)] group-hover:text-white">
-                  {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                </span>
-                <span className="text-[11px] font-medium text-white/84">{isDark ? "Licht" : "Dark mode"}</span>
+                {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                <span>{isDark ? "Licht" : "Dark mode"}</span>
               </button>
 
               <button
                 onClick={async () => { await signOut(); navigate("/login"); }}
-                className="group flex min-h-[64px] flex-col items-start justify-between rounded-2xl border px-3 py-2.5 text-left transition-all hover:-translate-y-0.5"
-                style={{
-                  borderColor: "hsl(0 84% 65% / 0.12)",
-                  background: "linear-gradient(180deg, hsl(220 18% 15%) 0%, hsl(220 18% 13%) 100%)",
-                }}
+                className="group inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[11px] font-medium text-white/56 transition-all hover:bg-[hsl(0_84%_65%/0.1)] hover:text-white"
                 aria-label="Uitloggen"
               >
-                <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/5 text-white/72 transition-colors group-hover:bg-[hsl(0_84%_65%/0.12)] group-hover:text-white">
-                  <LogOut className="h-4 w-4" />
-                </span>
-                <span className="text-[11px] font-medium text-white/84">Uitloggen</span>
+                <LogOut className="h-3.5 w-3.5" />
+                <span>Uitloggen</span>
               </button>
             </div>
           )}
