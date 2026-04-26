@@ -320,7 +320,7 @@ const Dispatch = () => {
             key={stat.label}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-card rounded-xl border border-border/40 p-3 flex items-center gap-3"
+            className="card--luxe p-3.5 flex items-center gap-3"
           >
             <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center", stat.bg)}>
               <stat.icon className={cn("h-4 w-4", stat.color)} />
@@ -334,17 +334,17 @@ const Dispatch = () => {
       </div>
 
       {/* Search & Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+      <div className="card--luxe p-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
           <input
             placeholder="Zoek op ritnummer, adres of contactpersoon..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 rounded-xl border border-border/50 bg-card text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring/20"
+            className="w-full h-10 pl-10 pr-4 rounded-xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)/0.14)]"
           />
         </div>
-        <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5">
+        <div className="flex flex-wrap rounded-xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1 gap-0.5">
           {FILTER_TABS.map((tab) => (
             <button
               key={tab.key}
@@ -352,7 +352,7 @@ const Dispatch = () => {
               className={cn(
                 "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap",
                 statusFilter === tab.key
-                  ? "bg-foreground text-background shadow-sm"
+                  ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -364,7 +364,7 @@ const Dispatch = () => {
 
       {/* Bulk select bar */}
       {conceptTripsInView.length > 0 && (
-        <div className="flex items-center gap-3">
+        <div className="card--luxe p-3.5 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Checkbox
               checked={allConceptsSelected}
@@ -378,7 +378,7 @@ const Dispatch = () => {
           {selectedTrips.size > 0 && (
             <Button
               size="sm"
-              className="gap-1.5"
+              className="gap-1.5 bg-[hsl(var(--gold-deep))] text-white hover:bg-[hsl(var(--gold-deep))]/90"
               onClick={() => setBulkDispatchOpen(true)}
             >
               <Send className="h-3.5 w-3.5" />
@@ -421,10 +421,10 @@ const Dispatch = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                 >
-                  <Card className="overflow-hidden">
+                  <Card className="card--luxe overflow-hidden border-[hsl(var(--gold)/0.08)]">
                     {/* Trip header row */}
                     <div
-                      className="flex items-center gap-4 px-5 py-3.5 cursor-pointer hover:bg-muted/30 transition-colors"
+                      className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-[hsl(var(--gold-soft)/0.08)] transition-colors"
                       onClick={() => setExpandedTrip(isExpanded ? null : trip.id)}
                     >
                       {/* Checkbox for concept trips */}
@@ -439,8 +439,8 @@ const Dispatch = () => {
 
                       {/* Trip number + status */}
                       <div className="flex items-center gap-3 min-w-[180px]">
-                        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <Truck className="h-4 w-4 text-primary" />
+                        <div className="h-10 w-10 rounded-xl flex items-center justify-center border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.22)]">
+                          <Truck className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
                         </div>
                         <div>
                           <p className="text-sm font-semibold font-display">Rit #{trip.trip_number}</p>
@@ -512,7 +512,7 @@ const Dispatch = () => {
                         {trip.dispatch_status === "CONCEPT" && (
                           <Button
                             size="sm"
-                            className="gap-1.5 h-8"
+                            className="gap-1.5 h-8 bg-[hsl(var(--gold-deep))] text-white hover:bg-[hsl(var(--gold-deep))]/90"
                             onClick={() => handleDispatch(trip.id, trip.trip_number)}
                             disabled={dispatchTrip.isPending}
                           >
@@ -527,7 +527,7 @@ const Dispatch = () => {
                         {trip.dispatch_status === "VERZENDKLAAR" && (
                           <Button
                             size="sm"
-                            className="gap-1.5 h-8"
+                            className="gap-1.5 h-8 bg-[hsl(var(--gold-deep))] text-white hover:bg-[hsl(var(--gold-deep))]/90"
                             onClick={() => handleDispatch(trip.id, trip.trip_number)}
                             disabled={dispatchTrip.isPending}
                           >
@@ -568,8 +568,8 @@ const Dispatch = () => {
                     {/* Expanded stops */}
                     {isExpanded && stops.length > 0 && (
                       <div className="border-t border-border/30">
-                        <div className="px-5 py-2 bg-muted/20">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        <div className="px-5 py-2.5 bg-[hsl(var(--gold-soft)/0.12)]">
+                          <p className="text-xs font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-wide">
                             Stops ({stops.length})
                           </p>
                         </div>
@@ -640,7 +640,7 @@ const Dispatch = () => {
 
                         {/* Trip notes */}
                         {trip.notes && (
-                          <div className="px-5 py-2 bg-muted/10 border-t border-border/20">
+                          <div className="px-5 py-2.5 bg-[hsl(var(--gold-soft)/0.08)] border-t border-border/20">
                             <p className="text-xs text-muted-foreground">{trip.notes}</p>
                           </div>
                         )}
@@ -658,7 +658,7 @@ const Dispatch = () => {
 
       {/* Dispatch confirmation dialog */}
       <Dialog open={!!confirmDispatch} onOpenChange={(open) => !open && setConfirmDispatch(null)}>
-        <DialogContent>
+        <DialogContent className="border-[hsl(var(--gold)/0.14)]">
           <DialogHeader>
             <DialogTitle>Rit dispatchen</DialogTitle>
             <DialogDescription>
@@ -668,7 +668,7 @@ const Dispatch = () => {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDispatch(null)}>Annuleren</Button>
-            <Button onClick={confirmDispatchAction} disabled={dispatchTrip.isPending}>
+            <Button className="bg-[hsl(var(--gold-deep))] text-white hover:bg-[hsl(var(--gold-deep))]/90" onClick={confirmDispatchAction} disabled={dispatchTrip.isPending}>
               {dispatchTrip.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
               ) : (
@@ -682,7 +682,7 @@ const Dispatch = () => {
 
       {/* Status change confirmation dialog */}
       <Dialog open={!!confirmStatus} onOpenChange={(open) => !open && setConfirmStatus(null)}>
-        <DialogContent>
+        <DialogContent className="border-[hsl(var(--gold)/0.14)]">
           <DialogHeader>
             <DialogTitle>Status wijzigen</DialogTitle>
             <DialogDescription>
@@ -693,7 +693,7 @@ const Dispatch = () => {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmStatus(null)}>Annuleren</Button>
-            <Button onClick={confirmStatusChange} disabled={updateStatus.isPending}>
+            <Button className="bg-[hsl(var(--gold-deep))] text-white hover:bg-[hsl(var(--gold-deep))]/90" onClick={confirmStatusChange} disabled={updateStatus.isPending}>
               {updateStatus.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
               Bevestigen
             </Button>
@@ -703,7 +703,7 @@ const Dispatch = () => {
 
       {/* Bulk dispatch confirmation dialog */}
       <Dialog open={bulkDispatchOpen} onOpenChange={(open) => { if (!open && !bulkProgress) setBulkDispatchOpen(false); }}>
-        <DialogContent>
+        <DialogContent className="border-[hsl(var(--gold)/0.14)]">
           <DialogHeader>
             <DialogTitle>Ritten verzenden</DialogTitle>
             <DialogDescription>
@@ -730,7 +730,7 @@ const Dispatch = () => {
           {!bulkProgress && (
             <DialogFooter>
               <Button variant="outline" onClick={() => setBulkDispatchOpen(false)}>Annuleren</Button>
-              <Button onClick={executeBulkDispatch}>
+              <Button className="bg-[hsl(var(--gold-deep))] text-white hover:bg-[hsl(var(--gold-deep))]/90" onClick={executeBulkDispatch}>
                 <Send className="h-3.5 w-3.5 mr-1.5" />
                 Verzenden
               </Button>
