@@ -563,11 +563,24 @@ const Facturatie = () => {
         </div>
       </div>
 
-      <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
+      <div
+        className="overflow-hidden rounded-[1.6rem] border"
+        style={{
+          borderColor: "hsl(var(--gold) / 0.14)",
+          background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.12) 0%, hsl(var(--background)) 16%, hsl(var(--background)) 100%)",
+          boxShadow: "0 28px 60px -38px hsl(var(--gold-deep) / 0.28)",
+        }}
+      >
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-border/40 bg-muted/30">
+              <tr
+                className="border-b"
+                style={{
+                  borderColor: "hsl(var(--gold) / 0.12)",
+                  background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.22) 0%, hsl(var(--background)) 100%)",
+                }}
+              >
                 <th className="px-4 py-2.5 text-left">
                   <SortableHeader label="Factuurnummer" field="invoice_number" currentSort={sortConfig} onSort={handleSort} />
                 </th>
@@ -591,7 +604,7 @@ const Facturatie = () => {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/20">
+            <tbody className="divide-y" style={{ borderColor: "hsl(var(--gold) / 0.08)" }}>
               {filtered.map((invoice) => {
                 const overdue = isOverdue(invoice.due_date, invoice.status);
                 const effectiveStatus = overdue ? "vervallen" : invoice.status;
@@ -603,7 +616,8 @@ const Facturatie = () => {
                     tabIndex={0}
                     onClick={() => navigate(`/facturatie/${invoice.id}`)}
                     onKeyDown={(e) => { if (e.key === "Enter") navigate(`/facturatie/${invoice.id}`); }}
-                    className="hover:bg-muted/20 transition-colors duration-100 group cursor-pointer"
+                    className="group cursor-pointer transition-colors duration-100"
+                    style={{ background: "transparent" }}
                   >
                     <td className="px-4 py-2">
                       <span className="font-mono text-sm font-medium text-foreground flex items-center gap-1.5">
@@ -684,10 +698,21 @@ const Facturatie = () => {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
-                    <Receipt className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
-                    <p className="text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-5 py-20 text-center">
+                    <div
+                      className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border"
+                      style={{
+                        borderColor: "hsl(var(--gold) / 0.14)",
+                        background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.35) 0%, hsl(var(--gold) / 0.18) 100%)",
+                      }}
+                    >
+                      <Receipt className="h-6 w-6 text-[hsl(var(--gold-deep))]" />
+                    </div>
+                    <p className="mt-4 text-sm font-medium text-foreground">
                       Geen facturen gevonden
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Zodra facturen binnenkomen, verschijnt je werkvoorraad hier.
                     </p>
                   </td>
                 </tr>
@@ -696,7 +721,13 @@ const Facturatie = () => {
           </table>
         </div>
 
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
+        <div
+          className="flex items-center justify-between border-t px-4 py-3"
+          style={{
+            borderColor: "hsl(var(--gold) / 0.12)",
+            background: "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--gold-soft) / 0.18) 100%)",
+          }}
+        >
           <p className="text-xs text-muted-foreground">
             {filtered.length > 0
               ? `${page * pageSize + 1}-${Math.min((page + 1) * pageSize, totalCount)} van ${totalCount} facturen`
@@ -707,8 +738,8 @@ const Facturatie = () => {
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
               className={cn(
-                "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
-                page === 0 ? "text-muted-foreground/40 cursor-not-allowed" : "text-foreground hover:bg-muted/50",
+                "inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors",
+                page === 0 ? "cursor-not-allowed text-muted-foreground/40" : "text-foreground hover:bg-[hsl(var(--gold-soft)/0.3)]",
               )}
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -721,8 +752,8 @@ const Facturatie = () => {
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
               className={cn(
-                "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
-                page >= totalPages - 1 ? "text-muted-foreground/40 cursor-not-allowed" : "text-foreground hover:bg-muted/50",
+                "inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors",
+                page >= totalPages - 1 ? "cursor-not-allowed text-muted-foreground/40" : "text-foreground hover:bg-[hsl(var(--gold-soft)/0.3)]",
               )}
             >
               Volgende
@@ -736,19 +767,56 @@ const Facturatie = () => {
       </div>
 
       <Dialog open={showNewInvoice} onOpenChange={setShowNewInvoice}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nieuwe factuur aanmaken</DialogTitle>
-            <DialogDescription>Selecteer een klant en koppel onverfactureerde orders.</DialogDescription>
+        <DialogContent
+          className="overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-2xl"
+        >
+          <div
+            className="rounded-[1.75rem] border"
+            style={{
+              borderColor: "hsl(var(--gold) / 0.16)",
+              background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.16) 0%, hsl(var(--background)) 18%, hsl(var(--background)) 100%)",
+              boxShadow: "0 36px 80px -42px hsl(var(--gold-deep) / 0.38)",
+            }}
+          >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-32"
+              style={{ background: "radial-gradient(circle at top, hsl(var(--gold-soft) / 0.6), transparent 72%)" }}
+            />
+            <DialogHeader className="relative border-b px-6 pb-5 pt-6" style={{ borderColor: "hsl(var(--gold) / 0.12)" }}>
+              <div className="mb-3 flex items-center gap-2" style={{ fontFamily: "var(--font-display)" }}>
+                <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))]">
+                  Facturatie
+                </span>
+              </div>
+              <DialogTitle
+                className="text-[1.7rem] leading-tight text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Nieuwe factuur aanmaken
+              </DialogTitle>
+              <DialogDescription className="mt-2 max-w-xl text-sm text-muted-foreground">
+                Selecteer een klant en zet afgeleverde orders direct door naar een nette factuurflow.
+              </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 mt-2">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Klant</label>
+            <div className="relative space-y-5 px-6 py-6">
+            <div
+              className="rounded-[1.35rem] border p-4"
+              style={{
+                borderColor: "hsl(var(--gold) / 0.14)",
+                background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.14) 0%, hsl(var(--background)) 72%)",
+              }}
+            >
+              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--gold-deep))]">
+                Klant
+              </label>
               <select
                 value={selectedClientId}
                 onChange={(e) => { setSelectedClientId(e.target.value); setSelectedOrderIds(new Set()); }}
-                className="w-full h-10 px-3 rounded-lg border border-border/50 bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
+                className="h-12 w-full rounded-[1rem] border bg-background/90 px-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/20"
+                style={{ borderColor: "hsl(var(--gold) / 0.14)" }}
               >
                 <option value="">Selecteer een klant...</option>
                 {clients.filter((c) => c.is_active).map((client) => (
@@ -758,40 +826,84 @@ const Facturatie = () => {
             </div>
 
             {selectedClientId && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              <div
+                className="rounded-[1.35rem] border p-4"
+                style={{
+                  borderColor: "hsl(var(--gold) / 0.14)",
+                  background: "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--gold-soft) / 0.12) 100%)",
+                }}
+              >
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <label className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--gold-deep))]">
                   Onverfactureerde orders
-                </label>
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    {clientOrders.length} beschikbaar
+                  </p>
+                </div>
                 {isLoadingClientOrders ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="h-5 w-5 animate-spin text-[hsl(var(--gold-deep))]" />
                   </div>
                 ) : clientOrders.length === 0 ? (
-                  <div className="text-center py-6 bg-muted/30 rounded-lg border border-border/30">
-                    <p className="text-sm text-muted-foreground">Geen onverfactureerde orders voor deze klant</p>
+                  <div
+                    className="rounded-[1.1rem] border px-4 py-8 text-center"
+                    style={{
+                      borderColor: "hsl(var(--gold) / 0.12)",
+                      background: "hsl(var(--gold-soft) / 0.1)",
+                    }}
+                  >
+                    <p className="text-sm font-medium text-foreground">Geen onverfactureerde orders voor deze klant</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Zodra er leveringen klaarstaan, kun je ze hier bundelen.</p>
                   </div>
                 ) : (
-                  <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-lg border border-border/30 p-2">
+                  <div
+                    className="space-y-2 max-h-72 overflow-y-auto rounded-[1.1rem] border p-2"
+                    style={{ borderColor: "hsl(var(--gold) / 0.12)", background: "hsl(var(--background) / 0.76)" }}
+                  >
                     {clientOrders.map((order: any) => (
                       <label
                         key={order.id}
                         className={cn(
-                          "flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors",
-                          selectedOrderIds.has(order.id) ? "bg-primary/5 border border-primary/20" : "hover:bg-muted/40 border border-transparent"
+                          "flex items-start gap-3 rounded-[1rem] border p-3 cursor-pointer transition-all",
+                          selectedOrderIds.has(order.id)
+                            ? "shadow-sm"
+                            : "hover:bg-[hsl(var(--gold-soft)/0.12)]"
                         )}
+                        style={selectedOrderIds.has(order.id)
+                          ? {
+                              borderColor: "hsl(var(--gold) / 0.22)",
+                              background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.32) 0%, hsl(var(--background)) 100%)",
+                            }
+                          : {
+                              borderColor: "hsl(var(--gold) / 0.08)",
+                              background: "hsl(var(--background) / 0.82)",
+                            }}
                       >
-                        <Checkbox
-                          checked={selectedOrderIds.has(order.id)}
-                          onCheckedChange={() => toggleOrderSelection(order.id)}
-                        />
+                        <div className="pt-0.5">
+                          <Checkbox
+                            checked={selectedOrderIds.has(order.id)}
+                            onCheckedChange={() => toggleOrderSelection(order.id)}
+                          />
+                        </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-mono font-medium">#{order.order_number}</span>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+                              #{order.order_number}
+                            </span>
                             {order.quantity > 0 && (
-                              <span className="text-xs text-muted-foreground">{order.quantity} {order.unit || "stuks"}</span>
+                              <span
+                                className="inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium text-[hsl(var(--gold-deep))]"
+                                style={{ background: "hsl(var(--gold-soft) / 0.5)" }}
+                              >
+                                {order.quantity} {order.unit || "stuks"}
+                              </span>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground truncate">
+                          <p className="mt-1 text-xs text-muted-foreground truncate">
+                            {order.client_name}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground truncate">
                             {order.pickup_address?.split(",")[0] || "?"} {"->"} {order.delivery_address?.split(",")[0] || "?"}
                           </p>
                         </div>
@@ -803,24 +915,39 @@ const Facturatie = () => {
             )}
 
             {selectedOrderIds.size > 0 && (
-              <div className="bg-muted/30 rounded-lg p-3 border border-border/30">
-                <p className="text-xs text-muted-foreground">
+              <div
+                className="rounded-[1.2rem] border px-4 py-3"
+                style={{
+                  borderColor: "hsl(var(--gold) / 0.16)",
+                  background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.22) 0%, hsl(var(--background)) 100%)",
+                }}
+              >
+                <p className="text-sm text-muted-foreground">
                   <span className="font-semibold text-foreground">{selectedOrderIds.size}</span> order(s) geselecteerd
                   {clientRates.length === 0 && (
-                    <span className="text-amber-600 ml-2">- geen tarieven geconfigureerd, lege regels worden aangemaakt</span>
+                    <span className="ml-2 text-amber-600">- geen tarieven geconfigureerd, lege regels worden aangemaakt</span>
                   )}
                 </p>
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowNewInvoice(false)}>
+            <div
+              className="flex justify-end gap-2 border-t pt-5"
+              style={{ borderColor: "hsl(var(--gold) / 0.12)" }}
+            >
+              <Button
+                variant="outline"
+                onClick={() => setShowNewInvoice(false)}
+                className="h-11 rounded-[1rem] border px-4"
+                style={{ borderColor: "hsl(var(--gold) / 0.14)", background: "hsl(var(--background) / 0.85)" }}
+              >
                 Annuleren
               </Button>
               <Button
                 onClick={handleCreateInvoice}
                 disabled={!selectedClientId || selectedOrderIds.size === 0 || createInvoiceMutation.isPending}
-                className="gap-2"
+                className="h-11 gap-2 rounded-[1rem] px-5 text-[hsl(var(--gold-deep))] shadow-sm hover:opacity-95"
+                style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)) 0%, hsl(var(--gold) / 0.4) 100%)" }}
               >
                 {createInvoiceMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -830,6 +957,7 @@ const Facturatie = () => {
                 Factuur aanmaken
               </Button>
             </div>
+          </div>
           </div>
         </DialogContent>
       </Dialog>
