@@ -46,7 +46,7 @@ const sections = [
     label: "Controle",
     items: [
       { label: "Autonomie", path: "/autonomie", icon: Activity },
-      { label: "Finance", path: "/finance", icon: Receipt },
+      { label: "Facturatie", path: "/facturatie", icon: Receipt },
       { label: "Rapportage", path: "/rapportage", icon: BarChart3 },
     ],
   },

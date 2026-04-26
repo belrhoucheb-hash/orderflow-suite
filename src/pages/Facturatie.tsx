@@ -1,17 +1,16 @@
 import { useState, useMemo, useCallback } from "react";
-import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, Check, FileDown, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode, Wallet, AlertTriangle, CheckCircle2, FileClock, SendHorizonal } from "lucide-react";
+import { Receipt, Search, Plus, Eye, Download, Loader2, ArrowRight, Check, FileDown, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode, Wallet, AlertTriangle, CheckCircle2, FileClock, SendHorizonal } from "lucide-react";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useInvoices, useCreateInvoice, type InvoiceLine } from "@/hooks/useInvoices";
+import { useInvoices, useCreateInvoice, useUpdateInvoiceStatus, type InvoiceLine } from "@/hooks/useInvoices";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
@@ -92,6 +91,7 @@ const Facturatie = () => {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const { data: clients = [] } = useClients();
   const createInvoiceMutation = useCreateInvoice();
+  const updateInvoiceStatusMutation = useUpdateInvoiceStatus();
 
   const { data: clientOrders = [], isLoading: isLoadingClientOrders } = useQuery({
     queryKey: ["client-uninvoiced-orders", selectedClientId],
@@ -222,6 +222,20 @@ const Facturatie = () => {
     );
   };
 
+  const handleInvoiceStatusAction = useCallback(async (
+    invoiceId: string,
+    nextStatus: "verzonden" | "betaald",
+  ) => {
+    try {
+      await updateInvoiceStatusMutation.mutateAsync({ id: invoiceId, status: nextStatus });
+      toast.success(
+        nextStatus === "verzonden" ? "Factuur verzonden gemarkeerd" : "Factuur als betaald gemarkeerd",
+      );
+    } catch (error: any) {
+      toast.error("Status bijwerken mislukt", { description: error?.message ?? "Onbekende fout" });
+    }
+  }, [updateInvoiceStatusMutation]);
+
   const { data: uninvoicedOrders = [] } = useQuery({
     queryKey: ["uninvoiced-orders"],
     queryFn: async () => {
@@ -342,14 +356,6 @@ const Facturatie = () => {
     return { totaalOpenstaand, dezeMaandGefactureerd, betaaldDezeMaand, vervallenCount, conceptCount, conceptAmount, betaalRatio };
   }, [invoices]);
 
-  const heroStats = useMemo(() => {
-    const totalVisibleAmount = filtered.reduce((sum, inv) => sum + inv.total, 0);
-    return {
-      totalVisibleAmount,
-      urgentCount: stats.vervallenCount + uninvoicedOrders.length,
-    };
-  }, [filtered, stats.vervallenCount, uninvoicedOrders.length]);
-
   if (isLoading) {
     return <LoadingState message="Facturen laden..." />;
   }
@@ -391,59 +397,6 @@ const Facturatie = () => {
         }
       />
 
-      <motion.section
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="card--luxe relative overflow-hidden p-5"
-      >
-        <div
-          className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-70"
-          style={{
-            background: "radial-gradient(circle at top right, hsl(var(--gold) / 0.18), transparent 55%)",
-          }}
-        />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <div
-              className="mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]"
-              style={{ borderColor: "hsl(var(--gold) / 0.18)", background: "hsl(var(--gold-soft) / 0.18)" }}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Facturatie cockpit
-            </div>
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground" style={{ fontFamily: "var(--font-display)" }}>
-              Hier stuur je op cash, niet alleen op facturen.
-            </h2>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-              Concepten, openstaand en leveringen zonder factuur komen hier samen, zodat je sneller ziet wat moet bewegen.
-            </p>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3">
-            {[
-              { label: "In beeld", value: formatCurrency(heroStats.totalVisibleAmount), icon: Wallet },
-              { label: "Actie nodig", value: `${heroStats.urgentCount}`, icon: AlertTriangle },
-              { label: "Betaalratio", value: `${stats.betaalRatio}%`, icon: CheckCircle2 },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-2xl border p-3"
-                style={{
-                  borderColor: "hsl(var(--gold) / 0.14)",
-                  background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.14) 100%)",
-                }}
-              >
-                <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "hsl(var(--gold-soft) / 0.36)" }}>
-                  <item.icon className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
-                </div>
-                <p className="text-lg font-semibold tabular-nums" style={{ fontFamily: "var(--font-display)" }}>{item.value}</p>
-                <p className="text-xs text-muted-foreground">{item.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </motion.section>
-
       <KPIStrip
         columns={6}
         items={[
@@ -457,18 +410,13 @@ const Facturatie = () => {
       />
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.04 }}
-          className="card--luxe p-5"
-        >
+        <section className="card--luxe p-5">
           <div className="mb-4 flex items-center gap-2.5">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-xl"
               style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)) 0%, hsl(var(--gold) / 0.3) 100%)" }}
             >
-              <Sparkles className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+              <FileClock className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
             </div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
@@ -506,14 +454,9 @@ const Facturatie = () => {
               <p className="mt-1 text-xs text-muted-foreground">Waarde die nog niet verzonden is naar de klant.</p>
             </div>
           </div>
-        </motion.section>
+        </section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.07 }}
-          className="card--luxe p-5"
-        >
+        <section className="card--luxe p-5">
           <div className="mb-4 flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "hsl(var(--gold-soft) / 0.35)" }}>
               <Receipt className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
@@ -556,7 +499,7 @@ const Facturatie = () => {
               <p className="mt-1 text-xs text-muted-foreground">Met filters en zoeken stuur je hier direct op de actuele werkvoorraad.</p>
             </div>
           </div>
-        </motion.section>
+        </section>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -659,11 +602,35 @@ const Facturatie = () => {
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/facturatie/${invoice.id}`); }}
-                          className="p-1.5 rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
-                        >
+                        <div className="flex items-center justify-end gap-1">
+                          {effectiveStatus === "concept" && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleInvoiceStatusAction(invoice.id, "verzonden");
+                              }}
+                              disabled={updateInvoiceStatusMutation.isPending}
+                              className="rounded-md border border-blue-200/60 px-2 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-500/8 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800/60 dark:text-blue-300"
+                            >
+                              Verzend
+                            </button>
+                          )}
+                          {(effectiveStatus === "verzonden" || effectiveStatus === "vervallen") && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleInvoiceStatusAction(invoice.id, "betaald");
+                              }}
+                              disabled={updateInvoiceStatusMutation.isPending}
+                              className="rounded-md border border-emerald-200/60 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-500/8 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-800/60 dark:text-emerald-300"
+                            >
+                              Betaald
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/facturatie/${invoice.id}`); }}
+                            className="p-1.5 rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
+                          >
                           <Eye className="h-3.5 w-3.5" />
                         </button>
                         {invoice.pdf_url && (
