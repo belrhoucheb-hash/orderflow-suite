@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown, Sparkles } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -262,6 +262,10 @@ export function AppSidebar() {
     return location.pathname.startsWith(url);
   };
 
+  const displayName = profile?.display_name || "Gebruiker";
+  const userEmail = user?.email || "";
+  const initials = (profile?.display_name || user?.email || "?").slice(0, 2).toUpperCase();
+
   return (
     <Sidebar
       collapsible="icon"
@@ -315,61 +319,134 @@ export function AppSidebar() {
         className="mx-3 mb-3 rounded-2xl border px-3 py-3"
         style={{
           borderColor: "hsl(218 24% 18%)",
-          background: "hsl(222 24% 12%)",
+          background: "linear-gradient(180deg, hsl(222 24% 12%) 0%, hsl(221 22% 11%) 100%)",
         }}
       >
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-            style={{ background: "hsl(219 22% 18%)", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.2)" }}
-          >
-            {(profile?.display_name || user?.email || "?").slice(0, 2).toUpperCase()}
+        <div
+          className={cn(
+            "rounded-[22px] border p-2.5",
+            collapsed ? "space-y-2" : "space-y-3",
+          )}
+          style={{
+            borderColor: "hsl(var(--gold) / 0.1)",
+            background: "linear-gradient(180deg, hsl(222 23% 14%) 0%, hsl(220 22% 12%) 100%)",
+            boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.03)",
+          }}
+        >
+          <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
+            <div
+              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-[11px] font-semibold text-white"
+              style={{
+                background: "linear-gradient(135deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+                boxShadow: "0 10px 24px -16px hsl(var(--gold) / 0.7), inset 0 1px 0 hsl(0 0% 100% / 0.18)",
+              }}
+            >
+              {initials}
+              <span
+                className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border border-[hsl(222_24%_12%)]"
+                style={{ background: "hsl(142 66% 46%)" }}
+                aria-hidden="true"
+              />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-[13px] font-semibold tracking-tight text-white">{displayName}</span>
+                  <span
+                    className="inline-flex h-5 items-center gap-1 rounded-full px-2 text-[9px] font-semibold uppercase tracking-[0.16em]"
+                    style={{
+                      background: "hsl(var(--gold-soft) / 0.18)",
+                      color: "hsl(var(--gold-light))",
+                    }}
+                  >
+                    <Sparkles className="h-2.5 w-2.5" strokeWidth={2} />
+                    Live
+                  </span>
+                </div>
+                <p className="truncate text-[11px] text-white/42">{userEmail}</p>
+              </div>
+            )}
           </div>
+
           {!collapsed && (
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="truncate text-sm font-medium text-white/90">{profile?.display_name || "Gebruiker"}</span>
-              <span className="truncate text-xs text-white/45">{user?.email}</span>
+            <div className="grid grid-cols-3 gap-1.5">
+              <button
+                onClick={() => navigate("/settings")}
+                className="group flex min-h-[64px] flex-col items-start justify-between rounded-2xl border px-3 py-2.5 text-left transition-all hover:-translate-y-0.5"
+                style={{
+                  borderColor: "hsl(0 0% 100% / 0.05)",
+                  background: "linear-gradient(180deg, hsl(220 18% 15%) 0%, hsl(220 18% 13%) 100%)",
+                }}
+                aria-label="Instellingen"
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/5 text-white/72 transition-colors group-hover:bg-[hsl(var(--gold-soft)/0.16)] group-hover:text-white">
+                  <Settings className="h-4 w-4" />
+                </span>
+                <span className="text-[11px] font-medium text-white/84">Instellingen</span>
+              </button>
+
+              <button
+                onClick={toggleTheme}
+                className="group flex min-h-[64px] flex-col items-start justify-between rounded-2xl border px-3 py-2.5 text-left transition-all hover:-translate-y-0.5"
+                style={{
+                  borderColor: "hsl(0 0% 100% / 0.05)",
+                  background: isDark
+                    ? "linear-gradient(180deg, hsl(220 18% 15%) 0%, hsl(220 18% 13%) 100%)"
+                    : "linear-gradient(180deg, hsl(var(--gold-soft) / 0.16), hsl(220 18% 13%) 100%)",
+                }}
+                aria-label={isDark ? "Licht thema" : "Donker thema"}
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/5 text-white/72 transition-colors group-hover:bg-[hsl(var(--gold-soft)/0.16)] group-hover:text-white">
+                  {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </span>
+                <span className="text-[11px] font-medium text-white/84">{isDark ? "Licht" : "Dark mode"}</span>
+              </button>
+
+              <button
+                onClick={async () => { await signOut(); navigate("/login"); }}
+                className="group flex min-h-[64px] flex-col items-start justify-between rounded-2xl border px-3 py-2.5 text-left transition-all hover:-translate-y-0.5"
+                style={{
+                  borderColor: "hsl(0 84% 65% / 0.12)",
+                  background: "linear-gradient(180deg, hsl(220 18% 15%) 0%, hsl(220 18% 13%) 100%)",
+                }}
+                aria-label="Uitloggen"
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/5 text-white/72 transition-colors group-hover:bg-[hsl(0_84%_65%/0.12)] group-hover:text-white">
+                  <LogOut className="h-4 w-4" />
+                </span>
+                <span className="text-[11px] font-medium text-white/84">Uitloggen</span>
+              </button>
             </div>
           )}
-          <button
-            onClick={() => navigate("/settings")}
-            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:text-white/80"
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = "hsl(220 20% 15%)";
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "transparent";
-            }}
-            aria-label="Instellingen"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-          <button
-            onClick={toggleTheme}
-            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:text-white/80"
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = "hsl(220 20% 15%)";
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "transparent";
-            }}
-            aria-label={isDark ? "Licht thema" : "Donker thema"}
-          >
-            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
-          <button
-            onClick={async () => { await signOut(); navigate("/login"); }}
-            className="shrink-0 rounded-md p-1 text-white/35 transition-colors hover:text-white/80"
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background = "hsl(220 20% 15%)";
-            }}
-            onMouseLeave={(event) => {
-              event.currentTarget.style.background = "transparent";
-            }}
-            aria-label="Uitloggen"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+
+          {collapsed && (
+            <div className="flex flex-col items-center gap-1.5">
+              <button
+                onClick={() => navigate("/settings")}
+                className="grid h-9 w-9 place-items-center rounded-xl border text-white/62 transition-all hover:border-[hsl(var(--gold)/0.2)] hover:bg-white/5 hover:text-white"
+                style={{ borderColor: "hsl(0 0% 100% / 0.05)" }}
+                aria-label="Instellingen"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+              <button
+                onClick={toggleTheme}
+                className="grid h-9 w-9 place-items-center rounded-xl border text-white/62 transition-all hover:border-[hsl(var(--gold)/0.2)] hover:bg-white/5 hover:text-white"
+                style={{ borderColor: "hsl(0 0% 100% / 0.05)" }}
+                aria-label={isDark ? "Licht thema" : "Donker thema"}
+              >
+                {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={async () => { await signOut(); navigate("/login"); }}
+                className="grid h-9 w-9 place-items-center rounded-xl border text-white/62 transition-all hover:border-[hsl(0_84%_65%/0.18)] hover:bg-white/5 hover:text-white"
+                style={{ borderColor: "hsl(0 0% 100% / 0.05)" }}
+                aria-label="Uitloggen"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>
