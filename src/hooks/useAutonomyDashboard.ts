@@ -184,6 +184,10 @@ export function useDecisionFeed(limit = 20) {
     staleTime: 15_000,
     refetchInterval: 30_000,
     queryFn: async () => {
+      if (import.meta.env.DEV && readDevBypassUser()) {
+        return [];
+      }
+
       const { data, error } = await (supabase
         .from("decision_log" as any)
         .select("*")
@@ -224,6 +228,10 @@ export function useLearningProgress(clientId?: string) {
     enabled: !!tenant?.id,
     staleTime: 60_000,
     queryFn: async (): Promise<LearningMetric[]> => {
+      if (import.meta.env.DEV && readDevBypassUser()) {
+        return [];
+      }
+
       let query = supabase
         .from("confidence_scores" as any)
         .select("client_id, total_decisions, current_score, last_updated, clients(name)")
@@ -271,6 +279,10 @@ export function useCorrectionLog(days = 7) {
     enabled: !!tenant?.id,
     staleTime: 60_000,
     queryFn: async (): Promise<CorrectionEntry[]> => {
+      if (import.meta.env.DEV && readDevBypassUser()) {
+        return [];
+      }
+
       const since = new Date();
       since.setDate(since.getDate() - days);
 
@@ -308,6 +320,10 @@ export function useAutonomyTrend(weeks = 8) {
     enabled: !!tenant?.id,
     staleTime: 300_000,
     queryFn: async (): Promise<TrendDataPoint[]> => {
+      if (import.meta.env.DEV && readDevBypassUser()) {
+        return [];
+      }
+
       const since = new Date();
       since.setDate(since.getDate() - weeks * 7);
 

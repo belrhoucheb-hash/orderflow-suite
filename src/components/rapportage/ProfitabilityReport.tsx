@@ -27,21 +27,37 @@ function useProfitabilityData(groupBy: GroupBy) {
 
       if (invErr) throw invErr;
 
-      // Costs: from trip_costs joined with trips
+      // Costs: fetch plain trip_cost rows first. Joining nested relations here
+      // can fail on local schemas where the FK metadata is incomplete.
       const { data: tripCosts, error: tcErr } = await supabase
         .from("trip_costs" as any)
-        .select("amount, trips(vehicle_id, total_distance_km)")
+        .select("amount, trip_id")
         .order("created_at", { ascending: false });
 
       // trip_costs may not exist yet
       const costs = tcErr ? [] : (tripCosts ?? []);
 
       // Get trips for vehicle mapping
-      const { data: trips } = await supabase
+      const { data: trips, error: tripsErr } = await supabase
         .from("trips")
-        .select("id, vehicle_id, vehicles(name)")
+        .select("id, vehicle_id")
         .order("planned_date", { ascending: false })
         .limit(500);
+
+      const tripRows = tripsErr ? [] : (trips ?? []);
+      const vehicleIds = Array.from(new Set(tripRows.map((trip) => trip.vehicle_id).filter(Boolean)));
+      const { data: vehicles, error: vehiclesErr } = vehicleIds.length > 0
+        ? await supabase
+            .from("vehicles")
+            .select("id, name")
+            .in("id", vehicleIds)
+        : { data: [], error: null };
+      const vehicleNameById = new Map<string, string>();
+      if (!vehiclesErr) {
+        for (const vehicle of vehicles ?? []) {
+          vehicleNameById.set(vehicle.id, vehicle.name ?? vehicle.id.slice(0, 8));
+        }
+      }
 
       if (groupBy === "client") {
         // Group by client
@@ -70,8 +86,10 @@ function useProfitabilityData(groupBy: GroupBy) {
         // Group by vehicle
         const vehicleMap = new Map<string, { name: string; revenue: number; cost: number }>();
 
-        for (const trip of (trips ?? [])) {
-          const vehicleName = (trip.vehicles as any)?.name ?? trip.vehicle_id?.slice(0, 8) ?? "Onbekend";
+        for (const trip of tripRows) {
+          const vehicleName = trip.vehicle_id
+            ? vehicleNameById.get(trip.vehicle_id) ?? trip.vehicle_id.slice(0, 8)
+            : "Onbekend";
           const existing = vehicleMap.get(vehicleName) ?? { name: vehicleName, revenue: 0, cost: 0 };
           vehicleMap.set(vehicleName, existing);
         }
