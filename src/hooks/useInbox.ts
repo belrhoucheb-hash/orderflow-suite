@@ -21,8 +21,10 @@ import {
 import { saveCorrection } from "@/hooks/useAIFeedback";
 import { recordAIDecision, resolveAIDecision } from "@/hooks/useConfidenceStore";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 import { emitEventDirect } from "@/hooks/useEventPipeline";
+import { fetchDepartmentsCached } from "@/hooks/useDepartments";
 import { buildFewShotExamples } from "@/utils/fewShotBuilder";
 import type { AIDecision } from "@/types/confidence";
 import { assessAutoConfirm } from "@/lib/autoConfirm";
@@ -39,6 +41,7 @@ function formsEqual(left?: FormState | null, right?: FormState | null) {
 export function useInbox() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  const { user } = useAuth();
 
   // ─── State ───
   const [selectedId, setSelectedId] = useState<string>("");
@@ -97,6 +100,26 @@ export function useInbox() {
     [clients],
   );
 
+  const resolveDraftDepartmentId = useCallback(
+    async (tenantId: string) => {
+      const departments = await fetchDepartmentsCached(queryClient, tenantId);
+      const defaultDepartmentId = departments[0]?.id;
+      if (!defaultDepartmentId) {
+        throw new Error("Geen actieve afdeling gevonden voor deze tenant.");
+      }
+      return defaultDepartmentId;
+    },
+    [queryClient],
+  );
+
+  const resolveTenantId = useCallback(() => {
+    const userTenantId = user?.app_metadata?.tenant_id;
+    if (typeof userTenantId === "string" && userTenantId.length > 0) {
+      return userTenantId;
+    }
+    return tenant?.id || "00000000-0000-0000-0000-000000000001";
+  }, [tenant?.id, user?.app_metadata]);
+
   // ─── Email Import ───
   const handleImportEmail = async (file: File) => {
     setIsImporting(true);
@@ -125,11 +148,13 @@ export function useInbox() {
         else emailBody = bodyPart.replace(/Content-[A-Za-z-]+:.*\n/g, "").trim();
       }
 
-      const tenantId = tenant?.id || "00000000-0000-0000-0000-000000000001";
+      const tenantId = resolveTenantId();
+      const departmentId = await resolveDraftDepartmentId(tenantId);
       const { data: newOrder, error } = await supabase
         .from("orders")
         .insert({
           tenant_id: tenantId,
+          department_id: departmentId,
           status: "DRAFT",
           source: "EMAIL",
           source_email_from: emailFrom,
@@ -179,11 +204,13 @@ export function useInbox() {
           return;
         }
 
-        const tenantId = tenant?.id || "00000000-0000-0000-0000-000000000001";
+        const tenantId = resolveTenantId();
+        const departmentId = await resolveDraftDepartmentId(tenantId);
         const { data: newOrder, error } = await supabase
           .from("orders")
           .insert({
             tenant_id: tenantId,
+            department_id: departmentId,
             status: "DRAFT",
             source: "EMAIL",
             source_email_from: fromEmail,
@@ -256,6 +283,10 @@ export function useInbox() {
           transportType: ext.transport_type || "direct",
           pickupAddress: ext.pickup_address || "",
           deliveryAddress: ext.delivery_address || "",
+          pickupTimeFrom: "",
+          pickupTimeTo: "",
+          deliveryTimeFrom: "",
+          deliveryTimeTo: "",
           quantity: qtyVal,
           unit: unitVal,
           weight: weightVal,
@@ -325,7 +356,7 @@ export function useInbox() {
         setLoadingScenario(null);
       }
     },
-    [queryClient, toast, enrichAddresses, tenant],
+    [queryClient, toast, enrichAddresses, resolveDraftDepartmentId, resolveTenantId],
   );
 
   // ─── Queries ───
@@ -453,6 +484,10 @@ export function useInbox() {
           transport_type: form.transportType.toUpperCase().replace("-", "_"),
           pickup_address: form.pickupAddress,
           delivery_address: form.deliveryAddress,
+          pickup_time_from: form.pickupTimeFrom || null,
+          pickup_time_to: form.pickupTimeTo || null,
+          delivery_time_from: form.deliveryTimeFrom || null,
+          delivery_time_to: form.deliveryTimeTo || null,
           quantity: form.quantity,
           unit: form.unit,
           weight_kg: form.weight ? Number(form.weight) : null,
@@ -472,6 +507,10 @@ export function useInbox() {
       const wasChanged = originalForm && (
         originalForm.pickupAddress !== approvedForm.pickupAddress ||
         originalForm.deliveryAddress !== approvedForm.deliveryAddress ||
+        originalForm.pickupTimeFrom !== approvedForm.pickupTimeFrom ||
+        originalForm.pickupTimeTo !== approvedForm.pickupTimeTo ||
+        originalForm.deliveryTimeFrom !== approvedForm.deliveryTimeFrom ||
+        originalForm.deliveryTimeTo !== approvedForm.deliveryTimeTo ||
         originalForm.quantity !== approvedForm.quantity ||
         originalForm.unit !== approvedForm.unit
       );
@@ -489,6 +528,10 @@ export function useInbox() {
           const hasCorrections = originalForm && (
             originalForm.pickupAddress !== approvedForm.pickupAddress ||
             originalForm.deliveryAddress !== approvedForm.deliveryAddress ||
+            originalForm.pickupTimeFrom !== approvedForm.pickupTimeFrom ||
+            originalForm.pickupTimeTo !== approvedForm.pickupTimeTo ||
+            originalForm.deliveryTimeFrom !== approvedForm.deliveryTimeFrom ||
+            originalForm.deliveryTimeTo !== approvedForm.deliveryTimeTo ||
             originalForm.quantity !== approvedForm.quantity ||
             originalForm.unit !== approvedForm.unit
           );
@@ -500,6 +543,10 @@ export function useInbox() {
             correctionSummary: hasCorrections ? {
               pickupChanged: originalForm?.pickupAddress !== approvedForm.pickupAddress,
               deliveryChanged: originalForm?.deliveryAddress !== approvedForm.deliveryAddress,
+              pickupTimeFromChanged: originalForm?.pickupTimeFrom !== approvedForm.pickupTimeFrom,
+              pickupTimeToChanged: originalForm?.pickupTimeTo !== approvedForm.pickupTimeTo,
+              deliveryTimeFromChanged: originalForm?.deliveryTimeFrom !== approvedForm.deliveryTimeFrom,
+              deliveryTimeToChanged: originalForm?.deliveryTimeTo !== approvedForm.deliveryTimeTo,
               quantityChanged: originalForm?.quantity !== approvedForm.quantity,
               unitChanged: originalForm?.unit !== approvedForm.unit,
             } : undefined,
@@ -556,6 +603,10 @@ export function useInbox() {
           transport_type: f.transportType.toUpperCase().replace("-", "_"),
           pickup_address: f.pickupAddress,
           delivery_address: f.deliveryAddress,
+          pickup_time_from: f.pickupTimeFrom || null,
+          pickup_time_to: f.pickupTimeTo || null,
+          delivery_time_from: f.deliveryTimeFrom || null,
+          delivery_time_to: f.deliveryTimeTo || null,
           quantity: f.quantity,
           unit: f.unit,
           weight_kg: f.weight ? Number(f.weight) : null,
@@ -840,7 +891,7 @@ export function useInbox() {
       autoExtractingRef.current = true;
       lastExtractedIdRef.current = selected.id;
       try {
-        const tenantId = tenant?.id || "00000000-0000-0000-0000-000000000001";
+        const tenantId = resolveTenantId();
         // Event Pipeline: AI extraction started
         emitEventDirect(selected.id, "ai_extraction_started", { actorType: "ai", tenantId });
         const { data: parseResponse, error: parseError } = await supabase.functions.invoke("parse-order", {
@@ -873,6 +924,10 @@ export function useInbox() {
           transportType: ext.transport_type || "direct",
           pickupAddress: ext.pickup_address || "",
           deliveryAddress: ext.delivery_address || "",
+          pickupTimeFrom: "",
+          pickupTimeTo: "",
+          deliveryTimeFrom: "",
+          deliveryTimeTo: "",
           quantity: qtyVal2,
           unit: unitVal2,
           weight: weightVal2,
@@ -942,7 +997,7 @@ export function useInbox() {
 
     runExtraction();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, drafts]); // Trigger on selection change and when drafts load/update
+    }, [selectedId, drafts, resolveTenantId]); // Trigger on selection change and when drafts load/update
 
   // ─── Keyboard Navigation ───
   const filteredRef = useRef(filtered);

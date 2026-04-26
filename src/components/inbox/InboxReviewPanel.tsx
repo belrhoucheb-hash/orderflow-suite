@@ -286,8 +286,8 @@ export function InboxReviewPanel({
       ? Number(form.weight) * form.quantity
       : Number(form.weight)
     : 0;
-  const pickupWindowLabel = formatTimeWindow(selected.pickup_time_from, selected.pickup_time_to);
-  const deliveryWindowLabel = formatTimeWindow(selected.delivery_time_from, selected.delivery_time_to);
+  const pickupWindowLabel = formatTimeWindow(form.pickupTimeFrom, form.pickupTimeTo);
+  const deliveryWindowLabel = formatTimeWindow(form.deliveryTimeFrom, form.deliveryTimeTo);
 
   const handlePrimaryAction = () => {
     if (autoConfirmAssessment.eligible) {
@@ -375,7 +375,7 @@ export function InboxReviewPanel({
                   className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
                   style={{ fontFamily: "'Space Grotesk', sans-serif" }}
                 >
-                  Order-review
+                  Conceptorder
                 </span>
               </div>
               <h2
@@ -587,9 +587,7 @@ export function InboxReviewPanel({
                   <p className="mt-1 text-[13px] font-medium text-foreground">
                     {filledCount} van {totalFields} velden herkend
                   </p>
-                  <p className="mt-1 text-[10.5px] text-muted-foreground">
-                    Auto-confirm {autoConfirmConfidence}% · drempel 95%
-                  </p>
+                  <p className="mt-1 text-[10.5px] text-muted-foreground">Automatisch gelezen uit mail en bijlagen</p>
                 </div>
                 <p
                   className="shrink-0 text-[18px] font-semibold tabular-nums"
@@ -598,17 +596,12 @@ export function InboxReviewPanel({
                   {extractionConfidence}%
                 </p>
               </div>
-              <div
-                className={cn(
-                  "mt-3 rounded-xl border px-3 py-2 text-[11.5px]",
-                  autoConfirmAssessment.eligible
-                    ? "border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.92),rgba(236,253,245,0.74))] text-emerald-900"
-                    : "border-red-200 bg-[linear-gradient(180deg,rgba(254,242,242,0.92),rgba(254,242,242,0.74))] text-red-900",
-                )}
-              >
-                <p className="font-semibold">{autoConfirmAssessment.title}</p>
-                <p className="mt-1">{autoConfirmAssessment.reason}</p>
-              </div>
+              {autoConfirmAssessment.eligible ? (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.92),rgba(236,253,245,0.74))] px-3 py-2 text-[11.5px] text-emerald-900">
+                  <p className="font-semibold">{autoConfirmAssessment.title}</p>
+                  <p className="mt-1">{autoConfirmAssessment.reason}</p>
+                </div>
+              ) : null}
             </div>
           </section>
 
@@ -682,11 +675,26 @@ export function InboxReviewPanel({
                       </p>
                     )}
                     <div className="mt-2 flex items-center gap-2" {...pickupTimeLinkage}>
-                      <span className={cn("text-[11px]", pickupTimeNeedsAttention ? "text-amber-800" : "text-muted-foreground")}>
-                        {pickupWindowLabel}
-                      </span>
+                      <input
+                        type="time"
+                        value={form.pickupTimeFrom}
+                        onChange={(e) => onUpdateField("pickupTimeFrom", e.target.value)}
+                        onBlur={onAutoSave}
+                        className="picker h-8 w-[92px] text-[11.5px] px-2 py-1 rounded-md"
+                      />
+                      <span className="text-[11px] text-muted-foreground">tot</span>
+                      <input
+                        type="time"
+                        value={form.pickupTimeTo}
+                        onChange={(e) => onUpdateField("pickupTimeTo", e.target.value)}
+                        onBlur={onAutoSave}
+                        className="picker h-8 w-[92px] text-[11.5px] px-2 py-1 rounded-md"
+                      />
                       {pickupTimeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
                     </div>
+                    {!pickupTimeNeedsAttention && (form.pickupTimeFrom || form.pickupTimeTo) ? (
+                      <p className="mt-1 text-[10.5px] text-muted-foreground">{pickupWindowLabel}</p>
+                    ) : null}
                     {pickupTimeNeedsAttention && (
                       <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
                         <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
@@ -744,11 +752,26 @@ export function InboxReviewPanel({
                       </p>
                     )}
                     <div className="mt-2 flex items-center gap-2" {...deliveryTimeLinkage}>
-                      <span className={cn("text-[11px]", deliveryTimeNeedsAttention ? "text-amber-800" : "text-muted-foreground")}>
-                        {deliveryWindowLabel}
-                      </span>
+                      <input
+                        type="time"
+                        value={form.deliveryTimeFrom}
+                        onChange={(e) => onUpdateField("deliveryTimeFrom", e.target.value)}
+                        onBlur={onAutoSave}
+                        className="picker h-8 w-[92px] text-[11.5px] px-2 py-1 rounded-md"
+                      />
+                      <span className="text-[11px] text-muted-foreground">tot</span>
+                      <input
+                        type="time"
+                        value={form.deliveryTimeTo}
+                        onChange={(e) => onUpdateField("deliveryTimeTo", e.target.value)}
+                        onBlur={onAutoSave}
+                        className="picker h-8 w-[92px] text-[11.5px] px-2 py-1 rounded-md"
+                      />
                       {deliveryTimeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
                     </div>
+                    {!deliveryTimeNeedsAttention && (form.deliveryTimeFrom || form.deliveryTimeTo) ? (
+                      <p className="mt-1 text-[10.5px] text-muted-foreground">{deliveryWindowLabel}</p>
+                    ) : null}
                     {deliveryTimeNeedsAttention && (
                       <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
                         <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />

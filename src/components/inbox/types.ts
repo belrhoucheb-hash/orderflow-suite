@@ -44,6 +44,10 @@ export interface FormState {
   transportType: string;
   pickupAddress: string;
   deliveryAddress: string;
+  pickupTimeFrom: string;
+  pickupTimeTo: string;
+  deliveryTimeFrom: string;
+  deliveryTimeTo: string;
   quantity: number;
   unit: string;
   weight: string;

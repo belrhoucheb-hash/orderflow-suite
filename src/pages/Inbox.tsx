@@ -170,7 +170,7 @@ export default function Inbox() {
                 className="text-[15px] font-semibold text-foreground"
                 style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.01em" }}
               >
-                Inbox
+                Bericht
               </h3>
               <p
                 className="text-[11px] tabular-nums text-muted-foreground min-w-0"
