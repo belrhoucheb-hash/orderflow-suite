@@ -18,6 +18,7 @@ const { mockSupabase, mockUnsubscribe } = vi.hoisted(() => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
     }),
   };
   return { mockSupabase, mockUnsubscribe };
@@ -55,7 +56,7 @@ function buildFromChain(profileData: any, rolesData: any, driverData: any = null
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: driverData, error: driverData ? null : { code: "PGRST116" } }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: driverData, error: driverData ? null : { code: "PGRST116" } }),
           }),
         }),
       };
@@ -64,6 +65,7 @@ function buildFromChain(profileData: any, rolesData: any, driverData: any = null
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
     };
   });
 }
@@ -311,6 +313,7 @@ describe("AuthContext", () => {
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           single: vi.fn().mockResolvedValue({ data: null, error: null }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         }),
       }),
     }));

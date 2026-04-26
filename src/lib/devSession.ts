@@ -1,7 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 
 export const DEV_BYPASS_STORAGE_KEY = "debug_bypass";
-export const DEV_BYPASS_USER_ID = "dev-local-user";
+export const DEV_BYPASS_USER_ID = "00000000-0000-0000-0000-00000000d001";
 export const DEV_BYPASS_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 
 export function isLocalDevHost() {

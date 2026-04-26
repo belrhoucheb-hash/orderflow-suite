@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { DEV_BYPASS_USER_ID, DEV_BYPASS_TENANT_ID, readDevBypassUser } from "@/lib/devSession";
+import { DEV_BYPASS_USER_ID, readDevBypassUser } from "@/lib/devSession";
 
 type AppRole = "admin" | "medewerker";
 type EffectiveRole = "admin" | "planner" | "chauffeur";

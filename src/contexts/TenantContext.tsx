@@ -80,7 +80,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
             .from('tenants' as any)
             .select('*')
             .eq('id', tenantId)
-            .single();
+            .maybeSingle();
             
           const data = rawData as any;
           if (data && !error) {

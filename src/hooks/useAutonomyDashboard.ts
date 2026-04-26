@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { readDevBypassUser } from "@/lib/devSession";
 import type { DecisionType } from "@/types/confidence";
 import type {
   AutonomyScoreResult,
@@ -114,6 +115,21 @@ export function useAutonomyScore() {
     staleTime: 30_000,
     refetchInterval: 60_000,
     queryFn: async (): Promise<AutonomyScoreResult> => {
+      if (import.meta.env.DEV && readDevBypassUser()) {
+        return {
+          overall: 0,
+          perModule: {
+            ORDER_INTAKE: 0,
+            PLANNING: 0,
+            DISPATCH: 0,
+            PRICING: 0,
+            INVOICING: 0,
+            CONSOLIDATION: 0,
+          },
+          todayStats: { autonomous: 0, validated: 0, manual: 0 },
+        };
+      }
+
       // 1. Get confidence scores per module
       const { data: scores, error: scoresErr } = await (supabase
         .from("confidence_scores" as any)

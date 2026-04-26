@@ -50,6 +50,24 @@ const Login = () => {
     setLoading(true);
     setErrorText("");
 
+    if (
+      import.meta.env.DEV &&
+      isLocalDevHost() &&
+      loginEmail.trim().toLowerCase() === DEV_BYPASS_EMAIL &&
+      loginPassword === DEV_BYPASS_PASSWORD
+    ) {
+      localStorage.setItem(
+        DEV_BYPASS_STORAGE_KEY,
+        JSON.stringify({
+          email: DEV_BYPASS_EMAIL,
+          display_name: "Local Admin",
+        }),
+      );
+      setLoading(false);
+      window.location.assign("/");
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: loginPassword,
@@ -57,22 +75,6 @@ const Login = () => {
     setLoading(false);
 
     if (error) {
-      if (
-        import.meta.env.DEV &&
-        isLocalDevHost() &&
-        loginEmail.trim().toLowerCase() === DEV_BYPASS_EMAIL &&
-        loginPassword === DEV_BYPASS_PASSWORD
-      ) {
-        localStorage.setItem(
-          DEV_BYPASS_STORAGE_KEY,
-          JSON.stringify({
-            email: DEV_BYPASS_EMAIL,
-            display_name: "Local Admin",
-          }),
-        );
-        navigate("/");
-        return;
-      }
       setErrorText("Ongeldig e-mailadres of wachtwoord");
     } else {
       localStorage.removeItem(DEV_BYPASS_STORAGE_KEY);

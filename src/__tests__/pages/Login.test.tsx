@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
@@ -55,6 +55,11 @@ function renderLogin() {
 describe("Login", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("renders without crashing", () => {
@@ -199,6 +204,7 @@ describe("Login", () => {
   });
 
   it("calls Google OAuth on Google button click", async () => {
+    vi.stubEnv("VITE_GOOGLE_AUTH_ENABLED", "true");
     mockSupabase.auth.signInWithOAuth.mockResolvedValueOnce({ error: null });
     const user = userEvent.setup();
     renderLogin();

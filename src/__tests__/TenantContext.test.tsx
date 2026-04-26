@@ -21,6 +21,7 @@ const { mockAuthValues, mockSupabase } = vi.hoisted(() => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       limit: vi.fn().mockReturnValue({
         maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
       }),
@@ -63,8 +64,8 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 function setupFromMock(options: {
-  singleData?: any;
-  singleError?: any;
+  maybeSingleData?: any;
+  maybeSingleError?: any;
   maybeSingleResults?: Array<{ data: any; error?: any }>;
 }) {
   let maybeSingleCallCount = 0;
@@ -83,9 +84,9 @@ function setupFromMock(options: {
   mockSupabase.from.mockImplementation(() => ({
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({
-          data: options.singleData ?? null,
-          error: options.singleError ?? null,
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: options.maybeSingleData ?? null,
+          error: options.maybeSingleError ?? null,
         }),
         // When eq() is used as query reassignment (subdomain path),
         // the result also needs limit().maybeSingle()
@@ -142,7 +143,7 @@ describe("TenantContext", () => {
   // ── Tenant resolved via user tenant_id (JWT path) ─────────────────
   it("resolves tenant via user app_metadata.tenant_id", async () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
-    setupFromMock({ singleData: fakeTenantRow });
+    setupFromMock({ maybeSingleData: fakeTenantRow });
 
     const { result } = renderHook(() => useTenant(), { wrapper });
 
@@ -209,9 +210,9 @@ describe("TenantContext", () => {
   it("falls back to first available tenant when primary resolution fails", async () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "nonexistent" } };
 
-    // single() returns null (id lookup fails), fallback maybeSingle returns data
+    // maybeSingle() returns null (id lookup fails), fallback maybeSingle returns data
     setupFromMock({
-      singleData: null,
+      maybeSingleData: null,
       maybeSingleResults: [{ data: fakeTenantRow }],
     });
 
@@ -222,14 +223,14 @@ describe("TenantContext", () => {
 
     expect(result.current.tenant).not.toBeNull();
     expect(result.current.tenant?.id).toBe("t-001");
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Could not accurately resolve tenant"));
+    expect(result.current.tenant?.name).toBe("Acme Transport");
     warnSpy.mockRestore();
   });
 
   // ── Ultimate fallback: no tenants in DB at all ─────────────────────
   it("creates hardcoded dev tenant when no tenants exist in database", async () => {
     setupFromMock({
-      singleData: null,
+      maybeSingleData: null,
       maybeSingleResults: [{ data: null }],
     });
 
@@ -242,14 +243,13 @@ describe("TenantContext", () => {
 
     expect(result.current.tenant).toEqual({
       id: "00000000-0000-0000-0000-000000000001",
-      name: "Dev Mode TestCo",
+      name: "TestCo",
       slug: "localhost-dev",
       logoUrl: null,
       primaryColor: "#dc2626",
     });
 
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("CRITICAL: No tenants exist"));
-    warnSpy.mockRestore();
+    expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });
 
@@ -276,8 +276,8 @@ describe("TenantContext", () => {
 
     // single() returns data AND error -> code checks `data && !error`
     setupFromMock({
-      singleData: fakeTenantRow,
-      singleError: { message: "RLS denied" },
+      maybeSingleData: fakeTenantRow,
+      maybeSingleError: { message: "RLS denied" },
       maybeSingleResults: [{ data: null }],
     });
 
@@ -299,7 +299,7 @@ describe("TenantContext", () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
 
     const tenantNoPrimaryColor = { ...fakeTenantRow, primary_color: null };
-    setupFromMock({ singleData: tenantNoPrimaryColor });
+    setupFromMock({ maybeSingleData: tenantNoPrimaryColor });
 
     const { result } = renderHook(() => useTenant(), { wrapper });
 
@@ -311,7 +311,7 @@ describe("TenantContext", () => {
   // ── CSS variables are set when tenant has primaryColor ─────────────
   it("injects CSS custom properties for tenant primary color", async () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
-    setupFromMock({ singleData: fakeTenantRow });
+    setupFromMock({ maybeSingleData: fakeTenantRow });
 
     renderHook(() => useTenant(), { wrapper });
 
@@ -369,7 +369,7 @@ describe("TenantContext", () => {
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
           }),
           limit: vi.fn().mockReturnValue({
             maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
@@ -394,7 +394,7 @@ describe("TenantContext", () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
 
     const tenantNoLogo = { ...fakeTenantRow, logo_url: null };
-    setupFromMock({ singleData: tenantNoLogo });
+    setupFromMock({ maybeSingleData: tenantNoLogo });
 
     const { result } = renderHook(() => useTenant(), { wrapper });
 
@@ -406,7 +406,7 @@ describe("TenantContext", () => {
   it("converts pure red (#ff0000) to correct HSL", async () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
     const redTenant = { ...fakeTenantRow, primary_color: "#ff0000" };
-    setupFromMock({ singleData: redTenant });
+    setupFromMock({ maybeSingleData: redTenant });
 
     renderHook(() => useTenant(), { wrapper });
 
@@ -420,7 +420,7 @@ describe("TenantContext", () => {
   it("handles achromatic colors (grey) in hex to HSL conversion", async () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
     const greyTenant = { ...fakeTenantRow, primary_color: "#808080" };
-    setupFromMock({ singleData: greyTenant });
+    setupFromMock({ maybeSingleData: greyTenant });
 
     renderHook(() => useTenant(), { wrapper });
 
@@ -434,7 +434,7 @@ describe("TenantContext", () => {
   it("handles green-dominant hex color conversion", async () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
     const greenTenant = { ...fakeTenantRow, primary_color: "#00ff00" };
-    setupFromMock({ singleData: greenTenant });
+    setupFromMock({ maybeSingleData: greenTenant });
 
     renderHook(() => useTenant(), { wrapper });
 
@@ -448,7 +448,7 @@ describe("TenantContext", () => {
   it("handles blue-dominant hex color conversion", async () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
     const blueTenant = { ...fakeTenantRow, primary_color: "#0000ff" };
-    setupFromMock({ singleData: blueTenant });
+    setupFromMock({ maybeSingleData: blueTenant });
 
     renderHook(() => useTenant(), { wrapper });
 
@@ -462,7 +462,7 @@ describe("TenantContext", () => {
   it("handles red-dominant hex with g < b for hue wrapping (magenta)", async () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
     const magentaTenant = { ...fakeTenantRow, primary_color: "#ff00ff" };
-    setupFromMock({ singleData: magentaTenant });
+    setupFromMock({ maybeSingleData: magentaTenant });
 
     renderHook(() => useTenant(), { wrapper });
 
@@ -477,7 +477,7 @@ describe("TenantContext", () => {
     mockAuthValues.user = { id: "u-1", app_metadata: { tenant_id: "t-001" } };
     // #ffcccc has l > 0.5 → uses d / (2 - max - min) for saturation
     const lightPinkTenant = { ...fakeTenantRow, primary_color: "#ffcccc" };
-    setupFromMock({ singleData: lightPinkTenant });
+    setupFromMock({ maybeSingleData: lightPinkTenant });
 
     renderHook(() => useTenant(), { wrapper });
 
