@@ -860,6 +860,9 @@ const Exceptions = () => {
     },
   ];
 
+  const activeFocusLabel =
+    focusOptions.find((option) => option.key === focus)?.label ?? "Alles";
+
   return (
     <div className="page-container space-y-5">
       <div className="relative pb-2 pt-2">
@@ -892,39 +895,50 @@ const Exceptions = () => {
         </div>
       </div>
 
-      <div className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)]">
-        <div className="flex flex-wrap gap-2 rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1">
-          {focusOptions.map((option) => {
-            const countLabel = formatFocusCount(focusCounts[option.key]);
+      <div className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_34%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background)/0.78)] px-2.5 py-1 font-medium text-foreground">
+              Actieve selectie: {activeFocusLabel}
+            </span>
+            <span>{filteredExceptions.length} zichtbaar</span>
+            <span aria-hidden className="text-[hsl(var(--gold-deep)/0.55)]">•</span>
+            <span>{exceptions.length} totaal</span>
+          </div>
 
-            return (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setFocus(option.key)}
-                className={cn(
-                  "inline-flex min-h-10 items-center gap-2 rounded-[0.85rem] px-3.5 py-2 text-xs font-medium transition-all whitespace-nowrap",
-                  focus === option.key
-                    ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <span>{option.label}</span>
-                {countLabel && (
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
-                      focus === option.key
-                        ? "bg-[hsl(var(--gold)/0.18)] text-[hsl(var(--gold-deep))]"
-                        : "bg-[hsl(var(--background)/0.85)] text-foreground/80 shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]",
-                    )}
-                  >
-                    {countLabel}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          <div className="flex flex-wrap gap-2 rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1">
+            {focusOptions.map((option) => {
+              const countLabel = formatFocusCount(focusCounts[option.key]);
+
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setFocus(option.key)}
+                  className={cn(
+                    "inline-flex min-h-10 items-center gap-2 rounded-[0.85rem] px-3.5 py-2 text-xs font-medium transition-all whitespace-nowrap",
+                    focus === option.key
+                      ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <span>{option.label}</span>
+                  {countLabel && (
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                        focus === option.key
+                          ? "bg-[hsl(var(--gold)/0.18)] text-[hsl(var(--gold-deep))]"
+                          : "bg-[hsl(var(--background)/0.85)] text-foreground/80 shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]",
+                      )}
+                    >
+                      {countLabel}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -937,14 +951,14 @@ const Exceptions = () => {
             <h2 className="mt-1 text-sm font-semibold text-foreground">Aandachtspunten</h2>
           </div>
 
-          <div className="space-y-3">
+          <div className="grid gap-3">
             {summaryCards.map((card) => (
               <button
                 key={card.label}
                 type="button"
                 onClick={() => setFocus(card.target)}
                 className={cn(
-                  "w-full rounded-[1.15rem] border p-3 text-left transition-all",
+                  "w-full rounded-[1.15rem] border p-3 text-left transition-all hover:shadow-[0_18px_36px_-32px_hsl(var(--gold-deep)/0.28)]",
                   card.ring,
                   card.surface,
                   focus === card.target && "shadow-[0_18px_36px_-30px_hsl(var(--gold-deep)/0.3)] ring-1 ring-[hsl(var(--gold)/0.16)]",
@@ -953,7 +967,7 @@ const Exceptions = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
-                    <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">{card.value}</p>
+                    <p className="mt-1 text-[1.7rem] font-semibold tracking-tight text-foreground">{card.value}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
                   </div>
                   <div className={cn("rounded-[0.9rem] p-2.5", card.surface)}>
@@ -964,24 +978,24 @@ const Exceptions = () => {
             ))}
           </div>
 
-          <div className="mt-4 rounded-[1.15rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3">
+          <div className="mt-4 rounded-[1.15rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3.5">
             <p className="text-xs font-medium text-foreground">Bronoverzicht</p>
-            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+            <div className="mt-3 space-y-2.5 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5" /> Delivery exceptions</span>
-                <span className="font-medium text-foreground">{counts.delivery}</span>
+                <span className="rounded-full bg-[hsl(var(--background)/0.8)] px-2 py-0.5 font-medium text-foreground">{counts.delivery}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-2"><Brain className="h-3.5 w-3.5" /> Anomalies</span>
-                <span className="font-medium text-foreground">{counts.anomalies ?? 0}</span>
+                <span className="rounded-full bg-[hsl(var(--background)/0.8)] px-2 py-0.5 font-medium text-foreground">{counts.anomalies ?? 0}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-2"><Package className="h-3.5 w-3.5" /> Intake en gegevens</span>
-                <span className="font-medium text-foreground">{counts.missingData + counts.sla}</span>
+                <span className="rounded-full bg-[hsl(var(--background)/0.8)] px-2 py-0.5 font-medium text-foreground">{counts.missingData + counts.sla}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-2"><Truck className="h-3.5 w-3.5" /> Capaciteit</span>
-                <span className="font-medium text-foreground">{counts.capacity}</span>
+                <span className="rounded-full bg-[hsl(var(--background)/0.8)] px-2 py-0.5 font-medium text-foreground">{counts.capacity}</span>
               </div>
             </div>
           </div>
@@ -996,9 +1010,10 @@ const Exceptions = () => {
                 </p>
                 <h2 className="mt-1 text-sm font-semibold text-foreground">Uitzonderingenoverzicht</h2>
               </div>
-              <span className="text-xs text-muted-foreground">
-                {filteredExceptions.length} getoond van {exceptions.length}
-              </span>
+              <div className="text-right">
+                <p className="text-xs font-medium text-foreground">{filteredExceptions.length}</p>
+                <p className="text-[11px] text-muted-foreground">getoond van {exceptions.length}</p>
+              </div>
             </div>
           </div>
 
@@ -1029,7 +1044,7 @@ const Exceptions = () => {
                     onClick={() => setSelectedExceptionId(exc.id)}
                     className={cn(
                       "w-full px-5 py-4 text-left transition-colors",
-                      isSelected ? "bg-[hsl(var(--gold-soft)/0.12)]" : "hover:bg-muted/30",
+                      isSelected ? "bg-[hsl(var(--gold-soft)/0.12)] shadow-[inset_3px_0_0_hsl(var(--gold))]" : "hover:bg-muted/30",
                     )}
                   >
                     <div className="flex items-start gap-4">
@@ -1061,7 +1076,7 @@ const Exceptions = () => {
                             {recommendedAction ? recommendedAction.title : suggestion.title}
                           </span>
                           <span className="chiplet">
-                            {Math.round(recommendedAction?.confidence ?? suggestion.confidence)}% confidence
+                            {Math.round(recommendedAction?.confidence ?? suggestion.confidence)}% betrouwbaarheid
                           </span>
                           {recommendedAction && <span className="chiplet">{recommendedAction.status}</span>}
                         </div>
@@ -1070,7 +1085,7 @@ const Exceptions = () => {
                       <div className="shrink-0 text-right">
                         <p className="text-xs text-muted-foreground">{timeAgo(exc.detectedAt)}</p>
                         <p className="mt-2 text-[11px] font-medium text-[hsl(var(--gold-deep))]">
-                          {recommendedAction ? "Copilot klaar" : "Voorstel beschikbaar"}
+                          {recommendedAction ? "Voorstel gereed" : "Voorstel beschikbaar"}
                         </p>
                       </div>
                     </div>
@@ -1132,7 +1147,7 @@ const Exceptions = () => {
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
-                      Next Best Action
+                      Aanbevolen vervolgstap
                     </p>
                     <h3 className="mt-0.5 text-sm font-semibold text-foreground">
                       {selectedRecommendedAction?.title ?? selectedSuggestion.title}
@@ -1152,7 +1167,7 @@ const Exceptions = () => {
                     {selectedRecommendedAction?.requiresApproval ?? selectedSuggestion.requiresApproval ? "Planner approval nodig" : "Mag autonoom"}
                   </span>
                   <span className="chiplet">
-                    {Math.round(selectedRecommendedAction?.confidence ?? selectedSuggestion.confidence)}% confidence
+                    {Math.round(selectedRecommendedAction?.confidence ?? selectedSuggestion.confidence)}% betrouwbaarheid
                   </span>
                 </div>
 
