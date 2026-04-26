@@ -15,6 +15,10 @@ export function IntakeSourceBadge({
 }: IntakeSourceBadgeProps) {
   const meta = getIntakeSourceMeta(source, fallbackHasEmail);
 
+  if (meta.key === "UNKNOWN") {
+    return null;
+  }
+
   return (
     <Badge
       variant="outline"

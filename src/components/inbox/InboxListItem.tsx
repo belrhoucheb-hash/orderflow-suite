@@ -3,7 +3,6 @@ import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
 import type { OrderDraft } from "./types";
 import { formatDate } from "./utils";
 import { cn } from "@/lib/utils";
-import { getFollowUpStatus } from "@/lib/followUpStatus";
 import type { InboxCaseSummary } from "@/lib/inboxCase";
 
 interface Props {
@@ -30,7 +29,6 @@ export function InboxListItem({ draft, caseSummary, isSelected, isBulkChecked, o
   const { Icon, label, stripe } = meta;
   const isUnread = !draft.confidence_score;
   const isCancel = threadType === "cancellation";
-  const followUpStatus = getFollowUpStatus(draft);
   const attachmentsCount = draft.attachments?.length || 0;
   const blockerCount = caseSummary.blockers.length;
   const topBlocker = caseSummary.blockers[0];
@@ -126,7 +124,7 @@ export function InboxListItem({ draft, caseSummary, isSelected, isBulkChecked, o
           )}
           style={{ fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "-0.005em" }}
         >
-          {draft.client_name || draft.source_email_from || "Onbekend"}
+          {draft.client_name || draft.source_email_from || "Onbekende afzender"}
         </span>
         {draft.confidence_score !== null && draft.confidence_score !== undefined && (
           <span
@@ -158,11 +156,6 @@ export function InboxListItem({ draft, caseSummary, isSelected, isBulkChecked, o
         >
           {draft.source_email_subject || "Geen onderwerp"}
         </p>
-        {followUpStatus && (
-          <span className={cn("shrink-0 rounded-full border px-2 py-[2px] text-[10px] font-semibold", followUpStatus.tone)}>
-            {followUpStatus.label}
-          </span>
-        )}
         <span className={cn("shrink-0 rounded-full border px-2 py-[2px] text-[10px] font-semibold", caseSummary.status.tone)}>
           {caseSummary.status.label}
         </span>

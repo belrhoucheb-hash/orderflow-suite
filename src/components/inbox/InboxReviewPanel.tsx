@@ -208,12 +208,25 @@ export function InboxReviewPanel({
   const hasMissingField = (key: keyof typeof fieldAliases) => fieldAliases[key].some((alias) => missingFieldSet.has(alias));
   const pickupNeedsAttention = hasMissingField("pickupAddress") || !form.pickupAddress || isAddressIncomplete(form.pickupAddress);
   const deliveryNeedsAttention = hasMissingField("deliveryAddress") || !form.deliveryAddress || isAddressIncomplete(form.deliveryAddress);
+  const pickupTimeNeedsAttention =
+    missingFieldSet.has("pickup_time_window") ||
+    missingFieldSet.has("pickup_date") ||
+    missingFieldSet.has("pickup_time") ||
+    (!!selected.pickup_time_from && !selected.pickup_time_to) ||
+    (!selected.pickup_time_from && !!selected.pickup_time_to);
+  const deliveryTimeNeedsAttention =
+    missingFieldSet.has("delivery_time_window") ||
+    missingFieldSet.has("delivery_date") ||
+    missingFieldSet.has("delivery_time") ||
+    (!!selected.delivery_time_from && !selected.delivery_time_to) ||
+    (!selected.delivery_time_from && !!selected.delivery_time_to);
   const quantityMissing = hasMissingField("quantity") || !form.quantity;
   const weightMissing = hasMissingField("weight") || !form.weight;
   const unitMissing = hasMissingField("unit") || !form.unit;
   const dimensionsMissing = hasMissingField("dimensions") || !form.dimensions;
   const requirementsMissing = hasMissingField("requirements");
-  const routeNeedsAttention = pickupNeedsAttention || deliveryNeedsAttention;
+  const routeNeedsAttention =
+    pickupNeedsAttention || deliveryNeedsAttention || pickupTimeNeedsAttention || deliveryTimeNeedsAttention;
   const cargoNeedsAttention = quantityMissing || weightMissing || dimensionsMissing || !!weightAnomaly;
   const requirementsNeedAttention = requirementsMissing;
   const topBlockers = caseSummary.blockers.slice(0, 4);
@@ -237,8 +250,35 @@ export function InboxReviewPanel({
       : needsFollowUpGuidance
         ? recommendedFollowUpAction.description
         : topBlockers.length > 0
-          ? `${caseSummary.nextStep} · ${topBlockers[0].label}`
+          ? `${caseSummary.nextStep} - ${topBlockers[0].label}`
           : autoConfirmAssessment.reason;
+
+  const handoffSummary = (() => {
+    switch (caseSummary.status.key) {
+      case "auto_confirm_ready":
+        return {
+          title: "Klaar voor directe doorstroom",
+          description: "Deze intake is compleet genoeg om direct te bevestigen en door te zetten.",
+          tone: "border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.96),rgba(255,255,255,0.98))] text-emerald-900",
+        };
+      case "ready_for_order":
+        return {
+          title: "Klaar om order te maken",
+          description: "Na aanmaak kan deze order direct naar confirm of planning.",
+          tone: "border-[hsl(var(--gold)/0.18)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.18),rgba(255,255,255,0.98))] text-foreground",
+        };
+      case "response_received":
+        return {
+          title: "Nieuwe reactie verwerkt",
+          description: topBlockers.length > 0
+            ? "Werk de nieuwe informatie door en rond daarna de intake af."
+            : "De reactie vult de intake aan; rond nu de order af.",
+          tone: "border-sky-200 bg-[linear-gradient(180deg,rgba(239,246,255,0.96),rgba(255,255,255,0.98))] text-sky-900",
+        };
+      default:
+        return null;
+    }
+  })();
 
   const totalKg = form.weight
     ? form.perUnit
@@ -488,6 +528,14 @@ export function InboxReviewPanel({
             </div>
           )}
 
+          {handoffSummary && (
+            <div className={cn("mb-4 rounded-2xl border px-4 py-3", handoffSummary.tone)}>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Handoff</p>
+              <p className="mt-2 text-[13px] font-semibold">{handoffSummary.title}</p>
+              <p className="mt-1 text-[11.5px] leading-[1.55] text-current/80">{handoffSummary.description}</p>
+            </div>
+          )}
+
           <div className="hairline my-4 opacity-60" />
 
           {/* I · AI-extractie */}
@@ -656,7 +704,14 @@ export function InboxReviewPanel({
                         className="picker text-[11.5px] px-2 py-1 rounded-md"
                         style={{ width: 75 }}
                       />
+                      <FieldStatePill tone={pickupTimeNeedsAttention ? "review" : "ok"} label={pickupTimeNeedsAttention ? "Venster checken" : "Venster ok"} />
                     </div>
+                    {pickupTimeNeedsAttention && (
+                      <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
+                        <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                        Laadvenster is nog onvolledig of ontbreekt.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -728,7 +783,14 @@ export function InboxReviewPanel({
                         className="picker text-[11.5px] px-2 py-1 rounded-md"
                         style={{ width: 75 }}
                       />
+                      <FieldStatePill tone={deliveryTimeNeedsAttention ? "review" : "ok"} label={deliveryTimeNeedsAttention ? "Venster checken" : "Venster ok"} />
                     </div>
+                    {deliveryTimeNeedsAttention && (
+                      <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
+                        <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                        Losvenster is nog onvolledig of ontbreekt.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

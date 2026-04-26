@@ -6,6 +6,7 @@ import { getRecommendedFollowUpAction } from "@/lib/followUpDraft";
 export type InboxCaseStatusKey =
   | "extracting"
   | "waiting_for_customer"
+  | "response_received"
   | "draft_reply"
   | "answer_question"
   | "review_update"
@@ -67,6 +68,18 @@ export function getInboxCaseBlockers(draft: OrderDraft, form?: FormState | null)
   const effectiveForm = getEffectiveForm(draft, form);
   const blockers: InboxCaseBlocker[] = [];
   const missing = getMissingFieldSet(draft);
+  const pickupTimeMissing =
+    missing.has("pickup_time_window") ||
+    missing.has("pickup_date") ||
+    missing.has("pickup_time") ||
+    (!!draft.pickup_time_from && !draft.pickup_time_to) ||
+    (!draft.pickup_time_from && !!draft.pickup_time_to);
+  const deliveryTimeMissing =
+    missing.has("delivery_time_window") ||
+    missing.has("delivery_date") ||
+    missing.has("delivery_time") ||
+    (!!draft.delivery_time_from && !draft.delivery_time_to) ||
+    (!draft.delivery_time_from && !!draft.delivery_time_to);
 
   if (!effectiveForm.pickupAddress || missing.has("pickup_address")) {
     addBlocker(blockers, "pickup_address", "Ophaaladres ontbreekt", "critical");
@@ -78,6 +91,14 @@ export function getInboxCaseBlockers(draft: OrderDraft, form?: FormState | null)
     addBlocker(blockers, "delivery_address", "Afleveradres ontbreekt", "critical");
   } else if (isAddressIncomplete(effectiveForm.deliveryAddress)) {
     addBlocker(blockers, "delivery_address_incomplete", "Afleveradres is onvolledig", "critical");
+  }
+
+  if (pickupTimeMissing) {
+    addBlocker(blockers, "pickup_time_window", "Laadvenster controleren", "warning");
+  }
+
+  if (deliveryTimeMissing) {
+    addBlocker(blockers, "delivery_time_window", "Losvenster controleren", "warning");
   }
 
   if (!effectiveForm.quantity || missing.has("quantity")) {
@@ -131,6 +152,16 @@ export function getInboxCaseStatus(
   }
 
   if (draft.follow_up_sent_at) {
+    if (draft.thread_type === "confirmation") {
+      return {
+        key: "response_received",
+        label: "Reactie ontvangen",
+        description: "Nieuwe klantinformatie is binnen en vraagt om herbeoordeling.",
+        tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        recommendedLabel: blockers.length > 0 ? "Werk reactie door" : "Rond intake af",
+      };
+    }
+
     return {
       key: "waiting_for_customer",
       label: "Wacht op klant",
@@ -240,6 +271,8 @@ export function getInboxCaseSummary(
   let nextStep = status.recommendedLabel;
   if (status.key === "waiting_for_customer") {
     nextStep = "Wachten op klantreactie";
+  } else if (status.key === "response_received") {
+    nextStep = blockers.length > 0 ? "Reactie verwerken" : "Afronden en bevestigen";
   } else if (status.key === "auto_confirm_ready") {
     nextStep = "Direct doorzetten";
   } else if (status.key === "ready_for_order") {
@@ -248,6 +281,8 @@ export function getInboxCaseSummary(
     nextStep = "Wijziging beoordelen";
   } else if (status.key === "answer_question") {
     nextStep = "Klant beantwoorden";
+  } else if (status.key === "review_cancellation") {
+    nextStep = "Annulering beoordelen";
   }
 
   return { status, blockers, nextStep };
