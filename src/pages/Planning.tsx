@@ -23,7 +23,6 @@ import {
   type GeoCoord,
 } from "@/data/geoData";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import {
@@ -746,12 +745,35 @@ const Planning = () => {
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex flex-col h-[calc(100vh-5rem)] gap-4">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
-          <PageHeader
-            title="Smart Planning"
-            subtitle={`Sleep orders naar voertuigen \u00B7 ${totalUnassigned} beschikbaar \u00B7 ${totalAssigned} ingepland`}
+        <div className="relative pb-3 pt-2 shrink-0">
+          <div
+            aria-hidden
+            className="absolute -top-6 -left-8 w-64 h-32 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)" }}
           />
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex items-end justify-between gap-5 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2" style={{ fontFamily: "var(--font-display)" }}>
+                <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
+                <span className="text-[10px] uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))] font-semibold">
+                  Operations
+                </span>
+                <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
+                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums font-medium">
+                  {totalUnassigned} beschikbaar · {totalAssigned} ingepland
+                </span>
+              </div>
+              <h1
+                className="text-[2.25rem] leading-[1.05] font-semibold tracking-tight text-foreground"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Planbord
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Sleep orders naar voertuigen en bevestig de planning per dag of week
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
             <Button
               variant={showMap ? "default" : "outline"}
               size="sm"
@@ -785,6 +807,7 @@ const Planning = () => {
               </motion.div>
             )}
           </div>
+        </div>
         </div>
 
         {/* Date navigation */}
