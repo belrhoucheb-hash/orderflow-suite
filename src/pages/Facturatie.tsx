@@ -44,6 +44,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const filterOptions = ["alle", "concept", "verzonden", "betaald", "vervallen"] as const;
+const tableHeaderLabelClass = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
@@ -587,10 +588,10 @@ const Facturatie = () => {
                 <th className="px-4 py-2.5 text-left">
                   <SortableHeader label="Klant" field="client_name" currentSort={sortConfig} onSort={handleSort} />
                 </th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">
+                <th className={cn("px-4 py-2.5 text-left hidden md:table-cell", tableHeaderLabelClass)}>
                   Datum
                 </th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">
+                <th className={cn("px-4 py-2.5 text-left hidden md:table-cell", tableHeaderLabelClass)}>
                   Vervaldatum
                 </th>
                 <th className="px-4 py-2.5 text-right">
@@ -599,7 +600,7 @@ const Facturatie = () => {
                 <th className="px-4 py-2.5 text-left">
                   <SortableHeader label="Status" field="status" currentSort={sortConfig} onSort={handleSort} />
                 </th>
-                <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                <th className={cn("px-4 py-2.5 text-right", tableHeaderLabelClass)}>
                   Acties
                 </th>
               </tr>
