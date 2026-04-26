@@ -261,12 +261,6 @@ export function InboxReviewPanel({
           description: "Deze intake is compleet genoeg om direct te bevestigen en door te zetten.",
           tone: "border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,0.96),rgba(255,255,255,0.98))] text-emerald-900",
         };
-      case "ready_for_order":
-        return {
-          title: "Klaar om order te maken",
-          description: "Na aanmaak kan deze order direct naar confirm of planning.",
-          tone: "border-[hsl(var(--gold)/0.18)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.18),rgba(255,255,255,0.98))] text-foreground",
-        };
       case "response_received":
         return {
           title: "Nieuwe reactie verwerkt",
@@ -384,12 +378,12 @@ export function InboxReviewPanel({
               <button
                 onClick={() => setDept((d) => (d === "export" ? "operations" : "export"))}
                 className={cn(
-                  "inline-flex items-center gap-1.5 mt-2 px-2.5 py-[3px] rounded-full text-[11px] font-medium border transition-colors",
+                  "inline-flex items-center gap-1.5 mt-2 px-2 py-[2px] rounded-full text-[10.5px] font-medium border transition-colors",
                 )}
                 style={{
                   fontFamily: "'Space Grotesk', sans-serif",
-                  background: dept === "export" ? "hsl(var(--gold-soft) / 0.6)" : "hsl(var(--muted) / 0.5)",
-                  borderColor: dept === "export" ? "hsl(var(--gold) / 0.4)" : "hsl(var(--border))",
+                  background: dept === "export" ? "hsl(var(--gold-soft) / 0.38)" : "hsl(var(--muted) / 0.35)",
+                  borderColor: dept === "export" ? "hsl(var(--gold) / 0.24)" : "hsl(var(--border) / 0.8)",
                   color: dept === "export" ? "hsl(var(--gold-deep))" : "hsl(var(--muted-foreground))",
                 }}
                 title="Klik om afdeling te wisselen"
@@ -418,7 +412,9 @@ export function InboxReviewPanel({
                 <span className={cn("inline-flex items-center rounded-full border px-2.5 py-[3px] text-[11px] font-medium", caseSummary.status.tone)}>
                   {caseSummary.status.label}
                 </span>
-                <span className="text-[11px] text-muted-foreground">Volgende stap: {caseSummary.nextStep}</span>
+                {caseSummary.status.key !== "ready_for_order" && caseSummary.status.key !== "auto_confirm_ready" ? (
+                  <span className="text-[11px] text-muted-foreground">{caseSummary.nextStep}</span>
+                ) : null}
               </div>
             </div>
             <div className="flex shrink-0 flex-row items-center gap-3 self-start md:flex-col md:items-center md:gap-0">
@@ -501,11 +497,12 @@ export function InboxReviewPanel({
                 )}
               </div>
               <button
-                className="mt-0 inline-flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground md:mt-1"
+                className="mt-0 inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground/80 transition-colors hover:bg-muted/50 hover:text-foreground md:mt-1"
                 style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                title="Waarom deze beoordeling?"
+                aria-label="Waarom deze beoordeling?"
               >
                 <HelpCircle className="h-3 w-3" strokeWidth={1.75} />
-                Waarom?
               </button>
             </div>
           </div>
@@ -543,7 +540,7 @@ export function InboxReviewPanel({
             <ChapterHead
               badge="I"
               title="AI-extractie"
-              sub={`${extractionConfidence}% extractiezekerheid, ${filledCount}/${totalFields} velden herkend`}
+              sub={autoConfirmAssessment.eligible ? "Klaar voor automatische doorstroom" : autoConfirmAssessment.reason}
             />
             <div className="card--luxe p-4">
               <div className="mb-2 flex items-center gap-2">
@@ -575,35 +572,22 @@ export function InboxReviewPanel({
                   ? `Uit e-mail plus ${selected.attachments.length} bijlage${selected.attachments.length > 1 ? "n" : ""}`
                   : "Uit e-mailtekst"}
               </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <div className="rounded-xl border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.18)] px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Extractiezekerheid</p>
-                  <p
-                    className="mt-1 text-[16px] font-semibold tabular-nums"
-                    style={{ fontFamily: "'Space Grotesk', sans-serif", color: confColor }}
-                  >
-                    {extractionConfidence}%
+              <div className="mt-3 flex items-end justify-between gap-3 rounded-xl border border-[hsl(var(--gold)/0.12)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),white)] px-3 py-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">AI samenvatting</p>
+                  <p className="mt-1 text-[13px] font-medium text-foreground">
+                    {filledCount} van {totalFields} velden herkend
                   </p>
                   <p className="mt-1 text-[10.5px] text-muted-foreground">
-                    {filledCount} van {totalFields} ordervelden herkend
+                    Auto-confirm {autoConfirmConfidence}% · drempel 95%
                   </p>
                 </div>
-                <div
-                  className="rounded-xl border px-3 py-2"
-                  style={{
-                    borderColor: autoConfirmAssessment.eligible ? "rgb(167 243 208)" : "rgb(254 202 202)",
-                    background: autoConfirmAssessment.eligible ? "rgba(236,253,245,0.72)" : "rgba(254,242,242,0.72)",
-                  }}
+                <p
+                  className="shrink-0 text-[18px] font-semibold tabular-nums"
+                  style={{ fontFamily: "'Space Grotesk', sans-serif", color: confColor }}
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Auto-confirm score</p>
-                  <p
-                    className="mt-1 text-[16px] font-semibold tabular-nums"
-                    style={{ fontFamily: "'Space Grotesk', sans-serif", color: autoConfirmColor }}
-                  >
-                    {autoConfirmConfidence}%
-                  </p>
-                  <p className="mt-1 text-[10.5px] text-muted-foreground">Drempel voor automatisch doorzetten: 95%</p>
-                </div>
+                  {extractionConfidence}%
+                </p>
               </div>
               <div
                 className={cn(
@@ -631,9 +615,14 @@ export function InboxReviewPanel({
               style={
                 routeNeedsAttention
                   ? { borderColor: "rgb(254 202 202)", boxShadow: "0 0 0 1px rgba(248,113,113,0.12)" }
-                  : undefined
+                : undefined
               }
             >
+              {!routeNeedsAttention ? (
+                <p className="mb-4 text-[11px] leading-[1.55] text-muted-foreground">
+                  {form.pickupAddress || "Ophaaladres volgt"} naar {form.deliveryAddress || "afleveradres volgt"}
+                </p>
+              ) : null}
               <div className="relative pl-6 space-y-4">
                 <div
                   className="absolute top-2 bottom-2"
@@ -665,7 +654,7 @@ export function InboxReviewPanel({
                       >
                         Ophalen
                       </span>
-                      <FieldStatePill tone={pickupNeedsAttention ? "missing" : "ok"} label={pickupNeedsAttention ? "Ontbreekt" : "Gevonden"} />
+                      {pickupNeedsAttention ? <FieldStatePill tone="missing" label="Ontbreekt" /> : null}
                     </div>
                     <AddressAutocomplete
                       value={form.pickupAddress}
@@ -683,29 +672,15 @@ export function InboxReviewPanel({
                         {!form.pickupAddress ? "Ophaaladres ontbreekt" : "Adres onvolledig, straat en nummer nodig"}
                       </p>
                     )}
-                    <div className="flex items-center gap-2 mt-2" {...pickupTimeLinkage}>
-                      <input
-                        type="date"
-                        className="picker text-[11.5px] px-2 py-1 rounded-md"
-                        style={{ minWidth: 0 }}
-                      />
-                      <input
-                        type="time"
-                        value={selected.pickup_time_from || ""}
-                        readOnly
-                        className="picker text-[11.5px] px-2 py-1 rounded-md"
-                        style={{ width: 75 }}
-                      />
-                      <span className="text-[11px] text-muted-foreground">tot</span>
-                      <input
-                        type="time"
-                        value={selected.pickup_time_to || ""}
-                        readOnly
-                        className="picker text-[11.5px] px-2 py-1 rounded-md"
-                        style={{ width: 75 }}
-                      />
-                      <FieldStatePill tone={pickupTimeNeedsAttention ? "review" : "ok"} label={pickupTimeNeedsAttention ? "Venster checken" : "Venster ok"} />
-                    </div>
+                    {(pickupTimeNeedsAttention || selected.pickup_time_from || selected.pickup_time_to) && (
+                      <div className="mt-2 flex items-center gap-2" {...pickupTimeLinkage}>
+                        <span className="text-[11px] text-muted-foreground">
+                          {selected.pickup_time_from || "Tijd volgt"}
+                          {selected.pickup_time_to ? ` tot ${selected.pickup_time_to}` : ""}
+                        </span>
+                        {pickupTimeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
+                      </div>
+                    )}
                     {pickupTimeNeedsAttention && (
                       <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
                         <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
@@ -744,7 +719,7 @@ export function InboxReviewPanel({
                       >
                         Afleveren
                       </span>
-                      <FieldStatePill tone={deliveryNeedsAttention ? "missing" : "ok"} label={deliveryNeedsAttention ? "Ontbreekt" : "Gevonden"} />
+                      {deliveryNeedsAttention ? <FieldStatePill tone="missing" label="Ontbreekt" /> : null}
                     </div>
                     <AddressAutocomplete
                       value={form.deliveryAddress}
@@ -762,29 +737,15 @@ export function InboxReviewPanel({
                         {!form.deliveryAddress ? "Afleveradres ontbreekt" : "Adres onvolledig, straat en nummer nodig"}
                       </p>
                     )}
-                    <div className="flex items-center gap-2 mt-2" {...deliveryTimeLinkage}>
-                      <input
-                        type="date"
-                        className="picker text-[11.5px] px-2 py-1 rounded-md"
-                        style={{ minWidth: 0 }}
-                      />
-                      <input
-                        type="time"
-                        value={selected.delivery_time_from || ""}
-                        readOnly
-                        className="picker text-[11.5px] px-2 py-1 rounded-md"
-                        style={{ width: 75 }}
-                      />
-                      <span className="text-[11px] text-muted-foreground">tot</span>
-                      <input
-                        type="time"
-                        value={selected.delivery_time_to || ""}
-                        readOnly
-                        className="picker text-[11.5px] px-2 py-1 rounded-md"
-                        style={{ width: 75 }}
-                      />
-                      <FieldStatePill tone={deliveryTimeNeedsAttention ? "review" : "ok"} label={deliveryTimeNeedsAttention ? "Venster checken" : "Venster ok"} />
-                    </div>
+                    {(deliveryTimeNeedsAttention || selected.delivery_time_from || selected.delivery_time_to) && (
+                      <div className="mt-2 flex items-center gap-2" {...deliveryTimeLinkage}>
+                        <span className="text-[11px] text-muted-foreground">
+                          {selected.delivery_time_from || "Tijd volgt"}
+                          {selected.delivery_time_to ? ` tot ${selected.delivery_time_to}` : ""}
+                        </span>
+                        {deliveryTimeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
+                      </div>
+                    )}
                     {deliveryTimeNeedsAttention && (
                       <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
                         <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
@@ -795,16 +756,18 @@ export function InboxReviewPanel({
                 </div>
               </div>
 
-              <button
-                className="mt-4 inline-flex items-center gap-1 text-[11.5px] font-medium hover:underline"
-                style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
-                  color: "hsl(var(--gold-deep))",
-                }}
-              >
-                <Plus className="h-3 w-3" strokeWidth={1.75} />
-                Tussenstop toevoegen
-              </button>
+              {routeNeedsAttention ? (
+                <button
+                  className="mt-4 inline-flex items-center gap-1 text-[11.5px] font-medium hover:underline"
+                  style={{
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    color: "hsl(var(--gold-deep))",
+                  }}
+                >
+                  <Plus className="h-3 w-3" strokeWidth={1.75} />
+                  Tussenstop toevoegen
+                </button>
+              ) : null}
             </div>
           </section>
 
@@ -827,6 +790,12 @@ export function InboxReviewPanel({
                   : undefined
               }
             >
+              {!cargoNeedsAttention ? (
+                <div className="px-4 pt-4 text-[11px] leading-[1.55] text-muted-foreground">
+                  {form.quantity || 0} {form.unit || "stuks"} · {totalKg > 0 ? `${totalKg.toLocaleString("nl-NL")} kg` : "gewicht volgt"}
+                  {form.dimensions ? ` · ${form.dimensions} cm` : ""}
+                </div>
+              ) : null}
               {/* Read-only row */}
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -844,7 +813,7 @@ export function InboxReviewPanel({
                         {form.quantity || 0}
                       </span>
                       <span className={cn("text-[12.5px] text-muted-foreground", unitMissing && "text-red-700")}>{form.unit || "Pallets"}</span>
-                      <FieldStatePill tone={quantityMissing || weightMissing || dimensionsMissing ? "missing" : "ok"} label={quantityMissing || weightMissing || dimensionsMissing ? "Ontbreekt" : "Compleet"} />
+                      {quantityMissing || weightMissing || dimensionsMissing ? <FieldStatePill tone="missing" label="Ontbreekt" /> : null}
                     </div>
                     {form.dimensions && (
                       <span className={cn("text-[11px] text-muted-foreground tabular-nums", dimensionsMissing && "text-red-700")} {...dimsLinkage}>
@@ -997,10 +966,7 @@ export function InboxReviewPanel({
               }
             />
             <div className="mb-2 flex items-center gap-2">
-              <FieldStatePill
-                tone={requirementsNeedAttention ? "missing" : "ok"}
-                label={requirementsNeedAttention ? "Ontbreekt" : "Compleet"}
-              />
+              {requirementsNeedAttention ? <FieldStatePill tone="missing" label="Ontbreekt" /> : null}
               {requirementsNeedAttention && <span className="text-[11px] text-red-700">De klant moet speciale vereisten nog bevestigen.</span>}
             </div>
             <div className="flex flex-wrap gap-2" {...reqLinkage}>
@@ -1118,17 +1084,25 @@ export function InboxReviewPanel({
             </div>
           </div>
         )}
-        <div
-          className="hairline"
-          style={{ marginBottom: 10 }}
-        />
+        {(topBlockers.length > 0 || formErrors) && (
+          <div
+            className="hairline"
+            style={{ marginBottom: 10 }}
+          />
+        )}
         <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
           <ClipboardCheck
             className="h-3.5 w-3.5"
             strokeWidth={1.75}
             style={{ color: formErrors ? "hsl(32 70% 45%)" : ctaVisual.iconColor }}
           />
-          <p className="text-[11px] leading-[1.45] text-muted-foreground">{primaryActionDescription}</p>
+          <p className="text-[11px] leading-[1.45] text-muted-foreground">
+            {topBlockers.length > 0
+              ? topBlockers[0].label
+              : formErrors
+                ? primaryActionDescription
+                : caseSummary.nextStep}
+          </p>
         </div>
         <button
           onClick={handlePrimaryAction}
