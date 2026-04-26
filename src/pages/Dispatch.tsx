@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -111,7 +111,7 @@ function DispatchLaneDrop({
   children,
 }: {
   laneId: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: `lane-drop-${laneId}`,
@@ -135,7 +135,7 @@ function SortableTripShell({
   children,
 }: {
   tripId: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tripId,
@@ -527,7 +527,7 @@ const Dispatch = () => {
         type="button"
         onClick={() => setSelectedTripId(trip.id)}
         className={cn(
-          "w-full rounded-[1.15rem] border text-left transition-all",
+          "w-full cursor-pointer rounded-[1.15rem] border text-left transition-all active:cursor-grabbing",
           isSelected
             ? "border-[hsl(var(--gold)/0.24)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.32),hsl(var(--background)))] shadow-[0_18px_40px_-28px_hsl(var(--gold-deep)/0.38)]"
             : "border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--background))] hover:bg-[hsl(var(--gold-soft)/0.08)]",
@@ -605,6 +605,21 @@ const Dispatch = () => {
                 <span>{driverName || "Nog geen chauffeur"}</span>
               </div>
             </div>
+
+            {!compact && counts.total > 0 && (
+              <div className="mt-3">
+                <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>Voortgang</span>
+                  <span>{Math.round((counts.done / counts.total) * 100)}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-[hsl(var(--gold-soft)/0.16)]">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,hsl(var(--gold)),hsl(var(--gold-deep)))]"
+                    style={{ width: `${Math.round((counts.done / counts.total) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </button>
@@ -660,7 +675,7 @@ const Dispatch = () => {
         </div>
       </div>
 
-      <div className={cn(detailCardClass, "p-4")}>
+      <div className={cn(detailCardClass, "sticky top-4 z-10 p-4")}>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <div className="flex items-center gap-2">
             <button className="btn-luxe" onClick={goToPrevDay} aria-label="Vorige dag">
@@ -716,7 +731,7 @@ const Dispatch = () => {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
-        <section className={cn(detailCardClass, "p-4")}>
+        <section className={cn(detailCardClass, "p-4 xl:sticky xl:top-28 xl:self-start")}>
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
@@ -750,13 +765,14 @@ const Dispatch = () => {
           </div>
         </section>
 
-        <section className={cn(detailCardClass, "p-4")}>
+        <section className={cn(detailCardClass, "p-4 xl:sticky xl:top-28 xl:self-start")}>
           <div className="mb-4 flex items-end justify-between gap-3">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
                 Planning
               </p>
               <h2 className="mt-1 text-sm font-semibold text-foreground">Dagregie</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Sleep ritten tussen lanes en houd de dagflow compact in beeld.</p>
             </div>
             <p className="text-xs text-muted-foreground">{formatDate(selectedDate)}</p>
           </div>
@@ -786,11 +802,16 @@ const Dispatch = () => {
                 {boardLanes.map((lane) => (
                   <div
                     key={lane.id}
-                    className="rounded-[1.25rem] border border-[hsl(var(--gold)/0.1)] bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--gold-soft)/0.08))] p-3"
+                    className="rounded-[1.25rem] border border-[hsl(var(--gold)/0.1)] bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--gold-soft)/0.08))] p-3 shadow-[0_18px_36px_-34px_hsl(var(--gold-deep)/0.3)]"
                   >
                     <div className="mb-3 flex items-center justify-between gap-3 px-1">
                       <div>
-                        <h3 className="text-sm font-semibold text-foreground">{lane.title}</h3>
+                        <div className="mb-1 flex items-center gap-2">
+                          <span className="rounded-full bg-[hsl(var(--gold-soft)/0.22)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                            {lane.id.startsWith("vehicle:") ? "Voertuig" : "Shift"}
+                          </span>
+                          <h3 className="text-sm font-semibold text-foreground">{lane.title}</h3>
+                        </div>
                         <p className="text-xs text-muted-foreground">{lane.subtitle}</p>
                       </div>
                       <Badge
