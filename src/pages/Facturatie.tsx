@@ -1,18 +1,18 @@
 import { useState, useMemo, useCallback } from "react";
-import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, X, Check, FileDown, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode } from "lucide-react";
+import { Receipt, Search, Plus, Eye, Download, Loader2, Sparkles, ArrowRight, Check, FileDown, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode, Wallet, AlertTriangle, CheckCircle2, FileClock, SendHorizonal } from "lucide-react";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useInvoices, useCreateInvoice, type InvoiceLine, type Invoice } from "@/hooks/useInvoices";
+import { useInvoices, useCreateInvoice, type InvoiceLine } from "@/hooks/useInvoices";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useClients } from "@/hooks/useClients";
 import { downloadInvoicesCSV, downloadUBL } from "@/lib/invoiceUtils";
@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTranslation } from "react-i18next";
+import { KPIStrip } from "@/components/ui/KPIStrip";
 
 const statusStyles: Record<string, string> = {
   concept: "bg-muted text-muted-foreground border-border",
@@ -84,24 +85,20 @@ const Facturatie = () => {
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  // ─── New Invoice Dialog State ───
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const { data: clients = [] } = useClients();
   const createInvoiceMutation = useCreateInvoice();
 
-  // Fetch uninvoiced orders for the selected client
   const { data: clientOrders = [], isLoading: isLoadingClientOrders } = useQuery({
     queryKey: ["client-uninvoiced-orders", selectedClientId],
     enabled: !!selectedClientId,
     queryFn: async () => {
-      // Look up the client name from the selected client ID
       const client = clients.find((c) => c.id === selectedClientId);
       if (!client) return [];
-      // Prefer client_id match; fall back to client_name ilike for orders
-      // that haven't been backfilled yet (see 20260402_backfill_client_id.sql)
       const { data, error } = await supabase
         .from("orders")
         .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, status, distance_km")
@@ -114,7 +111,6 @@ const Facturatie = () => {
     },
   });
 
-  // Fetch client rates to calculate line totals
   const { data: clientRates = [] } = useQuery({
     queryKey: ["client-rates-for-invoice", selectedClientId],
     enabled: !!selectedClientId,
@@ -142,17 +138,15 @@ const Facturatie = () => {
   const handleCreateInvoice = useCallback(async () => {
     if (!selectedClientId || selectedOrderIds.size === 0) return;
 
-    // Build invoice lines from selected orders
     const lines: Omit<InvoiceLine, "id" | "invoice_id" | "created_at">[] = [];
     let sortOrder = 0;
     const selectedOrders = clientOrders.filter((o: any) => selectedOrderIds.has(o.id));
 
     for (const order of selectedOrders) {
       if (clientRates.length === 0) {
-        // No rates configured - add a placeholder line
         lines.push({
           order_id: order.id,
-          description: `Transport #${order.order_number} — ${order.pickup_address?.split(",")[0] || "?"} → ${order.delivery_address?.split(",")[0] || "?"}`,
+          description: `Transport #${order.order_number} - ${order.pickup_address?.split(",")[0] || "?"} -> ${order.delivery_address?.split(",")[0] || "?"}`,
           quantity: 1,
           unit: "rit",
           unit_price: 0,
@@ -200,7 +194,6 @@ const Facturatie = () => {
         lines,
       });
 
-      // Link the selected orders to the newly created invoice
       for (const orderId of selectedOrderIds) {
         await supabase
           .from("orders")
@@ -228,9 +221,7 @@ const Facturatie = () => {
         : { field, direction: "asc" }
     );
   };
-  const navigate = useNavigate();
 
-  // Auto invoice suggestions: delivered orders without invoice
   const { data: uninvoicedOrders = [] } = useQuery({
     queryKey: ["uninvoiced-orders"],
     queryFn: async () => {
@@ -270,7 +261,6 @@ const Facturatie = () => {
     });
   }, [invoices, sortConfig]);
 
-  // ─── Export handlers ───
   const handleExportCSV = useCallback(() => {
     if (filtered.length === 0) {
       toast.error("Geen facturen om te exporteren");
@@ -314,6 +304,8 @@ const Facturatie = () => {
     let dezeMaandGefactureerd = 0;
     let betaaldDezeMaand = 0;
     let vervallenCount = 0;
+    let conceptCount = 0;
+    let conceptAmount = 0;
 
     invoices.forEach((inv) => {
       const invDate = new Date(inv.invoice_date);
@@ -329,6 +321,11 @@ const Facturatie = () => {
         vervallenCount++;
       }
 
+      if (inv.status === "concept") {
+        conceptCount++;
+        conceptAmount += inv.total;
+      }
+
       if (isThisMonth && (inv.status === "verzonden" || inv.status === "betaald")) {
         dezeMaandGefactureerd += inv.total;
       }
@@ -338,8 +335,20 @@ const Facturatie = () => {
       }
     });
 
-    return { totaalOpenstaand, dezeMaandGefactureerd, betaaldDezeMaand, vervallenCount };
+    const betaalRatio = dezeMaandGefactureerd > 0
+      ? Math.round((betaaldDezeMaand / dezeMaandGefactureerd) * 100)
+      : 100;
+
+    return { totaalOpenstaand, dezeMaandGefactureerd, betaaldDezeMaand, vervallenCount, conceptCount, conceptAmount, betaalRatio };
   }, [invoices]);
+
+  const heroStats = useMemo(() => {
+    const totalVisibleAmount = filtered.reduce((sum, inv) => sum + inv.total, 0);
+    return {
+      totalVisibleAmount,
+      urgentCount: stats.vervallenCount + uninvoicedOrders.length,
+    };
+  }, [filtered, stats.vervallenCount, uninvoicedOrders.length]);
 
   if (isLoading) {
     return <LoadingState message="Facturen laden..." />;
@@ -351,9 +360,8 @@ const Facturatie = () => {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <PageHeader
-        title={t('pages.invoicing.title')}
+        title={t("pages.invoicing.title")}
         subtitle={`${totalCount} facturen in totaal`}
         actions={
           <div className="flex items-center gap-2">
@@ -377,90 +385,180 @@ const Facturatie = () => {
               </DropdownMenuContent>
             </DropdownMenu>
             <Button type="button" onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }} className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
-              <Plus className="h-4 w-4" /> {t('pages.invoicing.newInvoice')}
+              <Plus className="h-4 w-4" /> {t("pages.invoicing.newInvoice")}
             </Button>
           </div>
         }
       />
 
-      {/* Auto invoice suggestions */}
-      {uninvoicedOrders.length > 0 && (
-        <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/30 p-4">
-          <div className="flex items-start gap-3">
-            <Sparkles className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-green-800 dark:text-green-300">{uninvoicedOrders.length} afgeleverde orders zonder factuur</p>
-              <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Deze orders zijn afgeleverd en kunnen gefactureerd worden.</p>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {uninvoicedOrders.slice(0, 5).map((order: any) => (
-                  <Link key={order.id} to={`/orders/${order.id}`} className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-300 bg-white dark:bg-green-950/50 border border-green-200 dark:border-green-800 rounded-lg px-2.5 py-1.5 hover:border-green-400 dark:hover:border-green-600 transition-colors">
-                    #{order.order_number} — {order.client_name}
-                    <ArrowRight className="h-3 w-3" />
-                  </Link>
-                ))}
-              </div>
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card--luxe relative overflow-hidden p-5"
+      >
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-70"
+          style={{
+            background: "radial-gradient(circle at top right, hsl(var(--gold) / 0.18), transparent 55%)",
+          }}
+        />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <div
+              className="mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]"
+              style={{ borderColor: "hsl(var(--gold) / 0.18)", background: "hsl(var(--gold-soft) / 0.18)" }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Facturatie cockpit
             </div>
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+              Hier stuur je op cash, niet alleen op facturen.
+            </h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+              Concepten, openstaand en leveringen zonder factuur komen hier samen, zodat je sneller ziet wat moet bewegen.
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            {[
+              { label: "In beeld", value: formatCurrency(heroStats.totalVisibleAmount), icon: Wallet },
+              { label: "Actie nodig", value: `${heroStats.urgentCount}`, icon: AlertTriangle },
+              { label: "Betaalratio", value: `${stats.betaalRatio}%`, icon: CheckCircle2 },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-2xl border p-3"
+                style={{
+                  borderColor: "hsl(var(--gold) / 0.14)",
+                  background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.14) 100%)",
+                }}
+              >
+                <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "hsl(var(--gold-soft) / 0.36)" }}>
+                  <item.icon className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+                </div>
+                <p className="text-lg font-semibold tabular-nums" style={{ fontFamily: "var(--font-display)" }}>{item.value}</p>
+                <p className="text-xs text-muted-foreground">{item.label}</p>
+              </div>
+            ))}
           </div>
         </div>
-      )}
+      </motion.section>
 
-      {/* Stats Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          {
-            label: "Totaal openstaand",
-            value: formatCurrency(stats.totaalOpenstaand),
-            icon: Receipt,
-            color: "text-blue-600",
-            bg: "bg-blue-500/8",
-          },
-          {
-            label: "Deze maand gefactureerd",
-            value: formatCurrency(stats.dezeMaandGefactureerd),
-            icon: Receipt,
-            color: "text-primary",
-            bg: "bg-primary/8",
-          },
-          {
-            label: "Betaald deze maand",
-            value: formatCurrency(stats.betaaldDezeMaand),
-            icon: Receipt,
-            color: "text-emerald-600",
-            bg: "bg-emerald-500/8",
-          },
-          {
-            label: "Vervallen",
-            value: String(stats.vervallenCount),
-            icon: Receipt,
-            color: "text-red-600",
-            bg: "bg-red-500/8",
-          },
-        ].map((stat) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-card rounded-xl border border-border/40 p-4 flex items-center gap-3"
-          >
+      <KPIStrip
+        columns={6}
+        items={[
+          { label: "Totaal openstaand", value: formatCurrency(stats.totaalOpenstaand), icon: Wallet },
+          { label: "Deze maand gefactureerd", value: formatCurrency(stats.dezeMaandGefactureerd), icon: Receipt },
+          { label: "Betaald deze maand", value: formatCurrency(stats.betaaldDezeMaand), icon: CheckCircle2 },
+          { label: "Nog te factureren", value: uninvoicedOrders.length, icon: FileClock },
+          { label: "Conceptfacturen", value: stats.conceptCount, icon: Receipt },
+          { label: "Vervallen", value: stats.vervallenCount, icon: AlertTriangle },
+        ]}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.04 }}
+          className="card--luxe p-5"
+        >
+          <div className="mb-4 flex items-center gap-2.5">
             <div
-              className={cn(
-                "h-9 w-9 rounded-lg flex items-center justify-center",
-                stat.bg
-              )}
+              className="flex h-8 w-8 items-center justify-center rounded-xl"
+              style={{ background: "linear-gradient(135deg, hsl(var(--gold-soft)) 0%, hsl(var(--gold) / 0.3) 100%)" }}
             >
-              <stat.icon className={cn("h-4.5 w-4.5", stat.color)} />
+              <Sparkles className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
             </div>
             <div>
-              <p className="text-xl font-semibold font-display tabular-nums">
-                {stat.value}
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                Prioriteit
               </p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
+              <h3 className="text-sm font-semibold text-foreground">Waar je facturatie nu aan moet trekken</h3>
             </div>
-          </motion.div>
-        ))}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border p-3" style={{ borderColor: "hsl(var(--gold) / 0.14)", background: "hsl(var(--gold-soft) / 0.12)" }}>
+              <div className="mb-2 flex items-center gap-2">
+                <FileClock className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+                <p className="text-sm font-semibold text-foreground">Nog te factureren</p>
+              </div>
+              <p className="text-xl font-semibold tabular-nums" style={{ fontFamily: "var(--font-display)" }}>{uninvoicedOrders.length}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Afgeleverde orders die nog cash moeten worden.</p>
+            </div>
+
+            <div className="rounded-2xl border border-red-400/18 bg-red-500/6 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-300" />
+                <p className="text-sm font-semibold text-foreground">Vervallen</p>
+              </div>
+              <p className="text-xl font-semibold tabular-nums text-foreground" style={{ fontFamily: "var(--font-display)" }}>{stats.vervallenCount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Facturen die opvolging of een herinnering vragen.</p>
+            </div>
+
+            <div className="rounded-2xl border border-sky-400/18 bg-sky-500/6 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <SendHorizonal className="h-4 w-4 text-sky-300" />
+                <p className="text-sm font-semibold text-foreground">Conceptdruk</p>
+              </div>
+              <p className="text-xl font-semibold tabular-nums text-foreground" style={{ fontFamily: "var(--font-display)" }}>{formatCurrency(stats.conceptAmount)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Waarde die nog niet verzonden is naar de klant.</p>
+            </div>
+          </div>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.07 }}
+          className="card--luxe p-5"
+        >
+          <div className="mb-4 flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: "hsl(var(--gold-soft) / 0.35)" }}>
+              <Receipt className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                Direct oppakken
+              </p>
+              <h3 className="text-sm font-semibold text-foreground">Snelle acties boven je lijst</h3>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {uninvoicedOrders.length > 0 ? (
+              <div className="rounded-2xl border border-emerald-400/18 bg-emerald-500/6 p-3">
+                <p className="text-sm font-semibold text-foreground">{uninvoicedOrders.length} afgeleverde orders zonder factuur</p>
+                <p className="mt-1 text-xs text-muted-foreground">Deze orders zijn klaar om doorgezet te worden naar concept of factuur.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {uninvoicedOrders.slice(0, 4).map((order: any) => (
+                    <Link
+                      key={order.id}
+                      to={`/orders/${order.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/18 bg-white/8 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-white/12"
+                    >
+                      #{order.order_number} - {order.client_name}
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.1)] p-3">
+                <p className="text-sm font-semibold text-foreground">Geen wachtende leveringen</p>
+                <p className="mt-1 text-xs text-muted-foreground">Je afgeleverde orders lijken al netjes door de facturatieflow te lopen.</p>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-white/8 bg-white/4 p-3">
+              <p className="text-sm font-semibold text-foreground">{filtered.length} facturen in huidige selectie</p>
+              <p className="mt-1 text-xs text-muted-foreground">Met filters en zoeken stuur je hier direct op de actuele werkvoorraad.</p>
+            </div>
+          </div>
+        </motion.section>
       </div>
 
-      {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
@@ -489,10 +587,7 @@ const Facturatie = () => {
         </div>
       </div>
 
-      {/* Table Card */}
-      <div
-        className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden"
-      >
+      <div className="bg-card rounded-xl shadow-sm border border-border/40 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -521,89 +616,72 @@ const Facturatie = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/20">
-                {filtered.map((invoice, idx) => {
-                  const overdue = isOverdue(invoice.due_date, invoice.status);
-                  const effectiveStatus = overdue ? "vervallen" : invoice.status;
+              {filtered.map((invoice) => {
+                const overdue = isOverdue(invoice.due_date, invoice.status);
+                const effectiveStatus = overdue ? "vervallen" : invoice.status;
 
-                  return (
-                    <tr
-                      key={invoice.id}
-                      role="link"
-                      tabIndex={0}
-                      onClick={() => navigate(`/facturatie/${invoice.id}`)}
-                      onKeyDown={(e) => { if (e.key === "Enter") navigate(`/facturatie/${invoice.id}`); }}
-                      className="hover:bg-muted/20 transition-colors duration-100 group cursor-pointer"
+                return (
+                  <tr
+                    key={invoice.id}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => navigate(`/facturatie/${invoice.id}`)}
+                    onKeyDown={(e) => { if (e.key === "Enter") navigate(`/facturatie/${invoice.id}`); }}
+                    className="hover:bg-muted/20 transition-colors duration-100 group cursor-pointer"
+                  >
+                    <td className="px-4 py-2">
+                      <span className="font-mono text-sm font-medium text-foreground flex items-center gap-1.5">
+                        <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDotColors[effectiveStatus])} />
+                        {invoice.invoice_number}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-sm text-foreground/80">
+                      {invoice.client_name}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-muted-foreground hidden md:table-cell">
+                      {formatDate(invoice.invoice_date)}
+                    </td>
+                    <td
+                      className={cn(
+                        "px-4 py-2 text-sm hidden md:table-cell",
+                        overdue ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"
+                      )}
                     >
-                      <td className="px-4 py-2">
-                        <span className="font-mono text-sm font-medium text-foreground flex items-center gap-1.5">
-                          <span
-                            className={cn(
-                              "h-1.5 w-1.5 rounded-full shrink-0",
-                              statusDotColors[effectiveStatus]
-                            )}
-                          />
-                          {invoice.invoice_number}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-sm text-foreground/80">
-                        {invoice.client_name}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-muted-foreground hidden md:table-cell">
-                        {formatDate(invoice.invoice_date)}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-4 py-2 text-sm hidden md:table-cell",
-                          overdue
-                            ? "text-red-600 dark:text-red-400 font-medium"
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        {invoice.due_date ? formatDate(invoice.due_date) : "—"}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-foreground/80 text-right tabular-nums font-medium">
-                        {formatCurrency(invoice.total)}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border",
-                            statusStyles[effectiveStatus]
-                          )}
+                      {invoice.due_date ? formatDate(invoice.due_date) : "-"}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-foreground/80 text-right tabular-nums font-medium">
+                      {formatCurrency(invoice.total)}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border", statusStyles[effectiveStatus])}>
+                        <span className={cn("h-1 w-1 rounded-full", statusDotColors[effectiveStatus])} />
+                        {statusLabels[effectiveStatus]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/facturatie/${invoice.id}`); }}
+                          className="p-1.5 rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
                         >
-                          <span
-                            className={cn(
-                              "h-1 w-1 rounded-full",
-                              statusDotColors[effectiveStatus]
-                            )}
-                          />
-                          {statusLabels[effectiveStatus]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/facturatie/${invoice.id}`); }}
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                        {invoice.pdf_url && (
+                          <a
+                            href={invoice.pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
                             className="p-1.5 rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
                           >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
-                          {invoice.pdf_url && (
-                            <a
-                              href={invoice.pdf_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="p-1.5 rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-16 text-center">
@@ -618,12 +696,11 @@ const Facturatie = () => {
           </table>
         </div>
 
-        {/* Footer with Pagination */}
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/20">
           <p className="text-xs text-muted-foreground">
             {filtered.length > 0
               ? `${page * pageSize + 1}-${Math.min((page + 1) * pageSize, totalCount)} van ${totalCount} facturen`
-              : `0 facturen`}
+              : "0 facturen"}
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -631,9 +708,7 @@ const Facturatie = () => {
               disabled={page === 0}
               className={cn(
                 "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
-                page === 0
-                  ? "text-muted-foreground/40 cursor-not-allowed"
-                  : "text-foreground hover:bg-muted/50",
+                page === 0 ? "text-muted-foreground/40 cursor-not-allowed" : "text-foreground hover:bg-muted/50",
               )}
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -647,9 +722,7 @@ const Facturatie = () => {
               disabled={page >= totalPages - 1}
               className={cn(
                 "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
-                page >= totalPages - 1
-                  ? "text-muted-foreground/40 cursor-not-allowed"
-                  : "text-foreground hover:bg-muted/50",
+                page >= totalPages - 1 ? "text-muted-foreground/40 cursor-not-allowed" : "text-foreground hover:bg-muted/50",
               )}
             >
               Volgende
@@ -663,106 +736,102 @@ const Facturatie = () => {
       </div>
 
       <Dialog open={showNewInvoice} onOpenChange={setShowNewInvoice}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Nieuwe factuur aanmaken</DialogTitle>
-          <DialogDescription>Selecteer een klant en koppel onverfactureerde orders.</DialogDescription>
-        </DialogHeader>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nieuwe factuur aanmaken</DialogTitle>
+            <DialogDescription>Selecteer een klant en koppel onverfactureerde orders.</DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4 mt-2">
-          {/* Client selector */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Klant</label>
-            <select
-              value={selectedClientId}
-              onChange={(e) => { setSelectedClientId(e.target.value); setSelectedOrderIds(new Set()); }}
-              className="w-full h-10 px-3 rounded-lg border border-border/50 bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
-            >
-              <option value="">Selecteer een klant...</option>
-              {clients.filter((c) => c.is_active).map((client) => (
-                <option key={client.id} value={client.id}>{client.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Uninvoiced orders for this client */}
-          {selectedClientId && (
+          <div className="space-y-4 mt-2">
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                Onverfactureerde orders
-              </label>
-              {isLoadingClientOrders ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : clientOrders.length === 0 ? (
-                <div className="text-center py-6 bg-muted/30 rounded-lg border border-border/30">
-                  <p className="text-sm text-muted-foreground">Geen onverfactureerde orders voor deze klant</p>
-                </div>
-              ) : (
-                <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-lg border border-border/30 p-2">
-                  {clientOrders.map((order: any) => (
-                    <label
-                      key={order.id}
-                      className={cn(
-                        "flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors",
-                        selectedOrderIds.has(order.id) ? "bg-primary/5 border border-primary/20" : "hover:bg-muted/40 border border-transparent"
-                      )}
-                    >
-                      <Checkbox
-                        checked={selectedOrderIds.has(order.id)}
-                        onCheckedChange={() => toggleOrderSelection(order.id)}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-mono font-medium">#{order.order_number}</span>
-                          {order.quantity > 0 && (
-                            <span className="text-xs text-muted-foreground">{order.quantity} {order.unit || "stuks"}</span>
-                          )}
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Klant</label>
+              <select
+                value={selectedClientId}
+                onChange={(e) => { setSelectedClientId(e.target.value); setSelectedOrderIds(new Set()); }}
+                className="w-full h-10 px-3 rounded-lg border border-border/50 bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring/20"
+              >
+                <option value="">Selecteer een klant...</option>
+                {clients.filter((c) => c.is_active).map((client) => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {selectedClientId && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  Onverfactureerde orders
+                </label>
+                {isLoadingClientOrders ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : clientOrders.length === 0 ? (
+                  <div className="text-center py-6 bg-muted/30 rounded-lg border border-border/30">
+                    <p className="text-sm text-muted-foreground">Geen onverfactureerde orders voor deze klant</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto rounded-lg border border-border/30 p-2">
+                    {clientOrders.map((order: any) => (
+                      <label
+                        key={order.id}
+                        className={cn(
+                          "flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors",
+                          selectedOrderIds.has(order.id) ? "bg-primary/5 border border-primary/20" : "hover:bg-muted/40 border border-transparent"
+                        )}
+                      >
+                        <Checkbox
+                          checked={selectedOrderIds.has(order.id)}
+                          onCheckedChange={() => toggleOrderSelection(order.id)}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-mono font-medium">#{order.order_number}</span>
+                            {order.quantity > 0 && (
+                              <span className="text-xs text-muted-foreground">{order.quantity} {order.unit || "stuks"}</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {order.pickup_address?.split(",")[0] || "?"} {"->"} {order.delivery_address?.split(",")[0] || "?"}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {order.pickup_address?.split(",")[0] || "?"} → {order.delivery_address?.split(",")[0] || "?"}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Summary */}
-          {selectedOrderIds.size > 0 && (
-            <div className="bg-muted/30 rounded-lg p-3 border border-border/30">
-              <p className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{selectedOrderIds.size}</span> order(s) geselecteerd
-                {clientRates.length === 0 && (
-                  <span className="text-amber-600 ml-2">— geen tarieven geconfigureerd, lege regels worden aangemaakt</span>
+                      </label>
+                    ))}
+                  </div>
                 )}
-              </p>
-            </div>
-          )}
+              </div>
+            )}
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setShowNewInvoice(false)}>
-              Annuleren
-            </Button>
-            <Button
-              onClick={handleCreateInvoice}
-              disabled={!selectedClientId || selectedOrderIds.size === 0 || createInvoiceMutation.isPending}
-              className="gap-2"
-            >
-              {createInvoiceMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
-              Factuur aanmaken
-            </Button>
+            {selectedOrderIds.size > 0 && (
+              <div className="bg-muted/30 rounded-lg p-3 border border-border/30">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{selectedOrderIds.size}</span> order(s) geselecteerd
+                  {clientRates.length === 0 && (
+                    <span className="text-amber-600 ml-2">- geen tarieven geconfigureerd, lege regels worden aangemaakt</span>
+                  )}
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowNewInvoice(false)}>
+                Annuleren
+              </Button>
+              <Button
+                onClick={handleCreateInvoice}
+                disabled={!selectedClientId || selectedOrderIds.size === 0 || createInvoiceMutation.isPending}
+                className="gap-2"
+              >
+                {createInvoiceMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                Factuur aanmaken
+              </Button>
+            </div>
           </div>
-        </div>
-      </DialogContent>
+        </DialogContent>
       </Dialog>
     </div>
   );
