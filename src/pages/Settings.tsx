@@ -606,6 +606,52 @@ const Settings = () => {
     else navigate(`/settings/${value}`);
   };
 
+  interface SmtpFields {
+    host: string;
+    port: string;
+    username: string;
+    password: string;
+    fromEmail: string;
+    fromName: string;
+  }
+  const EMPTY_SMTP: SmtpFields = {
+    host: "",
+    port: "587",
+    username: "",
+    password: "",
+    fromEmail: "",
+    fromName: "",
+  };
+  const [smtpSettings, setSmtpSettings] = useState<{ enabled: boolean; fields: SmtpFields }>(
+    { enabled: false, fields: { ...EMPTY_SMTP } },
+  );
+  const { data: smtpSaved } = useIntegrationCredentials<SmtpFields>("smtp");
+  const saveSmtp = useSaveIntegrationCredentials<SmtpFields>("smtp");
+  useEffect(() => {
+    if (smtpSaved === undefined) return;
+    setSmtpSettings({
+      enabled: smtpSaved.enabled,
+      fields: { ...EMPTY_SMTP, ...smtpSaved.credentials, password: "" },
+    });
+  }, [smtpSaved]);
+  const updateSmtpField = (field: keyof SmtpFields, value: string) => {
+    setSmtpSettings((prev) => ({ ...prev, fields: { ...prev.fields, [field]: value } }));
+  };
+  const handleSaveSmtp = async () => {
+    try {
+      await saveSmtp.mutateAsync({
+        enabled: smtpSettings.enabled,
+        credentials: smtpSettings.fields,
+      });
+      setSmtpSettings((prev) => ({ ...prev, fields: { ...prev.fields, password: "" } }));
+      toast.success("SMTP-config opgeslagen");
+    } catch (error) {
+      toast.error("SMTP-config opslaan mislukt", {
+        description: error instanceof Error ? error.message : "Probeer het opnieuw.",
+      });
+    }
+  };
+
   const activeTab = getActiveTab();
   const connectorSummary = useMemo(() => {
     const items = connectorList.data ?? [];
@@ -1164,6 +1210,63 @@ const Settings = () => {
                 Notificaties
               </p>
               <p className="mt-1 text-xs text-muted-foreground">Beheer hoe en wanneer je meldingen ontvangt.</p>
+            </div>
+
+            <div className="rounded-2xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.1)] p-4 space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Tenant-eigen SMTP</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Gebruik de mailbox van deze tenant voor bevestigingen, follow-ups en klantnotificaties.
+                  </p>
+                </div>
+                <Switch
+                  checked={smtpSettings.enabled}
+                  onCheckedChange={(value) => setSmtpSettings((prev) => ({ ...prev, enabled: value }))}
+                />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-host">SMTP host</Label>
+                  <Input id="smtp-host" value={smtpSettings.fields.host} onChange={(e) => updateSmtpField("host", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-port">Poort</Label>
+                  <Input id="smtp-port" value={smtpSettings.fields.port} onChange={(e) => updateSmtpField("port", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-username">Gebruikersnaam</Label>
+                  <Input id="smtp-username" value={smtpSettings.fields.username} onChange={(e) => updateSmtpField("username", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-password">Wachtwoord</Label>
+                  <Input
+                    id="smtp-password"
+                    type="password"
+                    value={smtpSettings.fields.password}
+                    onChange={(e) => updateSmtpField("password", e.target.value)}
+                    placeholder={(smtpSaved?.credentials as Record<string, unknown> | undefined)?.__hasStoredSecrets ? "Leeg laten behoudt huidige secret" : ""}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-from-email">From e-mail</Label>
+                  <Input id="smtp-from-email" value={smtpSettings.fields.fromEmail} onChange={(e) => updateSmtpField("fromEmail", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-from-name">From naam</Label>
+                  <Input id="smtp-from-name" value={smtpSettings.fields.fromName} onChange={(e) => updateSmtpField("fromName", e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={handleSaveSmtp}
+                  disabled={saveSmtp.isPending}
+                  className="btn-luxe !h-9"
+                >
+                  {saveSmtp.isPending ? "Opslaan..." : "SMTP-config opslaan"}
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center justify-between py-4 border-t border-[hsl(var(--gold)/0.12)]">

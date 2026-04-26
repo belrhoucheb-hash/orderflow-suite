@@ -1,10 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getUserAuth } from "../_shared/auth.ts";
 import { corsFor, handleOptions } from "../_shared/cors.ts";
-
-// TODO: replace with tenant_settings lookup when multi-tenant is wired up
-const COMPANY_NAME = "Royalty Cargo";
-const COMPANY_PLANNING_EMAIL = "planning@royaltycargo.nl";
+import { loadTenantSmtpConfig, sendEmailSmtp } from "../_shared/tenantMessaging.ts";
 
 const CORS_OPTIONS = {
   extraHeaders: [
@@ -22,27 +20,17 @@ serve(async (req) => {
 
   try {
     // Verify JWT authorization
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    const auth = await getUserAuth(req);
+    if (!auth.ok) {
       return new Response(
-        JSON.stringify({ error: "Authenticatie vereist" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: auth.error }),
+        { status: auth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Verify the user's JWT token
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !authUser) {
-      return new Response(
-        JSON.stringify({ error: "Ongeldige of verlopen sessie" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     const { orderId } = await req.json();
 
@@ -68,8 +56,7 @@ serve(async (req) => {
     }
 
     // Verify tenant isolation
-    const userTenantId = authUser.app_metadata?.tenant_id;
-    if (userTenantId && order.tenant_id && userTenantId !== order.tenant_id) {
+    if (auth.tenantId !== order.tenant_id) {
       return new Response(
         JSON.stringify({ error: "Geen toegang tot deze order" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -85,19 +72,6 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Geen geldig e-mailadres beschikbaar", skipped: true }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Check SMTP configuration
-    const smtpHost = Deno.env.get("SMTP_HOST");
-    const smtpUser = Deno.env.get("SMTP_USER");
-    const smtpPassword = Deno.env.get("SMTP_PASSWORD");
-    const smtpPort = parseInt(Deno.env.get("SMTP_PORT") || "587", 10);
-
-    if (!smtpHost || !smtpUser || !smtpPassword) {
-      return new Response(
-        JSON.stringify({ error: "SMTP is nog niet geconfigureerd" }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -138,8 +112,8 @@ serve(async (req) => {
     lines.push(``);
     lines.push(`Heeft u vragen of wijzigingen? Reageer dan op deze e-mail met vermelding van ordernummer #${orderNum}.`);
     lines.push(``);
-    const tenantName = order.tenants?.name || COMPANY_NAME;
-    const tenantEmail = order.tenants?.email || COMPANY_PLANNING_EMAIL;
+    const tenantName = order.tenants?.name || "Planning";
+    const tenantEmail = order.tenants?.email || "";
 
     lines.push(`Met vriendelijke groet,`);
     lines.push(`${tenantName} Planning`);
@@ -148,147 +122,17 @@ serve(async (req) => {
     const body = lines.join("\n");
     const subject = `Bevestiging transportorder #${orderNum} — ${tenantName}`;
 
-    // Send via SMTP
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-
-    const conn = await Deno.connect({ hostname: smtpHost, port: smtpPort });
-
-    async function sendLine(line: string) {
-      await conn.write(encoder.encode(line + "\r\n"));
-    }
-    async function readResponse(): Promise<string> {
-      const buf = new Uint8Array(1024);
-      const n = await conn.read(buf);
-      return n ? decoder.decode(buf.subarray(0, n)) : "";
-    }
-
-    await readResponse(); // greeting
-    await sendLine(`EHLO localhost`);
-    await readResponse();
-
-    if (smtpPort === 587) {
-      await sendLine("STARTTLS");
-      await readResponse();
-      const tlsConn = await Deno.startTls(conn, { hostname: smtpHost });
-      const tlsEncoder = new TextEncoder();
-      const tlsDecoder = new TextDecoder();
-
-      async function tlsSend(line: string) {
-        await tlsConn.write(tlsEncoder.encode(line + "\r\n"));
-      }
-      async function tlsRead(): Promise<string> {
-        const buf = new Uint8Array(4096);
-        const n = await tlsConn.read(buf);
-        return n ? tlsDecoder.decode(buf.subarray(0, n)) : "";
-      }
-
-      await tlsSend(`EHLO localhost`);
-      await tlsRead();
-      await tlsSend("AUTH LOGIN");
-      await tlsRead();
-      await tlsSend(btoa(smtpUser));
-      await tlsRead();
-      await tlsSend(btoa(smtpPassword));
-      const authResp = await tlsRead();
-      if (!authResp.startsWith("235")) {
-        tlsConn.close();
-        return new Response(
-          JSON.stringify({ error: "SMTP authenticatie mislukt" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      await tlsSend(`MAIL FROM:<${smtpUser}>`);
-      const mailFromResp = await tlsRead();
-      if (!mailFromResp.startsWith("2")) {
-        tlsConn.close();
-        throw new Error(`SMTP MAIL FROM afgewezen: ${mailFromResp.trim()}`);
-      }
-      await tlsSend(`RCPT TO:<${toEmail}>`);
-      const rcptResp = await tlsRead();
-      if (!rcptResp.startsWith("2")) {
-        tlsConn.close();
-        throw new Error(`SMTP RCPT TO afgewezen: ${rcptResp.trim()}`);
-      }
-      await tlsSend("DATA");
-      const dataResp = await tlsRead();
-      if (!dataResp.startsWith("3")) {
-        tlsConn.close();
-        throw new Error(`SMTP DATA afgewezen: ${dataResp.trim()}`);
-      }
-
-      const emailContent = [
-        `From: ${tenantName} Planning <${smtpUser}>`,
-        `To: ${toEmail}`,
-        `Subject: ${subject}`,
-        `Content-Type: text/plain; charset=UTF-8`,
-        ``,
-        body,
-        `.`,
-      ].join("\r\n");
-
-      await tlsSend(emailContent);
-      const sendResp = await tlsRead();
-      if (!sendResp.startsWith("2")) {
-        tlsConn.close();
-        throw new Error(`SMTP verzending mislukt: ${sendResp.trim()}`);
-      }
-      await tlsSend("QUIT");
-      tlsConn.close();
-    } else {
-      await sendLine("AUTH LOGIN");
-      await readResponse();
-      await sendLine(btoa(smtpUser));
-      await readResponse();
-      await sendLine(btoa(smtpPassword));
-      const authResp = await readResponse();
-      if (!authResp.startsWith("235")) {
-        conn.close();
-        return new Response(
-          JSON.stringify({ error: "SMTP authenticatie mislukt" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      await sendLine(`MAIL FROM:<${smtpUser}>`);
-      const mailFromResp = await readResponse();
-      if (!mailFromResp.startsWith("2")) {
-        conn.close();
-        throw new Error(`SMTP MAIL FROM afgewezen: ${mailFromResp.trim()}`);
-      }
-      await sendLine(`RCPT TO:<${toEmail}>`);
-      const rcptResp = await readResponse();
-      if (!rcptResp.startsWith("2")) {
-        conn.close();
-        throw new Error(`SMTP RCPT TO afgewezen: ${rcptResp.trim()}`);
-      }
-      await sendLine("DATA");
-      const dataResp = await readResponse();
-      if (!dataResp.startsWith("3")) {
-        conn.close();
-        throw new Error(`SMTP DATA afgewezen: ${dataResp.trim()}`);
-      }
-
-      const emailContent = [
-        `From: ${tenantName} Planning <${smtpUser}>`,
-        `To: ${toEmail}`,
-        `Subject: ${subject}`,
-        `Content-Type: text/plain; charset=UTF-8`,
-        ``,
-        body,
-        `.`,
-      ].join("\r\n");
-
-      await sendLine(emailContent);
-      const sendResp = await readResponse();
-      if (!sendResp.startsWith("2")) {
-        conn.close();
-        throw new Error(`SMTP verzending mislukt: ${sendResp.trim()}`);
-      }
-      await sendLine("QUIT");
-      conn.close();
-    }
+    const smtpConfig = await loadTenantSmtpConfig(
+      supabase,
+      order.tenant_id,
+      `${tenantName} Planning`,
+    );
+    await sendEmailSmtp({
+      to: toEmail,
+      subject,
+      body,
+      config: smtpConfig,
+    });
 
     return new Response(
       JSON.stringify({ success: true, message: `Bevestiging verzonden naar ${toEmail}` }),

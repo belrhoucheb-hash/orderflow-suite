@@ -28,12 +28,28 @@ Deno.serve(async (req) => {
 
   const tenantId = state;
 
-  const clientId = Deno.env.get("EXACT_CLIENT_ID");
-  const clientSecret = Deno.env.get("EXACT_CLIENT_SECRET");
-  const redirectUri = Deno.env.get("EXACT_REDIRECT_URI");
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
 
+  const { data: existingRuntime, error: runtimeError } = await supabase.rpc("get_integration_credentials_runtime", {
+    p_tenant_id: tenantId,
+    p_provider: "exact_online",
+  });
+  if (runtimeError) {
+    return htmlPage(`Exact-config ophalen mislukt: ${runtimeError.message}`, false);
+  }
+  const existing = (Array.isArray(existingRuntime) ? existingRuntime[0] : existingRuntime) as
+    | { credentials?: Record<string, unknown>; enabled?: boolean }
+    | null;
+  const existingCredentials = existing?.credentials ?? {};
+  const clientId = typeof existingCredentials.clientId === "string" ? existingCredentials.clientId : "";
+  const clientSecret = typeof existingCredentials.clientSecret === "string" ? existingCredentials.clientSecret : "";
+  const redirectUri = typeof existingCredentials.redirectUri === "string" ? existingCredentials.redirectUri : "";
   if (!clientId || !clientSecret || !redirectUri) {
-    return htmlPage("Server-config ontbreekt (EXACT_CLIENT_ID/SECRET/REDIRECT_URI)", false);
+    return htmlPage("Tenant-specifieke Exact Client ID, Client Secret of Redirect URI ontbreekt", false);
   }
 
   let tokenJson: Record<string, unknown>;
@@ -64,29 +80,12 @@ Deno.serve(async (req) => {
   const refreshToken = tokenJson.refresh_token as string;
   const expiresIn = (tokenJson.expires_in as number) ?? 600;
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
-
   if (!accessToken || !refreshToken) {
     return htmlPage("Geen access/refresh-token in Exact-response", false);
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
-
-  const { data: existingRuntime } = await supabase.rpc("get_integration_credentials_runtime", {
-    p_tenant_id: tenantId,
-    p_provider: "exact_online",
-  });
-  const existing = (Array.isArray(existingRuntime) ? existingRuntime[0] : existingRuntime) as
-    | { credentials?: Record<string, unknown> }
-    | null;
-
   const newCreds = {
-    ...((existing?.credentials as Record<string, unknown>) ?? {}),
-    clientId,
-    clientSecret,
+    ...(existingCredentials as Record<string, unknown>),
     accessToken,
     refreshToken,
     accessTokenExpiresAt: expiresAt,

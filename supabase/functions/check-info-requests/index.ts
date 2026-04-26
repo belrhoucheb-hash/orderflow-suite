@@ -14,6 +14,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { corsFor, handleOptions } from "../_shared/cors.ts";
 import { getUserAuth, isTrustedCaller } from "../_shared/auth.ts";
+import { loadTenantSmtpConfig, sendEmailSmtp } from "../_shared/tenantMessaging.ts";
 
 const CORS_OPTIONS = { extraHeaders: ["x-cron-secret"] };
 
@@ -140,7 +141,7 @@ serve(async (req) => {
 
       if (shouldRemindClient || forced.force) {
         try {
-          await sendClientReminder(r, order);
+          await sendClientReminder(supabase, r, order);
           const updated = [...r.reminder_sent_at, now.toISOString()];
           await supabase
             .from("order_info_requests")
@@ -191,13 +192,13 @@ serve(async (req) => {
 });
 
 // ── Mail-helper — lichte SMTP. Leunt op ENV. Faalt stil als SMTP niet ge-config'd is. ──
-async function sendClientReminder(req: InfoRequestRow, order: OrderRow): Promise<void> {
-  const smtpHost = Deno.env.get("SMTP_HOST");
-  const smtpPort = parseInt(Deno.env.get("SMTP_PORT") || "587", 10);
-  const smtpUser = Deno.env.get("SMTP_USER");
-  const smtpPassword = Deno.env.get("SMTP_PASSWORD");
+async function sendClientReminder(
+  supabase: ReturnType<typeof createClient>,
+  req: InfoRequestRow,
+  order: OrderRow,
+): Promise<void> {
   const toEmail = req.promised_by_email;
-  if (!toEmail || !smtpHost || !smtpUser || !smtpPassword) {
+  if (!toEmail) {
     throw new Error("SMTP of ontvanger niet geconfigureerd");
   }
 
@@ -221,54 +222,6 @@ async function sendClientReminder(req: InfoRequestRow, order: OrderRow): Promise
     `Planning`,
   ].join("\n");
 
-  await smtpSend({ host: smtpHost, port: smtpPort, user: smtpUser, password: smtpPassword, to: toEmail, subject, body });
-}
-
-interface SmtpArgs { host: string; port: number; user: string; password: string; to: string; subject: string; body: string; }
-
-async function smtpSend(a: SmtpArgs): Promise<void> {
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  const conn = await Deno.connect({ hostname: a.host, port: a.port });
-  async function send(line: string, active: Deno.Conn | Deno.TlsConn = conn) {
-    await active.write(encoder.encode(line + "\r\n"));
-  }
-  async function read(active: Deno.Conn | Deno.TlsConn = conn): Promise<string> {
-    const buf = new Uint8Array(4096);
-    const n = await active.read(buf);
-    return n ? decoder.decode(buf.subarray(0, n)) : "";
-  }
-  await read();
-  await send("EHLO localhost");
-  await read();
-  let active: Deno.Conn | Deno.TlsConn = conn;
-  if (a.port === 587) {
-    await send("STARTTLS");
-    await read();
-    active = await Deno.startTls(conn, { hostname: a.host });
-    await send("EHLO localhost", active);
-    await read(active);
-  }
-  await send("AUTH LOGIN", active); await read(active);
-  await send(btoa(a.user), active); await read(active);
-  await send(btoa(a.password), active);
-  const authResp = await read(active);
-  if (!authResp.startsWith("235")) { try { (active as any).close(); } catch {} throw new Error("SMTP auth mislukt"); }
-  await send(`MAIL FROM:<${a.user}>`, active); await read(active);
-  await send(`RCPT TO:<${a.to}>`, active); await read(active);
-  await send("DATA", active); await read(active);
-  const email = [
-    `From: ${a.user}`,
-    `To: ${a.to}`,
-    `Subject: ${a.subject}`,
-    `Content-Type: text/plain; charset=UTF-8`,
-    ``,
-    a.body,
-    `.`,
-  ].join("\r\n");
-  await send(email, active);
-  const sendResp = await read(active);
-  if (!sendResp.startsWith("2")) { try { (active as any).close(); } catch {} throw new Error(`SMTP send mislukt: ${sendResp.trim()}`); }
-  await send("QUIT", active);
-  try { (active as any).close(); } catch {}
+  const smtpConfig = await loadTenantSmtpConfig(supabase, order.tenant_id, "Planning");
+  await sendEmailSmtp({ to: toEmail, subject, body, config: smtpConfig });
 }

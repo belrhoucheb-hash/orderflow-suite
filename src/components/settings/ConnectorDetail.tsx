@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, ExternalLink, RefreshCw, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,40 +98,18 @@ function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
   const creds = useIntegrationCredentials(slug);
   const save = useSaveIntegrationCredentials(slug);
   const test = useTestConnector(slug);
-  const { tenant } = useTenant();
 
   if (slug === "exact_online") {
-    const oauthUrl = tenant ? buildExactOAuthUrl(tenant.id) : null;
-    const hasCreds = Boolean(
-      creds.data?.enabled ||
-      (creds.data?.credentials as Record<string, unknown> | undefined)?.__hasStoredSecrets,
-    );
     return (
-      <div className="card--luxe p-5 space-y-4">
-        <p className="text-sm text-muted-foreground">{connector.setupHint}</p>
-        {oauthUrl ? (
-          <Button asChild>
-            <a href={oauthUrl} target="_blank" rel="noopener noreferrer" className="gap-2">
-              <ExternalLink className="h-4 w-4" />
-              {hasCreds ? "Opnieuw verbinden met Exact" : "Verbinden met Exact Online"}
-            </a>
-          </Button>
-        ) : (
-          <p className="text-sm text-destructive">
-            VITE_EXACT_CLIENT_ID en VITE_EXACT_REDIRECT_URI ontbreken in env.
-          </p>
-        )}
-        {hasCreds && (
-          <Button
-            variant="outline"
-            onClick={() => test.mutate()}
-            disabled={test.isPending}
-            className="gap-2"
-          >
-            {test.isPending ? "Testen..." : "Test verbinding"}
-          </Button>
-        )}
-      </div>
+      <ExactConnectionForm
+        setupHint={connector.setupHint}
+        creds={creds.data?.credentials ?? {}}
+        enabled={creds.data?.enabled ?? false}
+        onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
+        onTest={() => test.mutate()}
+        saving={save.isPending}
+        testing={test.isPending}
+      />
     );
   }
 
@@ -158,6 +136,126 @@ function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
       saving={save.isPending}
       testing={test.isPending}
     />
+  );
+}
+
+function ExactConnectionForm({
+  setupHint,
+  creds,
+  enabled,
+  onSave,
+  onTest,
+  saving,
+  testing,
+}: {
+  setupHint: string;
+  creds: Record<string, unknown>;
+  enabled: boolean;
+  onSave: (c: Record<string, unknown>, en: boolean) => Promise<void>;
+  onTest: () => void;
+  saving: boolean;
+  testing: boolean;
+}) {
+  const { tenant } = useTenant();
+  const [clientId, setClientId] = useState((creds.clientId as string) ?? "");
+  const [clientSecret, setClientSecret] = useState("");
+  const [redirectUri, setRedirectUri] = useState((creds.redirectUri as string) ?? "");
+  const [divisionId, setDivisionId] = useState((creds.divisionId as string) ?? "");
+  const [active, setActive] = useState(enabled);
+
+  useEffect(() => {
+    setClientId((creds.clientId as string) ?? "");
+    setRedirectUri((creds.redirectUri as string) ?? "");
+    setDivisionId((creds.divisionId as string) ?? "");
+    setActive(enabled);
+  }, [creds, enabled]);
+
+  const hasStoredSecrets = creds.__hasStoredSecrets === true;
+  const hasCreds = Boolean(enabled || hasStoredSecrets);
+  const oauthUrl = tenant ? buildExactOAuthUrl({
+    tenantId: tenant.id,
+    clientId,
+    redirectUri,
+  }) : null;
+
+  const saveExact = async () => {
+    try {
+      await onSave(
+        {
+          ...creds,
+          clientId,
+          clientSecret,
+          redirectUri,
+          divisionId,
+        },
+        active,
+      );
+      setClientSecret("");
+      toast.success("Exact-config opgeslagen");
+    } catch (error) {
+      toast.error("Opslaan mislukt", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  return (
+    <div className="card--luxe p-5 space-y-4">
+      <p className="text-sm text-muted-foreground">{setupHint}</p>
+      <div className="flex items-center justify-between">
+        <Label>Actief</Label>
+        <Switch checked={active} onCheckedChange={setActive} />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="exact-client-id">Exact Client ID</Label>
+        <Input id="exact-client-id" value={clientId} onChange={(e) => setClientId(e.target.value)} />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="exact-client-secret">Exact Client Secret</Label>
+        <Input
+          id="exact-client-secret"
+          type="password"
+          value={clientSecret}
+          onChange={(e) => setClientSecret(e.target.value)}
+          placeholder={hasStoredSecrets ? "Leeg laten behoudt huidige secret" : ""}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="exact-redirect-uri">Redirect URI</Label>
+        <Input
+          id="exact-redirect-uri"
+          value={redirectUri}
+          onChange={(e) => setRedirectUri(e.target.value)}
+          placeholder="https://<project>.supabase.co/functions/v1/oauth-callback-exact"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="exact-division-id">Division ID</Label>
+        <Input id="exact-division-id" value={divisionId} onChange={(e) => setDivisionId(e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <Button onClick={saveExact} disabled={saving}>
+          {saving ? "Opslaan..." : "Exact-config opslaan"}
+        </Button>
+      </div>
+      {oauthUrl ? (
+        <Button asChild>
+          <a href={oauthUrl} target="_blank" rel="noopener noreferrer" className="gap-2">
+            <ExternalLink className="h-4 w-4" />
+            {hasCreds ? "Opnieuw verbinden met Exact" : "Verbinden met Exact Online"}
+          </a>
+        </Button>
+      ) : (
+        <p className="text-sm text-destructive">
+          Vul eerst tenant-specifieke Exact Client ID en Redirect URI in.
+        </p>
+      )}
+      {hasCreds && (
+        <Button variant="outline" onClick={onTest} disabled={testing} className="gap-2">
+          {testing ? "Testen..." : "Test verbinding"}
+        </Button>
+      )}
+    </div>
   );
 }
 

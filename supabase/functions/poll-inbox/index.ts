@@ -195,7 +195,7 @@ async function ruleBasedClassify(
 // ── Inbox config + lifecycle ──
 
 interface InboxConfig {
-  id: string | null; // null = env-fallback (no DB row)
+  id: string;
   tenantId: string;
   label: string;
   host: string;
@@ -258,40 +258,7 @@ async function loadInboxConfigs(supabase: any): Promise<InboxConfig[]> {
       folder: row.folder || "INBOX",
     });
   }
-
-  // Env fallback: only if no active inboxes exist AT ALL (not just after filter)
-  if (configs.length === 0) {
-    const { count } = await supabase
-      .from("tenant_inboxes")
-      .select("id", { count: "exact", head: true })
-      .eq("is_active", true);
-    if ((count ?? 0) === 0) {
-      const envCfg = buildEnvFallbackConfig(supabase);
-      if (envCfg) {
-        console.warn("No tenant_inboxes configured, falling back to env IMAP, deprecated");
-        configs.push(envCfg);
-      }
-    }
-  }
-
   return configs;
-}
-
-function buildEnvFallbackConfig(_supabase: any): InboxConfig | null {
-  const host = Deno.env.get("IMAP_HOST");
-  const user = Deno.env.get("IMAP_USER");
-  const pass = Deno.env.get("IMAP_PASSWORD");
-  if (!host || !user || !pass) return null;
-  return {
-    id: null,
-    tenantId: "", // resolved at poll time
-    label: "env-fallback",
-    host,
-    port: parseInt(Deno.env.get("IMAP_PORT") || "993"),
-    username: user,
-    password: pass,
-    folder: "INBOX",
-  };
 }
 
 async function markInboxError(supabase: any, inboxId: string, errorMsg: string) {
@@ -323,11 +290,6 @@ async function markInboxSuccess(supabase: any, inboxId: string) {
   }).eq("id", inboxId);
 }
 
-async function resolveEnvFallbackTenant(supabase: any): Promise<string | null> {
-  const { data } = await supabase.from("tenants").select("id").eq("is_active", true).limit(1);
-  return data?.[0]?.id || null;
-}
-
 // ── Single-inbox polling (core logic) ──
 
 async function pollOneInbox(config: InboxConfig, supabase: any): Promise<InboxResult> {
@@ -338,15 +300,7 @@ async function pollOneInbox(config: InboxConfig, supabase: any): Promise<InboxRe
     orders: [],
   };
 
-  let tenantId = config.tenantId;
-  if (!tenantId) {
-    // Env fallback: resolve the first active tenant
-    const fallback = await resolveEnvFallbackTenant(supabase);
-    if (!fallback) {
-      throw new Error("Env fallback kan geen tenant vinden");
-    }
-    tenantId = fallback;
-  }
+  const tenantId = config.tenantId;
 
   // §27: orders.department_id is NOT NULL. Bij binnenkomst van een mail weten we
   // de echte afdeling nog niet (parse-order werkt het later bij). Fallback: OPS.
@@ -736,12 +690,12 @@ async function pollAllInboxes(corsHeaders: Record<string, string>): Promise<Resp
     const outcome = outcomes[i];
     if (outcome.status === "fulfilled") {
       summaries.push(outcome.value);
-      if (cfg.id) await markInboxSuccess(supabase, cfg.id);
+      await markInboxSuccess(supabase, cfg.id);
     } else {
       const errMsg = outcome.reason instanceof Error ? outcome.reason.message : "unknown";
       console.error(`Inbox ${cfg.label} failed: ${errMsg}`);
       summaries.push({ label: cfg.label, tenantId: cfg.tenantId, processed: 0, orders: [], error: errMsg });
-      if (cfg.id) await markInboxError(supabase, cfg.id, errMsg);
+      await markInboxError(supabase, cfg.id, errMsg);
     }
   }
 

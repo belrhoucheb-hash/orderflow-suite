@@ -7,7 +7,8 @@ export type IntegrationProvider =
   | "exact_online"
   | "twinfield"
   | "samsara"
-  | "nostradamus";
+  | "nostradamus"
+  | "smtp";
 
 export interface IntegrationCredentialRow<T = Record<string, unknown>> {
   enabled: boolean;

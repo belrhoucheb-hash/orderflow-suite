@@ -4,7 +4,7 @@
 //   POST { action: 'push'|'test', tenant_id, event_type?, payload? }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { isTrustedCaller } from "../_shared/auth.ts";
+import { getUserAuth, isTrustedCaller } from "../_shared/auth.ts";
 import { corsFor, handleOptions } from "../_shared/cors.ts";
 import { loadConfig, runConnectorAction } from "../_shared/connectors/runtime.ts";
 import { ExactConnector } from "../_shared/connectors/exact-impl.ts";
@@ -24,15 +24,21 @@ Deno.serve(async (req) => {
   const cors = corsFor(req);
   const headers = { ...cors, "Content-Type": "application/json" };
 
-  if (!isTrustedCaller(req)) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
-  }
-
   let body: RequestBody;
   try {
     body = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
+  }
+
+  if (!isTrustedCaller(req)) {
+    const auth = await getUserAuth(req);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), { status: auth.status, headers });
+    }
+    if (auth.tenantId !== body.tenant_id) {
+      return new Response(JSON.stringify({ error: "Tenant mismatch" }), { status: 403, headers });
+    }
   }
 
   if (!body.tenant_id) {

@@ -223,15 +223,19 @@ export function usePullConnector(provider: string) {
 
 // ─── OAuth-flow start (Exact) ───────────────────────────────────────
 
-export function buildExactOAuthUrl(tenantId: string): string | null {
-  const clientId = (import.meta as any).env?.VITE_EXACT_CLIENT_ID;
-  const redirectUri = (import.meta as any).env?.VITE_EXACT_REDIRECT_URI;
+export function buildExactOAuthUrl(input: {
+  tenantId: string;
+  clientId?: string | null;
+  redirectUri?: string | null;
+}): string | null {
+  const clientId = input.clientId?.trim();
+  const redirectUri = input.redirectUri?.trim();
   if (!clientId || !redirectUri) return null;
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    state: tenantId,
+    state: input.tenantId,
     force_login: "1",
   });
   return `https://start.exactonline.nl/api/oauth2/auth?${params.toString()}`;
