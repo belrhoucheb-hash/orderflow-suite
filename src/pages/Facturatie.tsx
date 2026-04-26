@@ -44,7 +44,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const filterOptions = ["alle", "concept", "verzonden", "betaald", "vervallen"] as const;
-const tableHeaderLabelClass = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60";
+const tableHeaderLabelClass = "text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
@@ -583,10 +583,22 @@ const Facturatie = () => {
                 }}
               >
                 <th className="px-4 py-2.5 text-left">
-                  <SortableHeader label="Factuurnummer" field="invoice_number" currentSort={sortConfig} onSort={handleSort} />
+                  <SortableHeader
+                    label="Factuurnummer"
+                    field="invoice_number"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                    className={tableHeaderLabelClass}
+                  />
                 </th>
                 <th className="px-4 py-2.5 text-left">
-                  <SortableHeader label="Klant" field="client_name" currentSort={sortConfig} onSort={handleSort} />
+                  <SortableHeader
+                    label="Klant"
+                    field="client_name"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                    className={tableHeaderLabelClass}
+                  />
                 </th>
                 <th className={cn("px-4 py-2.5 text-left hidden md:table-cell", tableHeaderLabelClass)}>
                   Datum
@@ -595,10 +607,22 @@ const Facturatie = () => {
                   Vervaldatum
                 </th>
                 <th className="px-4 py-2.5 text-right">
-                  <SortableHeader label="Bedrag" field="total" currentSort={sortConfig} onSort={handleSort} className="justify-end" />
+                  <SortableHeader
+                    label="Bedrag"
+                    field="total"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                    className={cn(tableHeaderLabelClass, "justify-end")}
+                  />
                 </th>
                 <th className="px-4 py-2.5 text-left">
-                  <SortableHeader label="Status" field="status" currentSort={sortConfig} onSort={handleSort} />
+                  <SortableHeader
+                    label="Status"
+                    field="status"
+                    currentSort={sortConfig}
+                    onSort={handleSort}
+                    className={tableHeaderLabelClass}
+                  />
                 </th>
                 <th className={cn("px-4 py-2.5 text-right", tableHeaderLabelClass)}>
                   Acties
