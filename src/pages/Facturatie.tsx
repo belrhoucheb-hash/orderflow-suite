@@ -600,11 +600,11 @@ const Facturatie = () => {
                     className={tableHeaderLabelClass}
                   />
                 </th>
-                <th className={cn("px-4 py-2.5 text-left hidden md:table-cell", tableHeaderLabelClass)}>
-                  Datum
+                <th className="px-4 py-2.5 text-left hidden md:table-cell">
+                  <span className={tableHeaderLabelClass}>Datum</span>
                 </th>
-                <th className={cn("px-4 py-2.5 text-left hidden md:table-cell", tableHeaderLabelClass)}>
-                  Vervaldatum
+                <th className="px-4 py-2.5 text-left hidden md:table-cell">
+                  <span className={tableHeaderLabelClass}>Vervaldatum</span>
                 </th>
                 <th className="px-4 py-2.5 text-right">
                   <SortableHeader
@@ -624,8 +624,8 @@ const Facturatie = () => {
                     className={tableHeaderLabelClass}
                   />
                 </th>
-                <th className={cn("px-4 py-2.5 text-right", tableHeaderLabelClass)}>
-                  Acties
+                <th className="px-4 py-2.5 text-right">
+                  <span className={tableHeaderLabelClass}>Acties</span>
                 </th>
               </tr>
             </thead>

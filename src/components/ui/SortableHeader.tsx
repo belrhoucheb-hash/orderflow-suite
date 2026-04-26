@@ -24,7 +24,7 @@ export function SortableHeader({ label, field, currentSort, onSort, className }:
       onClick={() => onSort(field)}
       className={cn(
         "relative inline-flex items-center gap-1 cursor-pointer transition-colors pb-0.5",
-        "text-[11px] font-semibold uppercase tracking-wide",
+        "font-semibold uppercase",
         isActive ? "text-foreground" : "text-muted-foreground/60 hover:text-foreground",
         className,
       )}
