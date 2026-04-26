@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { Receipt, Search, Plus, Eye, Download, Loader2, ArrowRight, Check, FileDown, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode, Wallet, AlertTriangle, CheckCircle2, FileClock, SendHorizonal } from "lucide-react";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { Button } from "@/components/ui/button";
@@ -365,15 +364,36 @@ const Facturatie = () => {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div className="flex-1 min-w-0">
-          <PageHeader
-            title={t("pages.invoicing.title")}
-            subtitle={`${totalCount} facturen in totaal`}
-          />
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+    <div className="page-container space-y-5">
+      <div className="relative pb-3 pt-2">
+        <div
+          aria-hidden
+          className="absolute -top-6 -left-8 h-32 w-64 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)" }}
+        />
+        <div className="relative flex items-end justify-between gap-5 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <div className="mb-2 flex items-center gap-2" style={{ fontFamily: "var(--font-display)" }}>
+              <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))]">
+                Finance
+              </span>
+              <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
+              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums">
+                {totalCount} {totalCount === 1 ? "factuur" : "facturen"}
+              </span>
+            </div>
+            <h1
+              className="text-[2.25rem] leading-[1.05] font-semibold tracking-tight text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {t("pages.invoicing.title")}
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Facturen, openstaand en leveringen die nog door je werktafel moeten.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2 rounded-xl h-10 px-4">
@@ -396,6 +416,7 @@ const Facturatie = () => {
             <Button type="button" onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }} className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
               <Plus className="h-4 w-4" /> {t("pages.invoicing.newInvoice")}
             </Button>
+          </div>
         </div>
       </div>
 
