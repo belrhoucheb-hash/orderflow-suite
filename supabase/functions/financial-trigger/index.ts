@@ -15,6 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isTrustedCaller } from "../_shared/auth.ts";
 import { emitWebhookEvent } from "../_shared/emit-webhook.ts";
+import { triggerConnectors } from "../_shared/trigger-connectors.ts";
 
 // Default margin threshold: 15%
 const DEFAULT_MARGIN_THRESHOLD_PCT = 15;
@@ -341,8 +342,8 @@ Deno.serve(async (req: Request) => {
         order_count: clientOrders.length,
       });
 
-      // Emit invoice.created naar externe subscribers.
-      await emitWebhookEvent(supabase, tenantId, "invoice.created", {
+      // Emit invoice.created naar externe subscribers en triggert connectoren.
+      const invoiceEventPayload = {
         entity_type: "invoice",
         entity_id: invoice.id,
         tenant_id: tenantId,
@@ -354,7 +355,9 @@ Deno.serve(async (req: Request) => {
         order_count: clientOrders.length,
         trip_id: tripId,
         occurred_at: new Date().toISOString(),
-      });
+      };
+      await emitWebhookEvent(supabase, tenantId, "invoice.created", invoiceEventPayload);
+      await triggerConnectors(tenantId, "invoice.created", invoiceEventPayload);
 
       // --- Step 3b: Margin check ---
       const { data: tripCosts } = await supabase

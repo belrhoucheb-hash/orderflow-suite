@@ -143,6 +143,25 @@ describe("mappingValue and credentialValue", () => {
 
 // ─── Connector interface contract ──────────────────────────────────
 
+describe("triggerConnectors filter", () => {
+  it("herkent invoice.sent en invoice.created als connector-events", async () => {
+    const { isConnectorEvent } = await import(
+      "../../supabase/functions/_shared/trigger-connectors"
+    );
+    expect(isConnectorEvent("invoice.sent")).toBe(true);
+    expect(isConnectorEvent("invoice.created")).toBe(true);
+  });
+
+  it("negeert order- en trip-events", async () => {
+    const { isConnectorEvent } = await import(
+      "../../supabase/functions/_shared/trigger-connectors"
+    );
+    expect(isConnectorEvent("order.created")).toBe(false);
+    expect(isConnectorEvent("trip.completed")).toBe(false);
+    expect(isConnectorEvent("invoice.paid")).toBe(false);
+  });
+});
+
 describe("Connector implementaties", () => {
   it("snelstart-impl exporteert push en testConnection", async () => {
     const mod = await import(

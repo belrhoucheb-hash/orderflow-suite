@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { isTrustedCaller } from "../_shared/auth.ts";
 import { corsFor, handleOptions } from "../_shared/cors.ts";
 import { emitWebhookEvent } from "../_shared/emit-webhook.ts";
+import { triggerConnectors } from "../_shared/trigger-connectors.ts";
 import { genericStatusEvent, mapStatusToEvent } from "../_shared/webhook-events.ts";
 
 const CORS_OPTIONS = { extraHeaders: ["x-cron-secret"] };
@@ -153,6 +154,7 @@ serve(async (req) => {
     };
     if (specificEvent) {
       await emitWebhookEvent(supabase, tenantId, specificEvent, eventPayload);
+      await triggerConnectors(tenantId, specificEvent, eventPayload);
     }
     if (genericEvent) {
       await emitWebhookEvent(supabase, tenantId, genericEvent, eventPayload);
