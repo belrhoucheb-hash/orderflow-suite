@@ -18,9 +18,79 @@ vi.mock("@/hooks/useOrders", () => ({
   useCreateOrder: () => ({ mutateAsync: mockCreateOrder, isPending: false }),
 }));
 
+vi.mock("@/contexts/TenantContext", () => ({
+  useTenantOptional: () => ({ tenant: { id: "tenant-1", name: "Test BV" } }),
+}));
+
+vi.mock("@/hooks/useClients", () => ({
+  useClient: () => ({ data: null }),
+  useClients: () => ({ data: [] }),
+  useClientOrders: () => ({ data: [] }),
+}));
+
+vi.mock("@/hooks/useClientContacts", () => ({
+  useClientContacts: () => ({ data: [] }),
+}));
+
+vi.mock("@/lib/trajectRouter", () => ({
+  createShipmentWithLegs: vi.fn().mockResolvedValue({ id: "new-1" }),
+  inferAfdelingAsync: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@/lib/trajectPreview", () => ({
+  previewLegs: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+    }),
+    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+  },
+}));
+
+vi.mock("@/components/LuxeDatePicker", () => ({
+  LuxeDatePicker: ({ value, onChange }: any) => (
+    <input data-testid="luxe-date-picker" value={value || ""} onChange={(e: any) => onChange?.(e.target.value)} />
+  ),
+}));
+
+vi.mock("@/components/LuxeTimePicker", () => ({
+  LuxeTimePicker: ({ value, onChange }: any) => (
+    <input data-testid="luxe-time-picker" value={value || ""} onChange={(e: any) => onChange?.(e.target.value)} />
+  ),
+}));
+
+vi.mock("@/components/orders/FinancialTab", () => ({
+  FinancialTab: () => <div data-testid="financial-tab">Financial Tab</div>,
+}));
+
+vi.mock("@/components/intake/IntakeSourceBadge", () => ({
+  IntakeSourceBadge: () => <div data-testid="intake-source-badge" />,
+}));
+
 vi.mock("@/components/AddressAutocomplete", () => ({
   AddressAutocomplete: ({ value, onChange, placeholder }: any) => (
     <input data-testid={`address-${placeholder}`} value={value || ""} onChange={(e: any) => onChange(e.target.value)} placeholder={placeholder} />
+  ),
+}));
+
+vi.mock("@/components/clients/AddressAutocomplete", () => ({
+  EMPTY_ADDRESS: { street: "", zipcode: "", city: "", country: "", lat: null, lng: null, coords_manual: false },
+  AddressAutocomplete: ({ value, onChange }: any) => (
+    <input
+      data-testid="client-address-autocomplete"
+      value={value?.street || ""}
+      onChange={(e: any) => onChange?.({ ...value, street: e.target.value, zipcode: "1234AB", city: "Amsterdam" })}
+      placeholder="Adres"
+    />
   ),
 }));
 

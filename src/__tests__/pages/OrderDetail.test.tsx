@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 // ── Hoisted mock ────────────────────────────────────────────────────
-const { mockSupabase, mockOrder, mockUpdateOrder, mockCreateInvoice } = vi.hoisted(() => {
+const { mockSupabase, mockOrder, mockUpdateOrder, mockCreateInvoice, mockDeleteOrder } = vi.hoisted(() => {
   const mockOrder = {
     id: "o1", order_number: 1001, client_name: "Acme BV", status: "PENDING",
     pickup_address: "Amsterdam", delivery_address: "Rotterdam", weight_kg: 500,
@@ -31,6 +31,7 @@ const { mockSupabase, mockOrder, mockUpdateOrder, mockCreateInvoice } = vi.hoist
     mockOrder,
     mockUpdateOrder: vi.fn().mockResolvedValue({}),
     mockCreateInvoice: vi.fn().mockResolvedValue({ id: "inv-new" }),
+    mockDeleteOrder: vi.fn().mockResolvedValue({}),
     mockSupabase: {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "test-user-id" } }, error: null }), getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }), onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }) },
       from: vi.fn().mockImplementation(chain),
@@ -43,12 +44,45 @@ const { mockSupabase, mockOrder, mockUpdateOrder, mockCreateInvoice } = vi.hoist
 });
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: mockSupabase }));
+vi.mock("@/contexts/TenantContext", () => ({
+  useTenantOptional: () => ({ tenant: { id: "tenant-1", name: "Test BV" } }),
+}));
+vi.mock("@/hooks/useShipments", () => ({
+  useShipment: () => ({ data: null }),
+}));
+vi.mock("@/hooks/useDepartments", () => ({
+  useDepartments: () => ({ data: [{ id: "dept-1", name: "Planning" }] }),
+}));
+vi.mock("@/hooks/useOrderNotesRead", () => ({
+  useOrderNotesRead: () => ({ hasUnread: false, markAsRead: vi.fn(), isLoading: false }),
+}));
 vi.mock("@/hooks/useInvoices", () => ({ useCreateInvoice: () => ({ mutateAsync: mockCreateInvoice, isPending: false }), useCalculateOrderCost: () => ({ data: null }) }));
-vi.mock("@/hooks/useOrders", () => ({ useUpdateOrder: () => ({ mutateAsync: mockUpdateOrder, isPending: false }) }));
+vi.mock("@/hooks/useOrders", () => ({
+  useUpdateOrder: () => ({ mutateAsync: mockUpdateOrder, isPending: false }),
+  useDeleteOrder: () => ({ mutateAsync: mockDeleteOrder, isPending: false }),
+}));
 vi.mock("@/components/orders/SmartLabel", () => ({ default: () => <div data-testid="smart-label" /> }));
 vi.mock("@/components/orders/PodViewer", () => ({ default: () => <div data-testid="pod-viewer" /> }));
 vi.mock("@/components/orders/CMRDocument", () => ({ default: () => <div data-testid="cmr-doc" /> }));
 vi.mock("@/components/orders/LabelWorkshop", () => ({ default: () => <div data-testid="label-workshop" /> }));
+vi.mock("@/components/orders/RecipientFields", () => ({ RecipientFields: () => <div data-testid="recipient-fields" /> }));
+vi.mock("@/components/orders/ReturnOrdersList", () => ({ ReturnOrdersList: () => <div data-testid="return-orders-list" /> }));
+vi.mock("@/components/orders/NotificationLogPanel", () => ({ NotificationLogPanel: () => <div data-testid="notification-log-panel" /> }));
+vi.mock("@/components/orders/OrderTimeline", () => ({ default: () => <div data-testid="order-timeline" /> }));
+vi.mock("@/components/orders/OrderInfoRequestsCard", () => ({ OrderInfoRequestsCard: () => <div data-testid="order-info-requests" /> }));
+vi.mock("@/components/orders/OrderPricePreview", () => ({ OrderPricePreview: () => <div data-testid="order-price-preview" /> }));
+vi.mock("@/components/orders/InfoStatusBadge", () => ({ InfoStatusBadge: () => <div data-testid="info-status-badge" /> }));
+vi.mock("@/components/orders/IncompleteBadge", () => ({ IncompleteBadge: () => <div data-testid="incomplete-badge" /> }));
+vi.mock("@/components/orders/FollowFromClientPopover", () => ({ FollowFromClientPopover: () => <div data-testid="follow-from-client-popover" /> }));
+vi.mock("@/components/orders/ReturnOrderDialog", () => ({ ReturnOrderDialog: () => null }));
+vi.mock("@/components/orders/CreateReturnDialog", () => ({ CreateReturnDialog: () => null }));
+vi.mock("@/components/ui/LuxePicker", () => ({
+  LuxeDatePicker: ({ value, onChange }: any) => <input data-testid="luxe-date-picker" value={value ?? ""} onChange={(e) => onChange?.(e.target.value)} />,
+  LuxeTimeRange: ({ value, onChange }: any) => <input data-testid="luxe-time-range" value={value ?? ""} onChange={(e) => onChange?.(e.target.value)} />,
+}));
+vi.mock("@/components/ui/LuxeSelect", () => ({
+  LuxeSelect: ({ value, onChange }: any) => <input data-testid="luxe-select" value={value ?? ""} onChange={(e) => onChange?.(e.target.value)} />,
+}));
 // Render DropdownMenu inline zodat tests bij action-items kunnen zonder eerst de
 // trigger-knop te openen. De actions zitten na de luxe refactor in een ... menu.
 vi.mock("@/components/ui/dropdown-menu", () => ({
@@ -89,7 +123,7 @@ describe("OrderDetail", () => {
   it("shows order client name", async () => {
     renderOrderDetail();
     await waitFor(() => {
-      expect(screen.getByText("Acme BV")).toBeInTheDocument();
+      expect(screen.getAllByText("Acme BV").length).toBeGreaterThanOrEqual(1);
     });
   });
 

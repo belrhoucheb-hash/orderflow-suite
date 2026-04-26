@@ -19,6 +19,53 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const DEV_BYPASS_STORAGE_KEY = "debug_bypass";
+
+function isLocalDevHost() {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
+
+function readDevBypassUser(): User | null {
+  if (!import.meta.env.DEV || !isLocalDevHost() || typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(DEV_BYPASS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { email?: string; display_name?: string } | null;
+    if (!parsed?.email) return null;
+    return {
+      id: "dev-local-user",
+      app_metadata: { tenant_id: "00000000-0000-0000-0000-000000000001", debug_bypass: true },
+      user_metadata: { display_name: parsed.display_name ?? "Local Admin" },
+      aud: "authenticated",
+      confirmation_sent_at: "",
+      created_at: new Date().toISOString(),
+      email: parsed.email,
+      factors: null,
+      identities: [],
+      is_anonymous: false,
+      last_sign_in_at: new Date().toISOString(),
+      phone: "",
+      role: "authenticated",
+      updated_at: new Date().toISOString(),
+    } as User;
+  } catch {
+    return null;
+  }
+}
+
+function createDevBypassSession(user: User): Session {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  return {
+    access_token: "dev-bypass-access-token",
+    refresh_token: "dev-bypass-refresh-token",
+    token_type: "bearer",
+    expires_in: 60 * 60 * 24,
+    expires_at: nowSeconds + 60 * 60 * 24,
+    user,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -28,6 +75,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfileAndRoles = async (userId: string) => {
+    if (userId === "dev-local-user") {
+      setProfile({ display_name: "Local Admin", avatar_url: null });
+      setRoles(["admin"]);
+      setIsLinkedDriver(false);
+      return;
+    }
+
     const [profileRes, rolesRes, driverRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url").eq("user_id", userId).single(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
@@ -56,12 +110,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+        const bypassUser = !session ? readDevBypassUser() : null;
+        const effectiveSession = session ?? (bypassUser ? createDevBypassSession(bypassUser) : null);
+        const effectiveUser = effectiveSession?.user ?? null;
 
-        if (session?.user) {
+        setSession(effectiveSession);
+        setUser(effectiveUser);
+
+        if (effectiveUser) {
           // Use setTimeout to avoid potential deadlocks with Supabase auth
-          setTimeout(() => fetchProfileAndRoles(session.user.id), 0);
+          setTimeout(() => fetchProfileAndRoles(effectiveUser.id), 0);
         } else {
           setProfile(null);
           setRoles([]);
@@ -72,10 +130,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfileAndRoles(session.user.id);
+      const bypassUser = !session ? readDevBypassUser() : null;
+      const effectiveSession = session ?? (bypassUser ? createDevBypassSession(bypassUser) : null);
+      const effectiveUser = effectiveSession?.user ?? null;
+
+      setSession(effectiveSession);
+      setUser(effectiveUser);
+      if (effectiveUser) {
+        fetchProfileAndRoles(effectiveUser.id);
       }
       setLoading(false);
     });
@@ -136,4 +198,10 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
+}
+
+export function useAuthOptional(): { user: User | null } {
+  const ctx = useContext(AuthContext);
+  if (!ctx) return { user: null };
+  return { user: ctx.user };
 }

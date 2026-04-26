@@ -16,7 +16,7 @@ export async function login(
   await page.locator("#login-password").fill(password);
 
   // Click the "Inloggen" button
-  await page.getByRole("button", { name: "Inloggen" }).click();
+  await page.locator("form").getByRole("button", { name: "Inloggen", exact: true }).click();
 
   // Wait until we are redirected away from /login (dashboard loads)
   await page.waitForURL((url) => !url.pathname.includes("/login"), {

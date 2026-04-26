@@ -10,7 +10,7 @@ const { mockUseInbox, mockSetSelectedId, mockSetSearch, mockSetSidebarFilter,
   mockSetBulkSelected, mockHandleImportEmail, mockHandleLoadTestScenario,
   mockHandleCreateOrder, mockHandleAutoConfirmAllSafe, mockHandleAutoConfirmCurrent, mockHandleAutoConfirmSelected, mockHandleDelete, mockHandleAutoSave,
   mockUpdateField, mockToggleRequirement, mockEnrichAddresses, mockSetFormData,
-  mockCreateOrderMutate, mockDeleteMutate, mockFileInputRef, mockGetDraftAutoConfirmAssessment } = vi.hoisted(() => {
+  mockCreateOrderMutate, mockDeleteMutate, mockFileInputRef, mockGetDraftAutoConfirmAssessment, mockGetDraftCaseSummary } = vi.hoisted(() => {
   const ref = { current: null } as any;
   return {
     mockSetSelectedId: vi.fn(),
@@ -41,6 +41,11 @@ const { mockUseInbox, mockSetSelectedId, mockSetSearch, mockSetSidebarFilter,
       title: "Controle nodig",
       reason: "Nog handmatige review nodig.",
     }),
+    mockGetDraftCaseSummary: vi.fn().mockReturnValue({
+      status: { key: "review", label: "Planner review", description: "", tone: "", recommendedLabel: "Controleer intake" },
+      blockers: [],
+      nextStep: "Controleer intake",
+    }),
     mockFileInputRef: ref,
     mockUseInbox: vi.fn(),
   };
@@ -59,6 +64,7 @@ function defaultHookReturn(overrides: any = {}) {
     handleCreateOrder: mockHandleCreateOrder, handleAutoConfirmAllSafe: mockHandleAutoConfirmAllSafe, handleAutoConfirmCurrent: mockHandleAutoConfirmCurrent, handleAutoConfirmSelected: mockHandleAutoConfirmSelected, handleDelete: mockHandleDelete, handleAutoSave: mockHandleAutoSave,
     updateField: mockUpdateField, toggleRequirement: mockToggleRequirement, enrichAddresses: mockEnrichAddresses, setFormData: mockSetFormData,
     getDraftAutoConfirmAssessment: mockGetDraftAutoConfirmAssessment,
+    getDraftCaseSummary: mockGetDraftCaseSummary,
     createOrderMutation: { mutate: mockCreateOrderMutate, isPending: false },
     deleteMutation: { mutate: mockDeleteMutate, isPending: false },
     ...overrides,
@@ -141,7 +147,7 @@ describe("Inbox", () => {
   it("clicks sidebar filter buttons (setSidebarFilter)", async () => {
     const user = userEvent.setup();
     renderInbox();
-    await user.click(screen.getByText("Actie nodig"));
+    await user.click(screen.getAllByRole("button", { name: /actie nodig/i })[0]);
     expect(mockSetSidebarFilter).toHaveBeenCalledWith("actie");
   });
 
@@ -540,7 +546,8 @@ describe("Inbox", () => {
     }));
     renderInbox();
     expect(screen.getByText("Wacht op info")).toBeInTheDocument();
-    expect(screen.getByText("Reactie verstuurd")).toBeInTheDocument();
+    expect(screen.getByText("Reactie")).toBeInTheDocument();
+    expect(screen.getByText("Verstuurd")).toBeInTheDocument();
     await user.click(screen.getByText("Wacht op info"));
     expect(mockSetSidebarFilter).toHaveBeenCalledWith("concepten");
   });

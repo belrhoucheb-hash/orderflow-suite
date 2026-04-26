@@ -39,11 +39,19 @@ vi.mock("@/hooks/useFleet", () => ({
 vi.mock("@/hooks/useAddressSuggestions", () => ({
   useAddressSuggestions: () => ({ data: null }),
 }));
+vi.mock("@/hooks/useDepartments", () => ({
+  fetchDepartmentsCached: vi.fn().mockResolvedValue([{ id: "dept-1", code: "OPS", name: "Operations", color: null }]),
+}));
 vi.mock("@/components/inbox/utils", () => ({
   orderToForm: (d: any) => ({
     transportType: d.transport_type || "direct",
     pickupAddress: d.pickup_address || "",
     deliveryAddress: d.delivery_address || "",
+    pickupTimeFrom: d.pickup_time_from || "",
+    pickupTimeTo: d.pickup_time_to || "",
+    deliveryTimeFrom: d.delivery_time_from || "",
+    deliveryTimeTo: d.delivery_time_to || "",
+    intermediateStops: d.intermediate_stops || [],
     quantity: d.quantity || 0,
     unit: d.unit || "Pallets",
     weight: d.weight_kg?.toString() || "",
@@ -71,6 +79,8 @@ vi.mock("@/components/inbox/utils", () => ({
     if (!f.pickupAddress || !f.deliveryAddress || !f.quantity || !f.weight) return true;
     return false;
   },
+  getRouteStopsNotificationPayload: vi.fn().mockReturnValue(null),
+  isAddressIncomplete: (addr: string) => !addr || !/\d/.test(addr),
   isValidAddress: (addr: string) => !!addr && /\d/.test(addr) && addr.split(/[\s,]+/).filter(Boolean).length >= 2,
   penalizeIncompleteAddresses: (conf: any, _p: any, _d: any) => conf,
 }));
@@ -231,8 +241,8 @@ describe("useInbox", () => {
     const drafts = [
       {
         id: "d1", status: "DRAFT", thread_type: "new", confidence_score: 97, missing_fields: [],
-        pickup_address: "Straat 1 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam",
-        quantity: 5, unit: "Pallets", weight_kg: 500, transport_type: "direct", anomalies: [],
+        pickup_address: "Straat 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam",
+        quantity: 5, unit: "Pallets", weight_kg: 500, dimensions: "120x80x150", transport_type: "direct", anomalies: [],
       },
       {
         id: "d2", status: "DRAFT", thread_type: "update", confidence_score: 99, missing_fields: [],
@@ -259,13 +269,13 @@ describe("useInbox", () => {
     const drafts = [
       {
         id: "d1", status: "DRAFT", thread_type: "new", confidence_score: 97, missing_fields: [],
-        pickup_address: "Straat 1 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam",
-        quantity: 5, unit: "Pallets", weight_kg: 500, transport_type: "direct", anomalies: [],
+        pickup_address: "Straat 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam",
+        quantity: 5, unit: "Pallets", weight_kg: 500, dimensions: "120x80x150", transport_type: "direct", anomalies: [],
       },
       {
         id: "d2", status: "DRAFT", thread_type: "new", confidence_score: 50, missing_fields: ["pickup_address"],
         pickup_address: "", delivery_address: "Kade 8, Breda",
-        quantity: 2, unit: "Pallets", weight_kg: 200, transport_type: "direct", anomalies: [],
+        quantity: 2, unit: "Pallets", weight_kg: 200, dimensions: "120x80x150", transport_type: "direct", anomalies: [],
       },
     ];
 
@@ -341,7 +351,7 @@ describe("useInbox", () => {
 
   it("computes needsAction for orders with missing fields", async () => {
     const drafts = [
-      { id: "d1", status: "DRAFT", confidence_score: 90, missing_fields: [] },
+      { id: "d1", status: "DRAFT", confidence_score: 90, missing_fields: [], pickup_address: "Straat 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam", quantity: 5, unit: "Pallets", weight_kg: 500, dimensions: "120x80x150" },
       { id: "d2", status: "DRAFT", confidence_score: 50, missing_fields: [] },
       { id: "d3", status: "DRAFT", confidence_score: 90, missing_fields: ["weight"] },
     ];
@@ -386,7 +396,7 @@ describe("useInbox", () => {
 
   it("sidebarFilter 'klaar' shows only ready orders", async () => {
     const drafts = [
-      { id: "d1", status: "DRAFT", confidence_score: 95, missing_fields: [] },
+      { id: "d1", status: "DRAFT", confidence_score: 95, missing_fields: [], pickup_address: "Straat 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam", quantity: 5, unit: "Pallets", weight_kg: 500, dimensions: "120x80x150" },
       { id: "d2", status: "DRAFT", confidence_score: 40, missing_fields: [] },
     ];
 
@@ -409,7 +419,7 @@ describe("useInbox", () => {
 
   it("sidebarFilter 'actie' shows only orders needing action", async () => {
     const drafts = [
-      { id: "d1", status: "DRAFT", confidence_score: 95, missing_fields: [] },
+      { id: "d1", status: "DRAFT", confidence_score: 95, missing_fields: [], pickup_address: "Straat 10, Amsterdam", delivery_address: "Havenweg 2, Rotterdam", quantity: 5, unit: "Pallets", weight_kg: 500, dimensions: "120x80x150" },
       { id: "d2", status: "DRAFT", confidence_score: 40, missing_fields: [] },
     ];
 
