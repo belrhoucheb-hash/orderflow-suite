@@ -21,7 +21,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTranslation } from "react-i18next";
-import { KPIStrip } from "@/components/ui/KPIStrip";
 
 const statusStyles: Record<string, string> = {
   concept: "bg-muted text-muted-foreground border-border",
@@ -420,18 +419,6 @@ const Facturatie = () => {
         </div>
       </div>
 
-      <KPIStrip
-        columns={6}
-        items={[
-          { label: "Totaal openstaand", value: formatCurrency(stats.totaalOpenstaand), icon: Wallet },
-          { label: "Deze maand gefactureerd", value: formatCurrency(stats.dezeMaandGefactureerd), icon: Receipt },
-          { label: "Betaald deze maand", value: formatCurrency(stats.betaaldDezeMaand), icon: CheckCircle2 },
-          { label: "Nog te factureren", value: uninvoicedOrders.length, icon: FileClock },
-          { label: "Conceptfacturen", value: stats.conceptCount, icon: Receipt },
-          { label: "Vervallen", value: stats.vervallenCount, icon: AlertTriangle },
-        ]}
-      />
-
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
         <section className="card--luxe p-5">
           <div className="mb-4 flex items-center gap-2.5">
@@ -525,27 +512,50 @@ const Facturatie = () => {
         </section>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div
+          className="relative flex-1 overflow-hidden rounded-[1.35rem] border max-w-xl"
+          style={{
+            borderColor: "hsl(var(--gold) / 0.14)",
+            background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.16) 0%, hsl(var(--background)) 58%)",
+            boxShadow: "0 18px 45px -30px hsl(var(--gold-deep) / 0.28)",
+          }}
+        >
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 left-0 w-16"
+            style={{ background: "linear-gradient(90deg, hsl(var(--gold) / 0.12), transparent)" }}
+          />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--gold-deep))]" />
           <input
             placeholder="Zoek op factuurnummer of klant..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            className="w-full h-10 pl-10 pr-4 rounded-xl border border-border/50 bg-card text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring/40 transition-all"
+            className="h-12 w-full bg-transparent pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground/55 focus:outline-none"
           />
         </div>
-        <div className="flex rounded-xl border border-border/50 bg-card p-1 gap-0.5 overflow-x-auto max-w-full">
+        <div
+          className="flex max-w-full items-center gap-1 overflow-x-auto rounded-[1.35rem] border p-1.5"
+          style={{
+            borderColor: "hsl(var(--gold) / 0.14)",
+            background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.14) 0%, hsl(var(--background)) 62%)",
+            boxShadow: "0 18px 45px -32px hsl(var(--gold-deep) / 0.24)",
+          }}
+        >
           {filterOptions.map((s) => (
             <button
               key={s}
               onClick={() => { setStatusFilter(s); setPage(0); }}
               className={cn(
-                "px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 whitespace-nowrap",
+                "rounded-[1rem] px-4 py-2 text-xs font-semibold transition-all duration-150 whitespace-nowrap",
                 statusFilter === s
-                  ? "bg-foreground text-background shadow-sm"
+                  ? "text-[hsl(var(--gold-deep))] shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
+              style={statusFilter === s ? {
+                background: "linear-gradient(135deg, hsl(var(--gold-soft)) 0%, hsl(var(--gold) / 0.34) 100%)",
+                boxShadow: "inset 0 1px 0 hsl(var(--background) / 0.55), 0 10px 25px -18px hsl(var(--gold-deep) / 0.55)",
+              } : undefined}
             >
               {s === "alle" ? "Alle" : statusLabels[s]}
             </button>
