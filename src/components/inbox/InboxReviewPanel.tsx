@@ -118,6 +118,13 @@ function normaliseConfidence(raw?: number | null) {
   return raw <= 1 ? Math.round(raw * 100) : Math.round(raw);
 }
 
+function formatTimeWindow(from?: string | null, to?: string | null) {
+  if (from && to) return `${from} - ${to}`;
+  if (from) return `Vanaf ${from}`;
+  if (to) return `Tot ${to}`;
+  return "Tijdvenster ontbreekt";
+}
+
 function FieldStatePill({ tone, label }: { tone: ReviewFieldTone; label: string }) {
   const tones: Record<ReviewFieldTone, string> = {
     ok: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -279,6 +286,8 @@ export function InboxReviewPanel({
       ? Number(form.weight) * form.quantity
       : Number(form.weight)
     : 0;
+  const pickupWindowLabel = formatTimeWindow(selected.pickup_time_from, selected.pickup_time_to);
+  const deliveryWindowLabel = formatTimeWindow(selected.delivery_time_from, selected.delivery_time_to);
 
   const handlePrimaryAction = () => {
     if (autoConfirmAssessment.eligible) {
@@ -672,15 +681,12 @@ export function InboxReviewPanel({
                         {!form.pickupAddress ? "Ophaaladres ontbreekt" : "Adres onvolledig, straat en nummer nodig"}
                       </p>
                     )}
-                    {(pickupTimeNeedsAttention || selected.pickup_time_from || selected.pickup_time_to) && (
-                      <div className="mt-2 flex items-center gap-2" {...pickupTimeLinkage}>
-                        <span className="text-[11px] text-muted-foreground">
-                          {selected.pickup_time_from || "Tijd volgt"}
-                          {selected.pickup_time_to ? ` tot ${selected.pickup_time_to}` : ""}
-                        </span>
-                        {pickupTimeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
-                      </div>
-                    )}
+                    <div className="mt-2 flex items-center gap-2" {...pickupTimeLinkage}>
+                      <span className={cn("text-[11px]", pickupTimeNeedsAttention ? "text-amber-800" : "text-muted-foreground")}>
+                        {pickupWindowLabel}
+                      </span>
+                      {pickupTimeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
+                    </div>
                     {pickupTimeNeedsAttention && (
                       <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
                         <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
@@ -737,15 +743,12 @@ export function InboxReviewPanel({
                         {!form.deliveryAddress ? "Afleveradres ontbreekt" : "Adres onvolledig, straat en nummer nodig"}
                       </p>
                     )}
-                    {(deliveryTimeNeedsAttention || selected.delivery_time_from || selected.delivery_time_to) && (
-                      <div className="mt-2 flex items-center gap-2" {...deliveryTimeLinkage}>
-                        <span className="text-[11px] text-muted-foreground">
-                          {selected.delivery_time_from || "Tijd volgt"}
-                          {selected.delivery_time_to ? ` tot ${selected.delivery_time_to}` : ""}
-                        </span>
-                        {deliveryTimeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
-                      </div>
-                    )}
+                    <div className="mt-2 flex items-center gap-2" {...deliveryTimeLinkage}>
+                      <span className={cn("text-[11px]", deliveryTimeNeedsAttention ? "text-amber-800" : "text-muted-foreground")}>
+                        {deliveryWindowLabel}
+                      </span>
+                      {deliveryTimeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
+                    </div>
                     {deliveryTimeNeedsAttention && (
                       <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
                         <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
@@ -756,18 +759,16 @@ export function InboxReviewPanel({
                 </div>
               </div>
 
-              {routeNeedsAttention ? (
-                <button
-                  className="mt-4 inline-flex items-center gap-1 text-[11.5px] font-medium hover:underline"
-                  style={{
-                    fontFamily: "'Space Grotesk', sans-serif",
-                    color: "hsl(var(--gold-deep))",
-                  }}
-                >
-                  <Plus className="h-3 w-3" strokeWidth={1.75} />
-                  Tussenstop toevoegen
-                </button>
-              ) : null}
+              <button
+                className="mt-4 inline-flex items-center gap-1 text-[11.5px] font-medium hover:underline"
+                style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  color: "hsl(var(--gold-deep))",
+                }}
+              >
+                <Plus className="h-3 w-3" strokeWidth={1.75} />
+                Tussenstop toevoegen
+              </button>
             </div>
           </section>
 

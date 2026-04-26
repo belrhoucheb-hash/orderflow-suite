@@ -244,7 +244,7 @@ export function getInboxCaseStatus(
   if (!formHasErrors) {
     return {
       key: "ready_for_order",
-      label: "Klaar voor order",
+      label: "Intake compleet",
       description: "De intake is compleet en kan handmatig worden afgerond.",
       tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
       recommendedLabel: "Maak order aan",
