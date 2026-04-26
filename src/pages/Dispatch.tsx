@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -13,6 +13,22 @@ import {
   Truck,
   User,
 } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  type DragEndEvent,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -90,6 +106,57 @@ const TIMELINE_SEGMENTS = ["06:00", "09:00", "12:00", "15:00", "18:00", "21:00"]
 
 const detailCardClass = "rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)]";
 
+function DispatchLaneDrop({
+  laneId,
+  children,
+}: {
+  laneId: string;
+  children: React.ReactNode;
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `lane-drop-${laneId}`,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "rounded-[1rem] transition-colors",
+        isOver && "bg-[hsl(var(--gold-soft)/0.18)]",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SortableTripShell({
+  tripId,
+  children,
+}: {
+  tripId: string;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: tripId,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={cn(isDragging && "z-20 opacity-80")}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
 const Dispatch = () => {
   const [selectedDate, setSelectedDate] = useState(getTodayISO());
   const [statusFilter, setStatusFilter] = useState<string>("alle");
@@ -100,6 +167,8 @@ const Dispatch = () => {
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; errors: string[] } | null>(null);
   const [confirmDispatch, setConfirmDispatch] = useState<{ tripId: string; tripNumber: number } | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<{ tripId: string; tripNumber: number; newStatus: TripStatus } | null>(null);
+  const [dragLaneMap, setDragLaneMap] = useState<Record<string, string>>({});
+  const [laneOrders, setLaneOrders] = useState<Record<string, string[]>>({});
 
   const { data: trips = [], isLoading, isError, refetch } = useTrips(selectedDate);
   useTripsRealtime();
@@ -107,6 +176,7 @@ const Dispatch = () => {
   const { data: vehicles = [] } = useVehicles();
   const updateStatus = useUpdateTripStatus();
   const dispatchTrip = useDispatchTrip();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const driverMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -161,7 +231,7 @@ const Dispatch = () => {
     filtered[0] ??
     null;
 
-  const boardLanes = useMemo(() => {
+  const baseBoardLanes = useMemo(() => {
     const lanes = new Map<string, { id: string; title: string; subtitle: string; trips: Trip[] }>();
 
     for (const trip of boardTrips) {
@@ -195,6 +265,85 @@ const Dispatch = () => {
         return aTime - bTime;
       });
   }, [boardTrips, driverMap, vehicleMap]);
+
+  const baseLaneByTrip = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const lane of baseBoardLanes) {
+      for (const trip of lane.trips) {
+        map.set(trip.id, lane.id);
+      }
+    }
+    return map;
+  }, [baseBoardLanes]);
+
+  const currentLaneByTrip = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const trip of boardTrips) {
+      map.set(trip.id, dragLaneMap[trip.id] ?? baseLaneByTrip.get(trip.id) ?? "unassigned");
+    }
+    return map;
+  }, [baseLaneByTrip, boardTrips, dragLaneMap]);
+
+  useEffect(() => {
+    const tripIds = new Set(boardTrips.map((trip) => trip.id));
+
+    setDragLaneMap((prev) => {
+      const next: Record<string, string> = {};
+      let changed = false;
+
+      for (const trip of boardTrips) {
+        const baseLaneId = baseLaneByTrip.get(trip.id);
+        const current = prev[trip.id];
+        if (current && current !== baseLaneId) {
+          next[trip.id] = current;
+        }
+      }
+
+      if (Object.keys(next).length !== Object.keys(prev).length) changed = true;
+      return changed ? next : prev;
+    });
+
+    setLaneOrders((prev) => {
+      const next: Record<string, string[]> = {};
+
+      for (const lane of baseBoardLanes) {
+        const laneTripIds = boardTrips
+          .filter((trip) => (dragLaneMap[trip.id] ?? baseLaneByTrip.get(trip.id)) === lane.id)
+          .map((trip) => trip.id);
+
+        const preserved = (prev[lane.id] || []).filter((tripId) => laneTripIds.includes(tripId));
+        const appended = laneTripIds.filter((tripId) => !preserved.includes(tripId));
+        next[lane.id] = [...preserved, ...appended];
+      }
+
+      for (const laneId of Object.keys(prev)) {
+        if (!next[laneId]) {
+          const leftover = prev[laneId].filter((tripId) => tripIds.has(tripId));
+          if (leftover.length > 0) next[laneId] = leftover;
+        }
+      }
+
+      return next;
+    });
+  }, [baseBoardLanes, baseLaneByTrip, boardTrips, dragLaneMap]);
+
+  const boardLanes = useMemo(() => {
+    const tripMap = new Map(boardTrips.map((trip) => [trip.id, trip]));
+    return baseBoardLanes.map((lane) => {
+      const orderedIds = laneOrders[lane.id] || [];
+      const fallbackIds = boardTrips
+        .filter((trip) => currentLaneByTrip.get(trip.id) === lane.id)
+        .map((trip) => trip.id);
+      const laneTripIds = orderedIds.length > 0 ? orderedIds : fallbackIds;
+
+      return {
+        ...lane,
+        trips: laneTripIds
+          .map((tripId) => tripMap.get(tripId))
+          .filter((trip): trip is Trip => Boolean(trip)),
+      };
+    });
+  }, [baseBoardLanes, boardTrips, currentLaneByTrip, laneOrders]);
 
   const goToPrevDay = () => {
     const d = new Date(selectedDate + "T00:00:00");
@@ -284,6 +433,47 @@ const Dispatch = () => {
     }
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const activeId = String(event.active.id);
+    const overId = event.over ? String(event.over.id) : null;
+    if (!overId) return;
+
+    const sourceLaneId = currentLaneByTrip.get(activeId);
+    const targetLaneId = overId.startsWith("lane-drop-")
+      ? overId.replace("lane-drop-", "")
+      : currentLaneByTrip.get(overId);
+
+    if (!sourceLaneId || !targetLaneId) return;
+
+    setLaneOrders((prev) => {
+      const next = { ...prev };
+      const sourceItems = [...(next[sourceLaneId] || [])];
+      const targetItems = sourceLaneId === targetLaneId ? sourceItems : [...(next[targetLaneId] || [])];
+
+      const sourceIndex = sourceItems.indexOf(activeId);
+      if (sourceIndex === -1) return prev;
+
+      if (sourceLaneId === targetLaneId) {
+        const targetIndex = overId.startsWith("lane-drop-") ? sourceItems.length - 1 : targetItems.indexOf(overId);
+        if (targetIndex === -1) return prev;
+        next[sourceLaneId] = arrayMove(sourceItems, sourceIndex, targetIndex);
+        return next;
+      }
+
+      sourceItems.splice(sourceIndex, 1);
+      const insertionIndex = overId.startsWith("lane-drop-") ? targetItems.length : targetItems.indexOf(overId);
+      targetItems.splice(insertionIndex < 0 ? targetItems.length : insertionIndex, 0, activeId);
+
+      next[sourceLaneId] = sourceItems;
+      next[targetLaneId] = targetItems;
+      return next;
+    });
+
+    if (sourceLaneId !== targetLaneId) {
+      setDragLaneMap((prev) => ({ ...prev, [activeId]: targetLaneId }));
+    }
+  };
+
   const renderTripAction = (trip: Trip) => {
     const nextStatuses = TRIP_TRANSITIONS[trip.dispatch_status] || [];
     if (trip.dispatch_status === "CONCEPT" || trip.dispatch_status === "VERZENDKLAAR") {
@@ -337,13 +527,13 @@ const Dispatch = () => {
         type="button"
         onClick={() => setSelectedTripId(trip.id)}
         className={cn(
-          "w-full rounded-[1.25rem] border p-4 text-left transition-all",
+          "w-full rounded-[1.15rem] border text-left transition-all",
           isSelected
             ? "border-[hsl(var(--gold)/0.24)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.32),hsl(var(--background)))] shadow-[0_18px_40px_-28px_hsl(var(--gold-deep)/0.38)]"
             : "border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--background))] hover:bg-[hsl(var(--gold-soft)/0.08)]",
         )}
       >
-        <div className="flex items-start gap-3">
+        <div className={cn("flex items-start gap-3", compact ? "p-3.5" : "p-3")}>
           {(trip.dispatch_status === "CONCEPT" || trip.dispatch_status === "VERZENDKLAAR") && (
             <div
               className="pt-0.5"
@@ -356,16 +546,26 @@ const Dispatch = () => {
             </div>
           )}
 
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.2)]">
-            <Truck className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+          <div className={cn(
+            "shrink-0 rounded-[0.9rem] border border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.2)]",
+            compact ? "flex h-9 w-9 items-center justify-center" : "flex h-8 w-8 items-center justify-center",
+          )}>
+            <Truck className={cn("text-[hsl(var(--gold-deep))]", compact ? "h-4 w-4" : "h-3.5 w-3.5")} />
           </div>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+                <div className="flex items-center gap-2">
+                  <p className={cn("font-semibold text-foreground", compact ? "text-sm" : "text-[13px]")} style={{ fontFamily: "var(--font-display)" }}>
                   Rit #{trip.trip_number}
-                </p>
+                  </p>
+                  {!compact && (
+                    <span className="rounded-full bg-[hsl(var(--gold-soft)/0.24)] px-2 py-0.5 text-[10px] font-medium text-[hsl(var(--gold-deep))]">
+                      {vehicle ? vehicle.plate : "Geen voertuig"}
+                    </span>
+                  )}
+                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   <Badge variant="outline" className={cn("border-0 text-[10px]", statusInfo.color)}>
                     {statusInfo.label}
@@ -386,7 +586,7 @@ const Dispatch = () => {
               </div>
             </div>
 
-            <div className={cn("mt-3 grid gap-2 text-xs text-muted-foreground", compact ? "grid-cols-1" : "md:grid-cols-2")}>
+            <div className={cn("mt-2.5 grid gap-x-3 gap-y-1.5 text-xs text-muted-foreground", compact ? "grid-cols-1" : "grid-cols-2")}>
               <div className="flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5" />
                 <span>{formatTime(trip.planned_start_time)}</span>
@@ -398,7 +598,7 @@ const Dispatch = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Truck className="h-3.5 w-3.5" />
-                <span>{vehicle ? `${vehicle.name} (${vehicle.plate})` : "Nog geen voertuig"}</span>
+                <span>{vehicle ? vehicle.name : "Nog geen voertuig"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <User className="h-3.5 w-3.5" />
@@ -418,6 +618,15 @@ const Dispatch = () => {
   const selectedCounts = selectedTrip ? getStopCounts(selectedTrip) : null;
   const selectedVehicle = selectedTrip?.vehicle_id ? vehicleMap.get(selectedTrip.vehicle_id) : null;
   const selectedDriver = selectedTrip?.driver_id ? driverMap.get(selectedTrip.driver_id) : null;
+  const nextStop = selectedStops
+    .slice()
+    .sort((a, b) => a.stop_sequence - b.stop_sequence)
+    .find((stop) => !["AFGELEVERD", "MISLUKT", "OVERGESLAGEN"].includes(stop.stop_status));
+  const firstStop = selectedStops.slice().sort((a, b) => a.stop_sequence - b.stop_sequence)[0];
+  const lastStop = selectedStops.slice().sort((a, b) => a.stop_sequence - b.stop_sequence)[selectedStops.length - 1];
+  const progressPercent = selectedCounts && selectedCounts.total > 0
+    ? Math.round((selectedCounts.done / selectedCounts.total) * 100)
+    : 0;
 
   return (
     <div className="page-container space-y-5">
@@ -572,31 +781,46 @@ const Dispatch = () => {
               </Link>
             </div>
           ) : (
-            <div className="space-y-4">
-              {boardLanes.map((lane) => (
-                <div
-                  key={lane.id}
-                  className="rounded-[1.25rem] border border-[hsl(var(--gold)/0.1)] bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--gold-soft)/0.08))] p-3"
-                >
-                  <div className="mb-3 flex items-center justify-between gap-3 px-1">
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">{lane.title}</h3>
-                      <p className="text-xs text-muted-foreground">{lane.subtitle}</p>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <div className="space-y-4">
+                {boardLanes.map((lane) => (
+                  <div
+                    key={lane.id}
+                    className="rounded-[1.25rem] border border-[hsl(var(--gold)/0.1)] bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--gold-soft)/0.08))] p-3"
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">{lane.title}</h3>
+                        <p className="text-xs text-muted-foreground">{lane.subtitle}</p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.2)] text-[hsl(var(--gold-deep))]"
+                      >
+                        {lane.trips.length}
+                      </Badge>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className="border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.2)] text-[hsl(var(--gold-deep))]"
-                    >
-                      {lane.trips.length}
-                    </Badge>
-                  </div>
 
-                  <div className="space-y-3">
-                    {lane.trips.map((trip) => renderTripCard(trip))}
+                    <DispatchLaneDrop laneId={lane.id}>
+                      <SortableContext items={lane.trips.map((trip) => trip.id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2.5">
+                          {lane.trips.map((trip) => (
+                            <SortableTripShell key={trip.id} tripId={trip.id}>
+                              {renderTripCard(trip)}
+                            </SortableTripShell>
+                          ))}
+                          {lane.trips.length === 0 && (
+                            <div className="rounded-[1rem] border border-dashed border-[hsl(var(--gold)/0.14)] px-4 py-6 text-center text-xs text-muted-foreground">
+                              Sleep hier een rit naartoe
+                            </div>
+                          )}
+                        </div>
+                      </SortableContext>
+                    </DispatchLaneDrop>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </DndContext>
           )}
         </section>
 
@@ -636,6 +860,12 @@ const Dispatch = () => {
                   {selectedCounts && selectedCounts.failed > 0 && (
                     <p className="mt-1 text-xs text-red-600">{selectedCounts.failed} probleemstop(s)</p>
                   )}
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-[hsl(var(--gold-soft)/0.2)]">
+                    <div
+                      className="h-2 rounded-full bg-[linear-gradient(90deg,hsl(var(--gold)),hsl(var(--gold-deep)))] transition-all"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -654,6 +884,28 @@ const Dispatch = () => {
                       {selectedTrip.notes}
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-foreground">Routebeeld</h3>
+                  <span className="text-xs text-muted-foreground">{progressPercent}% afgerond</span>
+                </div>
+                <div className="space-y-3">
+                  <div className="rounded-[0.95rem] bg-[hsl(var(--gold-soft)/0.1)] px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Van</p>
+                    <p className="mt-1 text-sm text-foreground">{firstStop?.planned_address || "Nog geen vertrekpunt"}</p>
+                  </div>
+                  <div className="rounded-[0.95rem] bg-[hsl(var(--gold-soft)/0.1)] px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Volgende stop</p>
+                    <p className="mt-1 text-sm text-foreground">{nextStop?.planned_address || "Alle stops afgerond"}</p>
+                    {nextStop?.planned_time && <p className="mt-1 text-xs text-muted-foreground">Gepland om {formatTime(nextStop.planned_time)}</p>}
+                  </div>
+                  <div className="rounded-[0.95rem] bg-[hsl(var(--gold-soft)/0.1)] px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Naar</p>
+                    <p className="mt-1 text-sm text-foreground">{lastStop?.planned_address || "Nog geen eindpunt"}</p>
+                  </div>
                 </div>
               </div>
 
