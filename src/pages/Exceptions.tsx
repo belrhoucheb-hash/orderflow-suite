@@ -22,7 +22,6 @@ import {
   ReceiptText,
   ChevronDown,
   Play,
-  Filter,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -783,9 +782,16 @@ const Exceptions = () => {
     { key: "all", label: "Alles" },
     { key: "critical", label: "Kritiek" },
     { key: "today", label: "Vandaag" },
-    { key: "copilot", label: "Met copilot" },
+    { key: "copilot", label: "Met voorstel" },
     { key: "open", label: "Open werk" },
   ];
+
+  const formatFocusCount = (value: number) => {
+    if (value <= 0) return null;
+    if (value > 999) return "999+";
+    if (value > 99) return "99+";
+    return String(value);
+  };
 
   const handleSaveSuggestion = async (exc: ExceptionItem, suggestion: ExceptionCopilotSuggestion) => {
     const payload: CreateExceptionActionInput = {
@@ -823,7 +829,7 @@ const Exceptions = () => {
 
   const summaryCards = [
     {
-      label: "Direct oppakken",
+      label: "Directe aandacht",
       value: focusCounts.critical,
       hint: "kritieke uitzonderingen",
       icon: AlertTriangle,
@@ -833,9 +839,9 @@ const Exceptions = () => {
       target: "critical" as const,
     },
     {
-      label: "Vandaag",
+      label: "Actueel",
       value: focusCounts.today,
-      hint: "nieuw of actueel",
+      hint: "vandaag gedetecteerd",
       icon: Clock,
       tone: "text-amber-600",
       surface: "bg-amber-50/80 dark:bg-amber-950/30",
@@ -843,9 +849,9 @@ const Exceptions = () => {
       target: "today" as const,
     },
     {
-      label: "Copilot klaar",
+      label: "Voorstel beschikbaar",
       value: focusCounts.copilot,
-      hint: "met voorstel",
+      hint: "met aanbevolen vervolgstap",
       icon: Bot,
       tone: "text-[hsl(var(--gold-deep))]",
       surface: "bg-[hsl(var(--gold-soft)/0.3)]",
@@ -880,40 +886,45 @@ const Exceptions = () => {
               Uitzonderingen
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Werk vanuit focus, context en aanbevolen acties in plaats van losse alarmen.
+              Beoordeel uitzonderingen op basis van prioriteit, context en aanbevolen vervolgstappen.
             </p>
           </div>
         </div>
       </div>
 
       <div className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)]">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              Planner focus
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Wissel van werkmodus zonder je triagefeed kwijt te raken.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1">
-            {focusOptions.map((option) => (
+        <div className="flex flex-wrap gap-2 rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1">
+          {focusOptions.map((option) => {
+            const countLabel = formatFocusCount(focusCounts[option.key]);
+
+            return (
               <button
                 key={option.key}
                 type="button"
                 onClick={() => setFocus(option.key)}
                 className={cn(
-                  "rounded-[0.8rem] px-3.5 py-2 text-xs font-medium transition-all whitespace-nowrap",
+                  "inline-flex min-h-10 items-center gap-2 rounded-[0.85rem] px-3.5 py-2 text-xs font-medium transition-all whitespace-nowrap",
                   focus === option.key
                     ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {option.label} ({focusCounts[option.key]})
+                <span>{option.label}</span>
+                {countLabel && (
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                      focus === option.key
+                        ? "bg-[hsl(var(--gold)/0.18)] text-[hsl(var(--gold-deep))]"
+                        : "bg-[hsl(var(--background)/0.85)] text-foreground/80 shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]",
+                    )}
+                  >
+                    {countLabel}
+                  </span>
+                )}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
 
@@ -921,9 +932,9 @@ const Exceptions = () => {
         <section className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)] xl:sticky xl:top-4 xl:self-start">
           <div className="mb-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
-              Queues
+              Prioriteiten
             </p>
-            <h2 className="mt-1 text-sm font-semibold text-foreground">Wat vraagt nu aandacht</h2>
+            <h2 className="mt-1 text-sm font-semibold text-foreground">Aandachtspunten</h2>
           </div>
 
           <div className="space-y-3">
@@ -954,7 +965,7 @@ const Exceptions = () => {
           </div>
 
           <div className="mt-4 rounded-[1.15rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3">
-            <p className="text-xs font-medium text-foreground">Bronnen in beeld</p>
+            <p className="text-xs font-medium text-foreground">Bronoverzicht</p>
             <div className="mt-3 space-y-2 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5" /> Delivery exceptions</span>
@@ -965,7 +976,7 @@ const Exceptions = () => {
                 <span className="font-medium text-foreground">{counts.anomalies ?? 0}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-2"><Package className="h-3.5 w-3.5" /> Intake / data</span>
+                <span className="flex items-center gap-2"><Package className="h-3.5 w-3.5" /> Intake en gegevens</span>
                 <span className="font-medium text-foreground">{counts.missingData + counts.sla}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -981,12 +992,12 @@ const Exceptions = () => {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
-                  Feed
+                  Werkvoorraad
                 </p>
-                <h2 className="mt-1 text-sm font-semibold text-foreground">Exception workbench</h2>
+                <h2 className="mt-1 text-sm font-semibold text-foreground">Uitzonderingenoverzicht</h2>
               </div>
               <span className="text-xs text-muted-foreground">
-                {filteredExceptions.length} zichtbaar van {exceptions.length}
+                {filteredExceptions.length} getoond van {exceptions.length}
               </span>
             </div>
           </div>
@@ -995,7 +1006,7 @@ const Exceptions = () => {
             <EmptyState
               icon={CheckCircle2}
               title={exceptions.length === 0 ? "Geen uitzonderingen" : "Geen uitzonderingen in deze focus"}
-              description={exceptions.length === 0 ? "Alles loopt volgens planning" : "Kies een andere focus om meer werkitems te zien"}
+              description={exceptions.length === 0 ? "Er zijn momenteel geen uitzonderingen die opvolging vereisen." : "Kies een andere focus om aanvullende uitzonderingen te tonen."}
             />
           ) : (
             <div className="divide-y divide-[hsl(var(--gold)/0.08)]">

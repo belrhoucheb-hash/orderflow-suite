@@ -88,8 +88,9 @@ export function AppSidebar() {
   const chauffeurItems = useMemo(() => toItems(chauffeurItemsDef), [t, i18n.language]);
 
   const exceptionBadgeValue = exceptionCount?.total ?? 0;
-  const showExceptionCount = exceptionBadgeValue >= 4;
-  const showExceptionDot = exceptionBadgeValue > 0 && !showExceptionCount;
+  const isExceptionsActive = location.pathname.startsWith("/exceptions");
+  const showExceptionCount = !isExceptionsActive && exceptionBadgeValue >= 4;
+  const showExceptionDot = !isExceptionsActive && exceptionBadgeValue > 0 && !showExceptionCount;
 
   useEffect(() => {
     const savedGroups = localStorage.getItem(groupStorageKey);

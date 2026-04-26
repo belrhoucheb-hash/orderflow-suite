@@ -72,8 +72,9 @@ export function MobileNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const { data: exceptionCount } = useExceptionCount();
   const exceptionBadgeValue = exceptionCount?.total ?? 0;
-  const showExceptionCount = exceptionBadgeValue >= 4;
-  const showExceptionDot = exceptionBadgeValue > 0 && !showExceptionCount;
+  const isExceptionsActive = location.pathname.startsWith("/exceptions");
+  const showExceptionCount = !isExceptionsActive && exceptionBadgeValue >= 4;
+  const showExceptionDot = !isExceptionsActive && exceptionBadgeValue > 0 && !showExceptionCount;
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
