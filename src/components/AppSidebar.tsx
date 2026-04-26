@@ -316,24 +316,19 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter
-        className="mx-3 mb-3 rounded-2xl border px-3 py-3"
-        style={{
-          borderColor: "hsl(218 24% 18%)",
-          background: "linear-gradient(180deg, hsl(222 24% 12%) 0%, hsl(221 22% 11%) 100%)",
-        }}
+        className="mx-3 mb-3 px-1 py-2"
       >
-        <div
-          className={cn(
-            "rounded-[22px] border p-2.5",
-            collapsed ? "space-y-2" : "space-y-3",
-          )}
-          style={{
-            borderColor: "hsl(var(--gold) / 0.1)",
-            background: "linear-gradient(180deg, hsl(222 23% 14%) 0%, hsl(220 22% 12%) 100%)",
-            boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.03)",
-          }}
-        >
-          <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
+        <div className={cn("space-y-2.5", collapsed && "space-y-2")}>
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-2xl px-2 py-2.5",
+              collapsed && "justify-center px-1.5",
+            )}
+            style={{
+              background: "linear-gradient(180deg, hsl(220 18% 14%) 0%, hsl(220 18% 12%) 100%)",
+              boxShadow: "inset 0 0 0 1px hsl(0 0% 100% / 0.04)",
+            }}
+          >
             <div
               className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-[11px] font-semibold text-white"
               style={{
@@ -357,42 +352,36 @@ export function AppSidebar() {
           </div>
 
           {!collapsed && (
-            <div
-              className="flex items-center gap-1 rounded-2xl border p-1"
-              style={{
-                borderColor: "hsl(0 0% 100% / 0.05)",
-                background: "hsl(220 18% 13% / 0.72)",
-              }}
-            >
+            <div className="grid grid-cols-3 gap-1.5">
               <button
                 onClick={() => navigate("/settings")}
-                className="group inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[11px] font-medium text-white/70 transition-all hover:bg-white/5 hover:text-white"
+                className="group inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[10.5px] font-medium text-white/68 transition-all hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-white"
                 aria-label="Instellingen"
               >
-                <Settings className="h-3.5 w-3.5" />
-                <span>Instellingen</span>
+                <Settings className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Instellingen</span>
               </button>
 
               <button
                 onClick={toggleTheme}
-                className="group inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[11px] font-medium transition-all hover:text-white"
+                className="group inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[10.5px] font-medium transition-all hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-white"
                 style={{
                   color: isDark ? "hsl(var(--gold-light))" : "hsl(0 0% 100% / 0.7)",
                   background: isDark ? "hsl(var(--gold-soft) / 0.14)" : "transparent",
                 }}
                 aria-label={isDark ? "Licht thema" : "Donker thema"}
               >
-                {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                <span>{isDark ? "Licht" : "Dark mode"}</span>
+                {isDark ? <Sun className="h-3.5 w-3.5 shrink-0" /> : <Moon className="h-3.5 w-3.5 shrink-0" />}
+                <span className="truncate">{isDark ? "Licht" : "Dark mode"}</span>
               </button>
 
               <button
                 onClick={async () => { await signOut(); navigate("/login"); }}
-                className="group inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[11px] font-medium text-white/56 transition-all hover:bg-[hsl(0_84%_65%/0.1)] hover:text-white"
+                className="group inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[10.5px] font-medium text-white/56 transition-all hover:bg-[hsl(0_84%_65%/0.1)] hover:text-white"
                 aria-label="Uitloggen"
               >
-                <LogOut className="h-3.5 w-3.5" />
-                <span>Uitloggen</span>
+                <LogOut className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Uitloggen</span>
               </button>
             </div>
           )}
