@@ -51,6 +51,7 @@ import { WebhookSettings } from "@/components/settings/WebhookSettings";
 import { ApiTokenSettings } from "@/components/settings/ApiTokenSettings";
 import { ConnectorCatalog } from "@/components/settings/ConnectorCatalog";
 import { ConnectorDetail } from "@/components/settings/ConnectorDetail";
+import { ExceptionRulesSettings } from "@/components/settings/ExceptionRulesSettings";
 import { useTranslation } from "react-i18next";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DEFAULT_SLA_SETTINGS, normalizeSlaSettings } from "@/lib/slaSettings";
@@ -183,6 +184,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { value: "algemeen", label: "Algemeen" },
       { value: "sla", label: "SLA" },
+      { value: "uitzonderingen", label: "Uitzonderingen" },
       { value: "branding", label: "Branding" },
       { value: "notificaties", label: "Notificaties" },
     ],
@@ -603,6 +605,7 @@ const Settings = () => {
     if (location.pathname.includes("/stamgegevens")) return "stamgegevens";
     if (location.pathname.includes("/rooster-types")) return "rooster-types";
     if (location.pathname.includes("/sla")) return "sla";
+    if (location.pathname.includes("/uitzonderingen")) return "uitzonderingen";
     if (location.pathname.includes("/branding")) return "branding";
     if (location.pathname.includes("/notificaties")) return "notificaties";
     if (location.pathname.includes("/sms")) return "sms";
@@ -1318,6 +1321,10 @@ const Settings = () => {
               </div>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="uitzonderingen" className="outline-none">
+          <ExceptionRulesSettings />
         </TabsContent>
 
         <TabsContent value="notificaties" className="outline-none">

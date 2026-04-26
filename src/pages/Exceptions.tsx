@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useFleetVehicles } from "@/hooks/useFleet";
+import { useFleetVehicles, useVehicleUtilization } from "@/hooks/useFleet";
 import { useAnomalies, useResolveAnomaly, anomalyToException } from "@/hooks/useAnomalyDetection";
 import { Link } from "react-router-dom";
 import {
@@ -34,6 +34,12 @@ import { toast } from "sonner";
 import { useEffect, useMemo as useReactMemo, useState } from "react";
 import { useLoadSettings } from "@/hooks/useSettings";
 import { normalizeSlaSettings } from "@/lib/slaSettings";
+import {
+  anomalyPassesSeverity,
+  isDeliverySeverityEnabled,
+  isDeliveryTypeEnabled,
+  normalizeExceptionSettings,
+} from "@/lib/exceptionSettings";
 import {
   useCreateExceptionAction,
   useExceptionActions,
@@ -344,10 +350,12 @@ const Exceptions = () => {
   const [selectedExceptionId, setSelectedExceptionId] = useState<string | null>(null);
   const { data: orderData, isLoading: ordersLoading } = useExceptionOrders();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useFleetVehicles();
+  const { data: utilization = {} } = useVehicleUtilization();
   const { data: deliveryExceptions = [], isLoading: dexLoading } = useDeliveryExceptions();
   const { data: anomalies = [], isLoading: anomaliesLoading } = useAnomalies({ unresolvedOnly: true });
   const { data: exceptionActions = [] } = useExceptionActions({ status: "ALL" });
   const { data: rawSlaSettings } = useLoadSettings("sla");
+  const { data: rawExceptionSettings } = useLoadSettings("exceptions");
   const createExceptionAction = useCreateExceptionAction();
   const updateExceptionActionStatus = useUpdateExceptionActionStatus();
   const executeExceptionAction = useExecuteExceptionAction();
@@ -356,8 +364,13 @@ const Exceptions = () => {
 
   const isLoading = ordersLoading || vehiclesLoading || dexLoading || anomaliesLoading;
   const slaSettings = normalizeSlaSettings(rawSlaSettings as Record<string, unknown>);
+  const exceptionSettings = normalizeExceptionSettings(rawExceptionSettings as Record<string, unknown>);
 
-  const { exceptions, counts } = useMemo(() => {
+  const getUtilization = (vehicleId: string) => {
+    return (utilization as Record<string, number>)[vehicleId] ?? 0;
+  };
+
+  const { exceptions: rawExceptions } = useMemo(() => {
     if (!orderData) return { exceptions: [] as ExceptionItem[], counts: { delays: 0, missingData: 0, capacity: 0, sla: 0, delivery: 0 } };
 
     const items: ExceptionItem[] = [];
@@ -520,6 +533,182 @@ const Exceptions = () => {
       },
     };
   }, [anomalies, deliveryExceptions, orderData, slaSettings.deadlineHours, slaSettings.enabled, vehicles]);
+
+  const { exceptions, counts } = useMemo(() => {
+    if (!orderData) {
+      return {
+        exceptions: [] as ExceptionItem[],
+        counts: { delays: 0, missingData: 0, capacity: 0, sla: 0, delivery: 0, anomalies: 0 },
+      };
+    }
+
+    const now = Date.now();
+    const slaDeadlineMs = slaSettings.deadlineHours * 60 * 60 * 1000;
+    const delayThresholdMs = exceptionSettings.delayThresholdHours * 60 * 60 * 1000;
+    const severityToUrgency: Record<string, Urgency> = {
+      CRITICAL: "critical",
+      HIGH: "critical",
+      MEDIUM: "warning",
+      LOW: "info",
+    };
+    const dexTypeMap: Record<string, ExceptionType> = {
+      DELAY: "Vertraging",
+      MISSING_DATA: "Data mist",
+      CAPACITY: "Capaciteit",
+      SLA_BREACH: "SLA",
+      PREDICTED_DELAY: "Voorspelde vertraging",
+    };
+
+    const filteredDelivery = deliveryExceptions
+      .filter(
+        (dex) =>
+          exceptionSettings.deliveryExceptionsEnabled &&
+          isDeliveryTypeEnabled(exceptionSettings, dex.exception_type) &&
+          isDeliverySeverityEnabled(exceptionSettings, dex.severity),
+      )
+      .map((dex) => {
+        const isPredicted = dex.exception_type === "PREDICTED_DELAY";
+        const tripId = dex.trip_id;
+        return {
+          id: dex.id,
+          type: dexTypeMap[dex.exception_type] || "Vertraging",
+          urgency: isPredicted ? "info" : (severityToUrgency[dex.severity] || "warning"),
+          orderNumber: dex.order_id ? "Order" : "-",
+          clientName: "",
+          description: dex.description,
+          detectedAt: new Date(dex.created_at),
+          actionLabel: isPredicted ? "Bekijk rit" : dex.order_id ? "Bekijk order" : "Details",
+          actionTo: isPredicted
+            ? (tripId ? `/dispatch?trip=${tripId}` : "/dispatch")
+            : dex.order_id
+              ? `/orders/${dex.order_id}`
+              : "/exceptions",
+          source: "db" as const,
+        };
+      });
+
+    const missingItems = (exceptionSettings.missingDataEnabled
+      ? orderData.drafts.filter(
+          (o: any) => o.missing_fields && Array.isArray(o.missing_fields) && o.missing_fields.length > 0,
+        )
+      : []
+    ).map((o: any) => ({
+      id: `missing-${o.id}`,
+      type: "Data mist" as ExceptionType,
+      urgency: "warning" as Urgency,
+      orderNumber: `#${o.order_number}`,
+      clientName: o.client_name || "Onbekend",
+      description: `Ontbrekende velden: ${(o.missing_fields as string[]).join(", ")}`,
+      detectedAt: new Date(o.received_at || o.created_at),
+      actionLabel: "Ga naar inbox",
+      actionTo: "/inbox",
+      source: "adhoc" as const,
+    }));
+
+    const slaItems = orderData.drafts
+      .filter((o: any) => {
+        const receivedAt = o.received_at || o.created_at;
+        return exceptionSettings.slaEnabled && slaSettings.enabled && receivedAt && now - new Date(receivedAt).getTime() > slaDeadlineMs;
+      })
+      .map((o: any) => ({
+        id: `sla-${o.id}`,
+        type: "SLA" as ExceptionType,
+        urgency: "critical" as Urgency,
+        orderNumber: `#${o.order_number}`,
+        clientName: o.client_name || "Onbekend",
+        description: `Order al ${timeAgo(new Date(o.received_at || o.created_at))} in DRAFT - SLA risico`,
+        detectedAt: new Date(o.received_at || o.created_at),
+        actionLabel: "Ga naar inbox",
+        actionTo: "/inbox",
+        source: "adhoc" as const,
+      }));
+
+    const delayItems = (exceptionSettings.delayEnabled
+      ? orderData.inTransit.filter(
+          (o: any) => now - new Date(o.created_at).getTime() > delayThresholdMs,
+        )
+      : []
+    ).map((o: any) => ({
+      id: `delay-${o.id}`,
+      type: "Vertraging" as ExceptionType,
+      urgency: "critical" as Urgency,
+      orderNumber: `#${o.order_number}`,
+      clientName: o.client_name || "Onbekend",
+      description: `Order al meer dan ${exceptionSettings.delayThresholdHours}u onderweg`,
+      detectedAt: new Date(o.created_at),
+      actionLabel: "Bekijk order",
+      actionTo: `/orders/${o.id}`,
+      source: "adhoc" as const,
+    }));
+
+    const capacityItems = (exceptionSettings.capacityEnabled
+      ? vehicles.filter((v) => getUtilization(v.id) >= exceptionSettings.capacityUtilizationThreshold)
+      : []
+    ).map((v) => ({
+      id: `cap-${v.id}`,
+      type: "Capaciteit" as ExceptionType,
+      urgency: "warning" as Urgency,
+      orderNumber: v.code,
+      clientName: v.name,
+      description: `Voertuig ${v.plate} op ${getUtilization(v.id)}% benutting`,
+      detectedAt: new Date(),
+      actionLabel: "Bekijk voertuig",
+      actionTo: `/vloot/${v.id}`,
+      source: "adhoc" as const,
+    }));
+
+    const anomalyItems = anomalies
+      .filter((a) => exceptionSettings.anomaliesEnabled && anomalyPassesSeverity(exceptionSettings, a.severity))
+      .map((a) => {
+        const exc = anomalyToException(a);
+        return {
+          id: exc.id,
+          type: (exc.type === "Prijs" || exc.type === "Timing" || exc.type === "Compliance" || exc.type === "Patroon")
+            ? "Data mist" as ExceptionType
+            : exc.type === "Capaciteit"
+              ? "Capaciteit" as ExceptionType
+              : "Vertraging" as ExceptionType,
+          urgency: exc.urgency,
+          orderNumber: exc.orderNumber,
+          clientName: exc.clientName,
+          description: exc.description,
+          detectedAt: exc.detectedAt,
+          actionLabel: exc.actionLabel,
+          actionTo: exc.actionTo,
+          source: "db" as const,
+        };
+      });
+
+    const items = [...filteredDelivery, ...missingItems, ...slaItems, ...delayItems, ...capacityItems, ...anomalyItems];
+    const urgencyOrder: Record<Urgency, number> = { critical: 0, warning: 1, info: 2 };
+    items.sort((a, b) => {
+      const uo = urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
+      if (uo !== 0) return uo;
+      return a.detectedAt.getTime() - b.detectedAt.getTime();
+    });
+
+    return {
+      exceptions: items,
+      counts: {
+        delays: delayItems.length,
+        missingData: missingItems.length,
+        capacity: capacityItems.length,
+        sla: slaItems.length,
+        delivery: filteredDelivery.length,
+        anomalies: anomalyItems.length,
+      },
+    };
+  }, [
+    anomalies,
+    deliveryExceptions,
+    exceptionSettings,
+    orderData,
+    rawExceptions,
+    slaSettings.deadlineHours,
+    slaSettings.enabled,
+    utilization,
+    vehicles,
+  ]);
 
   const actionsBySource = useReactMemo(() => {
     const map = new Map<string, ExceptionAction[]>();
