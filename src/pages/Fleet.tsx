@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Plus,
   Truck,
@@ -35,6 +35,7 @@ import { QueryError } from "@/components/QueryError";
 import { TYPE_LABELS, TYPE_ORDER, STATUS_CONFIG } from "@/lib/constants/vehicleConfig";
 import { cn } from "@/lib/utils";
 import VoertuigcheckHistorie from "@/pages/VoertuigcheckHistorie";
+import { toast } from "sonner";
 
 type FleetStatusSection = "beschikbaar" | "onderweg" | "onderhoud" | "defect";
 
@@ -75,10 +76,6 @@ const STATUS_SECTIONS: Array<{
   },
 ];
 
-function statusPriority(status: string) {
-  return STATUS_SECTIONS.findIndex((section) => section.key === status);
-}
-
 function sortVehicles(items: Vehicle[], mode: string, getUtilization: (vehicle: Vehicle) => number) {
   const clone = [...items];
 
@@ -102,6 +99,7 @@ function sortVehicles(items: Vehicle[], mode: string, getUtilization: (vehicle: 
 }
 
 export default function Fleet() {
+  const navigate = useNavigate();
   const { data: vehicles, isLoading, isError, refetch } = useFleetVehicles();
   const { data: utilization } = useVehicleUtilization();
   const { data: overdueMaintenance } = useUpcomingMaintenance();
@@ -195,6 +193,43 @@ export default function Fleet() {
     ? overdueMaintenance?.filter((item) => item.vehicle_id === selectedVehicle.id) ?? []
     : [];
   const selectedVehicleType = selectedVehicle ? TYPE_LABELS[selectedVehicle.type] || selectedVehicle.type : null;
+  const hasActiveFilters =
+    search.length > 0 || typeFilter !== "all" || statusFilter !== "all" || featureFilter !== "all";
+
+  const handlePlanVehicle = (vehicle: Vehicle) => {
+    navigate("/planning", {
+      state: {
+        preferredVehicleId: vehicle.id,
+        preferredVehicleName: vehicle.name,
+        source: "fleet",
+      },
+    });
+    toast.success(`${vehicle.name} doorgestuurd naar Planning`, {
+      description: "Gebruik dit voertuig direct in je planning of dispatchflow.",
+    });
+  };
+
+  const handleAssignDriver = (vehicle: Vehicle) => {
+    navigate("/chauffeurs", {
+      state: {
+        preferredVehicleId: vehicle.id,
+        preferredVehicleName: vehicle.name,
+        source: "fleet",
+      },
+    });
+    toast.success(`Open chauffeurs voor ${vehicle.name}`, {
+      description: "Kies daar een chauffeur en koppel hem aan dit voertuig.",
+    });
+  };
+
+  const handleOpenVehicleDetail = (vehicle: Vehicle, section?: "documents" | "maintenance") => {
+    navigate(`/vloot/${vehicle.id}`, {
+      state: {
+        initialSection: section ?? "specs",
+        source: "fleet",
+      },
+    });
+  };
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -350,10 +385,17 @@ export default function Fleet() {
 
                 <button
                   type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setTypeFilter("all");
+                    setStatusFilter("all");
+                    setFeatureFilter("all");
+                    setSortMode("beste-match");
+                  }}
                   className="inline-flex h-11 items-center gap-2 rounded-[0.95rem] border border-[hsl(var(--gold)/0.12)] bg-background/95 px-4 text-sm font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]"
                 >
                   <SlidersHorizontal className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
-                  Filters
+                  {hasActiveFilters ? "Reset filters" : "Filters klaar"}
                 </button>
               </div>
             </div>
@@ -525,7 +567,7 @@ export default function Fleet() {
                                     type="button"
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      setSelectedVehicleId(vehicle.id);
+                                      handlePlanVehicle(vehicle);
                                     }}
                                     className="btn-luxe btn-luxe--primary h-9 justify-center px-3 text-sm"
                                   >
@@ -590,7 +632,11 @@ export default function Fleet() {
                             <User className="h-4 w-4" />
                             <span className="text-xs uppercase tracking-[0.12em]">Chauffeur</span>
                           </div>
-                          <button type="button" className="inline-flex h-8 items-center rounded-[0.8rem] border border-[hsl(var(--gold)/0.14)] px-3 text-xs font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]">
+                          <button
+                            type="button"
+                            onClick={() => handleAssignDriver(selectedVehicle)}
+                            className="inline-flex h-8 items-center rounded-[0.8rem] border border-[hsl(var(--gold)/0.14)] px-3 text-xs font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]"
+                          >
                             Toewijzen
                           </button>
                         </div>
@@ -637,8 +683,12 @@ export default function Fleet() {
                             <ShieldCheck className="h-4 w-4" />
                             <span className="text-xs uppercase tracking-[0.12em]">Certificeringen</span>
                           </div>
-                          <button type="button" className="inline-flex h-8 items-center rounded-[0.8rem] border border-[hsl(var(--gold)/0.14)] px-3 text-xs font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]">
-                            Toevoegen
+                          <button
+                            type="button"
+                            onClick={() => handleOpenVehicleDetail(selectedVehicle, "documents")}
+                            className="inline-flex h-8 items-center rounded-[0.8rem] border border-[hsl(var(--gold)/0.14)] px-3 text-xs font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]"
+                          >
+                            Beheren
                           </button>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
@@ -674,10 +724,14 @@ export default function Fleet() {
                         )}
                       </div>
 
-                      <Link to={`/vloot/${selectedVehicle.id}`} className="btn-luxe btn-luxe--primary w-full justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenVehicleDetail(selectedVehicle)}
+                        className="btn-luxe btn-luxe--primary w-full justify-center"
+                      >
                         Open voertuigdetail
                         <ArrowRight className="h-4 w-4" />
-                      </Link>
+                      </button>
                     </div>
                   )}
                 </aside>
