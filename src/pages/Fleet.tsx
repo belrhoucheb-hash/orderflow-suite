@@ -10,6 +10,10 @@ import {
   User,
   Gauge,
   ShieldCheck,
+  SlidersHorizontal,
+  Package,
+  Star,
+  ChevronRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -32,6 +36,71 @@ import { TYPE_LABELS, TYPE_ORDER, STATUS_CONFIG } from "@/lib/constants/vehicleC
 import { cn } from "@/lib/utils";
 import VoertuigcheckHistorie from "@/pages/VoertuigcheckHistorie";
 
+type FleetStatusSection = "beschikbaar" | "onderweg" | "onderhoud" | "defect";
+
+const STATUS_SECTIONS: Array<{
+  key: FleetStatusSection;
+  heading: string;
+  subheading: string;
+  dotClass: string;
+  accentClass: string;
+}> = [
+  {
+    key: "beschikbaar",
+    heading: "Beschikbaar",
+    subheading: "Klaar voor inzet",
+    dotClass: "bg-emerald-500",
+    accentClass: "text-emerald-700",
+  },
+  {
+    key: "onderweg",
+    heading: "Onderweg",
+    subheading: "Bezig met rit of levering",
+    dotClass: "bg-[hsl(var(--gold-deep))]",
+    accentClass: "text-[hsl(var(--gold-deep))]",
+  },
+  {
+    key: "onderhoud",
+    heading: "Onderhoud",
+    subheading: "Aandacht of werkplaats",
+    dotClass: "bg-amber-500",
+    accentClass: "text-amber-700",
+  },
+  {
+    key: "defect",
+    heading: "Defect",
+    subheading: "Niet inzetbaar",
+    dotClass: "bg-rose-500",
+    accentClass: "text-rose-700",
+  },
+];
+
+function statusPriority(status: string) {
+  return STATUS_SECTIONS.findIndex((section) => section.key === status);
+}
+
+function sortVehicles(items: Vehicle[], mode: string, getUtilization: (vehicle: Vehicle) => number) {
+  const clone = [...items];
+
+  switch (mode) {
+    case "belasting":
+      return clone.sort((a, b) => getUtilization(b) - getUtilization(a));
+    case "capaciteit":
+      return clone.sort((a, b) => b.capacityKg - a.capacityKg);
+    case "kenteken":
+      return clone.sort((a, b) => a.plate.localeCompare(b.plate, "nl"));
+    case "naam":
+      return clone.sort((a, b) => a.name.localeCompare(b.name, "nl"));
+    default:
+      return clone.sort((a, b) => {
+        const aScore = (a.status === "beschikbaar" ? 0 : 2) + (a.assignedDriver ? 1 : 0) + (a.features.length > 0 ? 1 : 0);
+        const bScore = (b.status === "beschikbaar" ? 0 : 2) + (b.assignedDriver ? 1 : 0) + (b.features.length > 0 ? 1 : 0);
+        if (aScore !== bScore) return aScore - bScore;
+        return a.name.localeCompare(b.name, "nl");
+      });
+  }
+}
+
 export default function Fleet() {
   const { data: vehicles, isLoading, isError, refetch } = useFleetVehicles();
   const { data: utilization } = useVehicleUtilization();
@@ -41,6 +110,7 @@ export default function Fleet() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [featureFilter, setFeatureFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("beste-match");
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("voertuigen");
@@ -51,7 +121,8 @@ export default function Fleet() {
       if (
         search &&
         !vehicle.name.toLowerCase().includes(search.toLowerCase()) &&
-        !vehicle.plate.toLowerCase().includes(search.toLowerCase())
+        !vehicle.plate.toLowerCase().includes(search.toLowerCase()) &&
+        !vehicle.code.toLowerCase().includes(search.toLowerCase())
       ) {
         return false;
       }
@@ -67,39 +138,33 @@ export default function Fleet() {
     });
   }, [vehicles, search, typeFilter, statusFilter, featureFilter]);
 
-  const grouped = useMemo(() => {
-    const groups: Record<string, Vehicle[]> = {};
-    for (const type of TYPE_ORDER) {
-      const items = filtered.filter((vehicle) => vehicle.type === type);
-      if (items.length > 0) groups[type] = items;
-    }
-
-    const knownTypes = new Set(TYPE_ORDER);
-    for (const vehicle of filtered) {
-      if (!knownTypes.has(vehicle.type)) {
-        if (!groups[vehicle.type]) groups[vehicle.type] = [];
-        groups[vehicle.type].push(vehicle);
-      }
-    }
-
-    return groups;
-  }, [filtered]);
-
-  useEffect(() => {
-    if (filtered.length === 0) {
-      setSelectedVehicleId(null);
-      return;
-    }
-
-    if (!selectedVehicleId || !filtered.some((vehicle) => vehicle.id === selectedVehicleId)) {
-      setSelectedVehicleId(filtered[0].id);
-    }
-  }, [filtered, selectedVehicleId]);
-
   const getUtilization = (vehicle: Vehicle) => {
     if (vehicle.status === "onderhoud" || vehicle.status === "defect") return 0;
     return utilization?.[vehicle.id] ?? 0;
   };
+
+  const filteredSorted = useMemo(
+    () => sortVehicles(filtered, sortMode, getUtilization),
+    [filtered, sortMode, utilization],
+  );
+
+  const groupedByStatus = useMemo(() => {
+    return STATUS_SECTIONS.map((section) => ({
+      ...section,
+      items: filteredSorted.filter((vehicle) => vehicle.status === section.key),
+    })).filter((section) => section.items.length > 0);
+  }, [filteredSorted]);
+
+  useEffect(() => {
+    if (filteredSorted.length === 0) {
+      setSelectedVehicleId(null);
+      return;
+    }
+
+    if (!selectedVehicleId || !filteredSorted.some((vehicle) => vehicle.id === selectedVehicleId)) {
+      setSelectedVehicleId(filteredSorted[0].id);
+    }
+  }, [filteredSorted, selectedVehicleId]);
 
   const overdueCount = overdueMaintenance
     ? new Set(overdueMaintenance.map((item) => item.vehicle_id)).size
@@ -115,11 +180,9 @@ export default function Fleet() {
 
   const totalVehicles = vehicles?.length ?? 0;
   const availableVehicles = vehicles?.filter((vehicle) => vehicle.status === "beschikbaar").length ?? 0;
-  const archivedVehicles = vehicles?.filter((vehicle) => (vehicle as any).is_active === false).length ?? 0;
-
   const selectedVehicle =
-    filtered.find((vehicle) => vehicle.id === selectedVehicleId) ??
-    filtered[0] ??
+    filteredSorted.find((vehicle) => vehicle.id === selectedVehicleId) ??
+    filteredSorted[0] ??
     null;
   const selectedVehicleStatus = selectedVehicle
     ? (STATUS_CONFIG[selectedVehicle.status] || STATUS_CONFIG.beschikbaar)
@@ -131,47 +194,32 @@ export default function Fleet() {
   const selectedVehicleMaintenance = selectedVehicle
     ? overdueMaintenance?.filter((item) => item.vehicle_id === selectedVehicle.id) ?? []
     : [];
+  const selectedVehicleType = selectedVehicle ? TYPE_LABELS[selectedVehicle.type] || selectedVehicle.type : null;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
-        <div className="mx-auto w-full max-w-[1800px] space-y-4 p-6">
+        <div className="mx-auto w-full max-w-[1880px] space-y-4 p-6">
           <div className="relative pb-3 pt-2">
             <div
               aria-hidden
               className="pointer-events-none absolute -left-8 -top-6 h-32 w-64"
               style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)" }}
             />
-            <div className="relative flex flex-wrap items-end justify-between gap-5">
+            <div className="relative flex flex-wrap items-start justify-between gap-5">
               <div className="min-w-0 flex-1">
-                <div
-                  className="mb-3 flex flex-wrap items-center gap-2.5"
-                  style={{ fontFamily: "var(--font-display)" }}
-                >
-                  <span
-                    aria-hidden
-                    className="inline-block h-[1px] w-8"
-                    style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold)/0.7))" }}
-                  />
+                <div className="mb-3 flex flex-wrap items-center gap-2.5" style={{ fontFamily: "var(--font-display)" }}>
+                  <span aria-hidden className="inline-block h-[1px] w-8" style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold)/0.7))" }} />
                   <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[hsl(var(--gold-deep))]">
                     {greeting}
                   </span>
-                  <span
-                    aria-hidden
-                    className="inline-block h-[3px] w-[3px] rounded-full"
-                    style={{ background: "hsl(var(--gold) / 0.5)" }}
-                  />
+                  <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
                   <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground/80 tabular-nums">
                     {totalVehicles} voertuigen, {availableVehicles} beschikbaar
-                    {archivedVehicles > 0 ? `, ${archivedVehicles} archief` : ""}
                   </span>
                   {overdueCount > 0 && (
                     <>
-                      <span
-                        aria-hidden
-                        className="inline-block h-[3px] w-[3px] rounded-full"
-                        style={{ background: "hsl(var(--gold) / 0.5)" }}
-                      />
+                      <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
                       <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-700 tabular-nums">
                         {overdueCount} onderhoud
                       </span>
@@ -179,14 +227,20 @@ export default function Fleet() {
                   )}
                 </div>
 
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                  <span>Vloot</span>
+                  <ChevronRight className="h-4 w-4 text-[hsl(var(--gold-deep))/0.45]" />
+                  <span className="text-foreground">Voertuigen</span>
+                </div>
+
                 <h1
-                  className="text-[2.25rem] font-semibold leading-[1.05] tracking-tight text-foreground"
+                  className="mt-2 text-[2.35rem] font-semibold leading-[1.05] tracking-tight text-foreground"
                   style={{ fontFamily: "var(--font-display)" }}
                 >
                   Vloot
                 </h1>
 
-                <div className="mt-3 inline-flex items-center gap-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))] p-0.5">
+                <div className="mt-4 inline-flex items-center gap-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))] p-0.5">
                   {[
                     { value: "voertuigen", label: "Voertuigen" },
                     { value: "types", label: "Types" },
@@ -198,7 +252,7 @@ export default function Fleet() {
                       onClick={() => setActiveTab(tab.value)}
                       aria-pressed={activeTab === tab.value}
                       className={cn(
-                        "h-7 rounded-full px-4 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors",
+                        "h-8 rounded-full px-4 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors",
                         activeTab === tab.value
                           ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
                           : "text-muted-foreground/70 hover:text-foreground",
@@ -242,60 +296,73 @@ export default function Fleet() {
               </div>
             )}
 
-            <div className="card--luxe flex flex-wrap items-center gap-3 p-4">
-              <div className="flex min-w-[220px] max-w-md flex-1 items-center gap-2">
-                <Search className="h-4 w-4 shrink-0 text-[hsl(var(--gold-deep))]" />
-                <Input
-                  placeholder="Zoek op naam of kenteken..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="field-luxe flex-1"
-                />
+            <div className="card--luxe space-y-4 p-4 md:p-5">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-[0.95rem] border border-[hsl(var(--gold)/0.12)] bg-background/95 px-3">
+                  <Search className="h-4 w-4 shrink-0 text-[hsl(var(--gold-deep))]" />
+                  <Input
+                    placeholder="Zoek op naam of kenteken..."
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="h-11 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                  />
+                </div>
+
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger aria-label="Type" className="h-11 w-[168px] rounded-[0.95rem] border-[hsl(var(--gold)/0.12)] bg-background/95 text-sm" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}>
+                    <span className="mr-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Type</span>
+                    <SelectValue placeholder="Alle types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle types</SelectItem>
+                    {TYPE_ORDER.map((type) => (
+                      <SelectItem key={type} value={type}>{TYPE_LABELS[type] || type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger aria-label="Status" className="h-11 w-[180px] rounded-[0.95rem] border-[hsl(var(--gold)/0.12)] bg-background/95 text-sm" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}>
+                    <span className="mr-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Status</span>
+                    <SelectValue placeholder="Alle statussen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle statussen</SelectItem>
+                    <SelectItem value="beschikbaar">Beschikbaar</SelectItem>
+                    <SelectItem value="onderweg">Onderweg</SelectItem>
+                    <SelectItem value="onderhoud">Onderhoud</SelectItem>
+                    <SelectItem value="defect">Defect</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={featureFilter} onValueChange={setFeatureFilter}>
+                  <SelectTrigger aria-label="Certificering" className="h-11 w-[210px] rounded-[0.95rem] border-[hsl(var(--gold)/0.12)] bg-background/95 text-sm" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}>
+                    <span className="mr-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Certificering</span>
+                    <SelectValue placeholder="Alle certificeringen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle certificeringen</SelectItem>
+                    <SelectItem value="adr">ADR</SelectItem>
+                    <SelectItem value="koel">Koeling</SelectItem>
+                    <SelectItem value="internationaal">Internationaal</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-2 rounded-[0.95rem] border border-[hsl(var(--gold)/0.12)] bg-background/95 px-4 text-sm font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]"
+                >
+                  <SlidersHorizontal className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+                  Filters
+                </button>
               </div>
-
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger aria-label="Type" className="h-9 w-[140px] text-sm" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}>
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alle types</SelectItem>
-                  {TYPE_ORDER.map((type) => (
-                    <SelectItem key={type} value={type}>{TYPE_LABELS[type] || type}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger aria-label="Status" className="h-9 w-[150px] text-sm" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}>
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alle statussen</SelectItem>
-                  <SelectItem value="beschikbaar">Beschikbaar</SelectItem>
-                  <SelectItem value="onderweg">Onderweg</SelectItem>
-                  <SelectItem value="onderhoud">Onderhoud</SelectItem>
-                  <SelectItem value="defect">Defect</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={featureFilter} onValueChange={setFeatureFilter}>
-                <SelectTrigger aria-label="Certificering" className="h-9 w-[170px] text-sm" style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}>
-                  <SelectValue placeholder="Certificering" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alle certificeringen</SelectItem>
-                  <SelectItem value="adr">ADR</SelectItem>
-                  <SelectItem value="koel">Koeling</SelectItem>
-                  <SelectItem value="internationaal">Internationaal</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             {isLoading ? (
               <LoadingState message="Voertuigen laden..." />
             ) : isError ? (
               <QueryError message="Kan voertuiggegevens niet laden." onRetry={() => refetch()} />
-            ) : Object.keys(grouped).length === 0 ? (
+            ) : groupedByStatus.length === 0 ? (
               <EmptyState
                 icon={Truck}
                 title="Geen voertuigen gevonden"
@@ -304,23 +371,48 @@ export default function Fleet() {
             ) : (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="space-y-8">
-                  {Object.entries(grouped).map(([type, items]) => (
-                    <div key={type}>
-                      <h2 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
-                        <Truck className="h-4 w-4" strokeWidth={1.75} />
-                        {TYPE_LABELS[type] || type}
-                        <span className="font-normal normal-case tracking-normal text-[hsl(var(--gold-deep))/0.6]">
-                          ({items.length})
-                        </span>
-                      </h2>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-muted-foreground">
+                      {filteredSorted.length} voertuigen in huidige selectie
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">Sorteer op</span>
+                      <Select value={sortMode} onValueChange={setSortMode}>
+                        <SelectTrigger className="h-10 w-[160px] rounded-[0.95rem] border-[hsl(var(--gold)/0.12)] bg-background/95 text-sm">
+                          <SelectValue placeholder="Beste match" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="beste-match">Beste match</SelectItem>
+                          <SelectItem value="belasting">Beladingsgraad</SelectItem>
+                          <SelectItem value="capaciteit">Capaciteit</SelectItem>
+                          <SelectItem value="kenteken">Kenteken</SelectItem>
+                          <SelectItem value="naam">Naam</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {items.map((vehicle) => {
+                  {groupedByStatus.map((section) => (
+                    <section key={section.key} className="space-y-4">
+                      <div className="border-b border-[hsl(var(--gold)/0.12)] pb-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={cn("h-3 w-3 rounded-full", section.dotClass)} />
+                          <h2 className={cn("text-xl font-semibold tracking-tight", section.accentClass)} style={{ fontFamily: "var(--font-display)" }}>
+                            {section.heading}
+                          </h2>
+                          <span className="text-sm text-muted-foreground">({section.items.length})</span>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{section.subheading}</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                        {section.items.map((vehicle, index) => {
                           const statusCfg = STATUS_CONFIG[vehicle.status] || STATUS_CONFIG.beschikbaar;
                           const util = getUtilization(vehicle);
                           const driverWarning = driverConsistency?.[vehicle.id]?.warning;
                           const isSelected = selectedVehicle?.id === vehicle.id;
                           const overdueForVehicle = overdueMaintenance?.some((item) => item.vehicle_id === vehicle.id) ?? false;
+                          const highlightCard = section.key === "beschikbaar" && index === 0 && statusFilter === "all" && !search;
 
                           return (
                             <button
@@ -328,97 +420,144 @@ export default function Fleet() {
                               type="button"
                               onClick={() => setSelectedVehicleId(vehicle.id)}
                               className={cn(
-                                "card--luxe space-y-3 p-4 text-left transition-all duration-150",
-                                isSelected && "ring-1 ring-[hsl(var(--gold)/0.22)] shadow-[0_18px_40px_-28px_hsl(var(--gold-deep)/0.3)]",
+                                "card--luxe group relative overflow-hidden p-4 text-left transition-all duration-200",
+                                isSelected && "ring-1 ring-[hsl(var(--gold)/0.26)] shadow-[0_24px_70px_-34px_hsl(var(--gold-deep)/0.34)]",
+                                highlightCard && !isSelected && "ring-1 ring-emerald-400/65",
                               )}
                             >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="truncate text-sm font-semibold text-foreground">{vehicle.name}</p>
-                                    {overdueForVehicle && (
-                                      <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                                        Onderhoud
+                              <div
+                                aria-hidden
+                                className={cn(
+                                  "pointer-events-none absolute inset-x-0 top-0 h-20 opacity-0 transition-opacity duration-200",
+                                  isSelected && "opacity-100",
+                                )}
+                                style={{ background: "linear-gradient(180deg, hsl(var(--gold-soft)/0.18) 0%, transparent 100%)" }}
+                              />
+
+                              <div className="relative space-y-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    {highlightCard && (
+                                      <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                                        <Star className="h-3 w-3" />
+                                        Beste match
                                       </span>
                                     )}
+                                    <p className="truncate text-[1.05rem] font-semibold text-foreground">{vehicle.name}</p>
+                                    <p className="mt-0.5 text-sm text-muted-foreground">{vehicle.plate}</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                      {selectedVehicle?.id === vehicle.id ? selectedVehicleType : TYPE_LABELS[vehicle.type] || vehicle.type}
+                                    </p>
                                   </div>
-                                  <p className="mt-0.5 text-xs font-mono text-muted-foreground">{vehicle.plate}</p>
+                                  <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusCfg.textClass} bg-background/85`}>
+                                    <span className={`h-2 w-2 rounded-full ${statusCfg.dotClass}`} />
+                                    {statusCfg.label}
+                                  </span>
                                 </div>
-                                <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${statusCfg.textClass}`}>
-                                  <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dotClass}`} />
-                                  {statusCfg.label}
-                                </span>
-                              </div>
 
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <span className="tabular-nums">{vehicle.capacityKg.toLocaleString()} kg</span>
-                                <span className="text-[hsl(var(--gold)/0.5)]">-</span>
-                                <span className="tabular-nums">{vehicle.capacityPallets} pallets</span>
-                              </div>
+                                <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                                  <div className="inline-flex items-center gap-2">
+                                    <Gauge className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+                                    <span className="tabular-nums">{vehicle.capacityKg.toLocaleString()} kg</span>
+                                  </div>
+                                  <div className="inline-flex items-center gap-2">
+                                    <Package className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+                                    <span className="tabular-nums">{vehicle.capacityPallets} pallets</span>
+                                  </div>
+                                </div>
 
-                              <div className="flex flex-wrap gap-1.5">
-                                {vehicle.features.slice(0, 3).map((feature) => (
-                                  <span
-                                    key={feature}
-                                    className="inline-flex items-center rounded-md border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.3)] px-1.5 py-0.5 text-[11px] text-[hsl(var(--gold-deep))]"
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-muted-foreground">Belading</span>
+                                    <span className="font-semibold tabular-nums text-foreground">{util}%</span>
+                                  </div>
+                                  <Progress value={util} className="h-1.5 bg-[hsl(var(--gold-soft)/0.35)] [&>div]:bg-[hsl(var(--gold-deep))]" />
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                  <div className="min-w-0">
+                                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Chauffeur</p>
+                                    <p className="mt-1 truncate font-medium text-foreground">
+                                      {vehicle.assignedDriver || "Geen chauffeur"}
+                                    </p>
+                                  </div>
+                                  {driverWarning && (
+                                    <TooltipProvider delayDuration={100}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span
+                                            role="img"
+                                            aria-label={driverWarning}
+                                            onClick={(event) => event.stopPropagation()}
+                                            className="inline-flex rounded-full border border-amber-200 bg-amber-50 p-1.5 text-amber-700"
+                                          >
+                                            <AlertTriangle className="h-3.5 w-3.5" strokeWidth={1.75} />
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="max-w-[260px] text-xs">
+                                          {driverWarning}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-wrap gap-1.5">
+                                  {vehicle.features.length > 0 ? vehicle.features.slice(0, 2).map((feature) => (
+                                    <span
+                                      key={feature}
+                                      className="inline-flex items-center rounded-full border border-[hsl(var(--gold)/0.24)] bg-[hsl(var(--gold-soft)/0.3)] px-2.5 py-1 text-[11px] font-medium text-[hsl(var(--gold-deep))]"
+                                    >
+                                      {feature}
+                                    </span>
+                                  )) : (
+                                    <span className="text-[12px] text-muted-foreground">Direct inzetbaar</span>
+                                  )}
+                                  {overdueForVehicle && (
+                                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+                                      Onderhoud nodig
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setSelectedVehicleId(vehicle.id);
+                                    }}
+                                    className="btn-luxe btn-luxe--primary h-9 justify-center px-3 text-sm"
                                   >
-                                    {feature}
-                                  </span>
-                                ))}
-                                {vehicle.features.length === 0 && (
-                                  <span className="text-[11px] text-muted-foreground">Geen certificeringen</span>
-                                )}
-                              </div>
-
-                              <div className="space-y-2 pt-1">
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">Chauffeur</span>
-                                  <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                                    {driverWarning && (
-                                      <TooltipProvider delayDuration={100}>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <span
-                                              role="img"
-                                              aria-label={driverWarning}
-                                              onClick={(event) => event.stopPropagation()}
-                                              className="inline-flex"
-                                            >
-                                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" strokeWidth={1.75} />
-                                            </span>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="top" className="max-w-[260px] text-xs">
-                                            {driverWarning}
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    )}
-                                    {vehicle.assignedDriver || "Niet toegewezen"}
-                                  </span>
+                                    Plan rit
+                                  </button>
+                                  <Link
+                                    to={`/vloot/${vehicle.id}`}
+                                    onClick={(event) => event.stopPropagation()}
+                                    className="inline-flex h-9 items-center justify-center rounded-[0.9rem] border border-[hsl(var(--gold)/0.16)] bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]"
+                                  >
+                                    Details
+                                  </Link>
                                 </div>
-
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">Beladingsgraad</span>
-                                  <span className="font-medium tabular-nums text-foreground">{util}%</span>
-                                </div>
-                                <Progress value={util} className="h-1.5 bg-[hsl(var(--gold-soft)/0.35)] [&>div]:bg-[hsl(var(--gold-deep))]" />
                               </div>
                             </button>
                           );
                         })}
                       </div>
-                    </div>
+                    </section>
                   ))}
                 </div>
 
                 <aside className="card--luxe p-4 xl:sticky xl:top-4 xl:self-start">
-                  <div className="mb-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
-                      Fleet Desk
-                    </p>
-                    <h2 className="mt-1 text-sm font-semibold text-foreground">
-                      {selectedVehicle ? selectedVehicle.name : "Geen voertuig geselecteerd"}
-                    </h2>
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                        Fleet Desk
+                      </p>
+                      <h2 className="mt-1 text-xl font-semibold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+                        {selectedVehicle ? selectedVehicle.name : "Voertuigdetails"}
+                      </h2>
+                    </div>
                   </div>
 
                   {!selectedVehicle || !selectedVehicleStatus ? (
@@ -428,42 +567,50 @@ export default function Fleet() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <div className="rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3">
+                      <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-lg font-semibold text-foreground">{selectedVehicle.plate}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {selectedVehicle.brand || "Onbekend merk"} - {selectedVehicle.code}
+                            <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${selectedVehicleStatus.textClass}`}>
+                              <span className={`h-2 w-2 rounded-full ${selectedVehicleStatus.dotClass}`} />
+                              {selectedVehicleStatus.label}
+                            </span>
+                            <p className="mt-3 text-[2rem] font-semibold leading-none text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+                              {selectedVehicle.plate}
+                            </p>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              {(selectedVehicle.brand || "Onbekend merk")} - {selectedVehicle.code}
                             </p>
                           </div>
-                          <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${selectedVehicleStatus.textClass}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${selectedVehicleStatus.dotClass}`} />
-                            {selectedVehicleStatus.label}
-                          </span>
                         </div>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                        <div className="rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))] p-3">
+                      <div className="rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))] p-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <User className="h-4 w-4" />
                             <span className="text-xs uppercase tracking-[0.12em]">Chauffeur</span>
                           </div>
-                          <p className="mt-2 text-sm font-medium text-foreground">{selectedVehicle.assignedDriver || "Niet toegewezen"}</p>
-                          {selectedVehicleDriverWarning && (
-                            <p className="mt-1 text-xs text-amber-700">{selectedVehicleDriverWarning}</p>
-                          )}
+                          <button type="button" className="inline-flex h-8 items-center rounded-[0.8rem] border border-[hsl(var(--gold)/0.14)] px-3 text-xs font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]">
+                            Toewijzen
+                          </button>
                         </div>
+                        <p className="text-sm font-medium text-foreground">{selectedVehicle.assignedDriver || "Geen chauffeur toegewezen"}</p>
+                        {selectedVehicleDriverWarning && (
+                          <p className="mt-1 text-xs text-amber-700">{selectedVehicleDriverWarning}</p>
+                        )}
+                      </div>
 
-                        <div className="rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))] p-3">
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Gauge className="h-4 w-4" />
-                            <span className="text-xs uppercase tracking-[0.12em]">Belading</span>
-                          </div>
-                          <p className="mt-2 text-sm font-medium text-foreground">{selectedVehicleUtilization}% benut</p>
-                          <div className="mt-2">
-                            <Progress value={selectedVehicleUtilization} className="h-1.5 bg-[hsl(var(--gold-soft)/0.35)] [&>div]:bg-[hsl(var(--gold-deep))]" />
-                          </div>
+                      <div className="rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))] p-3">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Gauge className="h-4 w-4" />
+                          <span className="text-xs uppercase tracking-[0.12em]">Belading</span>
+                        </div>
+                        <div className="mt-2 flex items-end justify-between gap-3">
+                          <p className="text-sm font-medium text-foreground">{selectedVehicleUtilization}% benut</p>
+                          <p className="text-xs text-muted-foreground">Live inschatting</p>
+                        </div>
+                        <div className="mt-3">
+                          <Progress value={selectedVehicleUtilization} className="h-1.5 bg-[hsl(var(--gold-soft)/0.35)] [&>div]:bg-emerald-500" />
                         </div>
                       </div>
 
@@ -485,15 +632,20 @@ export default function Fleet() {
                       </div>
 
                       <div className="rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))] p-3">
-                        <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-                          <ShieldCheck className="h-4 w-4" />
-                          <span className="text-xs uppercase tracking-[0.12em]">Certificeringen</span>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <ShieldCheck className="h-4 w-4" />
+                            <span className="text-xs uppercase tracking-[0.12em]">Certificeringen</span>
+                          </div>
+                          <button type="button" className="inline-flex h-8 items-center rounded-[0.8rem] border border-[hsl(var(--gold)/0.14)] px-3 text-xs font-medium text-foreground transition-colors hover:bg-[hsl(var(--gold-soft)/0.18)]">
+                            Toevoegen
+                          </button>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {selectedVehicle.features.length > 0 ? selectedVehicle.features.map((feature) => (
                             <span
                               key={feature}
-                              className="inline-flex items-center rounded-md border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.3)] px-1.5 py-0.5 text-[11px] text-[hsl(var(--gold-deep))]"
+                              className="inline-flex items-center rounded-full border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.3)] px-2.5 py-1 text-[11px] text-[hsl(var(--gold-deep))]"
                             >
                               {feature}
                             </span>
@@ -518,7 +670,7 @@ export default function Fleet() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-xs text-muted-foreground">Geen achterstallig onderhoud in beeld.</p>
+                          <p className="text-xs text-muted-foreground">Geen achterstallig onderhoud.</p>
                         )}
                       </div>
 
