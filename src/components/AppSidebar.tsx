@@ -34,7 +34,7 @@ const operationsItemsDef = [
 
 const controlItemsDef = [
   { title: "Autonomie", url: "/autonomie", icon: Activity },
-  { title: "Finance", url: "/facturatie", icon: Receipt },
+  { title: "Finance", url: "/finance", icon: Receipt },
   { titleKey: "nav.reporting", url: "/rapportage", icon: BarChart3 },
 ];
 
