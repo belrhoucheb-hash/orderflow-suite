@@ -588,7 +588,13 @@ const Dispatch = () => {
 
                                   {/* Type badge */}
                                   <Badge variant="outline" className="text-[10px] min-w-[60px] justify-center">
-                                    {stop.stop_type === "PICKUP" ? "Ophaal" : stop.stop_type === "DELIVERY" ? "Lever" : "Depot"}
+                                    {stop.stop_type === "PICKUP"
+                                      ? "Ophaal"
+                                      : stop.stop_type === "INTERMEDIATE"
+                                        ? "Tussenstop"
+                                        : stop.stop_type === "DELIVERY"
+                                          ? "Lever"
+                                          : "Depot"}
                                   </Badge>
 
                                   {/* Address */}

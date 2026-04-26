@@ -1,4 +1,5 @@
-import type { OrderDraft, FormState, ClientRecord } from "./types";
+import type { OrderDraft, FormState, ClientRecord, IntermediateStop } from "./types";
+import { parseRouteStops } from "@/lib/routeStops";
 
 // Standard pallet dimensions (LxBxH in cm) and weight per unit (kg)
 const STANDARD_PALLET_DIMENSIONS: Record<string, string> = {
@@ -19,6 +20,24 @@ export const STANDARD_PALLET_WEIGHT_KG: Record<string, number> = {
   blokpallets: 25,
 };
 
+export function getRouteStopsNotificationPayload(
+  base: OrderDraft["notification_preferences"],
+  stops: IntermediateStop[],
+) {
+  const next = { ...(base || {}) } as Record<string, unknown>;
+  if (stops.length > 0) {
+    next.route_stops = stops.map((stop) => ({
+      id: stop.id,
+      address: stop.address,
+      timeFrom: stop.timeFrom,
+      timeTo: stop.timeTo,
+    }));
+  } else {
+    delete next.route_stops;
+  }
+  return next;
+}
+
 export function orderToForm(order: OrderDraft): FormState {
   const unit = order.unit || "Pallets";
   // Auto-fill standard dimensions for known pallet types
@@ -38,10 +57,11 @@ export function orderToForm(order: OrderDraft): FormState {
     transportType: order.transport_type?.toLowerCase().replace("_", "-") || "direct",
     pickupAddress: order.pickup_address || "",
     deliveryAddress: order.delivery_address || "",
-    pickupTimeFrom: order.pickup_time_from || "",
-    pickupTimeTo: order.pickup_time_to || "",
-    deliveryTimeFrom: order.delivery_time_from || "",
-    deliveryTimeTo: order.delivery_time_to || "",
+    pickupTimeFrom: order.pickup_time_window_start || "",
+    pickupTimeTo: order.pickup_time_window_end || "",
+    deliveryTimeFrom: order.delivery_time_window_start || "",
+    deliveryTimeTo: order.delivery_time_window_end || "",
+    intermediateStops: parseRouteStops(order.notification_preferences) as IntermediateStop[],
     quantity: order.quantity || 0,
     unit,
     weight,
@@ -240,6 +260,17 @@ export function getFormErrors(f: FormState | undefined): boolean {
   if (!f?.pickupAddress || !f?.deliveryAddress || !f?.quantity || !f?.weight) return true;
   // Block order creation if address is just a city name
   if (!isValidAddress(f.pickupAddress) || !isValidAddress(f.deliveryAddress)) return true;
+  if (
+    f.intermediateStops.some(
+      (stop) =>
+        !stop.address ||
+        !isValidAddress(stop.address) ||
+        (!!stop.timeFrom && !stop.timeTo) ||
+        (!stop.timeFrom && !!stop.timeTo),
+    )
+  ) {
+    return true;
+  }
   return false;
 }
 

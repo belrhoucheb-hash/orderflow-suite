@@ -8,6 +8,8 @@ import type {
   TrackingAlert,
   TrackingAlertSeverity,
 } from "@/types/tracking";
+import { parseRouteStops } from "@/lib/routeStops";
+import { resolveCoordinates } from "@/data/geoData";
 
 // ─── Helpers (exported for testing) ────────────────────────────
 
@@ -384,59 +386,86 @@ export function useActiveTrips() {
           notes: null,
           created_at: o.created_at,
           updated_at: o.updated_at,
-          // Synthesize trip_stops from order pickup/delivery for route display
-          trip_stops: [
-            ...(o.pickup_address
-              ? [
-                  {
-                    id: `${o.id}-pickup`,
-                    trip_id: o.id,
-                    order_id: o.id,
-                    stop_type: "PICKUP",
-                    stop_sequence: 1,
-                    stop_status: "AFGELEVERD",
-                    planned_address: o.pickup_address,
-                    planned_latitude: o.pickup_lat ?? o.geocoded_pickup_lat ?? null,
-                    planned_longitude: o.pickup_lng ?? o.geocoded_pickup_lng ?? null,
-                    planned_time: null,
-                    actual_arrival_time: null,
-                    actual_departure_time: null,
-                    contact_name: null,
-                    contact_phone: null,
-                    instructions: null,
-                    failure_reason: null,
-                    notes: null,
-                    created_at: o.created_at,
-                    updated_at: o.updated_at,
-                  },
-                ]
-              : []),
-            ...(o.delivery_address
-              ? [
-                  {
-                    id: `${o.id}-delivery`,
-                    trip_id: o.id,
-                    order_id: o.id,
-                    stop_type: "DELIVERY",
-                    stop_sequence: 2,
-                    stop_status: "GEPLAND",
-                    planned_address: o.delivery_address,
-                    planned_latitude: o.delivery_lat ?? o.geocoded_delivery_lat ?? null,
-                    planned_longitude: o.delivery_lng ?? o.geocoded_delivery_lng ?? null,
-                    planned_time: null,
-                    actual_arrival_time: null,
-                    actual_departure_time: null,
-                    contact_name: null,
-                    contact_phone: null,
-                    instructions: null,
-                    failure_reason: null,
-                    notes: null,
-                    created_at: o.created_at,
-                    updated_at: o.updated_at,
-                  },
-                ]
-              : []),
-          ],
+          // Synthesize trip_stops from order pickup/intermediate/delivery for route display
+          trip_stops: (() => {
+            let seq = 1;
+            const stops: TripStop[] = [];
+
+            if (o.pickup_address) {
+              stops.push({
+                id: `${o.id}-pickup`,
+                trip_id: o.id,
+                order_id: o.id,
+                stop_type: "PICKUP",
+                stop_sequence: seq++,
+                stop_status: "AFGELEVERD",
+                planned_address: o.pickup_address,
+                planned_latitude: o.pickup_lat ?? o.geocoded_pickup_lat ?? null,
+                planned_longitude: o.pickup_lng ?? o.geocoded_pickup_lng ?? null,
+                planned_time: null,
+                actual_arrival_time: null,
+                actual_departure_time: null,
+                contact_name: null,
+                contact_phone: null,
+                instructions: null,
+                failure_reason: null,
+                notes: null,
+                created_at: o.created_at,
+                updated_at: o.updated_at,
+              });
+            }
+
+            for (const stop of parseRouteStops(o.notification_preferences)) {
+              const coords = resolveCoordinates(stop.address);
+              stops.push({
+                id: `${o.id}-${stop.id}`,
+                trip_id: o.id,
+                order_id: o.id,
+                stop_type: "INTERMEDIATE",
+                stop_sequence: seq++,
+                stop_status: "GEPLAND",
+                planned_address: stop.address,
+                planned_latitude: coords.lat ?? null,
+                planned_longitude: coords.lng ?? null,
+                planned_time: null,
+                actual_arrival_time: null,
+                actual_departure_time: null,
+                contact_name: null,
+                contact_phone: null,
+                instructions: null,
+                failure_reason: null,
+                notes: null,
+                created_at: o.created_at,
+                updated_at: o.updated_at,
+              });
+            }
+
+            if (o.delivery_address) {
+              stops.push({
+                id: `${o.id}-delivery`,
+                trip_id: o.id,
+                order_id: o.id,
+                stop_type: "DELIVERY",
+                stop_sequence: seq++,
+                stop_status: "GEPLAND",
+                planned_address: o.delivery_address,
+                planned_latitude: o.delivery_lat ?? o.geocoded_delivery_lat ?? null,
+                planned_longitude: o.delivery_lng ?? o.geocoded_delivery_lng ?? null,
+                planned_time: null,
+                actual_arrival_time: null,
+                actual_departure_time: null,
+                contact_name: null,
+                contact_phone: null,
+                instructions: null,
+                failure_reason: null,
+                notes: null,
+                created_at: o.created_at,
+                updated_at: o.updated_at,
+              });
+            }
+
+            return stops;
+          })(),
         })) as Trip[];
     },
   });

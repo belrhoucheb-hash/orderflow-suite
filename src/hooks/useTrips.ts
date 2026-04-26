@@ -78,7 +78,7 @@ export function useCreateTrip() {
       driver_id: string | null;
       planned_date: string;
       planned_start_time?: string;
-      stops: { order_id: string; stop_type: "PICKUP" | "DELIVERY"; planned_address: string; stop_sequence: number; planned_latitude?: number | null; planned_longitude?: number | null }[];
+      stops: { order_id: string; stop_type: "PICKUP" | "INTERMEDIATE" | "DELIVERY"; planned_address: string; stop_sequence: number; planned_latitude?: number | null; planned_longitude?: number | null }[];
     }) => {
       // Create trip
       const { data: trip, error: tripErr } = await supabase

@@ -68,6 +68,7 @@ import { RoosterTab } from "@/components/planning/rooster/RoosterTab";
 import { useTenant } from "@/contexts/TenantContext";
 import { solveVRP } from "@/lib/vrpSolver";
 import { useLoadPlanningDraft, useSavePlanningDraft, useDeletePlanningDraft, collectWeekDrafts, usePlanningDraftsRealtime } from "@/hooks/usePlanningDrafts";
+import { parseRouteStops } from "@/lib/routeStops";
 
 const Planning = () => {
   const { data: fleetVehicles = [] } = useVehicles();
@@ -250,7 +251,7 @@ const Planning = () => {
       // Fetch orders for selected date: either matching delivery_date or PENDING without date
       const { data, error } = await supabase
         .from("orders")
-        .select("id, order_number, client_name, pickup_address, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit, time_window_start, time_window_end, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng, delivery_date, pickup_date, info_status, missing_fields")
+        .select("id, order_number, client_name, pickup_address, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit, time_window_start, time_window_end, pickup_time_window_start, pickup_time_window_end, delivery_time_window_start, delivery_time_window_end, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng, delivery_date, pickup_date, info_status, missing_fields, notification_preferences")
         .eq("status", "PENDING")
         .is("vehicle_id", null)
         .order("order_number", { ascending: true });
@@ -670,12 +671,32 @@ const Planning = () => {
             stop_status: "GEPLAND" as const,
             planned_latitude: firstOrder.geocoded_pickup_lat ?? null,
             planned_longitude: firstOrder.geocoded_pickup_lng ?? null,
+            planned_window_start: firstOrder.pickup_time_window_start ?? null,
+            planned_window_end: firstOrder.pickup_time_window_end ?? null,
           });
           seq++;
         }
 
-        // Create DELIVERY stops (one per order)
+        // Create per-order route stops: intermediate stops first, then delivery
         for (const order of vOrders) {
+          const routeStops = parseRouteStops(order.notification_preferences);
+          for (const stop of routeStops) {
+            const stopCoord = resolveCoordinates(stop.address);
+            stopInserts.push({
+              trip_id: trip.id,
+              order_id: order.id,
+              stop_type: "INTERMEDIATE" as const,
+              stop_sequence: seq,
+              planned_address: stop.address,
+              stop_status: "GEPLAND" as const,
+              planned_latitude: stopCoord.lat ?? null,
+              planned_longitude: stopCoord.lng ?? null,
+              planned_window_start: stop.timeFrom || null,
+              planned_window_end: stop.timeTo || null,
+            });
+            seq++;
+          }
+
           stopInserts.push({
             trip_id: trip.id,
             order_id: order.id,
@@ -685,6 +706,8 @@ const Planning = () => {
             stop_status: "GEPLAND" as const,
             planned_latitude: order.geocoded_delivery_lat ?? null,
             planned_longitude: order.geocoded_delivery_lng ?? null,
+            planned_window_start: order.delivery_time_window_start ?? null,
+            planned_window_end: order.delivery_time_window_end ?? null,
           });
           seq++;
         }

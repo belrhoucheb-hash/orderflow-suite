@@ -13,10 +13,19 @@ export interface PlanOrder {
   is_weight_per_unit: boolean;
   time_window_start: string | null;
   time_window_end: string | null;
-  pickup_time_from: string | null;
-  pickup_time_to: string | null;
-  delivery_time_from: string | null;
-  delivery_time_to: string | null;
+  pickup_time_window_start: string | null;
+  pickup_time_window_end: string | null;
+  delivery_time_window_start: string | null;
+  delivery_time_window_end: string | null;
+  notification_preferences?: {
+    route_stops?: {
+      id?: string;
+      address?: string;
+      timeFrom?: string;
+      timeTo?: string;
+    }[];
+    [key: string]: unknown;
+  } | null;
   geocoded_pickup_lat: number | null;
   geocoded_pickup_lng: number | null;
   geocoded_delivery_lat: number | null;

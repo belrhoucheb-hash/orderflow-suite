@@ -72,14 +72,14 @@ export function getInboxCaseBlockers(draft: OrderDraft, form?: FormState | null)
     missing.has("pickup_time_window") ||
     missing.has("pickup_date") ||
     missing.has("pickup_time") ||
-    (!!draft.pickup_time_from && !draft.pickup_time_to) ||
-    (!draft.pickup_time_from && !!draft.pickup_time_to);
+    (!!draft.pickup_time_window_start && !draft.pickup_time_window_end) ||
+    (!draft.pickup_time_window_start && !!draft.pickup_time_window_end);
   const deliveryTimeMissing =
     missing.has("delivery_time_window") ||
     missing.has("delivery_date") ||
     missing.has("delivery_time") ||
-    (!!draft.delivery_time_from && !draft.delivery_time_to) ||
-    (!draft.delivery_time_from && !!draft.delivery_time_to);
+    (!!draft.delivery_time_window_start && !draft.delivery_time_window_end) ||
+    (!draft.delivery_time_window_start && !!draft.delivery_time_window_end);
 
   if (!effectiveForm.pickupAddress || missing.has("pickup_address")) {
     addBlocker(blockers, "pickup_address", "Ophaaladres ontbreekt", "critical");
@@ -100,6 +100,20 @@ export function getInboxCaseBlockers(draft: OrderDraft, form?: FormState | null)
   if (deliveryTimeMissing) {
     addBlocker(blockers, "delivery_time_window", "Losvenster controleren", "warning");
   }
+
+  effectiveForm.intermediateStops.forEach((stop, index) => {
+    const label = `Tussenstop ${index + 1}`;
+    if (!stop.address) {
+      addBlocker(blockers, `intermediate_stop:${index}:address`, `${label} ontbreekt`, "critical");
+      return;
+    }
+    if (isAddressIncomplete(stop.address)) {
+      addBlocker(blockers, `intermediate_stop:${index}:address_incomplete`, `${label} is onvolledig`, "critical");
+    }
+    if ((stop.timeFrom && !stop.timeTo) || (!stop.timeFrom && stop.timeTo)) {
+      addBlocker(blockers, `intermediate_stop:${index}:time_window`, `${label} venster controleren`, "warning");
+    }
+  });
 
   if (!effectiveForm.quantity || missing.has("quantity")) {
     addBlocker(blockers, "quantity", "Aantal ontbreekt", "critical");

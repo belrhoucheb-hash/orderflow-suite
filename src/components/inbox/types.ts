@@ -20,10 +20,10 @@ export interface OrderDraft {
   received_at: string | null;
   created_at: string;
   attachments: { name: string; url: string; type: string }[] | null;
-  pickup_time_from: string | null;
-  pickup_time_to: string | null;
-  delivery_time_from: string | null;
-  delivery_time_to: string | null;
+  pickup_time_window_start: string | null;
+  pickup_time_window_end: string | null;
+  delivery_time_window_start: string | null;
+  delivery_time_window_end: string | null;
   internal_note: string | null;
   missing_fields: string[] | null;
   follow_up_draft: string | null;
@@ -33,6 +33,19 @@ export interface OrderDraft {
   changes_detected: { field: string; old_value: string; new_value: string }[] | null;
   anomalies: { field: string; value: number; avg_value: number; message: string }[] | null;
   field_confidence: Record<string, number> | null;
+  notification_preferences: {
+    email?: boolean;
+    sms?: boolean;
+    route_stops?: IntermediateStop[];
+    [key: string]: unknown;
+  } | null;
+}
+
+export interface IntermediateStop {
+  id: string;
+  address: string;
+  timeFrom: string;
+  timeTo: string;
 }
 
 export type FieldSource = "email" | "pdf" | "both";
@@ -48,6 +61,7 @@ export interface FormState {
   pickupTimeTo: string;
   deliveryTimeFrom: string;
   deliveryTimeTo: string;
+  intermediateStops: IntermediateStop[];
   quantity: number;
   unit: string;
   weight: string;

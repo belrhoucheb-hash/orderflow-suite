@@ -2,7 +2,7 @@
 
 export type TripStatus = "CONCEPT" | "VERZENDKLAAR" | "VERZONDEN" | "ONTVANGEN" | "GEACCEPTEERD" | "GEWEIGERD" | "ACTIEF" | "VOLTOOID" | "AFGEBROKEN";
 export type StopStatus = "GEPLAND" | "ONDERWEG" | "AANGEKOMEN" | "LADEN" | "LOSSEN" | "AFGELEVERD" | "MISLUKT" | "OVERGESLAGEN";
-export type StopType = "PICKUP" | "DELIVERY" | "DEPOT";
+export type StopType = "PICKUP" | "INTERMEDIATE" | "DELIVERY" | "DEPOT";
 export type PodStatus = "NIET_VEREIST" | "VERWACHT" | "ONTVANGEN" | "ONVOLLEDIG" | "GOEDGEKEURD" | "AFGEWEZEN";
 export type BillingStatus = "NIET_GEREED" | "GEREED" | "GEBLOKKEERD" | "GEFACTUREERD";
 export type ExceptionSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";

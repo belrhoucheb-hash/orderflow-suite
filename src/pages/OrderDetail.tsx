@@ -50,6 +50,7 @@ import { Receipt } from "lucide-react";
 import { ReturnOrderDialog } from "@/components/orders/ReturnOrderDialog";
 import { CreateReturnDialog } from "@/components/orders/CreateReturnDialog";
 import { MoreHorizontal } from "lucide-react";
+import { formatRouteStopWindow, parseRouteStops } from "@/lib/routeStops";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -422,6 +423,7 @@ const OrderDetail = () => {
   const statusInfo = STATUS_MAP[order.status] || STATUS_MAP.DRAFT;
   const isCancelled = order.status === "CANCELLED";
   const isPrintable = order.status !== "CANCELLED"; // Printable for DRAFT, OPEN, PLANNED, DELIVERED
+  const routeStops = parseRouteStops(order.notification_preferences);
   const isActive = order.status === "PENDING" || order.status === "OPEN" || order.status === "PLANNED";
   const requirements = (order.requirements || []) as string[];
 
@@ -778,6 +780,26 @@ const OrderDetail = () => {
                   )}
                 </div>
               </div>
+              {routeStops.length > 0 && (
+                <div className="mt-4 rounded-2xl border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.22)] px-4 py-3">
+                  <label className="label-luxe">Tussenstops</label>
+                  <div className="mt-2 space-y-2">
+                    {routeStops.map((stop, index) => (
+                      <div key={stop.id} className="flex items-start justify-between gap-4 text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground">{stop.address || `Tussenstop ${index + 1}`}</p>
+                          {formatRouteStopWindow(stop) ? (
+                            <p className="text-xs text-muted-foreground">{formatRouteStopWindow(stop)}</p>
+                          ) : null}
+                        </div>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Stop {index + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="hairline" />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-4 text-sm">
                 <div>

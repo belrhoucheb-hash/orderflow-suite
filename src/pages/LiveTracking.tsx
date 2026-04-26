@@ -280,7 +280,7 @@ const LiveTracking = () => {
 
       marker.bindPopup(
         `<div style="font-size:12px;">
-          <b>Stop #${seq}</b> — ${stop.stop_type === "PICKUP" ? "Ophaal" : "Levering"}
+          <b>Stop #${seq}</b> — ${stop.stop_type === "PICKUP" ? "Ophaal" : stop.stop_type === "INTERMEDIATE" ? "Tussenstop" : "Levering"}
           <br/>${stop.planned_address || "Geen adres"}
           ${stop.contact_name ? `<br/>${stop.contact_name}` : ""}
           <br/><span style="color:#6b7280;">${stop.stop_status}</span>

@@ -4,6 +4,7 @@ import {
   Plus,
   AlertTriangle,
   Check,
+  Trash2,
   HelpCircle,
   MessageSquare,
   MapPin,
@@ -29,7 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import type { OrderDraft, FormState } from "./types";
+import type { IntermediateStop, OrderDraft, FormState } from "./types";
 import { requirementOptions } from "./types";
 import type { AutoConfirmAssessment } from "@/lib/autoConfirm";
 import { FollowUpPanel } from "@/components/inbox/InboxFollowUpPanel";
@@ -123,6 +124,10 @@ function formatTimeWindow(from?: string | null, to?: string | null) {
   if (from) return `Vanaf ${from}`;
   if (to) return `Tot ${to}`;
   return "Tijdvenster ontbreekt";
+}
+
+function isStopTimeWindowIncomplete(stop: IntermediateStop) {
+  return (!!stop.timeFrom && !stop.timeTo) || (!stop.timeFrom && !!stop.timeTo);
 }
 
 function FieldStatePill({ tone, label }: { tone: ReviewFieldTone; label: string }) {
@@ -219,21 +224,28 @@ export function InboxReviewPanel({
     missingFieldSet.has("pickup_time_window") ||
     missingFieldSet.has("pickup_date") ||
     missingFieldSet.has("pickup_time") ||
-    (!!selected.pickup_time_from && !selected.pickup_time_to) ||
-    (!selected.pickup_time_from && !!selected.pickup_time_to);
+    (!!selected.pickup_time_window_start && !selected.pickup_time_window_end) ||
+    (!selected.pickup_time_window_start && !!selected.pickup_time_window_end);
   const deliveryTimeNeedsAttention =
     missingFieldSet.has("delivery_time_window") ||
     missingFieldSet.has("delivery_date") ||
     missingFieldSet.has("delivery_time") ||
-    (!!selected.delivery_time_from && !selected.delivery_time_to) ||
-    (!selected.delivery_time_from && !!selected.delivery_time_to);
+    (!!selected.delivery_time_window_start && !selected.delivery_time_window_end) ||
+    (!selected.delivery_time_window_start && !!selected.delivery_time_window_end);
   const quantityMissing = hasMissingField("quantity") || !form.quantity;
   const weightMissing = hasMissingField("weight") || !form.weight;
   const unitMissing = hasMissingField("unit") || !form.unit;
   const dimensionsMissing = hasMissingField("dimensions") || !form.dimensions;
   const requirementsMissing = hasMissingField("requirements");
+  const intermediateStopsNeedAttention = form.intermediateStops.some(
+    (stop) => !stop.address || isAddressIncomplete(stop.address) || isStopTimeWindowIncomplete(stop),
+  );
   const routeNeedsAttention =
-    pickupNeedsAttention || deliveryNeedsAttention || pickupTimeNeedsAttention || deliveryTimeNeedsAttention;
+    pickupNeedsAttention ||
+    deliveryNeedsAttention ||
+    pickupTimeNeedsAttention ||
+    deliveryTimeNeedsAttention ||
+    intermediateStopsNeedAttention;
   const cargoNeedsAttention = quantityMissing || weightMissing || dimensionsMissing || !!weightAnomaly;
   const requirementsNeedAttention = requirementsMissing;
   const topBlockers = caseSummary.blockers.slice(0, 4);
@@ -288,6 +300,32 @@ export function InboxReviewPanel({
     : 0;
   const pickupWindowLabel = formatTimeWindow(form.pickupTimeFrom, form.pickupTimeTo);
   const deliveryWindowLabel = formatTimeWindow(form.deliveryTimeFrom, form.deliveryTimeTo);
+
+  const updateIntermediateStop = (stopId: string, patch: Partial<IntermediateStop>) => {
+    const nextStops = form.intermediateStops.map((stop) => (stop.id === stopId ? { ...stop, ...patch } : stop));
+    onUpdateField("intermediateStops", nextStops);
+  };
+
+  const addIntermediateStop = () => {
+    onUpdateField("intermediateStops", [
+      ...form.intermediateStops,
+      {
+        id: crypto.randomUUID(),
+        address: "",
+        timeFrom: "",
+        timeTo: "",
+      },
+    ]);
+    setTimeout(onAutoSave, 0);
+  };
+
+  const removeIntermediateStop = (stopId: string) => {
+    onUpdateField(
+      "intermediateStops",
+      form.intermediateStops.filter((stop) => stop.id !== stopId),
+    );
+    setTimeout(onAutoSave, 0);
+  };
 
   const handlePrimaryAction = () => {
     if (autoConfirmAssessment.eligible) {
@@ -782,7 +820,103 @@ export function InboxReviewPanel({
                 </div>
               </div>
 
+              {form.intermediateStops.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {form.intermediateStops.map((stop, index) => {
+                    const addressNeedsAttention = !stop.address || isAddressIncomplete(stop.address);
+                    const timeNeedsAttention = isStopTimeWindowIncomplete(stop);
+                    const windowLabel = formatTimeWindow(stop.timeFrom, stop.timeTo);
+
+                    return (
+                      <div
+                        key={stop.id}
+                        className="rounded-2xl border px-3 py-3"
+                        style={{
+                          borderColor: addressNeedsAttention
+                            ? "rgba(239,68,68,0.3)"
+                            : timeNeedsAttention
+                              ? "rgba(245,158,11,0.28)"
+                              : "hsl(var(--border) / 0.55)",
+                          background:
+                            addressNeedsAttention || timeNeedsAttention
+                              ? "linear-gradient(180deg, rgba(255,251,235,0.42), rgba(255,255,255,0.96))"
+                              : "rgba(255,255,255,0.8)",
+                        }}
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p
+                              className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+                              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                            >
+                              Tussenstop {index + 1}
+                            </p>
+                            {!addressNeedsAttention && (stop.timeFrom || stop.timeTo) ? (
+                              <p className="mt-1 text-[10.5px] text-muted-foreground">{windowLabel}</p>
+                            ) : null}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeIntermediateStop(stop.id)}
+                            className="h-7 w-7 shrink-0 grid place-items-center rounded-md text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            aria-label={`Verwijder tussenstop ${index + 1}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          </button>
+                        </div>
+
+                        <AddressAutocomplete
+                          value={stop.address}
+                          onChange={(value) => updateIntermediateStop(stop.id, { address: value })}
+                          onBlur={onAutoSave}
+                          placeholder="Tussenstop adres..."
+                          className={cn(
+                            "h-auto border-0 shadow-none p-0 text-[13px] font-medium bg-transparent focus-visible:ring-1 focus-visible:ring-[hsl(var(--gold)/0.4)] focus-visible:bg-white focus-visible:rounded focus-visible:px-1",
+                            addressNeedsAttention && "text-destructive italic font-normal",
+                          )}
+                        />
+
+                        {addressNeedsAttention ? (
+                          <p className="mt-1 flex items-center gap-1 text-[10.5px] text-red-700">
+                            <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                            {!stop.address ? "Adres van tussenstop ontbreekt" : "Adres van tussenstop is onvolledig"}
+                          </p>
+                        ) : null}
+
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={stop.timeFrom}
+                            onChange={(e) => updateIntermediateStop(stop.id, { timeFrom: e.target.value })}
+                            onBlur={onAutoSave}
+                            className="picker h-8 w-[92px] text-[11.5px] px-2 py-1 rounded-md"
+                          />
+                          <span className="text-[11px] text-muted-foreground">tot</span>
+                          <input
+                            type="time"
+                            value={stop.timeTo}
+                            onChange={(e) => updateIntermediateStop(stop.id, { timeTo: e.target.value })}
+                            onBlur={onAutoSave}
+                            className="picker h-8 w-[92px] text-[11.5px] px-2 py-1 rounded-md"
+                          />
+                          {timeNeedsAttention ? <FieldStatePill tone="review" label="Venster checken" /> : null}
+                        </div>
+
+                        {timeNeedsAttention ? (
+                          <p className="mt-1 flex items-center gap-1 text-[10.5px] text-amber-800">
+                            <AlertTriangle className="h-3 w-3" strokeWidth={1.75} />
+                            Tijdvenster van tussenstop is onvolledig.
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
               <button
+                type="button"
+                onClick={addIntermediateStop}
                 className="mt-4 inline-flex items-center gap-1 text-[11.5px] font-medium hover:underline"
                 style={{
                   fontFamily: "'Space Grotesk', sans-serif",

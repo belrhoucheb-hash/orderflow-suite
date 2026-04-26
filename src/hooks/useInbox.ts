@@ -14,6 +14,7 @@ import {
   getCapacityWarning,
   tryEnrichAddress,
   getFormErrors,
+  getRouteStopsNotificationPayload,
   isValidAddress,
   penalizeIncompleteAddresses,
   STANDARD_PALLET_WEIGHT_KG,
@@ -21,7 +22,7 @@ import {
 import { saveCorrection } from "@/hooks/useAIFeedback";
 import { recordAIDecision, resolveAIDecision } from "@/hooks/useConfidenceStore";
 import { useTenant } from "@/contexts/TenantContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuthOptional } from "@/contexts/AuthContext";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 import { emitEventDirect } from "@/hooks/useEventPipeline";
 import { fetchDepartmentsCached } from "@/hooks/useDepartments";
@@ -41,7 +42,7 @@ function formsEqual(left?: FormState | null, right?: FormState | null) {
 export function useInbox() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
-  const { user } = useAuth();
+  const { user } = useAuthOptional();
 
   // ─── State ───
   const [selectedId, setSelectedId] = useState<string>("");
@@ -287,6 +288,7 @@ export function useInbox() {
           pickupTimeTo: "",
           deliveryTimeFrom: "",
           deliveryTimeTo: "",
+          intermediateStops: [],
           quantity: qtyVal,
           unit: unitVal,
           weight: weightVal,
@@ -441,7 +443,7 @@ export function useInbox() {
       // ── Resolve client_id from client_name ──
       const { data: orderData } = await supabase
         .from("orders")
-        .select("client_name, tenant_id")
+        .select("client_name, tenant_id, notification_preferences")
         .eq("id", id)
         .single();
 
@@ -484,10 +486,10 @@ export function useInbox() {
           transport_type: form.transportType.toUpperCase().replace("-", "_"),
           pickup_address: form.pickupAddress,
           delivery_address: form.deliveryAddress,
-          pickup_time_from: form.pickupTimeFrom || null,
-          pickup_time_to: form.pickupTimeTo || null,
-          delivery_time_from: form.deliveryTimeFrom || null,
-          delivery_time_to: form.deliveryTimeTo || null,
+          pickup_time_window_start: form.pickupTimeFrom || null,
+          pickup_time_window_end: form.pickupTimeTo || null,
+          delivery_time_window_start: form.deliveryTimeFrom || null,
+          delivery_time_window_end: form.deliveryTimeTo || null,
           quantity: form.quantity,
           unit: form.unit,
           weight_kg: form.weight ? Number(form.weight) : null,
@@ -495,6 +497,10 @@ export function useInbox() {
           dimensions: form.dimensions || null,
           requirements: form.requirements,
           internal_note: form.internalNote || null,
+          notification_preferences: getRouteStopsNotificationPayload(
+            orderData?.notification_preferences as OrderDraft["notification_preferences"],
+            form.intermediateStops,
+          ),
           ...(clientId ? { client_id: clientId } : {}),
         })
         .eq("id", id);
@@ -603,10 +609,10 @@ export function useInbox() {
           transport_type: f.transportType.toUpperCase().replace("-", "_"),
           pickup_address: f.pickupAddress,
           delivery_address: f.deliveryAddress,
-          pickup_time_from: f.pickupTimeFrom || null,
-          pickup_time_to: f.pickupTimeTo || null,
-          delivery_time_from: f.deliveryTimeFrom || null,
-          delivery_time_to: f.deliveryTimeTo || null,
+          pickup_time_window_start: f.pickupTimeFrom || null,
+          pickup_time_window_end: f.pickupTimeTo || null,
+          delivery_time_window_start: f.deliveryTimeFrom || null,
+          delivery_time_window_end: f.deliveryTimeTo || null,
           quantity: f.quantity,
           unit: f.unit,
           weight_kg: f.weight ? Number(f.weight) : null,
@@ -614,6 +620,10 @@ export function useInbox() {
           dimensions: f.dimensions || null,
           requirements: f.requirements,
           internal_note: f.internalNote || null,
+          notification_preferences: getRouteStopsNotificationPayload(
+            drafts.find((draft) => draft.id === id)?.notification_preferences ?? null,
+            f.intermediateStops,
+          ),
         })
         .eq("id", id);
       if (error) throw error;
@@ -928,6 +938,7 @@ export function useInbox() {
           pickupTimeTo: "",
           deliveryTimeFrom: "",
           deliveryTimeTo: "",
+          intermediateStops: [],
           quantity: qtyVal2,
           unit: unitVal2,
           weight: weightVal2,
