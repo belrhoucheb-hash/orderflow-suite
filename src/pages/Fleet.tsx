@@ -226,7 +226,7 @@ export default function Fleet() {
           </div>
 
           <TabsContent value="voertuigcheck" className="mt-0">
-            <VoertuigcheckHistorie />
+            <VoertuigcheckHistorie embedded />
           </TabsContent>
 
           <TabsContent value="voertuigen" className="mt-0 space-y-4">

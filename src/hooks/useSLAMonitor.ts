@@ -1,15 +1,19 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createNotification } from "@/hooks/useNotifications";
+import { useLoadSettings } from "@/hooks/useSettings";
+import { DEFAULT_SLA_SETTINGS, normalizeSlaSettings } from "@/lib/slaSettings";
 
-// SLA deadline = 4 hours after received_at
-const SLA_HOURS = 4;
 const CHECK_INTERVAL_MS = 60_000; // Check every 60 seconds
 
 export function useSLAMonitor() {
   const notifiedRef = useRef<Set<string>>(new Set());
+  const { data: rawSettings } = useLoadSettings<Partial<typeof DEFAULT_SLA_SETTINGS>>("sla");
+  const slaSettings = normalizeSlaSettings(rawSettings);
 
   useEffect(() => {
+    if (!slaSettings.enabled) return;
+
     const checkSLA = async () => {
       try {
         // Fetch DRAFT and OPEN orders with received_at
@@ -26,7 +30,9 @@ export function useSLAMonitor() {
 
         for (const order of orders) {
           if (!order.received_at) continue;
-          const deadline = new Date(new Date(order.received_at).getTime() + SLA_HOURS * 60 * 60 * 1000);
+          const deadline = new Date(
+            new Date(order.received_at).getTime() + slaSettings.deadlineHours * 60 * 60 * 1000,
+          );
           const minutesLeft = Math.floor((deadline.getTime() - now.getTime()) / 60000);
 
           // Already notified for this order in this session
@@ -44,7 +50,11 @@ export function useSLAMonitor() {
               order_id: order.id,
               metadata: { minutes_left: 0, status: order.status },
             });
-          } else if (minutesLeft > 0 && minutesLeft <= 60 && !notifiedRef.current.has(warningKey)) {
+          } else if (
+            minutesLeft > 0 &&
+            minutesLeft <= slaSettings.warningMinutes &&
+            !notifiedRef.current.has(warningKey)
+          ) {
             // Warning: less than 1 hour left
             notifiedRef.current.add(warningKey);
             await createNotification({
@@ -67,7 +77,7 @@ export function useSLAMonitor() {
     const interval = setInterval(checkSLA, CHECK_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [slaSettings.deadlineHours, slaSettings.enabled, slaSettings.warningMinutes]);
 
   // Also listen to realtime order changes for instant notifications
   useEffect(() => {

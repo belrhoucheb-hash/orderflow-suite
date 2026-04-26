@@ -45,7 +45,7 @@ export function AutonomyScoreCard({ compact = false }: AutonomyScoreCardProps) {
             <Brain className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
           </div>
           <div>
-            <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>AI Autonomie</span>
+            <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>AI Score</span>
             <p className="text-xs text-muted-foreground">Laden...</p>
           </div>
         </div>
@@ -91,7 +91,7 @@ export function AutonomyScoreCard({ compact = false }: AutonomyScoreCardProps) {
         </div>
         <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]"
           style={{ fontFamily: "var(--font-display)" }}>
-          AI Autonomie
+          AI Score
         </span>
       </div>
 

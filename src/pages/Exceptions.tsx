@@ -32,6 +32,8 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "sonner";
 import { useEffect, useMemo as useReactMemo, useState } from "react";
+import { useLoadSettings } from "@/hooks/useSettings";
+import { normalizeSlaSettings } from "@/lib/slaSettings";
 import {
   useCreateExceptionAction,
   useExceptionActions,
@@ -345,6 +347,7 @@ const Exceptions = () => {
   const { data: deliveryExceptions = [], isLoading: dexLoading } = useDeliveryExceptions();
   const { data: anomalies = [], isLoading: anomaliesLoading } = useAnomalies({ unresolvedOnly: true });
   const { data: exceptionActions = [] } = useExceptionActions({ status: "ALL" });
+  const { data: rawSlaSettings } = useLoadSettings("sla");
   const createExceptionAction = useCreateExceptionAction();
   const updateExceptionActionStatus = useUpdateExceptionActionStatus();
   const executeExceptionAction = useExecuteExceptionAction();
@@ -352,13 +355,14 @@ const Exceptions = () => {
   const resolveAnomaly = useResolveAnomaly();
 
   const isLoading = ordersLoading || vehiclesLoading || dexLoading || anomaliesLoading;
+  const slaSettings = normalizeSlaSettings(rawSlaSettings as Record<string, unknown>);
 
   const { exceptions, counts } = useMemo(() => {
     if (!orderData) return { exceptions: [] as ExceptionItem[], counts: { delays: 0, missingData: 0, capacity: 0, sla: 0, delivery: 0 } };
 
     const items: ExceptionItem[] = [];
     const now = Date.now();
-    const threeHoursMs = 3 * 60 * 60 * 1000;
+    const slaDeadlineMs = slaSettings.deadlineHours * 60 * 60 * 1000;
     const twentyFourHoursMs = 24 * 60 * 60 * 1000;
 
     // ── Delivery exceptions from DB ──────────────────────────────
@@ -422,7 +426,7 @@ const Exceptions = () => {
     // ── Ad-hoc: SLA risk ─────────────────────────────────────────
     const slaOrders = orderData.drafts.filter((o: any) => {
       const receivedAt = o.received_at || o.created_at;
-      return receivedAt && now - new Date(receivedAt).getTime() > threeHoursMs;
+      return slaSettings.enabled && receivedAt && now - new Date(receivedAt).getTime() > slaDeadlineMs;
     });
     for (const o of slaOrders) {
       items.push({
@@ -515,7 +519,7 @@ const Exceptions = () => {
         anomalies: anomalies.length,
       },
     };
-  }, [orderData, vehicles, deliveryExceptions, anomalies]);
+  }, [anomalies, deliveryExceptions, orderData, slaSettings.deadlineHours, slaSettings.enabled, vehicles]);
 
   const actionsBySource = useReactMemo(() => {
     const map = new Map<string, ExceptionAction[]>();

@@ -53,6 +53,7 @@ import { ConnectorCatalog } from "@/components/settings/ConnectorCatalog";
 import { ConnectorDetail } from "@/components/settings/ConnectorDetail";
 import { useTranslation } from "react-i18next";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DEFAULT_SLA_SETTINGS, normalizeSlaSettings } from "@/lib/slaSettings";
 
 const LANGUAGE_OPTIONS = [
   { value: "nl", label: "Nederlands" },
@@ -181,6 +182,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Basis",
     items: [
       { value: "algemeen", label: "Algemeen" },
+      { value: "sla", label: "SLA" },
       { value: "branding", label: "Branding" },
       { value: "notificaties", label: "Notificaties" },
     ],
@@ -431,17 +433,21 @@ const Settings = () => {
   const { data: savedIntegrations } = useLoadSettings<typeof integrations>("integrations");
   const { data: savedNotifications } = useLoadSettings<typeof notifications>("notifications");
   const { data: savedSms } = useSmsSettings();
+  const { data: savedSla } = useLoadSettings("sla");
 
   const saveIntegrations = useSaveSettings("integrations");
   const saveNotifications = useSaveSettings("notifications");
   const saveSms = useSaveSmsSettings();
+  const saveSla = useSaveSettings("sla");
 
   // Baseline-state voor dirty-detectie per tab. Wordt gezet na load-
   // succes en na save-succes, dan is de huidige state "schoon".
   const [notificationsBaseline, setNotificationsBaseline] = useState<string>("");
   const [smsBaseline, setSmsBaseline] = useState<string>("");
   const [integrationsBaseline, setIntegrationsBaseline] = useState<string>("");
+  const [slaBaseline, setSlaBaseline] = useState<string>("");
   const connectorList = useConnectorList();
+  const [slaSettings, setSlaSettings] = useState(DEFAULT_SLA_SETTINGS);
 
   // Load saved settings into state when fetched
   useEffect(() => {
@@ -495,6 +501,14 @@ const Settings = () => {
       }));
     }
   }, [savedSms]);
+
+  useEffect(() => {
+    if (savedSla !== undefined) {
+      const merged = normalizeSlaSettings(savedSla as Record<string, unknown>);
+      setSlaSettings(merged);
+      setSlaBaseline(JSON.stringify(merged));
+    }
+  }, [savedSla]);
 
   const notificationsCurrent = JSON.stringify(notifications);
   const notificationsDirty = notificationsBaseline !== "" && notificationsCurrent !== notificationsBaseline;
@@ -588,6 +602,7 @@ const Settings = () => {
   const getActiveTab = () => {
     if (location.pathname.includes("/stamgegevens")) return "stamgegevens";
     if (location.pathname.includes("/rooster-types")) return "rooster-types";
+    if (location.pathname.includes("/sla")) return "sla";
     if (location.pathname.includes("/branding")) return "branding";
     if (location.pathname.includes("/notificaties")) return "notificaties";
     if (location.pathname.includes("/sms")) return "sms";
@@ -604,6 +619,27 @@ const Settings = () => {
   const handleTabChange = (value: string) => {
     if (value === "algemeen") navigate("/settings");
     else navigate(`/settings/${value}`);
+  };
+
+  const slaCurrent = JSON.stringify(slaSettings);
+  const slaDirty = slaBaseline !== "" && slaCurrent !== slaBaseline;
+  const revertSla = () => {
+    if (!slaBaseline) return;
+    try {
+      setSlaSettings(JSON.parse(slaBaseline));
+    } catch {
+      /* noop */
+    }
+  };
+
+  const handleSaveSla = async () => {
+    try {
+      await saveSla.mutateAsync(slaSettings as unknown as Record<string, unknown>);
+      setSlaBaseline(JSON.stringify(slaSettings));
+      toast.success("SLA-instellingen opgeslagen");
+    } catch {
+      toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
+    }
   };
 
   interface SmtpFields {
@@ -1203,6 +1239,87 @@ const Settings = () => {
           </div>
         </TabsContent>
 
+        <TabsContent value="sla" className="outline-none">
+          <div className="card--luxe p-6 space-y-6">
+            <div>
+              <p className="text-[11px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                SLA
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Bepaal wanneer een order als SLA-risico telt en wanneer waarschuwingen moeten verschijnen.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-4 space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">SLA-bewaking actief</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Gebruik tenant-eigen deadlines in notificaties en uitzonderingen.
+                  </p>
+                </div>
+                <Switch
+                  checked={slaSettings.enabled}
+                  onCheckedChange={(value) => setSlaSettings((prev) => ({ ...prev, enabled: value }))}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="sla-deadline-hours">SLA deadline in uren</Label>
+                  <Input
+                    id="sla-deadline-hours"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={slaSettings.deadlineHours}
+                    onChange={(e) => setSlaSettings((prev) => ({ ...prev, deadlineHours: Number(e.target.value || 1) }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Na dit aantal uur in `DRAFT` wordt een order als SLA-risico gezien.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="sla-warning-minutes">Waarschuwing in minuten</Label>
+                  <Input
+                    id="sla-warning-minutes"
+                    type="number"
+                    min={5}
+                    step={5}
+                    value={slaSettings.warningMinutes}
+                    onChange={(e) => setSlaSettings((prev) => ({ ...prev, warningMinutes: Number(e.target.value || 5) }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Binnen dit venster verschijnt een SLA-waarschuwing voordat de deadline verloopt.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                  Deadline
+                </p>
+                <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.deadlineHours} uur</p>
+              </div>
+              <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                  Waarschuwing
+                </p>
+                <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.warningMinutes} min</p>
+              </div>
+              <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                  Status
+                </p>
+                <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.enabled ? "Actief" : "Uit"}</p>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
         <TabsContent value="notificaties" className="outline-none">
           <div className="card--luxe p-6 space-y-1">
             <div className="pb-4">
@@ -1760,6 +1877,15 @@ const Settings = () => {
           onSave={handleSaveNotifications}
           onRevert={revertNotifications}
           label="Notificaties hebben niet-opgeslagen wijzigingen"
+        />
+      )}
+      {activeTab === "sla" && (
+        <StickySaveBar
+          dirty={slaDirty}
+          saving={saveSla.isPending}
+          onSave={handleSaveSla}
+          onRevert={revertSla}
+          label="SLA-instellingen hebben niet-opgeslagen wijzigingen"
         />
       )}
       {activeTab === "sms" && (

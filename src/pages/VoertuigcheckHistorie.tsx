@@ -280,7 +280,7 @@ function defaultDateRange() {
   return { from, to };
 }
 
-export default function VoertuigcheckHistorie() {
+export default function VoertuigcheckHistorie({ embedded = false }: { embedded?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlStatus = searchParams.get("status") ?? "";
 
@@ -354,7 +354,8 @@ export default function VoertuigcheckHistorie() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto" style={{ fontFamily: "var(--font-ui)" }}>
+    <div className={embedded ? "space-y-4" : "mx-auto max-w-6xl p-4 md:p-6"} style={{ fontFamily: "var(--font-ui)" }}>
+      {!embedded && (
       <header className="mb-6">
         <div className="flex items-center gap-2 mb-2" style={{ fontFamily: "var(--font-display)" }}>
           <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
@@ -369,7 +370,9 @@ export default function VoertuigcheckHistorie() {
           Overzicht van alle pre-trip checks, bevindingen en schade-attributie.
         </p>
       </header>
+      )}
 
+      {!embedded && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { label: "Totaal checks", value: stats.total, icon: ShieldAlert },
@@ -390,8 +393,9 @@ export default function VoertuigcheckHistorie() {
           </div>
         ))}
       </div>
+      )}
 
-      <div className="flex items-center gap-1 mb-4 border-b border-border/50">
+      <div className={embedded ? "mb-3 flex items-center gap-1 border-b border-[hsl(var(--gold)/0.1)]" : "mb-4 flex items-center gap-1 border-b border-border/50"}>
         {[
           { key: "all" as const, label: "Alle checks" },
           { key: "releases" as const, label: "Vrijgaves (audit)" },
@@ -417,7 +421,7 @@ export default function VoertuigcheckHistorie() {
         ))}
       </div>
 
-      <div className="card--luxe p-5 mb-4" style={{ overflow: "visible" }}>
+      <div className={embedded ? "rounded-[1.15rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.06)] p-4 mb-4" : "card--luxe p-5 mb-4"} style={{ overflow: "visible" }}>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 items-end">
           <div className="flex flex-col min-w-0">
             <label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1.5" style={{ fontFamily: "var(--font-display)" }}>
@@ -508,7 +512,7 @@ export default function VoertuigcheckHistorie() {
         )}
       </div>
 
-      <div className="card--luxe overflow-hidden">
+      <div className={embedded ? "overflow-hidden rounded-[1.15rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))]" : "card--luxe overflow-hidden"}>
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">Laden…</div>
         ) : rows.length === 0 ? (
