@@ -8,7 +8,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -237,41 +236,77 @@ const Dispatch = () => {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <PageHeader
-        title="Dispatch"
-        subtitle={
-          section === "dispatch"
-            ? "Ritten beheren en dispatchen naar chauffeurs"
-            : section === "live"
-              ? "Live-posities en voortgang per rit"
-              : "Afwijkingen en interventies"
-        }
-        actions={
-          section === "dispatch" ? (
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" className="h-10 w-10" onClick={goToPrevDay}>
+      <div className="relative pb-3 pt-2">
+        <div
+          aria-hidden
+          className="absolute -top-6 -left-8 w-64 h-32 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)" }}
+        />
+        <div className="relative flex items-end justify-between gap-5 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2" style={{ fontFamily: "var(--font-display)" }}>
+              <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
+              <span className="text-[10px] uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))] font-semibold">
+                Operations
+              </span>
+              <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
+              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums font-medium">
+                {section === "dispatch"
+                  ? `${trips.length} ${trips.length === 1 ? "rit" : "ritten"}`
+                  : section === "live"
+                    ? "Live overzicht"
+                    : "Actieve interventies"}
+              </span>
+            </div>
+            <h1
+              className="text-[2.25rem] leading-[1.05] font-semibold tracking-tight text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Dispatch
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {section === "dispatch"
+                ? "Ritten beheren en dispatchen naar chauffeurs"
+                : section === "live"
+                  ? "Live-posities en voortgang per rit"
+                  : "Afwijkingen en interventies"}
+            </p>
+          </div>
+          {section === "dispatch" && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                className="btn-luxe"
+                onClick={goToPrevDay}
+                aria-label="Vorige dag"
+              >
                 <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center gap-2 bg-card border border-border/50 rounded-xl px-3 h-10">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </button>
+              <div className="btn-luxe gap-2 pr-3">
+                <Calendar className="h-4 w-4" />
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-transparent text-sm font-medium border-none outline-none"
+                  className="bg-transparent text-sm font-medium text-foreground border-none outline-none"
                 />
               </div>
-              <Button variant="outline" size="icon" className="h-10 w-10" onClick={goToNextDay}>
+              <button
+                className="btn-luxe"
+                onClick={goToNextDay}
+                aria-label="Volgende dag"
+              >
                 <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setSelectedDate(getTodayISO())}>
+              </button>
+              <button
+                className="btn-luxe btn-luxe--primary"
+                onClick={() => setSelectedDate(getTodayISO())}
+              >
                 Vandaag
-              </Button>
+              </button>
             </div>
-          ) : null
-        }
-      />
+          )}
+        </div>
+      </div>
 
       <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
         {[
