@@ -28,11 +28,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "sonner";
-import { useMemo as useReactMemo, useState } from "react";
+import { useEffect, useMemo as useReactMemo, useState } from "react";
 import {
   useCreateExceptionAction,
   useExceptionActions,
@@ -339,8 +338,8 @@ function useExceptionOrders() {
 
 // ── Component ────────────────────────────────────────────────────────
 const Exceptions = () => {
-  const [expandedCopilotId, setExpandedCopilotId] = useState<string | null>(null);
   const [focus, setFocus] = useState<ExceptionFocus>("all");
+  const [selectedExceptionId, setSelectedExceptionId] = useState<string | null>(null);
   const { data: orderData, isLoading: ordersLoading } = useExceptionOrders();
   const { data: vehicles = [], isLoading: vehiclesLoading } = useFleetVehicles();
   const { data: deliveryExceptions = [], isLoading: dexLoading } = useDeliveryExceptions();
@@ -570,21 +569,22 @@ const Exceptions = () => {
     });
   }, [actionsBySource, exceptions, focus]);
 
+  useEffect(() => {
+    if (filteredExceptions.length === 0) {
+      setSelectedExceptionId(null);
+      return;
+    }
+
+    if (!selectedExceptionId || !filteredExceptions.some((exc) => exc.id === selectedExceptionId)) {
+      setSelectedExceptionId(filteredExceptions[0].id);
+    }
+  }, [filteredExceptions, selectedExceptionId]);
+
   const totalCount = counts.delays + counts.missingData + counts.capacity + counts.sla + counts.delivery + (counts.anomalies ?? 0);
 
   if (isLoading) {
     return <LoadingState message="Uitzonderingen laden..." />;
   }
-
-  const kpis = [
-    { label: "Delivery", value: counts.delivery, icon: AlertTriangle, color: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950/40" },
-    { label: "Vertragingen", value: counts.delays, icon: Clock, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/40" },
-    { label: "Ontbrekende data", value: counts.missingData, icon: Package, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/40" },
-    { label: "Capaciteit", value: counts.capacity, icon: Truck, color: "text-violet-600", bg: "bg-violet-50 dark:bg-violet-950/40" },
-    { label: "SLA risico", value: counts.sla, icon: Shield, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/40" },
-    { label: "Anomalies", value: counts.anomalies ?? 0, icon: Brain, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/40" },
-    { label: "Copilot acties", value: recommendedCount, icon: Bot, color: "text-[hsl(var(--gold-deep))]", bg: "bg-[hsl(var(--gold-soft)/0.35)]" },
-  ];
 
   const focusOptions: Array<{ key: ExceptionFocus; label: string }> = [
     { key: "all", label: "Alles" },
@@ -612,57 +612,109 @@ const Exceptions = () => {
     await createExceptionAction.mutateAsync(payload);
   };
 
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <PageHeader
-        title="Uitzonderingen"
-        subtitle={`${totalCount} items vereisen aandacht`}
-      />
+  const selectedException =
+    filteredExceptions.find((exc) => exc.id === selectedExceptionId) ??
+    filteredExceptions[0] ??
+    null;
 
-      {/* KPI Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
-        {kpis.map((kpi, i) => (
-          <motion.div
-            key={kpi.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className="rounded-xl border bg-card p-4 flex items-center gap-3"
-          >
-            <div className={cn("rounded-lg p-2.5", kpi.bg)}>
-              <kpi.icon className={cn("h-5 w-5", kpi.color)} strokeWidth={1.8} />
+  const selectedExceptionSourceType = selectedException ? mapExceptionToSourceType(selectedException) : null;
+  const selectedExceptionSourceKey = selectedException && selectedExceptionSourceType
+    ? `${selectedExceptionSourceType}:${selectedException.id}`
+    : null;
+  const selectedActions = selectedExceptionSourceKey ? actionsBySource.get(selectedExceptionSourceKey) ?? [] : [];
+  const selectedRecommendedAction = selectedActions.find((action) => action.recommended && action.status === "PENDING") ?? selectedActions[0] ?? null;
+  const selectedSuggestion = selectedException ? buildSuggestedAction(selectedException) : null;
+  const SelectedActionIcon = selectedRecommendedAction || selectedSuggestion
+    ? copilotIconByAction[(selectedRecommendedAction?.actionType ?? selectedSuggestion?.actionType ?? "")] ?? Wand2
+    : Wand2;
+
+  const summaryCards = [
+    {
+      label: "Direct oppakken",
+      value: focusCounts.critical,
+      hint: "kritieke uitzonderingen",
+      icon: AlertTriangle,
+      tone: "text-red-600",
+      surface: "bg-red-50/80 dark:bg-red-950/30",
+      ring: "border-red-200/80 dark:border-red-900/80",
+      target: "critical" as const,
+    },
+    {
+      label: "Vandaag",
+      value: focusCounts.today,
+      hint: "nieuw of actueel",
+      icon: Clock,
+      tone: "text-amber-600",
+      surface: "bg-amber-50/80 dark:bg-amber-950/30",
+      ring: "border-amber-200/80 dark:border-amber-900/80",
+      target: "today" as const,
+    },
+    {
+      label: "Copilot klaar",
+      value: focusCounts.copilot,
+      hint: "met voorstel",
+      icon: Bot,
+      tone: "text-[hsl(var(--gold-deep))]",
+      surface: "bg-[hsl(var(--gold-soft)/0.3)]",
+      ring: "border-[hsl(var(--gold)/0.2)]",
+      target: "copilot" as const,
+    },
+  ];
+
+  return (
+    <div className="page-container space-y-5">
+      <div className="relative pb-2 pt-2">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -left-6 -top-5 h-24 w-56"
+          style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.5), transparent 72%)" }}
+        />
+        <div className="relative flex items-end justify-between gap-5 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-center gap-2" style={{ fontFamily: "var(--font-display)" }}>
+              <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))]">
+                Triage
+              </span>
+              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums">
+                {totalCount} {totalCount === 1 ? "uitzondering" : "uitzonderingen"}
+              </span>
             </div>
-            <div>
-              <p className="text-2xl font-semibold tracking-tight">{kpi.value}</p>
-              <p className="text-xs text-muted-foreground">{kpi.label}</p>
-            </div>
-          </motion.div>
-        ))}
+            <h1
+              className="text-[2rem] font-semibold leading-[1.05] tracking-tight text-foreground"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Uitzonderingen
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Werk vanuit focus, context en aanbevolen acties in plaats van losse alarmen.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)]">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Filter className="h-4 w-4 text-muted-foreground" />
               Planner focus
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Werk sneller vanuit een focuslijst in plaats van de hele exceptionstroom tegelijk.
+            <p className="mt-1 text-xs text-muted-foreground">
+              Wissel van werkmodus zonder je triagefeed kwijt te raken.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1">
             {focusOptions.map((option) => (
               <button
                 key={option.key}
                 type="button"
                 onClick={() => setFocus(option.key)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  "rounded-[0.8rem] px-3.5 py-2 text-xs font-medium transition-all whitespace-nowrap",
                   focus === option.key
-                    ? "border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.38)] text-[hsl(var(--gold-deep))]"
-                    : "border-border/60 bg-background text-muted-foreground hover:text-foreground",
+                    ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {option.label} ({focusCounts[option.key]})
@@ -672,286 +724,339 @@ const Exceptions = () => {
         </div>
       </div>
 
-      {/* Exception List */}
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="px-5 py-3.5 border-b">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-sm font-semibold text-foreground">Alle uitzonderingen</h2>
-            <span className="text-xs text-muted-foreground">
-              {filteredExceptions.length} zichtbaar van {exceptions.length}
-            </span>
+      <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
+        <section className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)] xl:sticky xl:top-4 xl:self-start">
+          <div className="mb-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+              Queues
+            </p>
+            <h2 className="mt-1 text-sm font-semibold text-foreground">Wat vraagt nu aandacht</h2>
           </div>
-        </div>
 
-        {filteredExceptions.length === 0 ? (
-          <EmptyState
-            icon={CheckCircle2}
-            title={exceptions.length === 0 ? "Geen uitzonderingen" : "Geen uitzonderingen in deze focus"}
-            description={exceptions.length === 0 ? "Alles loopt volgens planning" : "Kies een andere focus om meer werkitems te zien"}
-          />
-        ) : (
-          <div className="divide-y">
-            {filteredExceptions.map((exc, i) => {
-              const uc = urgencyConfig[exc.urgency];
-              return (
-                <motion.div
-                  key={exc.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                  className="px-5 py-3.5 hover:bg-muted/40 transition-colors"
-                >
-                  {(() => {
-                    const sourceType = mapExceptionToSourceType(exc);
-                    const sourceKey = `${sourceType}:${exc.id}`;
-                    const actions = actionsBySource.get(sourceKey) ?? [];
-                    const recommendedAction = actions.find((action) => action.recommended && action.status === "PENDING") ?? actions[0] ?? null;
-                    const suggestion = buildSuggestedAction(exc);
-                    const ActionIcon = copilotIconByAction[(recommendedAction?.actionType ?? suggestion.actionType)] ?? Wand2;
-                    const isExpanded = expandedCopilotId === exc.id;
+          <div className="space-y-3">
+            {summaryCards.map((card) => (
+              <button
+                key={card.label}
+                type="button"
+                onClick={() => setFocus(card.target)}
+                className={cn(
+                  "w-full rounded-[1.15rem] border p-3 text-left transition-all",
+                  card.ring,
+                  card.surface,
+                  focus === card.target && "shadow-[0_18px_36px_-30px_hsl(var(--gold-deep)/0.3)] ring-1 ring-[hsl(var(--gold)/0.16)]",
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
+                    <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">{card.value}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
+                  </div>
+                  <div className={cn("rounded-[0.9rem] p-2.5", card.surface)}>
+                    <card.icon className={cn("h-4 w-4", card.tone)} />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
 
-                    return (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-4">
-                          <div className={cn("rounded-full p-1.5 ring-1", uc.bg, uc.ring)}>
-                            <AlertTriangle className={cn("h-4 w-4", uc.color)} strokeWidth={2} />
-                          </div>
+          <div className="mt-4 rounded-[1.15rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3">
+            <p className="text-xs font-medium text-foreground">Bronnen in beeld</p>
+            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5" /> Delivery exceptions</span>
+                <span className="font-medium text-foreground">{counts.delivery}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2"><Brain className="h-3.5 w-3.5" /> Anomalies</span>
+                <span className="font-medium text-foreground">{counts.anomalies ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2"><Package className="h-3.5 w-3.5" /> Intake / data</span>
+                <span className="font-medium text-foreground">{counts.missingData + counts.sla}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2"><Truck className="h-3.5 w-3.5" /> Capaciteit</span>
+                <span className="font-medium text-foreground">{counts.capacity}</span>
+              </div>
+            </div>
+          </div>
+        </section>
 
+        <section className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)]">
+          <div className="border-b border-[hsl(var(--gold)/0.12)] px-5 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                  Feed
+                </p>
+                <h2 className="mt-1 text-sm font-semibold text-foreground">Exception workbench</h2>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {filteredExceptions.length} zichtbaar van {exceptions.length}
+              </span>
+            </div>
+          </div>
+
+          {filteredExceptions.length === 0 ? (
+            <EmptyState
+              icon={CheckCircle2}
+              title={exceptions.length === 0 ? "Geen uitzonderingen" : "Geen uitzonderingen in deze focus"}
+              description={exceptions.length === 0 ? "Alles loopt volgens planning" : "Kies een andere focus om meer werkitems te zien"}
+            />
+          ) : (
+            <div className="divide-y divide-[hsl(var(--gold)/0.08)]">
+              {filteredExceptions.map((exc, i) => {
+                const uc = urgencyConfig[exc.urgency];
+                const sourceType = mapExceptionToSourceType(exc);
+                const sourceKey = `${sourceType}:${exc.id}`;
+                const actions = actionsBySource.get(sourceKey) ?? [];
+                const recommendedAction = actions.find((action) => action.recommended && action.status === "PENDING") ?? actions[0] ?? null;
+                const suggestion = buildSuggestedAction(exc);
+                const isSelected = selectedException?.id === exc.id;
+
+                return (
+                  <motion.button
+                    key={exc.id}
+                    type="button"
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                    onClick={() => setSelectedExceptionId(exc.id)}
+                    className={cn(
+                      "w-full px-5 py-4 text-left transition-colors",
+                      isSelected ? "bg-[hsl(var(--gold-soft)/0.12)]" : "hover:bg-muted/30",
+                    )}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={cn("rounded-full p-1.5 ring-1", uc.bg, uc.ring)}>
+                        <AlertTriangle className={cn("h-4 w-4", uc.color)} strokeWidth={2} />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Badge
                             variant="outline"
-                            className={cn("text-xs font-medium shrink-0 min-w-[80px] justify-center", typeBadgeColor[exc.type])}
+                            className={cn("text-xs font-medium shrink-0", typeBadgeColor[exc.type])}
                           >
                             {exc.type}
                           </Badge>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-foreground truncate">
-                                {exc.orderNumber}
-                              </span>
-                              <span className="text-xs text-muted-foreground truncate">
-                                {exc.clientName}
-                              </span>
-                              <span className="hidden md:inline-flex rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
-                                {getUrgencyLabel(exc.urgency)}
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground truncate mt-0.5">
-                              {exc.description}
-                            </p>
-                            <div className="mt-1 flex flex-wrap gap-1.5">
-                              <span className="chiplet">
-                                Aanbevolen: {(recommendedAction?.title ?? suggestion.title)}
-                              </span>
-                              <span className="chiplet">
-                                {Math.round(recommendedAction?.confidence ?? suggestion.confidence)}% confidence
-                              </span>
-                            </div>
-                          </div>
-
-                          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                            {timeAgo(exc.detectedAt)}
+                          <span className="text-sm font-medium text-foreground">{exc.orderNumber}</span>
+                          {exc.clientName && (
+                            <span className="text-xs text-muted-foreground">{exc.clientName}</span>
+                          )}
+                          <span className="rounded-full border border-[hsl(var(--gold)/0.12)] px-2 py-0.5 text-[10px] text-muted-foreground">
+                            {getUrgencyLabel(exc.urgency)}
                           </span>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {exc.source === "db" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                                disabled={resolveException.isPending || resolveAnomaly.isPending}
-                                onClick={() => {
-                                  if (exc.id.startsWith("anomaly-")) {
-                                    resolveAnomaly.mutate({ id: exc.id.replace("anomaly-", "") });
-                                  } else {
-                                    resolveException.mutate(exc.id);
-                                  }
-                                }}
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Opgelost
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              asChild
-                              className="text-xs gap-1.5"
-                            >
-                              <Link to={exc.actionTo}>
-                                {exc.actionLabel}
-                                <ArrowRight className="h-3.5 w-3.5" />
-                              </Link>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-xs gap-1.5 border-[hsl(var(--gold)/0.22)] hover:bg-[hsl(var(--gold-soft)/0.18)]"
-                              onClick={() => setExpandedCopilotId(isExpanded ? null : exc.id)}
-                            >
-                              <Bot className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
-                              Copilot
-                              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-180")} />
-                            </Button>
-                          </div>
                         </div>
 
-                        {isExpanded && (
-                          <div
-                            className="ml-12 rounded-2xl border px-4 py-4"
-                            style={{
-                              background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.18) 0%, hsl(var(--card)) 100%)",
-                              borderColor: "hsl(var(--gold) / 0.18)",
-                            }}
-                          >
-                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <div className="h-8 w-8 rounded-xl flex items-center justify-center bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))]">
-                                    <ActionIcon className="h-4 w-4" />
-                                  </div>
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                      <span
-                                        className="text-[10px] uppercase tracking-[0.18em] font-semibold text-[hsl(var(--gold-deep))]"
-                                        style={{ fontFamily: "var(--font-display)" }}
-                                      >
-                                        Next Best Action
-                                      </span>
-                                      <Badge
-                                        variant="outline"
-                                        className="border-[hsl(var(--gold)/0.22)] bg-[hsl(var(--gold-soft)/0.35)] text-[hsl(var(--gold-deep))]"
-                                      >
-                                        {Math.round(recommendedAction?.confidence ?? suggestion.confidence)}% confidence
-                                      </Badge>
-                                    </div>
-                                    <h3 className="text-sm font-semibold text-foreground mt-0.5">
-                                      {recommendedAction?.title ?? suggestion.title}
-                                    </h3>
-                                  </div>
-                                </div>
+                        <p className="mt-2 text-sm text-foreground">{exc.description}</p>
 
-                                <p className="text-sm text-muted-foreground leading-relaxed max-w-3xl">
-                                  {recommendedAction?.description ?? suggestion.description}
-                                </p>
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <span className="chiplet">
-                                    {String((recommendedAction?.impact?.summary as string | undefined) ?? suggestion.impact.summary ?? "Directe operationele opvolging")}
-                                  </span>
-                                  <span className="chiplet">
-                                    {recommendedAction?.requiresApproval ?? suggestion.requiresApproval ? "Planner approval nodig" : "Mag autonoom"}
-                                  </span>
-                                  {recommendedAction ? (
-                                    <span className="chiplet">{recommendedAction.status}</span>
-                                  ) : (
-                                    <span className="chiplet chiplet--warn">Preview voorstel</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="lg:w-[280px] shrink-0">
-                                <div className="rounded-xl border border-white/40 bg-white/60 dark:bg-white/5 p-3 space-y-3">
-                                  <div>
-                                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground font-semibold">
-                                      Verwachte impact
-                                    </p>
-                                    <p className="text-sm text-foreground mt-1">
-                                      {String((recommendedAction?.impact?.summary as string | undefined) ?? suggestion.impact.summary ?? "Snellere exception-afhandeling")}
-                                    </p>
-                                  </div>
-
-                                  <div className="flex flex-col gap-2">
-                                    {recommendedAction ? (
-                                      <>
-                                        {recommendedAction.status === "PENDING" && (
-                                          <>
-                                            <Button
-                                              size="sm"
-                                              className="w-full gap-1.5"
-                                              onClick={() => updateExceptionActionStatus.mutate({
-                                                id: recommendedAction.id,
-                                                status: "APPROVED",
-                                              })}
-                                              disabled={updateExceptionActionStatus.isPending}
-                                            >
-                                              <CheckCircle2 className="h-3.5 w-3.5" />
-                                              Goedkeuren
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="w-full gap-1.5 text-muted-foreground"
-                                              onClick={() => updateExceptionActionStatus.mutate({
-                                                id: recommendedAction.id,
-                                                status: "REJECTED",
-                                              })}
-                                              disabled={updateExceptionActionStatus.isPending}
-                                            >
-                                              Afwijzen
-                                            </Button>
-                                          </>
-                                        )}
-                                        <Button
-                                          size="sm"
-                                          variant={recommendedAction.status === "PENDING" ? "outline" : "default"}
-                                          className="w-full gap-1.5"
-                                          onClick={() => executeExceptionAction.mutate({
-                                            actionId: recommendedAction.id,
-                                            actionType: recommendedAction.actionType,
-                                            payload: {
-                                              ...recommendedAction.payload,
-                                              requiresApproval: recommendedAction.requiresApproval,
-                                              currentStatus: recommendedAction.status,
-                                            },
-                                          })}
-                                          disabled={
-                                            executeExceptionAction.isPending ||
-                                            (recommendedAction.requiresApproval && recommendedAction.status !== "APPROVED")
-                                          }
-                                        >
-                                          <Play className="h-3.5 w-3.5" />
-                                          Nu uitvoeren
-                                        </Button>
-                                        <CopilotHistory actionId={recommendedAction.id} />
-                                      </>
-                                    ) : (
-                                      <Button
-                                        size="sm"
-                                        className="w-full gap-1.5"
-                                        onClick={() => handleSaveSuggestion(exc, suggestion)}
-                                        disabled={createExceptionAction.isPending}
-                                      >
-                                        <Sparkles className="h-3.5 w-3.5" />
-                                        Opslaan als voorstel
-                                      </Button>
-                                    )}
-
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      asChild
-                                      className="w-full gap-1.5"
-                                    >
-                                      <Link to={exc.actionTo}>
-                                        Open context
-                                        <ArrowRight className="h-3.5 w-3.5" />
-                                      </Link>
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <span className="chiplet">
+                            {recommendedAction ? recommendedAction.title : suggestion.title}
+                          </span>
+                          <span className="chiplet">
+                            {Math.round(recommendedAction?.confidence ?? suggestion.confidence)}% confidence
+                          </span>
+                          {recommendedAction && <span className="chiplet">{recommendedAction.status}</span>}
+                        </div>
                       </div>
-                    );
-                  })()}
-                </motion.div>
-              );
-            })}
+
+                      <div className="shrink-0 text-right">
+                        <p className="text-xs text-muted-foreground">{timeAgo(exc.detectedAt)}</p>
+                        <p className="mt-2 text-[11px] font-medium text-[hsl(var(--gold-deep))]">
+                          {recommendedAction ? "Copilot klaar" : "Voorstel beschikbaar"}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)] xl:sticky xl:top-4 xl:self-start">
+          <div className="mb-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+              Detail
+            </p>
+            <h2 className="mt-1 text-sm font-semibold text-foreground">
+              {selectedException ? selectedException.orderNumber : "Geen uitzondering geselecteerd"}
+            </h2>
           </div>
-        )}
+
+          {!selectedException || !selectedSuggestion ? (
+            <div className="rounded-[1.2rem] border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-12 text-center">
+              <p className="text-sm font-medium text-foreground">Selecteer een uitzondering</p>
+              <p className="mt-1 text-xs text-muted-foreground">Dan verschijnen context en aanbevolen actie hier.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Type</p>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <Badge variant="outline" className={cn("text-xs font-medium", typeBadgeColor[selectedException.type])}>
+                      {selectedException.type}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">{timeAgo(selectedException.detectedAt)}</span>
+                  </div>
+                </div>
+
+                <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Urgentie</p>
+                  <p className="mt-2 text-sm font-medium text-foreground">{getUrgencyLabel(selectedException.urgency)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{selectedException.clientName || "Zonder klantlabel"}</p>
+                </div>
+              </div>
+
+              <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))] p-4">
+                <h3 className="text-sm font-semibold text-foreground">Context</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{selectedException.description}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="chiplet">{selectedException.actionLabel}</span>
+                  <span className="chiplet">{selectedException.source === "db" ? "Live bron" : "Ad-hoc detectie"}</span>
+                </div>
+              </div>
+
+              <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.18),hsl(var(--background)))] p-4">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-[1rem] bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))]">
+                    <SelectedActionIcon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                      Next Best Action
+                    </p>
+                    <h3 className="mt-0.5 text-sm font-semibold text-foreground">
+                      {selectedRecommendedAction?.title ?? selectedSuggestion.title}
+                    </h3>
+                  </div>
+                </div>
+
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {selectedRecommendedAction?.description ?? selectedSuggestion.description}
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="chiplet">
+                    {String((selectedRecommendedAction?.impact?.summary as string | undefined) ?? selectedSuggestion.impact.summary ?? "Snellere exception-afhandeling")}
+                  </span>
+                  <span className="chiplet">
+                    {selectedRecommendedAction?.requiresApproval ?? selectedSuggestion.requiresApproval ? "Planner approval nodig" : "Mag autonoom"}
+                  </span>
+                  <span className="chiplet">
+                    {Math.round(selectedRecommendedAction?.confidence ?? selectedSuggestion.confidence)}% confidence
+                  </span>
+                </div>
+
+                <div className="mt-4 rounded-[1rem] border border-white/40 bg-white/60 p-3 dark:bg-white/5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Verwachte impact
+                  </p>
+                  <p className="mt-1 text-sm text-foreground">
+                    {String((selectedRecommendedAction?.impact?.summary as string | undefined) ?? selectedSuggestion.impact.summary ?? "Snellere exception-afhandeling")}
+                  </p>
+
+                  <div className="mt-3 flex flex-col gap-2">
+                    {selectedRecommendedAction ? (
+                      <>
+                        {selectedRecommendedAction.status === "PENDING" && (
+                          <>
+                            <Button
+                              size="sm"
+                              className="w-full gap-1.5"
+                              onClick={() => updateExceptionActionStatus.mutate({
+                                id: selectedRecommendedAction.id,
+                                status: "APPROVED",
+                              })}
+                              disabled={updateExceptionActionStatus.isPending}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Goedkeuren
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="w-full gap-1.5 text-muted-foreground"
+                              onClick={() => updateExceptionActionStatus.mutate({
+                                id: selectedRecommendedAction.id,
+                                status: "REJECTED",
+                              })}
+                              disabled={updateExceptionActionStatus.isPending}
+                            >
+                              Afwijzen
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          size="sm"
+                          variant={selectedRecommendedAction.status === "PENDING" ? "outline" : "default"}
+                          className="w-full gap-1.5"
+                          onClick={() => executeExceptionAction.mutate({
+                            actionId: selectedRecommendedAction.id,
+                            actionType: selectedRecommendedAction.actionType,
+                            payload: {
+                              ...selectedRecommendedAction.payload,
+                              requiresApproval: selectedRecommendedAction.requiresApproval,
+                              currentStatus: selectedRecommendedAction.status,
+                            },
+                          })}
+                          disabled={
+                            executeExceptionAction.isPending ||
+                            (selectedRecommendedAction.requiresApproval && selectedRecommendedAction.status !== "APPROVED")
+                          }
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Nu uitvoeren
+                        </Button>
+                        <CopilotHistory actionId={selectedRecommendedAction.id} />
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="w-full gap-1.5"
+                        onClick={() => handleSaveSuggestion(selectedException, selectedSuggestion)}
+                        disabled={createExceptionAction.isPending}
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Opslaan als voorstel
+                      </Button>
+                    )}
+
+                    {selectedException.source === "db" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-1.5 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40"
+                        disabled={resolveException.isPending || resolveAnomaly.isPending}
+                        onClick={() => {
+                          if (selectedException.id.startsWith("anomaly-")) {
+                            resolveAnomaly.mutate({ id: selectedException.id.replace("anomaly-", "") });
+                          } else {
+                            resolveException.mutate(selectedException.id);
+                          }
+                        }}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Markeer als opgelost
+                      </Button>
+                    )}
+
+                    <Button variant="ghost" size="sm" asChild className="w-full gap-1.5">
+                      <Link to={selectedException.actionTo}>
+                        Open context
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
