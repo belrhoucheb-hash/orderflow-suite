@@ -366,11 +366,14 @@ const Facturatie = () => {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title={t("pages.invoicing.title")}
-        subtitle={`${totalCount} facturen in totaal`}
-        actions={
-          <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div className="flex-1 min-w-0">
+          <PageHeader
+            title={t("pages.invoicing.title")}
+            subtitle={`${totalCount} facturen in totaal`}
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2 rounded-xl h-10 px-4">
@@ -393,9 +396,8 @@ const Facturatie = () => {
             <Button type="button" onClick={() => { setShowNewInvoice(true); setSelectedClientId(""); setSelectedOrderIds(new Set()); }} className="gap-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm h-10 px-5">
               <Plus className="h-4 w-4" /> {t("pages.invoicing.newInvoice")}
             </Button>
-          </div>
-        }
-      />
+        </div>
+      </div>
 
       <KPIStrip
         columns={6}
