@@ -27,13 +27,21 @@ import { ZodError } from "zod";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useTenantOptional } from "@/contexts/TenantContext";
-import { useClient, useClients, useClientOrders } from "@/hooks/useClients";
+import {
+  useClient,
+  useClients,
+  useClientLocations,
+  useClientOrders,
+  type Client,
+  type ClientLocation,
+} from "@/hooks/useClients";
 import { useClientContacts } from "@/hooks/useClientContacts";
 import { createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
 import { orderFormSchema } from "@/lib/validation/orderSchema";
+import { useAddressSuggestions } from "@/hooks/useAddressSuggestions";
 // Orders-audit is server-side via trigger `audit_orders`.
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { LuxeTimePicker } from "@/components/LuxeTimePicker";
@@ -86,8 +94,143 @@ interface CargoRow {
   omschrijving: string;
 }
 
+interface PlannerLocationOption {
+  id: string;
+  label: string;
+  subtitle: string;
+  badge: string;
+  value: AddressValue;
+  addressString: string;
+  contactHint?: string;
+  notesHint?: string;
+  timeWindowStart?: string | null;
+  timeWindowEnd?: string | null;
+}
+
+interface PlannerTemplate {
+  id: string;
+  label: string;
+  description: string;
+  transportType?: string;
+  prioriteit?: string;
+  afdeling?: string;
+  voertuigtype?: string;
+  klepNodig?: boolean;
+  shipmentSecure?: boolean;
+}
+
 const today = new Date().toISOString().split("T")[0];
 const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+const QUICK_TEMPLATES: PlannerTemplate[] = [
+  {
+    id: "standard-pallet",
+    label: "Standaard palletzending",
+    description: "Normale rit met standaard prioriteit en LTL-profiel.",
+    transportType: "LTL",
+    prioriteit: "Standaard",
+    voertuigtype: "Vrachtwagen",
+    shipmentSecure: true,
+  },
+  {
+    id: "express",
+    label: "Express rit",
+    description: "Spoedtransport met expressinstelling en hogere prioriteit.",
+    transportType: "Express",
+    prioriteit: "Spoed",
+    voertuigtype: "Bestelbus",
+    shipmentSecure: true,
+  },
+  {
+    id: "return",
+    label: "Retour ophalen",
+    description: "Retourstroom met standaard prioriteit en laadklep-optie aan.",
+    transportType: "LTL",
+    prioriteit: "Retour",
+    voertuigtype: "Vrachtwagen",
+    klepNodig: true,
+    shipmentSecure: true,
+  },
+  {
+    id: "export",
+    label: "Luchtvracht export",
+    description: "Exportsjabloon met EXPORT-afdeling en snelle afhandeling.",
+    transportType: "Luchtvracht",
+    prioriteit: "Spoed",
+    afdeling: "EXPORT",
+    voertuigtype: "Bestelbus",
+    shipmentSecure: false,
+  },
+];
+
+function normalizeLookup(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function bestEffortAddressValue(address: string | null | undefined, fallbackCountry = "NL"): AddressValue {
+  if (!address) return { ...EMPTY_ADDRESS, country: fallbackCountry };
+  const trimmed = address.trim();
+  const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
+  const streetPart = parts[0] ?? trimmed;
+  const streetMatch = streetPart.match(/^(.*?)(?:\s+(\d+[A-Za-z]?))(?:\s+([A-Za-z0-9-]+))?$/);
+  const postcodeMatch = trimmed.match(/\b\d{4}\s?[A-Z]{2}\b/i);
+  const countryMatch = parts[parts.length - 1]?.length === 2 ? parts[parts.length - 1].toUpperCase() : fallbackCountry;
+  const cityPart = parts.length > 1 ? parts[1].replace(/\b\d{4}\s?[A-Z]{2}\b/i, "").trim() : "";
+
+  return {
+    street: streetMatch?.[1]?.trim() || streetPart,
+    house_number: streetMatch?.[2]?.trim() || "",
+    house_number_suffix: streetMatch?.[3]?.trim() || "",
+    zipcode: postcodeMatch?.[0]?.toUpperCase() || "",
+    city: cityPart,
+    country: countryMatch || fallbackCountry,
+    lat: null,
+    lng: null,
+    coords_manual: false,
+  };
+}
+
+function addressFromClientRecord(client: Client | null | undefined, type: "main" | "shipping"): AddressValue {
+  if (!client) return { ...EMPTY_ADDRESS };
+  if (type === "shipping") {
+    return {
+      street: client.shipping_street || "",
+      house_number: client.shipping_house_number || "",
+      house_number_suffix: client.shipping_house_number_suffix || "",
+      zipcode: client.shipping_zipcode || "",
+      city: client.shipping_city || "",
+      country: client.shipping_country || "NL",
+      lat: client.shipping_lat,
+      lng: client.shipping_lng,
+      coords_manual: client.shipping_coords_manual,
+    };
+  }
+  return {
+    street: client.street || "",
+    house_number: client.house_number || "",
+    house_number_suffix: client.house_number_suffix || "",
+    zipcode: client.zipcode || "",
+    city: client.city || "",
+    country: client.country || "NL",
+    lat: client.lat,
+    lng: client.lng,
+    coords_manual: client.coords_manual,
+  };
+}
+
+function addressFromClientLocation(location: ClientLocation): AddressValue {
+  return {
+    street: location.street || "",
+    house_number: location.house_number || "",
+    house_number_suffix: location.house_number_suffix || "",
+    zipcode: location.zipcode || "",
+    city: location.city || "",
+    country: location.country || "NL",
+    lat: location.lat,
+    lng: location.lng,
+    coords_manual: location.coords_manual,
+  };
+}
 
 const NewOrder = () => {
   const navigate = useNavigate();
@@ -118,18 +261,27 @@ const NewOrder = () => {
   const [clientId, setClientId] = useState<string | null>(null);
   const [clientOpen, setClientOpen] = useState(false);
   const { data: clientSuggestions = [] } = useClients(clientName.trim() || undefined);
+  const { data: selectedClient } = useClient(clientId);
+  const { data: clientLocations = [] } = useClientLocations(clientId);
+  const { data: addressSuggestions } = useAddressSuggestions(clientName.trim() || null);
   const { data: clientContacts = [] } = useClientContacts(clientId);
   const [contactpersoon, setContactpersoon] = useState("");
   const [prioriteit, setPrioriteit] = useState("Standaard");
   const [klantReferentie, setKlantReferentie] = useState("");
   const [transportType, setTransportType] = useState("");
+  const [transportTypeManual, setTransportTypeManual] = useState(false);
   const [afdeling, setAfdeling] = useState("");
   const [afdelingManual, setAfdelingManual] = useState(false);
   const [inferredAfdeling, setInferredAfdeling] = useState<string | null>(null);
   const [voertuigtype, setVoertuigtype] = useState("");
+  const [voertuigtypeManual, setVoertuigtypeManual] = useState(false);
   const [chauffeur, setChauffeur] = useState("");
   const [mrnDoc, setMrnDoc] = useState("");
   const [referentie, setReferentie] = useState("");
+  const [pickupLookup, setPickupLookup] = useState("");
+  const [deliveryLookup, setDeliveryLookup] = useState("");
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
 
   // Detailed freight entry
   const [quantity, setQuantity] = useState("");
@@ -169,7 +321,7 @@ const NewOrder = () => {
   const [pmtLocatie, setPmtLocatie] = useState("");
   const [pmtSeal, setPmtSeal] = useState("");
   const [pmtByCustomer, setPmtByCustomer] = useState(true);
-  const showPmt = transportType === "Express";
+  const showPmt = transportType === "Luchtvracht";
 
   // Financieel state, gevuld door FinancialTab via onPricingChange.
   const [pricingPayload, setPricingPayload] = useState<FinancialTabPayload>({ cents: null, details: null });
@@ -186,6 +338,10 @@ const NewOrder = () => {
   // via lat/lng exact weten waar ze moeten zijn (Jaimy's Webfleet/TomTom-issue).
   const [pickupAddr, setPickupAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
   const [deliveryAddr, setDeliveryAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
+  const draftStorageKey = useMemo(() => {
+    if (!tenant?.id || initialClientId || fromOrderId) return null;
+    return `new-order-draft:${tenant.id}`;
+  }, [tenant?.id, initialClientId, fromOrderId]);
 
   // Prefill vanuit ?client_id=, geïnitieerd vanuit de klantenlijst of
   // klant-detail ("Nieuwe order voor deze klant"). We fetchen de klant en
@@ -194,8 +350,45 @@ const NewOrder = () => {
   // en referenties blijven leeg — die zijn per order uniek en prefillen
   // zou silent errors verbergen.
   const prefillApplied = useRef(false);
+  const clientDefaultsAppliedRef = useRef<string | null>(null);
   const { data: prefillClient } = useClient(initialClientId);
   const { data: prefillOrders } = useClientOrders(initialClientId);
+
+  useEffect(() => {
+    if (!clientId) clientDefaultsAppliedRef.current = null;
+  }, [clientId]);
+
+  const applyPlannerLocation = (
+    kind: "pickup" | "delivery",
+    option: PlannerLocationOption,
+  ) => {
+    if (kind === "pickup") {
+      handlePickupAddrChange(option.value);
+      setPickupLookup(option.label);
+      if (primaryLadenId) {
+        setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? {
+          ...line,
+          contactLocatie: line.contactLocatie || option.contactHint || "",
+          opmerkingen: line.opmerkingen || option.notesHint || "",
+          tijd: line.tijd || option.timeWindowStart || "",
+          tijdTot: line.tijdTot || option.timeWindowEnd || "",
+        } : line));
+      }
+      return;
+    }
+
+    handleDeliveryAddrChange(option.value);
+    setDeliveryLookup(option.label);
+    if (primaryLossenId) {
+      setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? {
+        ...line,
+        contactLocatie: line.contactLocatie || option.contactHint || "",
+        opmerkingen: line.opmerkingen || option.notesHint || "",
+        tijd: line.tijd || option.timeWindowStart || "",
+        tijdTot: line.tijdTot || option.timeWindowEnd || "",
+      } : line));
+    }
+  };
 
   const addFreightLine = () => {
     setFreightLines(prev => [...prev, {
@@ -238,12 +431,13 @@ const NewOrder = () => {
   const handlePickupAddrChange = (v: AddressValue) => {
     setPickupAddr(v);
     clearError("pickup_address");
+    const composed = composeAddressString(v, { includeLocality: true });
+    if (composed) setPickupLookup(composed);
     // Sync plain-string locatie zodat trajectRouter-preview, isValidAddress
     // en afdeling-inferentie blijven werken zonder aanpassingen. Daarnaast
     // ook lat/lng/coords_manual op de leg zetten voor toekomstige hub-routing
     // en Webfleet-export per stop.
     if (primaryLadenId) {
-      const composed = composeAddressString(v, { includeLocality: true });
       setFreightLines(prev => prev.map(l => l.id === primaryLadenId ? {
         ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
       } : l));
@@ -253,8 +447,9 @@ const NewOrder = () => {
   const handleDeliveryAddrChange = (v: AddressValue) => {
     setDeliveryAddr(v);
     clearError("delivery_address");
+    const composed = composeAddressString(v, { includeLocality: true });
+    if (composed) setDeliveryLookup(composed);
     if (primaryLossenId) {
-      const composed = composeAddressString(v, { includeLocality: true });
       setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? {
         ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
       } : l));
@@ -278,6 +473,128 @@ const NewOrder = () => {
     const err = validateStructuredAddress(deliveryAddr);
     if (err) setErrors(prev => ({ ...prev, delivery_address: err }));
   };
+
+  const pickupQuickOptions = useMemo<PlannerLocationOption[]>(() => {
+    const options: PlannerLocationOption[] = [];
+    if (selectedClient) {
+      const shippingAddress = addressFromClientRecord(selectedClient, "shipping");
+      const shippingComposed = composeAddressString(shippingAddress, { includeLocality: true });
+      if (shippingComposed) {
+        options.push({
+          id: `client-shipping-${selectedClient.id}`,
+          label: `${selectedClient.name} · standaard ophaaladres`,
+          subtitle: shippingComposed,
+          badge: "Klantdefault",
+          value: shippingAddress,
+          addressString: shippingComposed,
+          contactHint: selectedClient.contact_person || undefined,
+        });
+      }
+
+      const mainAddress = addressFromClientRecord(selectedClient, "main");
+      const mainComposed = composeAddressString(mainAddress, { includeLocality: true });
+      if (mainComposed && mainComposed !== shippingComposed) {
+        options.push({
+          id: `client-main-${selectedClient.id}`,
+          label: `${selectedClient.name} · hoofdadres`,
+          subtitle: mainComposed,
+          badge: "Klant",
+          value: mainAddress,
+          addressString: mainComposed,
+          contactHint: selectedClient.contact_person || undefined,
+        });
+      }
+    }
+
+    clientLocations.forEach((location) => {
+      const value = addressFromClientLocation(location);
+      const composed = composeAddressString(value, { includeLocality: true }) || location.address;
+      options.push({
+        id: `location-${location.id}`,
+        label: location.label,
+        subtitle: composed,
+        badge: location.location_type || "Locatie",
+        value,
+        addressString: composed,
+        notesHint: location.notes || undefined,
+        timeWindowStart: location.time_window_start,
+        timeWindowEnd: location.time_window_end,
+      });
+    });
+
+    addressSuggestions?.pickup?.forEach((suggestion, index) => {
+      options.push({
+        id: `pickup-history-${index}`,
+        label: suggestion.address,
+        subtitle: `Gebruikt in ${suggestion.frequency} eerdere order${suggestion.frequency > 1 ? "s" : ""}`,
+        badge: "Recent",
+        value: bestEffortAddressValue(suggestion.address),
+        addressString: suggestion.address,
+      });
+    });
+
+    const seen = new Set<string>();
+    return options.filter((option) => {
+      const key = normalizeLookup(option.addressString || option.label);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [addressSuggestions?.pickup, clientLocations, selectedClient]);
+
+  const deliveryQuickOptions = useMemo<PlannerLocationOption[]>(() => {
+    const options: PlannerLocationOption[] = [];
+    clientLocations.forEach((location) => {
+      const value = addressFromClientLocation(location);
+      const composed = composeAddressString(value, { includeLocality: true }) || location.address;
+      options.push({
+        id: `delivery-location-${location.id}`,
+        label: location.label,
+        subtitle: composed,
+        badge: location.location_type || "Locatie",
+        value,
+        addressString: composed,
+        notesHint: location.notes || undefined,
+        timeWindowStart: location.time_window_start,
+        timeWindowEnd: location.time_window_end,
+      });
+    });
+
+    addressSuggestions?.delivery?.forEach((suggestion, index) => {
+      options.push({
+        id: `delivery-history-${index}`,
+        label: suggestion.address,
+        subtitle: `Gebruikt in ${suggestion.frequency} eerdere order${suggestion.frequency > 1 ? "s" : ""}`,
+        badge: "Recent",
+        value: bestEffortAddressValue(suggestion.address),
+        addressString: suggestion.address,
+      });
+    });
+
+    const seen = new Set<string>();
+    return options.filter((option) => {
+      const key = normalizeLookup(option.addressString || option.label);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [addressSuggestions?.delivery, clientLocations]);
+
+  const filteredPickupOptions = useMemo(() => {
+    const term = normalizeLookup(pickupLookup);
+    if (!term) return pickupQuickOptions.slice(0, 6);
+    return pickupQuickOptions.filter(option =>
+      normalizeLookup(`${option.label} ${option.subtitle} ${option.badge}`).includes(term),
+    ).slice(0, 8);
+  }, [pickupLookup, pickupQuickOptions]);
+
+  const filteredDeliveryOptions = useMemo(() => {
+    const term = normalizeLookup(deliveryLookup);
+    if (!term) return deliveryQuickOptions.slice(0, 6);
+    return deliveryQuickOptions.filter(option =>
+      normalizeLookup(`${option.label} ${option.subtitle} ${option.badge}`).includes(term),
+    ).slice(0, 8);
+  }, [deliveryLookup, deliveryQuickOptions]);
 
   const addToFreightSummary = () => {
     const ladenLine = freightLines.find(f => f.activiteit === "Laden");
@@ -359,6 +676,65 @@ const NewOrder = () => {
   const financialPickupLine = freightLines.find(f => f.activiteit === "Laden");
   const financialPickupDate = financialPickupLine?.datum || undefined;
   const financialPickupTime = financialPickupLine?.tijd || undefined;
+  const suggestedTransportType = useMemo(() => {
+    if (prioriteit === "Spoed") return "Express";
+    if (cargoTotals.totGewicht >= 7000 || cargoTotals.totAantal >= 18) return "FTL";
+    if (cargoTotals.totGewicht > 0) return "LTL";
+    return "";
+  }, [cargoTotals.totAantal, cargoTotals.totGewicht, prioriteit]);
+  const suggestedVehicleType = useMemo(() => {
+    if (financialCargo.maxLengthCm >= 1200 || cargoTotals.totGewicht >= 10000) return "Trailer";
+    if (cargoTotals.totGewicht >= 1200 || klepNodig || cargoTotals.totAantal >= 6) return "Vrachtwagen";
+    if (cargoTotals.totGewicht > 0 || prioriteit === "Spoed") return "Bestelbus";
+    return "";
+  }, [cargoTotals.totAantal, cargoTotals.totGewicht, financialCargo.maxLengthCm, klepNodig, prioriteit]);
+
+  useEffect(() => {
+    if (!transportTypeManual && suggestedTransportType) {
+      setTransportType(prev => prev === suggestedTransportType ? prev : suggestedTransportType);
+    }
+  }, [suggestedTransportType, transportTypeManual]);
+
+  useEffect(() => {
+    if (!voertuigtypeManual && suggestedVehicleType) {
+      setVoertuigtype(prev => prev === suggestedVehicleType ? prev : suggestedVehicleType);
+    }
+  }, [suggestedVehicleType, voertuigtypeManual]);
+
+  const plannerWarnings = useMemo(() => {
+    const warnings: string[] = [];
+    const pickupLine = freightLines.find(f => f.activiteit === "Laden");
+    const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
+    if (pickupLine?.datum && deliveryLine?.datum && deliveryLine.datum < pickupLine.datum) {
+      warnings.push("Losdatum ligt voor de laaddatum.");
+    }
+    if (pickupLine?.tijd && pickupLine?.tijdTot && pickupLine.tijdTot < pickupLine.tijd) {
+      warnings.push("Ophaaltijd tot ligt voor ophaaltijd van.");
+    }
+    if (deliveryLine?.tijd && deliveryLine?.tijdTot && deliveryLine.tijdTot < deliveryLine.tijd) {
+      warnings.push("Aflevertijd tot ligt voor aflevertijd van.");
+    }
+    if (voertuigtype === "Bestelbus" && cargoTotals.totGewicht > 1200) {
+      warnings.push("Gewicht is hoog voor een bestelbus. Overweeg vrachtwagen.");
+    }
+    if (transportType === "Express" && !pickupLine?.tijd && !deliveryLine?.tijd) {
+      warnings.push("Express zonder expliciet tijdslot kan planningruis geven.");
+    }
+    return warnings;
+  }, [cargoTotals.totGewicht, freightLines, transportType, voertuigtype]);
+
+  const plannerSummary = useMemo(() => {
+    const pickupLine = freightLines.find(f => f.activiteit === "Laden");
+    const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
+    return [
+      { label: "Klant", value: clientName || "Nog niet gekozen" },
+      { label: "Route", value: [pickupLine?.locatie, deliveryLine?.locatie].filter(Boolean).join(" → ") || "Nog geen route" },
+      { label: "Lading", value: cargoTotals.totAantal > 0 || cargoTotals.totGewicht > 0 ? `${cargoTotals.totAantal || 0} ${transportEenheid || "eenheden"} · ${cargoTotals.totGewicht || 0} kg` : "Nog leeg" },
+      { label: "Transport", value: [transportType || suggestedTransportType, voertuigtype || suggestedVehicleType].filter(Boolean).join(" · ") || "Wordt voorgesteld" },
+      { label: "Afdeling", value: afdeling || inferredAfdeling || "Nog onbekend" },
+      { label: "Prijs", value: pricingPayload.cents != null ? `€ ${(pricingPayload.cents / 100).toFixed(2)}` : "Nog geen prijs" },
+    ];
+  }, [afdeling, clientName, cargoTotals.totAantal, cargoTotals.totGewicht, freightLines, inferredAfdeling, pricingPayload.cents, suggestedTransportType, suggestedVehicleType, transportEenheid, transportType, voertuigtype]);
 
   // ─── Unsaved-changes-bewaking ────────────────────────────────────────
   // Baseline wordt gezet zodra prefill klaar is (of meteen als er geen
@@ -390,6 +766,109 @@ const NewOrder = () => {
     pmtDatum, pmtLocatie, pmtSeal, pmtByCustomer,
     infoFollows, infoContactName, infoContactEmail, pricingPayload,
   ]);
+
+  const draftPayload = useMemo(() => ({
+    clientName,
+    clientId,
+    contactpersoon,
+    prioriteit,
+    klantReferentie,
+    transportType,
+    transportTypeManual,
+    afdeling,
+    afdelingManual,
+    voertuigtype,
+    voertuigtypeManual,
+    referentie,
+    pickupLookup,
+    deliveryLookup,
+    cargoRows,
+    freightLines,
+    pickupAddr,
+    deliveryAddr,
+    transportEenheid,
+    quantity,
+    weightKg,
+    klepNodig,
+    shipmentSecure,
+  }), [
+    afdeling,
+    afdelingManual,
+    cargoRows,
+    clientId,
+    clientName,
+    contactpersoon,
+    deliveryAddr,
+    deliveryLookup,
+    freightLines,
+    klantReferentie,
+    klepNodig,
+    pickupAddr,
+    pickupLookup,
+    prioriteit,
+    quantity,
+    referentie,
+    shipmentSecure,
+    transportEenheid,
+    transportType,
+    transportTypeManual,
+    voertuigtype,
+    voertuigtypeManual,
+    weightKg,
+  ]);
+
+  useEffect(() => {
+    if (!draftStorageKey || !prefillReady || draftRestored) return;
+    const raw = window.localStorage.getItem(draftStorageKey);
+    if (!raw) {
+      setDraftRestored(true);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as Partial<typeof draftPayload> & { savedAt?: string };
+      if (parsed.clientName) setClientName(parsed.clientName);
+      if (parsed.clientId) setClientId(parsed.clientId);
+      if (parsed.contactpersoon) setContactpersoon(parsed.contactpersoon);
+      if (parsed.prioriteit) setPrioriteit(parsed.prioriteit);
+      if (parsed.klantReferentie) setKlantReferentie(parsed.klantReferentie);
+      if (parsed.transportType) setTransportType(parsed.transportType);
+      if (typeof parsed.transportTypeManual === "boolean") setTransportTypeManual(parsed.transportTypeManual);
+      if (parsed.afdeling) setAfdeling(parsed.afdeling);
+      if (typeof parsed.afdelingManual === "boolean") setAfdelingManual(parsed.afdelingManual);
+      if (parsed.voertuigtype) setVoertuigtype(parsed.voertuigtype);
+      if (typeof parsed.voertuigtypeManual === "boolean") setVoertuigtypeManual(parsed.voertuigtypeManual);
+      if (parsed.referentie) setReferentie(parsed.referentie);
+      if (parsed.pickupLookup) setPickupLookup(parsed.pickupLookup);
+      if (parsed.deliveryLookup) setDeliveryLookup(parsed.deliveryLookup);
+      if (parsed.transportEenheid) setTransportEenheid(parsed.transportEenheid);
+      if (parsed.quantity) setQuantity(parsed.quantity);
+      if (parsed.weightKg) setWeightKg(parsed.weightKg);
+      if (Array.isArray(parsed.cargoRows) && parsed.cargoRows.length > 0) setCargoRows(parsed.cargoRows);
+      if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines);
+      if (parsed.pickupAddr) setPickupAddr({ ...EMPTY_ADDRESS, ...parsed.pickupAddr });
+      if (parsed.deliveryAddr) setDeliveryAddr({ ...EMPTY_ADDRESS, ...parsed.deliveryAddr });
+      if (typeof parsed.klepNodig === "boolean") setKlepNodig(parsed.klepNodig);
+      if (typeof parsed.shipmentSecure === "boolean") setShipmentSecure(parsed.shipmentSecure);
+      if (parsed.savedAt) setLastDraftSavedAt(parsed.savedAt);
+      toast.success("Concept hersteld", {
+        description: "Je vorige handmatige invoer is teruggezet in het formulier.",
+      });
+    } catch {
+      window.localStorage.removeItem(draftStorageKey);
+    } finally {
+      setDraftRestored(true);
+    }
+  }, [draftPayload, draftRestored, draftStorageKey, prefillReady]);
+
+  useEffect(() => {
+    if (!draftStorageKey || !prefillReady || !draftRestored) return;
+    const timer = window.setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      window.localStorage.setItem(draftStorageKey, JSON.stringify({ ...draftPayload, savedAt }));
+      setLastDraftSavedAt(savedAt);
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [draftPayload, draftRestored, draftStorageKey, prefillReady]);
 
   useEffect(() => {
     if (!prefillReady) return;
@@ -460,6 +939,8 @@ const NewOrder = () => {
           if (key && !newErrors[key]) newErrors[key] = issue.message;
         }
         setErrors(newErrors);
+        setMainTab("algemeen");
+        window.scrollTo({ top: 0, behavior: "smooth" });
         const count = Object.keys(newErrors).length;
         toast.error(`Formulier bevat ${count} validatiefout${count > 1 ? "en" : ""}`, {
           description: Object.values(newErrors).join(" | "),
@@ -671,6 +1152,9 @@ const NewOrder = () => {
       // verdere bewerkingen via OrderDetail (update-pad) lopen.
       skipDirtyGuardRef.current = true;
       setDirty(false);
+      if (draftStorageKey) {
+        window.localStorage.removeItem(draftStorageKey);
+      }
       if (andClose) {
         navigate("/orders");
       } else if (legs[0]?.id) {
@@ -682,6 +1166,17 @@ const NewOrder = () => {
       toast.error(e.message || "Fout bij opslaan");
     } finally { setSaving(false); }
   };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void handleSave(e.shiftKey);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleSave]);
 
   // Prefill-flow: wacht tot klant-data binnen is (orders mag leeg zijn) en
   // pas eenmalig toe. Client_name/client_id zetten is genoeg — bij ontbreken
@@ -709,6 +1204,14 @@ const NewOrder = () => {
       setKlepNodig(true);
     }
     if (last.pickup_address || last.delivery_address) {
+      if (last.pickup_address) {
+        setPickupAddr(bestEffortAddressValue(last.pickup_address, prefillClient.country || "NL"));
+        setPickupLookup(last.pickup_address);
+      }
+      if (last.delivery_address) {
+        setDeliveryAddr(bestEffortAddressValue(last.delivery_address, prefillClient.country || "NL"));
+        setDeliveryLookup(last.delivery_address);
+      }
       setFreightLines((prev) =>
         prev.map((l) => {
           if (l.activiteit === "Laden" && last.pickup_address) {
@@ -739,6 +1242,36 @@ const NewOrder = () => {
     const t = setTimeout(() => setPrefillReady(true), 1500);
     return () => clearTimeout(t);
   }, [initialClientId, fromOrderId, prefillReady]);
+
+  useEffect(() => {
+    if (!clientId || !selectedClient) return;
+    if (clientDefaultsAppliedRef.current === clientId) return;
+    if (initialClientId || fromOrderId) return;
+
+    clientDefaultsAppliedRef.current = clientId;
+    if (!pickupAddr.street) {
+      const shipping = addressFromClientRecord(selectedClient, "shipping");
+      const fallback = composeAddressString(shipping, { includeLocality: true })
+        ? shipping
+        : addressFromClientRecord(selectedClient, "main");
+      if (composeAddressString(fallback, { includeLocality: true })) {
+        handlePickupAddrChange(fallback);
+      }
+    }
+    if (!deliveryAddr.street && clientLocations.length === 1) {
+      applyPlannerLocation("delivery", {
+        id: `autofill-${clientLocations[0].id}`,
+        label: clientLocations[0].label,
+        subtitle: clientLocations[0].address,
+        badge: "Klantlocatie",
+        value: addressFromClientLocation(clientLocations[0]),
+        addressString: clientLocations[0].address,
+        notesHint: clientLocations[0].notes || undefined,
+        timeWindowStart: clientLocations[0].time_window_start,
+        timeWindowEnd: clientLocations[0].time_window_end,
+      });
+    }
+  }, [applyPlannerLocation, clientId, clientLocations, deliveryAddr.street, fromOrderId, initialClientId, pickupAddr.street, selectedClient]);
 
   // Prefill vanuit ?from_order_id=: kopieer pickup, delivery, requirements,
   // afdeling, vehicle_type, order_type en klant-identificatie van een
@@ -774,6 +1307,14 @@ const NewOrder = () => {
         setKlepNodig(true);
       }
       if (src.pickup_address || src.delivery_address) {
+        if (src.pickup_address) {
+          setPickupAddr(bestEffortAddressValue(src.pickup_address));
+          setPickupLookup(src.pickup_address);
+        }
+        if (src.delivery_address) {
+          setDeliveryAddr(bestEffortAddressValue(src.delivery_address));
+          setDeliveryLookup(src.delivery_address);
+        }
         setFreightLines((prev) =>
           prev.map((l) => {
             if (l.activiteit === "Laden" && src.pickup_address) {
@@ -955,6 +1496,76 @@ const NewOrder = () => {
       <div className="flex-1 overflow-y-auto">
         {mainTab === "algemeen" && (
           <div className="max-w-[1320px] mx-auto px-6 pt-4 pb-8 space-y-5">
+            <section className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+              <div className="card--luxe p-5">
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                      Planner quick start
+                    </div>
+                    <h3 className="section-title">Snelle orderstart</h3>
+                    <p className="text-xs text-muted-foreground mt-1">Kies een template, hervat een concept en laat het systeem route en middelen voorstellen.</p>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {lastDraftSavedAt ? `Concept opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "Ctrl/Cmd+S opslaan · Shift+Ctrl/Cmd+S opslaan & sluiten"}
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {QUICK_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => {
+                        if (template.transportType) {
+                          setTransportType(template.transportType);
+                          setTransportTypeManual(false);
+                        }
+                        if (template.prioriteit) setPrioriteit(template.prioriteit);
+                        if (template.afdeling) {
+                          setAfdeling(template.afdeling);
+                          setAfdelingManual(true);
+                        }
+                        if (template.voertuigtype) {
+                          setVoertuigtype(template.voertuigtype);
+                          setVoertuigtypeManual(false);
+                        }
+                        if (typeof template.klepNodig === "boolean") setKlepNodig(template.klepNodig);
+                        if (typeof template.shipmentSecure === "boolean") setShipmentSecure(template.shipmentSecure);
+                        toast.success(`${template.label} toegepast`);
+                      }}
+                      className="rounded-2xl border border-border/60 bg-white p-4 text-left transition-all hover:-translate-y-px hover:border-[hsl(var(--gold)_/_0.45)]"
+                    >
+                      <div className="text-sm font-semibold">{template.label}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{template.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <aside className="card--luxe p-5 xl:sticky xl:top-5 h-fit">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                  Planner snapshot
+                </div>
+                <h3 className="section-title">Direct overzicht</h3>
+                <div className="mt-4 space-y-3">
+                  {plannerSummary.map((item) => (
+                    <div key={item.label} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-b-0 last:pb-0">
+                      <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{item.label}</span>
+                      <span className="text-sm text-right">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+                {plannerWarnings.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-3">
+                    <div className="text-xs font-semibold text-amber-800">Planner-waarschuwingen</div>
+                    <div className="mt-2 space-y-1">
+                      {plannerWarnings.map((warning) => (
+                        <p key={warning} className="text-xs text-amber-900">{warning}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </aside>
+            </section>
             {/* ══ Chapter I · Klant & order ══ */}
             <section className="card--luxe p-6 relative">
               <span className="card-chapter">I</span>
@@ -1037,6 +1648,11 @@ const NewOrder = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                  {suggestedTransportType && (
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                      Voorstel: {suggestedTransportType} op basis van prioriteit en lading
+                    </span>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Prioriteit</label>
@@ -1048,9 +1664,14 @@ const NewOrder = () => {
                       <SelectItem value="Retour">Retour</SelectItem>
                     </SelectContent>
                   </Select>
+                  {suggestedVehicleType && (
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                      Voorstel: {suggestedVehicleType} op basis van gewicht, lengte en laadklep
+                    </span>
+                  )}
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Klant-referentie <span className="text-red-600">*</span></label>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1">Klant-referentie</label>
                   <Input
                     value={klantReferentie}
                     onChange={e => setKlantReferentie(e.target.value)}
@@ -1069,6 +1690,13 @@ const NewOrder = () => {
                   />
                 </div>
               </div>
+              {selectedClient && (
+                <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                  {clientLocations.length > 0
+                    ? `${clientLocations.length} vaste locaties beschikbaar voor deze klant. Zoek op bedrijfsnaam of kies een snelle locatie bij ophaal/aflever.`
+                    : "Nog geen vaste locaties voor deze klant. Eerdere orderadressen en handmatige invoer blijven beschikbaar."}
+                </div>
+              )}
             </section>
 
 {/* ══ Chapter II · Vrachtplanning ══ */}
@@ -1087,24 +1715,76 @@ const NewOrder = () => {
                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
                     Ophaaladres
                   </div>
-                  <AddressAutocomplete
-                    value={pickupAddr}
-                    onChange={handlePickupAddrChange}
-                    onBlur={handlePickupAddrBlur}
-                    error={errors.pickup_address}
-                  />
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
-                    Afleveradres
+                  <div className="mb-3 space-y-2">
+                    <Input
+                      value={pickupLookup}
+                      onChange={(e) => setPickupLookup(e.target.value)}
+                      placeholder="Zoek op bedrijfsnaam of adres"
+                      className="h-9 text-sm"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {filteredPickupOptions.slice(0, 4).map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => applyPlannerLocation("pickup", option)}
+                          className="rounded-full border border-border/60 bg-white px-3 py-1 text-left text-[11px] transition-colors hover:border-[hsl(var(--gold)_/_0.45)]"
+                        >
+                          <span className="font-semibold">{option.label}</span>
+                          <span className="ml-1 text-muted-foreground">{option.badge}</span>
+                        </button>
+                      ))}
+                      {filteredPickupOptions.length === 0 && pickupLookup.trim() && (
+                        <span className="text-xs text-muted-foreground">Niet gevonden? Vul hieronder handmatig in.</span>
+                      )}
+                    </div>
                   </div>
                   <AddressAutocomplete
-                    value={deliveryAddr}
-                    onChange={handleDeliveryAddrChange}
-                    onBlur={handleDeliveryAddrBlur}
-                    error={errors.delivery_address}
-                  />
-                </div>
+                     value={pickupAddr}
+                     onChange={handlePickupAddrChange}
+                     onBlur={handlePickupAddrBlur}
+                     error={errors.pickup_address}
+                     searchLabel="Zoek exact ophaaladres"
+                     searchPlaceholder="Typ bedrijfsnaam, straat of dockadres"
+                   />
+                 </div>
+                 <div>
+                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
+                     Afleveradres
+                   </div>
+                   <div className="mb-3 space-y-2">
+                     <Input
+                       value={deliveryLookup}
+                       onChange={(e) => setDeliveryLookup(e.target.value)}
+                       placeholder="Zoek op bedrijfsnaam of adres"
+                       className="h-9 text-sm"
+                     />
+                     <div className="flex flex-wrap gap-2">
+                       {filteredDeliveryOptions.slice(0, 4).map((option) => (
+                         <button
+                           key={option.id}
+                           type="button"
+                           onClick={() => applyPlannerLocation("delivery", option)}
+                           className="rounded-full border border-border/60 bg-white px-3 py-1 text-left text-[11px] transition-colors hover:border-[hsl(var(--gold)_/_0.45)]"
+                         >
+                           <span className="font-semibold">{option.label}</span>
+                           <span className="ml-1 text-muted-foreground">{option.badge}</span>
+                         </button>
+                       ))}
+                       {filteredDeliveryOptions.length === 0 && deliveryLookup.trim() && (
+                         <span className="text-xs text-muted-foreground">Niet gevonden? Vul hieronder handmatig in.</span>
+                       )}
+                     </div>
+                   </div>
+                   <AddressAutocomplete
+                     value={deliveryAddr}
+                     onChange={handleDeliveryAddrChange}
+                     onBlur={handleDeliveryAddrBlur}
+                     error={errors.delivery_address}
+                     searchLabel="Zoek exact afleveradres"
+                     searchPlaceholder="Typ bedrijfsnaam, straat of warehouse"
+                   />
+                 </div>
               </div>
 
               <div className="space-y-0 divide-y divide-[hsl(var(--border)_/_0.4)]">
@@ -1304,19 +1984,20 @@ const NewOrder = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Transport type <span className="text-red-600">*</span></label>
-                  <Select value={transportType} onValueChange={setTransportType}>
+                  <Select value={transportType} onValueChange={(value) => { setTransportType(value); setTransportTypeManual(true); }}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecteer…" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="FTL">FTL</SelectItem>
                       <SelectItem value="LTL">LTL</SelectItem>
                       <SelectItem value="Koel">Koel</SelectItem>
                       <SelectItem value="Express">Express</SelectItem>
+                      <SelectItem value="Luchtvracht">Luchtvracht</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Voertuigtype</label>
-                  <Select value={voertuigtype} onValueChange={setVoertuigtype}>
+                  <Select value={voertuigtype} onValueChange={(value) => { setVoertuigtype(value); setVoertuigtypeManual(true); }}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecteer…" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Vrachtwagen">Vrachtwagen</SelectItem>

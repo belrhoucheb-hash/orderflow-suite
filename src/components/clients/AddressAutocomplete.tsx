@@ -32,6 +32,8 @@ interface Props {
   onChange: (v: AddressValue) => void;
   error?: string;
   onBlur?: () => void;
+  searchLabel?: string;
+  searchPlaceholder?: string;
 }
 
 const NL_CENTER = { lat: 52.1326, lng: 5.2913 };
@@ -63,9 +65,17 @@ function parsePlace(place: google.maps.places.PlaceResult): Partial<AddressValue
   };
 }
 
-export function AddressAutocomplete({ value, onChange, error, onBlur }: Props) {
+export function AddressAutocomplete({
+  value,
+  onChange,
+  error,
+  onBlur,
+  searchLabel = "Zoek adres",
+  searchPlaceholder = "Typ straat + huisnummer, bijv. Winthontlaan 30B Utrecht",
+}: Props) {
   const { isLoaded, loadError, missingKey } = useGoogleMaps();
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const [manualMode, setManualMode] = useState(false);
   const [searchInput, setSearchInput] = useState(() => {
     const parts = [value.street, value.house_number, value.house_number_suffix].filter(Boolean);
     return parts.join(" ");
@@ -132,8 +142,18 @@ export function AddressAutocomplete({ value, onChange, error, onBlur }: Props) {
 
   return (
     <div className="space-y-3">
+      {!manualMode && (
       <div>
-        <label className="label-luxe">Zoek adres</label>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <label className="label-luxe">{searchLabel}</label>
+          <button
+            type="button"
+            onClick={() => setManualMode(true)}
+            className="text-[11px] font-medium text-[hsl(var(--gold-deep))] underline-offset-4 hover:underline"
+          >
+            Handmatig invoeren
+          </button>
+        </div>
         <Autocomplete
           onLoad={(ac) => {
             autocompleteRef.current = ac;
@@ -147,13 +167,34 @@ export function AddressAutocomplete({ value, onChange, error, onBlur }: Props) {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onBlur={onBlur}
-            placeholder="Typ straat + huisnummer, bijv. Winthontlaan 30B Utrecht"
+            placeholder={searchPlaceholder}
             className="field-luxe w-full"
           />
         </Autocomplete>
         {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
       </div>
+      )}
 
+      {manualMode && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.25)] px-3 py-2">
+            <div>
+              <p className="text-sm font-medium text-foreground">Handmatige adresinvoer</p>
+              <p className="text-xs text-muted-foreground">Gebruik dit als de locatie niet in de zoekresultaten staat.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setManualMode(false)}
+              className="text-[11px] font-medium text-[hsl(var(--gold-deep))] underline-offset-4 hover:underline"
+            >
+              Terug naar zoeken
+            </button>
+          </div>
+          <ManualAddressFields value={value} onChange={onChange} error={error} onBlur={onBlur} />
+        </div>
+      )}
+
+      {!manualMode && (
       <div className="grid grid-cols-12 gap-2">
         <InputField
           label="Straat"
@@ -192,7 +233,9 @@ export function AddressAutocomplete({ value, onChange, error, onBlur }: Props) {
           className="col-span-2"
         />
       </div>
+      )}
 
+      {!manualMode && (
       <div className="overflow-hidden rounded border border-border">
         <GoogleMap
           mapContainerStyle={{ width: "100%", height: "260px" }}
@@ -214,14 +257,15 @@ export function AddressAutocomplete({ value, onChange, error, onBlur }: Props) {
           )}
         </GoogleMap>
       </div>
+      )}
 
-      {!hasCoords && (
+      {!manualMode && !hasCoords && (
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
           <MapPin className="h-3 w-3" />
           Selecteer een adres uit de suggesties om de kaart te tonen.
         </p>
       )}
-      {value.coords_manual && hasCoords && (
+      {!manualMode && value.coords_manual && hasCoords && (
         <p className="text-xs text-[hsl(var(--gold-deep))]">
           Coordinaten handmatig aangepast. Chauffeurs navigeren naar deze exacte locatie.
         </p>

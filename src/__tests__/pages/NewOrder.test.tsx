@@ -25,7 +25,12 @@ vi.mock("@/contexts/TenantContext", () => ({
 vi.mock("@/hooks/useClients", () => ({
   useClient: () => ({ data: null }),
   useClients: () => ({ data: [] }),
+  useClientLocations: () => ({ data: [] }),
   useClientOrders: () => ({ data: [] }),
+}));
+
+vi.mock("@/hooks/useAddressSuggestions", () => ({
+  useAddressSuggestions: () => ({ data: { pickup: [], delivery: [], orderCount: 0 } }),
 }));
 
 vi.mock("@/hooks/useClientContacts", () => ({
@@ -212,14 +217,13 @@ describe("NewOrder", () => {
 
   it("shows Opslaan & sluiten button", () => {
     renderNewOrder();
-    // Luxe refactor hernoemde knop naar "Opslaan & sluiten" (sluiten lowercase).
-    expect(screen.getByText(/sluiten/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /opslaan & sluiten/i })).toBeInTheDocument();
   });
 
   it("Opslaan & sluiten triggers handleSave(true) which validates first", async () => {
     const user = userEvent.setup();
     renderNewOrder();
-    await user.click(screen.getByText(/sluiten/i));
+    await user.click(screen.getByRole("button", { name: /opslaan & sluiten/i }));
     expect(document.body.textContent).toBeTruthy();
   });
 
