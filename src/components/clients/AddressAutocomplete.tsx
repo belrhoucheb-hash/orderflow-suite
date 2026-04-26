@@ -27,6 +27,14 @@ export const EMPTY_ADDRESS: AddressValue = {
   coords_manual: false,
 };
 
+export interface AddressSuggestionOption {
+  id: string;
+  title: string;
+  subtitle: string;
+  badge?: string;
+  value: AddressValue;
+}
+
 interface Props {
   value: AddressValue;
   onChange: (v: AddressValue) => void;
@@ -34,6 +42,8 @@ interface Props {
   onBlur?: () => void;
   searchLabel?: string;
   searchPlaceholder?: string;
+  quickOptions?: AddressSuggestionOption[];
+  onQuickSelect?: (option: AddressSuggestionOption) => void;
 }
 
 const NL_CENTER = { lat: 52.1326, lng: 5.2913 };
@@ -72,6 +82,8 @@ export function AddressAutocomplete({
   onBlur,
   searchLabel = "Zoek adres",
   searchPlaceholder = "Typ straat + huisnummer, bijv. Winthontlaan 30B Utrecht",
+  quickOptions = [],
+  onQuickSelect,
 }: Props) {
   const { isLoaded, loadError, missingKey } = useGoogleMaps();
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -125,6 +137,14 @@ export function AddressAutocomplete({
     }
   }, [value.street, value.house_number, value.house_number_suffix]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const filteredQuickOptions = quickOptions
+    .filter((option) => {
+      const term = searchInput.trim().toLowerCase();
+      if (!term) return true;
+      return `${option.title} ${option.subtitle} ${option.badge ?? ""}`.toLowerCase().includes(term);
+    })
+    .slice(0, 5);
+
   if (missingKey || loadError) {
     return (
       <ManualAddressFields value={value} onChange={onChange} error={error} onBlur={onBlur} />
@@ -171,6 +191,36 @@ export function AddressAutocomplete({
             className="field-luxe w-full"
           />
         </Autocomplete>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Zoekt via Google op bedrijfsnaam, straat en volledig adres.
+        </p>
+        {!manualMode && filteredQuickOptions.length > 0 && (
+          <div className="mt-2 overflow-hidden rounded-xl border border-border/60 bg-white">
+            {filteredQuickOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(option.value);
+                  setSearchInput(option.title);
+                  onQuickSelect?.(option);
+                }}
+                className="flex w-full items-start justify-between gap-3 border-b border-border/40 px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-[hsl(var(--gold-soft)_/_0.25)]"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-foreground">{option.title}</div>
+                  <div className="truncate text-xs text-muted-foreground">{option.subtitle}</div>
+                </div>
+                {option.badge && (
+                  <span className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {option.badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
         {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
       </div>
       )}

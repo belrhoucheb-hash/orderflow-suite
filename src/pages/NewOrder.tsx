@@ -6,6 +6,7 @@ import {
   AddressAutocomplete,
   EMPTY_ADDRESS,
   type AddressValue,
+  type AddressSuggestionOption,
 } from "@/components/clients/AddressAutocomplete";
 import { composeAddressString } from "@/lib/validation/clientSchema";
 import { Input } from "@/components/ui/input";
@@ -232,6 +233,16 @@ function addressFromClientLocation(location: ClientLocation): AddressValue {
   };
 }
 
+function toAddressSuggestionOption(option: PlannerLocationOption): AddressSuggestionOption {
+  return {
+    id: option.id,
+    title: option.label,
+    subtitle: option.subtitle,
+    badge: option.badge,
+    value: option.value,
+  };
+}
+
 const NewOrder = () => {
   const navigate = useNavigate();
   const { tenant } = useTenantOptional();
@@ -278,8 +289,6 @@ const NewOrder = () => {
   const [chauffeur, setChauffeur] = useState("");
   const [mrnDoc, setMrnDoc] = useState("");
   const [referentie, setReferentie] = useState("");
-  const [pickupLookup, setPickupLookup] = useState("");
-  const [deliveryLookup, setDeliveryLookup] = useState("");
   const [draftRestored, setDraftRestored] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
 
@@ -364,7 +373,6 @@ const NewOrder = () => {
   ) => {
     if (kind === "pickup") {
       handlePickupAddrChange(option.value);
-      setPickupLookup(option.label);
       if (primaryLadenId) {
         setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? {
           ...line,
@@ -378,7 +386,6 @@ const NewOrder = () => {
     }
 
     handleDeliveryAddrChange(option.value);
-    setDeliveryLookup(option.label);
     if (primaryLossenId) {
       setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? {
         ...line,
@@ -432,7 +439,6 @@ const NewOrder = () => {
     setPickupAddr(v);
     clearError("pickup_address");
     const composed = composeAddressString(v, { includeLocality: true });
-    if (composed) setPickupLookup(composed);
     // Sync plain-string locatie zodat trajectRouter-preview, isValidAddress
     // en afdeling-inferentie blijven werken zonder aanpassingen. Daarnaast
     // ook lat/lng/coords_manual op de leg zetten voor toekomstige hub-routing
@@ -448,7 +454,6 @@ const NewOrder = () => {
     setDeliveryAddr(v);
     clearError("delivery_address");
     const composed = composeAddressString(v, { includeLocality: true });
-    if (composed) setDeliveryLookup(composed);
     if (primaryLossenId) {
       setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? {
         ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
@@ -579,22 +584,6 @@ const NewOrder = () => {
       return true;
     });
   }, [addressSuggestions?.delivery, clientLocations]);
-
-  const filteredPickupOptions = useMemo(() => {
-    const term = normalizeLookup(pickupLookup);
-    if (!term) return pickupQuickOptions.slice(0, 6);
-    return pickupQuickOptions.filter(option =>
-      normalizeLookup(`${option.label} ${option.subtitle} ${option.badge}`).includes(term),
-    ).slice(0, 8);
-  }, [pickupLookup, pickupQuickOptions]);
-
-  const filteredDeliveryOptions = useMemo(() => {
-    const term = normalizeLookup(deliveryLookup);
-    if (!term) return deliveryQuickOptions.slice(0, 6);
-    return deliveryQuickOptions.filter(option =>
-      normalizeLookup(`${option.label} ${option.subtitle} ${option.badge}`).includes(term),
-    ).slice(0, 8);
-  }, [deliveryLookup, deliveryQuickOptions]);
 
   const addToFreightSummary = () => {
     const ladenLine = freightLines.find(f => f.activiteit === "Laden");
@@ -780,8 +769,6 @@ const NewOrder = () => {
     voertuigtype,
     voertuigtypeManual,
     referentie,
-    pickupLookup,
-    deliveryLookup,
     cargoRows,
     freightLines,
     pickupAddr,
@@ -799,12 +786,10 @@ const NewOrder = () => {
     clientName,
     contactpersoon,
     deliveryAddr,
-    deliveryLookup,
     freightLines,
     klantReferentie,
     klepNodig,
     pickupAddr,
-    pickupLookup,
     prioriteit,
     quantity,
     referentie,
@@ -838,8 +823,6 @@ const NewOrder = () => {
       if (parsed.voertuigtype) setVoertuigtype(parsed.voertuigtype);
       if (typeof parsed.voertuigtypeManual === "boolean") setVoertuigtypeManual(parsed.voertuigtypeManual);
       if (parsed.referentie) setReferentie(parsed.referentie);
-      if (parsed.pickupLookup) setPickupLookup(parsed.pickupLookup);
-      if (parsed.deliveryLookup) setDeliveryLookup(parsed.deliveryLookup);
       if (parsed.transportEenheid) setTransportEenheid(parsed.transportEenheid);
       if (parsed.quantity) setQuantity(parsed.quantity);
       if (parsed.weightKg) setWeightKg(parsed.weightKg);
@@ -1206,11 +1189,9 @@ const NewOrder = () => {
     if (last.pickup_address || last.delivery_address) {
       if (last.pickup_address) {
         setPickupAddr(bestEffortAddressValue(last.pickup_address, prefillClient.country || "NL"));
-        setPickupLookup(last.pickup_address);
       }
       if (last.delivery_address) {
         setDeliveryAddr(bestEffortAddressValue(last.delivery_address, prefillClient.country || "NL"));
-        setDeliveryLookup(last.delivery_address);
       }
       setFreightLines((prev) =>
         prev.map((l) => {
@@ -1309,11 +1290,9 @@ const NewOrder = () => {
       if (src.pickup_address || src.delivery_address) {
         if (src.pickup_address) {
           setPickupAddr(bestEffortAddressValue(src.pickup_address));
-          setPickupLookup(src.pickup_address);
         }
         if (src.delivery_address) {
           setDeliveryAddr(bestEffortAddressValue(src.delivery_address));
-          setDeliveryLookup(src.delivery_address);
         }
         setFreightLines((prev) =>
           prev.map((l) => {
@@ -1648,11 +1627,6 @@ const NewOrder = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  {suggestedTransportType && (
-                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                      Voorstel: {suggestedTransportType} op basis van prioriteit en lading
-                    </span>
-                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Prioriteit</label>
@@ -1664,11 +1638,6 @@ const NewOrder = () => {
                       <SelectItem value="Retour">Retour</SelectItem>
                     </SelectContent>
                   </Select>
-                  {suggestedVehicleType && (
-                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                      Voorstel: {suggestedVehicleType} op basis van gewicht, lengte en laadklep
-                    </span>
-                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Klant-referentie</label>
@@ -1715,76 +1684,38 @@ const NewOrder = () => {
                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
                     Ophaaladres
                   </div>
-                  <div className="mb-3 space-y-2">
-                    <Input
-                      value={pickupLookup}
-                      onChange={(e) => setPickupLookup(e.target.value)}
-                      placeholder="Zoek op bedrijfsnaam of adres"
-                      className="h-9 text-sm"
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      {filteredPickupOptions.slice(0, 4).map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => applyPlannerLocation("pickup", option)}
-                          className="rounded-full border border-border/60 bg-white px-3 py-1 text-left text-[11px] transition-colors hover:border-[hsl(var(--gold)_/_0.45)]"
-                        >
-                          <span className="font-semibold">{option.label}</span>
-                          <span className="ml-1 text-muted-foreground">{option.badge}</span>
-                        </button>
-                      ))}
-                      {filteredPickupOptions.length === 0 && pickupLookup.trim() && (
-                        <span className="text-xs text-muted-foreground">Niet gevonden? Vul hieronder handmatig in.</span>
-                      )}
-                    </div>
-                  </div>
                   <AddressAutocomplete
                      value={pickupAddr}
                      onChange={handlePickupAddrChange}
                      onBlur={handlePickupAddrBlur}
                      error={errors.pickup_address}
-                     searchLabel="Zoek exact ophaaladres"
+                     searchLabel="Zoek ophaaladres"
                      searchPlaceholder="Typ bedrijfsnaam, straat of dockadres"
-                   />
-                 </div>
-                 <div>
-                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
-                     Afleveradres
-                   </div>
-                   <div className="mb-3 space-y-2">
-                     <Input
-                       value={deliveryLookup}
-                       onChange={(e) => setDeliveryLookup(e.target.value)}
-                       placeholder="Zoek op bedrijfsnaam of adres"
-                       className="h-9 text-sm"
-                     />
-                     <div className="flex flex-wrap gap-2">
-                       {filteredDeliveryOptions.slice(0, 4).map((option) => (
-                         <button
-                           key={option.id}
-                           type="button"
-                           onClick={() => applyPlannerLocation("delivery", option)}
-                           className="rounded-full border border-border/60 bg-white px-3 py-1 text-left text-[11px] transition-colors hover:border-[hsl(var(--gold)_/_0.45)]"
-                         >
-                           <span className="font-semibold">{option.label}</span>
-                           <span className="ml-1 text-muted-foreground">{option.badge}</span>
-                         </button>
-                       ))}
-                       {filteredDeliveryOptions.length === 0 && deliveryLookup.trim() && (
-                         <span className="text-xs text-muted-foreground">Niet gevonden? Vul hieronder handmatig in.</span>
-                       )}
-                     </div>
-                   </div>
-                   <AddressAutocomplete
-                     value={deliveryAddr}
-                     onChange={handleDeliveryAddrChange}
-                     onBlur={handleDeliveryAddrBlur}
-                     error={errors.delivery_address}
-                     searchLabel="Zoek exact afleveradres"
-                     searchPlaceholder="Typ bedrijfsnaam, straat of warehouse"
-                   />
-                 </div>
+                     quickOptions={pickupQuickOptions.map(toAddressSuggestionOption)}
+                     onQuickSelect={(option) => {
+                       const selected = pickupQuickOptions.find(item => item.id === option.id);
+                       if (selected) applyPlannerLocation("pickup", selected);
+                     }}
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
+                      Afleveradres
+                    </div>
+                    <AddressAutocomplete
+                      value={deliveryAddr}
+                      onChange={handleDeliveryAddrChange}
+                      onBlur={handleDeliveryAddrBlur}
+                      error={errors.delivery_address}
+                      searchLabel="Zoek afleveradres"
+                      searchPlaceholder="Typ bedrijfsnaam, straat of warehouse"
+                      quickOptions={deliveryQuickOptions.map(toAddressSuggestionOption)}
+                      onQuickSelect={(option) => {
+                        const selected = deliveryQuickOptions.find(item => item.id === option.id);
+                        if (selected) applyPlannerLocation("delivery", selected);
+                      }}
+                    />
+                  </div>
               </div>
 
               <div className="space-y-0 divide-y divide-[hsl(var(--border)_/_0.4)]">
@@ -1994,6 +1925,11 @@ const NewOrder = () => {
                       <SelectItem value="Luchtvracht">Luchtvracht</SelectItem>
                     </SelectContent>
                   </Select>
+                  {suggestedTransportType && (
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                      Voorstel: {suggestedTransportType} op basis van prioriteit en lading
+                    </span>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Voertuigtype</label>
@@ -2005,6 +1941,11 @@ const NewOrder = () => {
                       <SelectItem value="Trailer">Trailer</SelectItem>
                     </SelectContent>
                   </Select>
+                  {suggestedVehicleType && (
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                      Voorstel: {suggestedVehicleType} op basis van gewicht, lengte en laadklep
+                    </span>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Afdeling <span className="text-red-600">*</span></label>
