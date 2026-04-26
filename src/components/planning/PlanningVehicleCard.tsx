@@ -158,8 +158,8 @@ export function PlanningVehicleCard({
       onMouseEnter={() => onHoverVehicle(vehicle.id)}
       onMouseLeave={() => onHoverVehicle(null)}
       className={cn(
-        "transition-all duration-200 flex flex-col rounded-xl border-border/40 shadow-sm",
-        isOver && !rejected && "ring-2 ring-primary/30 bg-primary/[0.03] scale-[1.005] shadow-md",
+        "transition-all duration-200 flex flex-col card--luxe border-[hsl(var(--gold)/0.08)]",
+        isOver && !rejected && "ring-2 ring-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.08)] scale-[1.005] shadow-md",
         rejected && "animate-[shake_0.4s_ease-in-out] ring-2 ring-destructive/60 bg-destructive/5"
       )}
     >
@@ -174,7 +174,7 @@ export function PlanningVehicleCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-xs gap-1"
+                className="h-6 px-2 text-xs gap-1 rounded-lg text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.18)] hover:text-[hsl(var(--gold-deep))]"
                 onClick={(e) => { e.stopPropagation(); onOptimize(vehicle.id); }}
               >
                 <RotateCw className="h-3 w-3" />Optimaliseer

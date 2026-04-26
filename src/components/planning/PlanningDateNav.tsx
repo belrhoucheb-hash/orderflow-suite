@@ -94,21 +94,31 @@ export function PlanningDateNav({
   };
 
   return (
-    <div className="flex flex-col gap-2 shrink-0">
+    <div className="card--luxe p-3.5 flex flex-col gap-3 shrink-0">
       {/* Week label + navigation */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={handlePrevWeek}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 rounded-xl border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.08)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.18)] hover:text-[hsl(var(--gold-deep))]"
+            onClick={handlePrevWeek}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium text-muted-foreground min-w-[220px] text-center">
+          <span className="text-sm font-medium text-muted-foreground min-w-[220px] text-center" style={{ fontFamily: "var(--font-display)" }}>
             {formatWeekLabel(monday)}
           </span>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleNextWeek}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 rounded-xl border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.08)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.18)] hover:text-[hsl(var(--gold-deep))]"
+            onClick={handleNextWeek}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
           {selectedDate !== today && (
-            <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={handleToday}>
+            <Button variant="ghost" size="sm" className="text-xs gap-1 rounded-xl text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.18)] hover:text-[hsl(var(--gold-deep))]" onClick={handleToday}>
               <Calendar className="h-3.5 w-3.5" />
               Vandaag
             </Button>
@@ -116,13 +126,13 @@ export function PlanningDateNav({
         </div>
 
         {/* View mode toggle */}
-        <div className="flex items-center rounded-lg border border-border/50 overflow-hidden">
+        <div className="flex items-center rounded-xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] overflow-hidden">
           <button
             className={cn(
               "px-3 py-1.5 text-xs font-medium transition-colors",
               viewMode === "day"
-                ? "bg-primary text-primary-foreground"
-                : "bg-background text-muted-foreground hover:bg-muted"
+                ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))]"
+                : "bg-transparent text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.16)]"
             )}
             onClick={() => onViewModeChange("day")}
           >
@@ -132,8 +142,8 @@ export function PlanningDateNav({
             className={cn(
               "px-3 py-1.5 text-xs font-medium transition-colors",
               viewMode === "week"
-                ? "bg-primary text-primary-foreground"
-                : "bg-background text-muted-foreground hover:bg-muted"
+                ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))]"
+                : "bg-transparent text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.16)]"
             )}
             onClick={() => onViewModeChange("week")}
           >
@@ -143,8 +153,8 @@ export function PlanningDateNav({
             className={cn(
               "px-3 py-1.5 text-xs font-medium transition-colors",
               viewMode === "rooster"
-                ? "bg-primary text-primary-foreground"
-                : "bg-background text-muted-foreground hover:bg-muted"
+                ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))]"
+                : "bg-transparent text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.16)]"
             )}
             onClick={() => onViewModeChange("rooster")}
           >
@@ -170,12 +180,12 @@ export function PlanningDateNav({
               className={cn(
                 "flex-1 flex flex-col items-center py-1.5 px-2 rounded-lg text-xs transition-all border",
                 isSelected && viewMode === "day"
-                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                  ? "bg-[hsl(var(--gold-deep))] text-white border-[hsl(var(--gold-deep))] shadow-sm"
                   : isToday
-                  ? "bg-primary/10 text-primary border-primary/30"
+                  ? "bg-[hsl(var(--gold-soft)/0.3)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.3)]"
                   : isWeekend
-                  ? "bg-muted/50 text-muted-foreground border-border/30 hover:bg-muted"
-                  : "bg-background text-foreground border-border/30 hover:bg-muted"
+                  ? "bg-[hsl(var(--gold-soft)/0.08)] text-muted-foreground border-[hsl(var(--gold)/0.08)] hover:bg-[hsl(var(--gold-soft)/0.16)]"
+                  : "bg-white/50 text-foreground border-[hsl(var(--gold)/0.08)] hover:bg-[hsl(var(--gold-soft)/0.12)]"
               )}
             >
               <span className="font-semibold">{day.dayLabel}</span>

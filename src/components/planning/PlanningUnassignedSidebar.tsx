@@ -47,14 +47,14 @@ export function PlanningUnassignedSidebar({
   const combineGroups = findCombinableGroups(orders, assignedIds);
 
   return (
-    <div className="w-full lg:w-1/4 lg:min-w-[260px] flex flex-col gap-3 shrink-0 max-h-[40vh] lg:max-h-none bg-card rounded-xl border border-border/40 p-3 shadow-sm">
+    <div className="w-full lg:w-1/4 lg:min-w-[260px] flex flex-col gap-3 shrink-0 max-h-[40vh] lg:max-h-none card--luxe p-3.5">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--gold-deep))]/60" />
         <Input
           placeholder="Zoek order..."
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9 h-9 text-sm rounded-lg border-border/40"
+          className="pl-9 h-9 text-sm rounded-xl border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)]"
         />
       </div>
       {/* Filters */}
@@ -66,8 +66,8 @@ export function PlanningUnassignedSidebar({
             className={cn(
               "h-6 px-2.5 rounded-md text-xs font-medium border transition-colors",
               filterTag === tag
-                ? "bg-foreground text-background border-foreground"
-                : "bg-transparent text-muted-foreground border-border/50 hover:border-border"
+                ? "bg-[hsl(var(--gold-deep))] text-white border-[hsl(var(--gold-deep))]"
+                : "bg-transparent text-muted-foreground border-[hsl(var(--gold)/0.14)] hover:border-[hsl(var(--gold)/0.28)]"
             )}
           >
             {tag}
@@ -84,17 +84,17 @@ export function PlanningUnassignedSidebar({
       <div className="flex gap-1.5 flex-wrap items-center">
         <Button
           size="sm"
-          className="h-7 text-xs rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground"
+          className="h-7 text-xs rounded-xl bg-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-deep))]/90 text-white"
           onClick={onAutoPlan}
           disabled={totalUnassigned === 0}
         >
           Auto-plan
         </Button>
-        <Button size="sm" variant="outline" className="h-7 text-xs rounded-lg" onClick={onCombineTrips}
+        <Button size="sm" variant="outline" className="h-7 text-xs rounded-xl border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.08)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.18)]" onClick={onCombineTrips}
           disabled={Object.values(assignments).filter((a) => a.length > 0).length < 2}>
           Combineer
         </Button>
-        <Button size="sm" variant="ghost" className="h-7 text-xs rounded-lg text-destructive hover:text-destructive hover:bg-destructive/10"
+        <Button size="sm" variant="ghost" className="h-7 text-xs rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10"
           onClick={() => {
             if (window.confirm("Hele planning wissen? Dit kan niet ongedaan worden.")) {
               onClearPlanning();
@@ -107,8 +107,8 @@ export function PlanningUnassignedSidebar({
       {combineGroups.length > 0 && (
         <div className="space-y-1.5 mb-2">
           {combineGroups.slice(0, 2).map(g => (
-            <div key={g.key} className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
-              <div className="flex items-center gap-1.5 text-primary font-semibold">
+            <div key={g.key} className="rounded-xl border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.18)] px-3 py-2 text-xs">
+              <div className="flex items-center gap-1.5 text-[hsl(var(--gold-deep))] font-semibold">
                 <Route className="h-3 w-3" />
                 Combineerbaar
               </div>
@@ -134,10 +134,10 @@ export function PlanningUnassignedSidebar({
           groupedUnassigned.map((group) => (
             <div key={group.region}>
               <div className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 py-1.5 px-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--gold-deep))]/70 flex items-center gap-1.5">
                   <MapPin className="h-2.5 w-2.5" />
                   {group.label}
-                  <span className="text-xs bg-muted rounded-md px-1.5 py-0.5 ml-auto tabular-nums font-medium">
+                  <span className="text-xs bg-[hsl(var(--gold-soft)/0.18)] rounded-md px-1.5 py-0.5 ml-auto tabular-nums font-medium">
                     {group.orders.length}
                   </span>
                 </p>

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Truck, Send, Play, CheckCircle2, XCircle, Clock, MapPin,
-  Package, AlertTriangle, ChevronRight, ChevronLeft, Loader2, Search, Calendar,
+  Package, AlertTriangle, ChevronRight, ChevronLeft, Loader2, Search,
   User, MoreHorizontal, Eye
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
+import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -281,15 +282,11 @@ const Dispatch = () => {
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <div className="btn-luxe gap-2 pr-3">
-                <Calendar className="h-4 w-4" />
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-transparent text-sm font-medium text-foreground border-none outline-none"
-                />
-              </div>
+              <LuxeDatePicker
+                value={selectedDate}
+                onChange={setSelectedDate}
+                className="min-w-[11rem]"
+              />
               <button
                 className="btn-luxe"
                 onClick={goToNextDay}
