@@ -22,7 +22,7 @@ import {
 import { saveCorrection } from "@/hooks/useAIFeedback";
 import { recordAIDecision, resolveAIDecision } from "@/hooks/useConfidenceStore";
 import { useTenant } from "@/contexts/TenantContext";
-import { useAuthOptional } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 import { emitEventDirect } from "@/hooks/useEventPipeline";
 import { fetchDepartmentsCached } from "@/hooks/useDepartments";
@@ -42,7 +42,7 @@ function formsEqual(left?: FormState | null, right?: FormState | null) {
 export function useInbox() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
-  const { user } = useAuthOptional();
+  const { user } = useAuth();
 
   // ─── State ───
   const [selectedId, setSelectedId] = useState<string>("");
