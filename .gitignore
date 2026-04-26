@@ -41,3 +41,8 @@ gcp-service-account.json
 
 # Supabase CLI local cache
 supabase/.temp/
+supabase/.branches/
+
+# Local test artifacts
+playwright-report/
+tmp-page-tests.json
