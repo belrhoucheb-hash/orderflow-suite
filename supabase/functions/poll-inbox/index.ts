@@ -151,7 +151,8 @@ async function fetchWithRetry(
 function geminiUrl(): string {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw new Error("GEMINI_API_KEY is not configured");
-  return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+  // Use Flex tier for batch email processing to reduce costs
+  return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-flex:generateContent?key=${key}`;
 }
 
 function parseGeminiResponse(json: any): string | null {
@@ -414,7 +415,7 @@ async function pollOneInbox(config: InboxConfig, supabase: any): Promise<InboxRe
                   await supabase.from("ai_usage_log").insert({
                     tenant_id: tenantId,
                     function_name: "poll-inbox-classify",
-                    model: "gemini-2.5-flash",
+                    model: "gemini-2.5-flash-flex",
                     input_tokens: inputTokens,
                     output_tokens: outputTokens,
                     cost_estimate: cost
