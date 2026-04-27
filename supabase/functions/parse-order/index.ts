@@ -39,7 +39,8 @@ async function fetchWithRetry(
 function geminiUrl(): string {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw new Error("GEMINI_API_KEY is not configured");
-  return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+  // Use Flex tier for batch email processing to reduce costs
+  return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-flex:generateContent?key=${key}`;
 }
 
 function buildGeminiBody(systemPrompt: string, userText: string, jsonSchema?: Record<string, any>) {
@@ -395,7 +396,7 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
             supabase.from("ai_usage_log").insert({
               tenant_id: tenantId,
               function_name: "parse-order-classify",
-              model: "gemini-2.5-flash",
+              model: "gemini-2.5-flash-flex",
               input_tokens: inputTokens,
               output_tokens: outputTokens,
               cost_estimate: cost
@@ -496,7 +497,7 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
       await supabase.from("ai_usage_log").insert({
         tenant_id: tenantId,
         function_name: "parse-order",
-        model: "gemini-2.5-flash",
+        model: "gemini-2.5-flash-flex",
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cost_estimate: cost
@@ -660,7 +661,7 @@ Antwoord als JSON: {"thread_type": "update|cancellation|confirmation|question|ne
         field_confidences: extracted.field_confidence ?? {},
         ai_suggestion: extracted,
         was_auto_approved: autoApprove,
-        model_version: "gemini-2.5-flash",
+        model_version: "gemini-2.5-flash-flex",
       }).then(() => {}).catch((e: any) => console.error("Edge confidence store error:", e));
     }
 
