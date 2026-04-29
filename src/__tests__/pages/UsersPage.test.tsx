@@ -244,8 +244,9 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getAllByRole("button", { name: /Configureren/i })[1]);
     await userEvent.click(screen.getByRole("button", { name: "Beveiliging" }));
 
-    expect(screen.getByText("Aandacht nodig")).toBeInTheDocument();
-    expect(screen.getByText("Extra beveiliging")).toBeInTheDocument();
+    expect(screen.getByText("Actie vereist")).toBeInTheDocument();
+    expect(screen.getByText("Two-factor authenticatie (2FA)")).toBeInTheDocument();
+    expect(screen.getByText("Aanbeveling")).toBeInTheDocument();
     expect(screen.getByText("Actieve sessies")).toBeInTheDocument();
     expect(screen.getByText("Inlogbeveiliging")).toBeInTheDocument();
 
@@ -261,7 +262,7 @@ describe("UsersPage", () => {
       }));
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Sessies opnieuw verifiëren" }));
+    await userEvent.click(screen.getByRole("button", { name: "Alle andere sessies beëindigen" }));
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
         body: expect.objectContaining({

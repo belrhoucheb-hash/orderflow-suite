@@ -1467,22 +1467,30 @@ const UsersPage = () => {
                   )}
 
                   {configTab === "beveiliging" && (
-                    <section className="space-y-4">
-                      <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                    <section className="space-y-5">
+                      <div className={cn(
+                        "rounded-lg p-6 shadow-sm ring-1",
+                        isUserActive(selectedUser) && securitySettings.login_protection_enabled && securitySettings.extra_security_enabled
+                          ? "bg-emerald-50/60 ring-emerald-100"
+                          : "bg-amber-50/60 ring-amber-100",
+                      )}>
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                           <div className="flex items-start gap-3">
                             <div className={cn(
-                              "flex h-11 w-11 items-center justify-center rounded-full ring-1",
-                              isUserActive(selectedUser) && securitySettings.login_protection_enabled
+                              "flex h-12 w-12 items-center justify-center rounded-full ring-1",
+                              isUserActive(selectedUser) && securitySettings.login_protection_enabled && securitySettings.extra_security_enabled
                                 ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
                                 : "bg-amber-50 text-amber-700 ring-amber-100",
                             )}>
-                              {isUserActive(selectedUser) && securitySettings.login_protection_enabled ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                              {isUserActive(selectedUser) && securitySettings.login_protection_enabled && securitySettings.extra_security_enabled ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
                             </div>
                             <div>
-                              <h3 className="text-base font-semibold text-foreground">Beveiliging</h3>
-                              <p className="mt-1 text-sm font-medium text-foreground">
-                                {isUserActive(selectedUser) && securitySettings.login_protection_enabled ? "Account veilig" : "Aandacht nodig"}
+                              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Beveiliging</h3>
+                              <p className="mt-1 text-xl font-semibold text-foreground">
+                                {isUserActive(selectedUser) && securitySettings.login_protection_enabled && securitySettings.extra_security_enabled ? "Account veilig" : "Actie vereist"}
+                              </p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {securitySettings.extra_security_enabled ? "Geen risico's gedetecteerd" : "2FA is nog niet ingeschakeld"}
                               </p>
                               <p className="mt-1 text-xs text-muted-foreground">
                                 Laatste controle: {formatDate(securitySettings.updated_at)} · Laatste login: {formatDate(selectedUser.last_sign_in_at)}
@@ -1515,15 +1523,32 @@ const UsersPage = () => {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 xl:grid-cols-[1.05fr_1.05fr_1.2fr]">
-                        <div className="space-y-4">
-                          <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                      {!securitySettings.extra_security_enabled && (
+                        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-100">
+                          <div className="flex gap-3">
+                            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                            <div>
+                              <p className="font-semibold">Aanbeveling</p>
+                              <p className="mt-1 text-amber-900/75">Schakel 2FA in voor extra beveiliging van dit account.</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid gap-5 xl:grid-cols-[1fr_1fr_1.35fr]">
+                        <div className="space-y-5">
+                          <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100">
-                                <Shield className="h-4 w-4" />
+                              <div className={cn(
+                                "flex h-9 w-9 items-center justify-center rounded-full ring-1",
+                                securitySettings.extra_security_enabled
+                                  ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                                  : "bg-amber-50 text-amber-700 ring-amber-100",
+                              )}>
+                                <Shield className="h-4 w-4 opacity-70" />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-foreground">Extra beveiliging</p>
+                                <p className="text-sm font-semibold text-foreground">Two-factor authenticatie (2FA)</p>
                                 <p className="mt-1 text-xs text-muted-foreground">Verificatie app voor extra controle bij inloggen.</p>
                               </div>
                             </div>
@@ -1536,7 +1561,7 @@ const UsersPage = () => {
                                     ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
                                     : "bg-amber-50 text-amber-800 ring-amber-100",
                                 )}>
-                                  {securitySettings.extra_security_enabled ? "Ingeschakeld" : "Aanbevolen"}
+                                  {securitySettings.extra_security_enabled ? "Ingeschakeld" : "Niet ingeschakeld"}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
@@ -1576,10 +1601,10 @@ const UsersPage = () => {
                             </div>
                           </div>
 
-                          <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                          <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-100">
-                                <Monitor className="h-4 w-4" />
+                                <Monitor className="h-4 w-4 opacity-70" />
                               </div>
                               <div>
                                 <p className="text-sm font-semibold text-foreground">Actieve sessies</p>
@@ -1590,27 +1615,30 @@ const UsersPage = () => {
                             </div>
                             <div className="mt-4 space-y-3">
                               {selectedUser.last_sign_in_at ? (
-                                <div className="flex items-start justify-between gap-3 rounded-md bg-muted/20 p-3">
-                                  <div className="flex items-start gap-2">
-                                    <Monitor className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                                    <div>
-                                      <p className="text-xs font-medium text-foreground">Laatste bekende sessie</p>
-                                      <p className="mt-1 text-xs text-muted-foreground">{formatDate(selectedUser.last_sign_in_at)}</p>
+                                <>
+                                  <div className="flex items-start justify-between gap-3 rounded-md bg-muted/20 p-3">
+                                    <div className="flex items-start gap-2">
+                                      <Monitor className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                                      <div>
+                                        <p className="text-xs font-medium text-foreground">Laatste bekende sessie</p>
+                                        <p className="mt-1 text-xs text-muted-foreground">Browser en locatie niet vastgelegd · {formatDate(selectedUser.last_sign_in_at)}</p>
+                                      </div>
                                     </div>
+                                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
+                                      Huidige sessie
+                                    </span>
                                   </div>
-                                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
-                                    Bekend
-                                  </span>
-                                </div>
+                                  {securitySettings.sessions_revoked_at && (
+                                    <div className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-100">
+                                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                      <span>Andere sessies gemarkeerd voor hercontrole op {formatDate(securitySettings.sessions_revoked_at)}.</span>
+                                    </div>
+                                  )}
+                                </>
                               ) : (
                                 <p className="rounded-md bg-muted/20 p-3 text-xs text-muted-foreground">Deze gebruiker heeft nog geen login geregistreerd.</p>
                               )}
                             </div>
-                            {securitySettings.sessions_revoked_at && (
-                              <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-100">
-                                Sessies gemarkeerd voor hercontrole op {formatDate(securitySettings.sessions_revoked_at)}.
-                              </p>
-                            )}
                             <Button
                               type="button"
                               variant="outline"
@@ -1619,16 +1647,16 @@ const UsersPage = () => {
                               onClick={() => revokeSessions.mutate({ userId: selectedUser.user_id })}
                             >
                               {revokeSessions.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                              Sessies opnieuw verifiëren
+                              Alle andere sessies beëindigen
                             </Button>
                           </div>
                         </div>
 
-                        <div className="space-y-4">
-                          <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                        <div className="space-y-5">
+                          <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-                                <KeyRound className="h-4 w-4" />
+                                <KeyRound className="h-4 w-4 opacity-70" />
                               </div>
                               <div>
                                 <p className="text-sm font-semibold text-foreground">Wachtwoord</p>
@@ -1644,17 +1672,6 @@ const UsersPage = () => {
                                 <span className="text-muted-foreground">Laatste wijziging</span>
                                 <span className="font-medium text-foreground">{formatDate(securitySettings.password_reset_sent_at)}</span>
                               </div>
-                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
-                                <span className="text-muted-foreground">Reset vereist</span>
-                                <span className={cn(
-                                  "rounded-full px-2 py-1 font-medium ring-1",
-                                  securitySettings.password_reset_required
-                                    ? "bg-amber-50 text-amber-800 ring-amber-100"
-                                    : "bg-muted/50 text-muted-foreground ring-border/50",
-                                )}>
-                                  {securitySettings.password_reset_required ? "Ja" : "Nee"}
-                                </span>
-                              </div>
                             </div>
                             <Button
                               type="button"
@@ -1668,10 +1685,10 @@ const UsersPage = () => {
                             </Button>
                           </div>
 
-                          <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                          <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/50">
-                                <LockKeyhole className="h-4 w-4" />
+                                <LockKeyhole className="h-4 w-4 opacity-70" />
                               </div>
                               <div>
                                 <p className="text-sm font-semibold text-foreground">Inlogbeveiliging</p>
@@ -1699,59 +1716,21 @@ const UsersPage = () => {
                                 <span className="font-medium text-foreground">{securitySettings.lockout_minutes} minuten</span>
                               </div>
                             </div>
-                            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                disabled={updateSecurity.isPending || securityLoading}
-                                onClick={() => updateSecurity.mutate({
-                                  userId: selectedUser.user_id,
-                                  patch: { login_protection_enabled: !securitySettings.login_protection_enabled },
-                                })}
-                              >
-                                {securitySettings.login_protection_enabled ? "Uitzetten" : "Aanzetten"}
-                              </Button>
-                              <Select
-                                value={String(securitySettings.max_login_attempts)}
-                                onValueChange={(value) => updateSecurity.mutate({
-                                  userId: selectedUser.user_id,
-                                  patch: { max_login_attempts: Number(value) },
-                                })}
-                              >
-                                <SelectTrigger className="h-10">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="3">3 pogingen</SelectItem>
-                                  <SelectItem value="5">5 pogingen</SelectItem>
-                                  <SelectItem value="10">10 pogingen</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Select
-                                value={String(securitySettings.lockout_minutes)}
-                                onValueChange={(value) => updateSecurity.mutate({
-                                  userId: selectedUser.user_id,
-                                  patch: { lockout_minutes: Number(value) },
-                                })}
-                              >
-                                <SelectTrigger className="h-10">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="5">5 min</SelectItem>
-                                  <SelectItem value="15">15 min</SelectItem>
-                                  <SelectItem value="30">30 min</SelectItem>
-                                  <SelectItem value="60">60 min</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="mt-4 w-full"
+                              onClick={() => setConfigTab("instellingen")}
+                            >
+                              Instellingen aanpassen
+                            </Button>
                           </div>
                         </div>
 
-                        <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                        <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="text-sm font-semibold text-foreground">Recente activiteit</p>
+                              <p className="text-base font-semibold text-foreground">Recente activiteit</p>
                               <p className="mt-1 text-xs text-muted-foreground">Laatste beveiligings- en accountacties.</p>
                             </div>
                             <Button
@@ -1775,18 +1754,22 @@ const UsersPage = () => {
                             ) : userActivity.length === 0 ? (
                               <p className="rounded-md bg-muted/20 p-3 text-xs text-muted-foreground">Nog geen beveiligingsactiviteit bekend.</p>
                             ) : (
-                              userActivity.slice(0, 4).map((event) => {
+                              userActivity.slice(0, 5).map((event) => {
                                 const item = activityPresentation(event);
-                                const Icon = item.tone === "warning" ? AlertTriangle : CheckCircle2;
+                                const Icon = event.action === "user.password_reset_sent"
+                                  ? KeyRound
+                                  : item.tone === "warning"
+                                    ? AlertTriangle
+                                    : CheckCircle2;
                                 return (
-                                  <div key={event.id} className="flex gap-3 border-b border-border/30 py-3 last:border-b-0">
+                                  <div key={event.id} className="flex gap-3 border-b border-border/25 py-3.5 last:border-b-0">
                                     <div className={cn(
-                                      "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1",
-                                      item.tone === "warning"
-                                        ? "bg-amber-50 text-amber-700 ring-amber-100"
-                                        : "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1",
+                                      event.action === "user.password_reset_sent" && "bg-blue-50 text-blue-700 ring-blue-100",
+                                      event.action !== "user.password_reset_sent" && item.tone === "warning" && "bg-amber-50 text-amber-700 ring-amber-100",
+                                      event.action !== "user.password_reset_sent" && item.tone !== "warning" && "bg-emerald-50 text-emerald-700 ring-emerald-100",
                                     )}>
-                                      <Icon className="h-3.5 w-3.5" />
+                                      <Icon className="h-4 w-4" />
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-start justify-between gap-2">
