@@ -75,6 +75,7 @@ interface UserRow {
   created_at: string;
   email: string | null;
   last_sign_in_at: string | null;
+  banned_until?: string | null;
   roles: UserRole[];
 }
 
@@ -115,6 +116,7 @@ type AccessLevel = "full" | "limited" | "none";
 type AccessAction = "view" | "create" | "edit" | "delete";
 type AccessActions = Record<AccessAction, boolean>;
 type ActivityFilter = "all" | "login" | "roles" | "access" | "profile" | "invites";
+type UserStatusFilter = "all" | "active" | "inactive";
 
 const accessMatrix = [
   { module: "Orders", description: "Aanmaken, bekijken en beheren", icon: Box, medewerker: "full", admin: "full" },
@@ -186,6 +188,11 @@ function getAccessActions(module: string, level: AccessLevel, customLimitedActio
 
 function getPrimaryRole(user: UserRow): UserRole {
   return user.roles.includes("admin") ? "admin" : "medewerker";
+}
+
+function isUserActive(user: UserRow) {
+  if (user.banned_until && new Date(user.banned_until).getTime() > Date.now()) return false;
+  return Boolean(user.last_sign_in_at);
 }
 
 function AccessIndicator({ level }: { level: AccessLevel }) {
@@ -300,6 +307,24 @@ function activityPresentation(event: UserActivityRow): {
     };
   }
 
+  if (event.action === "user.password_reset_sent") {
+    return {
+      title: "Wachtwoord reset verstuurd",
+      description: `Resetlink verstuurd naar ${stringValue("email") || "gebruiker"}`,
+      icon: KeyRound,
+      tone: "neutral",
+    };
+  }
+
+  if (event.action === "user.deactivated") {
+    return {
+      title: "Gebruiker gedeactiveerd",
+      description: "Accounttoegang is ingetrokken",
+      icon: UserX,
+      tone: "warning",
+    };
+  }
+
   return {
     title: "Activiteit",
     description: stringValue("description") || "Gebruikersactie geregistreerd",
@@ -361,6 +386,8 @@ const UsersPage = () => {
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("medewerker");
   const [roleFilter, setRoleFilter] = useState<"all" | UserRole>("all");
+  const [userFiltersOpen, setUserFiltersOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [configName, setConfigName] = useState("");
   const [configRole, setConfigRole] = useState<UserRole>("medewerker");
@@ -422,16 +449,40 @@ const UsersPage = () => {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Toegang loggen mislukt"),
   });
 
+  const resetPassword = useMutation({
+    mutationFn: ({ userId }: { userId: string }) =>
+      callAdminUsers("reset_password", { tenant_id: tenantId, user_id: userId }),
+    onSuccess: () => {
+      toast.success("Resetlink verstuurd");
+      queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser?.user_id] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Wachtwoord resetten mislukt"),
+  });
+
+  const deactivateUser = useMutation({
+    mutationFn: ({ userId }: { userId: string }) =>
+      callAdminUsers("deactivate_user", { tenant_id: tenantId, user_id: userId }),
+    onSuccess: () => {
+      toast.success("Gebruiker gedeactiveerd");
+      invalidateUsers();
+      queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser?.user_id] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Deactiveren mislukt"),
+  });
+
   const filteredUsers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return users.filter((u) =>
       (roleFilter === "all" || getPrimaryRole(u) === roleFilter) &&
+      (statusFilter === "all" ||
+        (statusFilter === "active" && isUserActive(u)) ||
+        (statusFilter === "inactive" && !isUserActive(u))) &&
       (!term ||
         [u.display_name, u.email, u.user_id, ...u.roles]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(term))),
     );
-  }, [roleFilter, searchTerm, users]);
+  }, [roleFilter, searchTerm, statusFilter, users]);
 
   const effectiveAccess = useMemo(() => {
     return accessMatrix.map((item) => ({
@@ -608,12 +659,61 @@ const UsersPage = () => {
                   <SelectItem value="medewerker">Medewerkers</SelectItem>
                 </SelectContent>
               </Select>
-              <Button type="button" variant="outline" className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setUserFiltersOpen((open) => !open)}
+                className={cn(
+                  "gap-2",
+                  userFiltersOpen && "border-amber-200 bg-amber-50 text-amber-800",
+                )}
+              >
                 <SlidersHorizontal className="h-4 w-4" />
-                Filters
+                {statusFilter === "all" ? "Filters" : statusFilter === "active" ? "Status: Actief" : "Status: Inactief"}
               </Button>
             </div>
           </div>
+
+          {userFiltersOpen && (
+            <div className="mt-4 flex flex-col gap-3 rounded-lg bg-background/70 p-3 ring-1 ring-border/30 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold text-foreground">Filters</p>
+                <p className="text-xs text-muted-foreground">Filter de lijst op actieve en inactieve gebruikers.</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ["all", "Alle statussen"],
+                  ["active", "Actief"],
+                  ["inactive", "Inactief"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setStatusFilter(value)}
+                    className={cn(
+                      "h-8 rounded-md px-2.5 text-xs font-medium transition-colors ring-1",
+                      statusFilter === value
+                        ? "bg-amber-50 text-amber-800 ring-amber-200"
+                        : "bg-background text-muted-foreground ring-border/40 hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {statusFilter !== "all" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStatusFilter("all")}
+                    className="h-8 px-2 text-xs text-muted-foreground"
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {filteredUsers.length === 0 ? (
@@ -647,6 +747,7 @@ const UsersPage = () => {
                 {filteredUsers.map((row, idx) => {
                   const primaryRole = getPrimaryRole(row);
                   const isCurrentUser = currentUser?.id === row.user_id;
+                  const active = isUserActive(row);
 
                   return (
                     <motion.tr
@@ -681,8 +782,8 @@ const UsersPage = () => {
                       </td>
                       <td className="px-5 py-5 hidden md:table-cell">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          Actief
+                          <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-emerald-500" : "bg-muted-foreground/50")} />
+                          {active ? "Actief" : "Inactief"}
                         </div>
                       </td>
                       <td className="px-5 py-5 hidden lg:table-cell">
@@ -884,10 +985,6 @@ const UsersPage = () => {
                             <h3 className="text-sm font-semibold text-foreground">Toegangsrechten</h3>
                             <p className="text-xs text-muted-foreground">Bepaal tot welke modules en acties deze gebruiker toegang heeft.</p>
                           </div>
-                          <Button type="button" variant="outline" size="sm" className="gap-2">
-                            <UserCog className="h-3.5 w-3.5" />
-                            Wijzig rol
-                          </Button>
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -1286,25 +1383,31 @@ const UsersPage = () => {
                           type="button"
                           variant="outline"
                           className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
-                          onClick={() => toast.info("Wachtwoord resetten is nog niet gekoppeld")}
+                          disabled={!selectedUser.email || resetPassword.isPending}
+                          onClick={() => resetPassword.mutate({ userId: selectedUser.user_id })}
                         >
-                          <KeyRound className="h-4 w-4" />
+                          {resetPassword.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
                           Wachtwoord resetten
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
                           className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
-                          onClick={() => toast.info("Deactiveren is nog niet gekoppeld")}
+                          disabled={selectedUser.user_id === currentUser?.id || deactivateUser.isPending}
+                          onClick={() => deactivateUser.mutate({ userId: selectedUser.user_id })}
                         >
-                          <UserX className="h-4 w-4" />
+                          {deactivateUser.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
                           Gebruiker deactiveren
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
                           className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm sm:col-span-1"
-                          onClick={() => toast.info("Login geschiedenis is nog niet gekoppeld")}
+                          onClick={() => {
+                            setConfigTab("activiteit");
+                            setActivityFiltersOpen(true);
+                            setActivityFilter("login");
+                          }}
                         >
                           <History className="h-4 w-4" />
                           Login geschiedenis

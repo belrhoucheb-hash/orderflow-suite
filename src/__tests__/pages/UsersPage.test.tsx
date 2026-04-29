@@ -216,6 +216,74 @@ describe("UsersPage", () => {
     expect(screen.getByText("Regular User")).toBeInTheDocument();
   });
 
+  it("filters users by status from the filter button", async () => {
+    renderUsersPage();
+    await waitFor(() => {
+      expect(screen.getByText("Admin User")).toBeInTheDocument();
+      expect(screen.getByText("Regular User")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Filters" }));
+    await userEvent.click(screen.getByRole("button", { name: "Inactief" }));
+
+    expect(screen.queryByText("Admin User")).not.toBeInTheDocument();
+    expect(screen.getByText("Regular User")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Actief" }));
+
+    expect(screen.getByText("Admin User")).toBeInTheDocument();
+    expect(screen.queryByText("Regular User")).not.toBeInTheDocument();
+  });
+
+  it("connects security action buttons to real user management actions", async () => {
+    renderUsersPage();
+    await waitFor(() => {
+      expect(screen.getByText("Regular User")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getAllByRole("button", { name: /Configureren/i })[1]);
+    await userEvent.click(screen.getByRole("button", { name: "Beveiliging" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Wachtwoord resetten" }));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
+        body: expect.objectContaining({
+          action: "reset_password",
+          tenant_id: "tenant-1",
+          user_id: "user-2",
+        }),
+      }));
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Gebruiker deactiveren" }));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
+        body: expect.objectContaining({
+          action: "deactivate_user",
+          tenant_id: "tenant-1",
+          user_id: "user-2",
+        }),
+      }));
+    });
+  });
+
+  it("opens login history from the security tab", async () => {
+    renderUsersPage();
+    await waitFor(() => {
+      expect(screen.getByText("Regular User")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getAllByRole("button", { name: /Configureren/i })[1]);
+    await userEvent.click(screen.getByRole("button", { name: "Beveiliging" }));
+    await userEvent.click(screen.getByRole("button", { name: "Login geschiedenis" }));
+
+    expect(screen.getByText("Overzicht van belangrijke acties en wijzigingen.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Logins" }).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getByText("Geen activiteit voor dit filter")).toBeInTheDocument();
+    });
+  });
+
   it("invites a new user", async () => {
     renderUsersPage();
     await waitFor(() => {

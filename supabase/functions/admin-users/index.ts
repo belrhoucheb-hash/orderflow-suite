@@ -14,7 +14,15 @@ const CORS_OPTIONS = {
 type OfficeRole = "admin" | "medewerker";
 
 interface AdminUsersRequest {
-  action: "list" | "invite" | "update_role" | "update_profile" | "update_access" | "list_activity";
+  action:
+    | "list"
+    | "invite"
+    | "update_role"
+    | "update_profile"
+    | "update_access"
+    | "reset_password"
+    | "deactivate_user"
+    | "list_activity";
   tenant_id?: string | null;
   user_id?: string;
   email?: string;
@@ -128,7 +136,7 @@ serve(async (req) => {
         : { data: [], error: null };
       if (rolesError) return json(500, { error: rolesError.message });
 
-      const emailMap = new Map<string, { email: string | null; last_sign_in_at: string | null }>();
+      const emailMap = new Map<string, { email: string | null; last_sign_in_at: string | null; banned_until: string | null }>();
       let page = 1;
       while (true) {
         const { data: authUsers, error: usersError } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
@@ -138,6 +146,7 @@ serve(async (req) => {
             emailMap.set(authUser.id, {
               email: authUser.email ?? null,
               last_sign_in_at: authUser.last_sign_in_at ?? null,
+              banned_until: authUser.banned_until ?? null,
             });
           }
         }
@@ -159,6 +168,7 @@ serve(async (req) => {
           created_at: profile.created_at,
           email: emailMap.get(profile.user_id)?.email ?? null,
           last_sign_in_at: emailMap.get(profile.user_id)?.last_sign_in_at ?? null,
+          banned_until: emailMap.get(profile.user_id)?.banned_until ?? null,
           roles: rolesMap.get(profile.user_id) ?? ["medewerker"],
         })),
       });
@@ -348,6 +358,54 @@ serve(async (req) => {
           overrides: body.access_overrides ?? {},
           override_count: Object.keys(body.access_overrides ?? {}).length,
         },
+      });
+
+      return json(200, { ok: true });
+    }
+
+    if (body.action === "reset_password") {
+      if (!body.user_id) return json(400, { error: "user_id is verplicht" });
+
+      const { data: targetUser, error: targetError } = await admin.auth.admin.getUserById(body.user_id);
+      if (targetError || !targetUser.user?.email) {
+        return json(400, { error: "Geen e-mailadres gevonden voor deze gebruiker" });
+      }
+
+      const origin = req.headers.get("origin");
+      const fallbackBaseUrl = Deno.env.get("PUBLIC_SITE_URL") ?? origin ?? supabaseUrl.replace(".supabase.co", ".app");
+      const redirectTo = `${fallbackBaseUrl.replace(/\/$/, "")}/login`;
+      const { error: resetError } = await admin.auth.resetPasswordForEmail(targetUser.user.email, { redirectTo });
+      if (resetError) return json(400, { error: resetError.message });
+
+      await logUserActivity(admin, {
+        tenantId,
+        actorUserId: user.id,
+        targetUserId: body.user_id,
+        action: "user.password_reset_sent",
+        changes: {
+          email: targetUser.user.email,
+        },
+      });
+
+      return json(200, { ok: true });
+    }
+
+    if (body.action === "deactivate_user") {
+      if (!body.user_id) return json(400, { error: "user_id is verplicht" });
+      if (body.user_id === user.id) {
+        return json(400, { error: "Je kunt jezelf niet deactiveren" });
+      }
+
+      const { error: deactivateError } = await admin.auth.admin.updateUserById(body.user_id, {
+        ban_duration: "876000h",
+      });
+      if (deactivateError) return json(400, { error: deactivateError.message });
+
+      await logUserActivity(admin, {
+        tenantId,
+        actorUserId: user.id,
+        targetUserId: body.user_id,
+        action: "user.deactivated",
       });
 
       return json(200, { ok: true });
