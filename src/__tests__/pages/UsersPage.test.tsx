@@ -173,6 +173,10 @@ describe("UsersPage", () => {
     expect(screen.getByText("Rol gewijzigd")).toBeInTheDocument();
     expect(screen.getByText("Rol gewijzigd van medewerker naar admin")).toBeInTheDocument();
     expect(screen.getByText("Gebruiker uitgenodigd")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    await userEvent.click(screen.getByRole("button", { name: "Uitnodigingen" }));
+    expect(screen.queryByText("Rol gewijzigd")).not.toBeInTheDocument();
+    expect(screen.getByText("Gebruiker uitgenodigd")).toBeInTheDocument();
   });
 
   it("shows admin impact feedback in the configuration sheet", async () => {

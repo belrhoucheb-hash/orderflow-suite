@@ -114,6 +114,7 @@ const configTabs = [
 type AccessLevel = "full" | "limited" | "none";
 type AccessAction = "view" | "create" | "edit" | "delete";
 type AccessActions = Record<AccessAction, boolean>;
+type ActivityFilter = "all" | "login" | "roles" | "access" | "profile" | "invites";
 
 const accessMatrix = [
   { module: "Orders", description: "Aanmaken, bekijken en beheren", icon: Box, medewerker: "full", admin: "full" },
@@ -139,6 +140,15 @@ const actionLabels: Record<AccessAction, string> = {
   create: "Aanmaken",
   edit: "Bewerken",
   delete: "Verwijderen",
+};
+
+const activityFilterLabels: Record<ActivityFilter, string> = {
+  all: "Alle activiteit",
+  login: "Logins",
+  roles: "Rolwijzigingen",
+  access: "Toegangsrechten",
+  profile: "Profiel",
+  invites: "Uitnodigingen",
 };
 
 const fullActions: AccessActions = {
@@ -298,6 +308,16 @@ function activityPresentation(event: UserActivityRow): {
   };
 }
 
+function matchesActivityFilter(event: UserActivityRow, filter: ActivityFilter) {
+  if (filter === "all") return true;
+  if (filter === "login") return event.action === "user.login";
+  if (filter === "roles") return event.action === "user.role_updated";
+  if (filter === "access") return event.action === "user.access_updated";
+  if (filter === "profile") return event.action === "user.profile_updated";
+  if (filter === "invites") return event.action === "user.invited";
+  return true;
+}
+
 async function callAdminUsers(action: string, payload: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke<AdminUsersResponse>("admin-users", {
     body: { action, ...payload },
@@ -350,6 +370,8 @@ const UsersPage = () => {
   const [accessOverrides, setAccessOverrides] = useState<Record<string, AccessLevel>>({});
   const [advancedLimitedModules, setAdvancedLimitedModules] = useState<Record<string, boolean>>({});
   const [customLimitedActions, setCustomLimitedActions] = useState<Record<string, AccessActions>>({});
+  const [activityFiltersOpen, setActivityFiltersOpen] = useState(false);
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const { data: userActivity = [], isLoading: activityLoading } = useUserActivity(tenantId, selectedUser?.user_id);
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
@@ -419,6 +441,11 @@ const UsersPage = () => {
       actions: getAccessActions(item.module, accessOverrides[item.module] ?? item[configRole], customLimitedActions[item.module]),
     }));
   }, [accessOverrides, configRole, customLimitedActions]);
+
+  const filteredUserActivity = useMemo(
+    () => userActivity.filter((event) => matchesActivityFilter(event, activityFilter)),
+    [activityFilter, userActivity],
+  );
 
   const impactLines = useMemo(() => {
     const byModule = Object.fromEntries(effectiveAccess.map((item) => [item.module, item]));
@@ -499,6 +526,8 @@ const UsersPage = () => {
     setAccessOverrides({});
     setAdvancedLimitedModules({});
     setCustomLimitedActions({});
+    setActivityFiltersOpen(false);
+    setActivityFilter("all");
   };
 
   const handleSaveConfig = async (event: FormEvent) => {
@@ -1141,11 +1170,57 @@ const UsersPage = () => {
                           <h3 className="text-sm font-semibold text-foreground">Activiteit</h3>
                           <p className="mt-1 text-xs text-muted-foreground">Overzicht van belangrijke acties en wijzigingen.</p>
                         </div>
-                        <Button type="button" variant="outline" size="sm" className="h-9 gap-2 rounded-md bg-background px-3 text-xs">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActivityFiltersOpen((open) => !open)}
+                          className={cn(
+                            "h-9 gap-2 rounded-md bg-background px-3 text-xs",
+                            activityFiltersOpen && "border-amber-200 bg-amber-50 text-amber-800",
+                          )}
+                        >
                           <SlidersHorizontal className="h-3.5 w-3.5" />
-                          Filter
+                          {activityFilter === "all" ? "Filter" : activityFilterLabels[activityFilter]}
                         </Button>
                       </div>
+
+                      {activityFiltersOpen && (
+                        <div className="mt-4 flex flex-col gap-3 rounded-lg bg-muted/20 p-3 ring-1 ring-border/30 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-xs font-semibold text-foreground">Filter activiteit</p>
+                            <p className="text-xs text-muted-foreground">Toon alleen het type events dat je wilt controleren.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(Object.keys(activityFilterLabels) as ActivityFilter[]).map((filter) => (
+                              <button
+                                key={filter}
+                                type="button"
+                                onClick={() => setActivityFilter(filter)}
+                                className={cn(
+                                  "h-8 rounded-md px-2.5 text-xs font-medium transition-colors ring-1",
+                                  activityFilter === filter
+                                    ? "bg-amber-50 text-amber-800 ring-amber-200"
+                                    : "bg-background text-muted-foreground ring-border/40 hover:text-foreground",
+                                )}
+                              >
+                                {activityFilterLabels[filter]}
+                              </button>
+                            ))}
+                            {activityFilter !== "all" && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setActivityFilter("all")}
+                                className="h-8 px-2 text-xs text-muted-foreground"
+                              >
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       <div className="mt-6">
                         {activityLoading ? (
@@ -1157,11 +1232,18 @@ const UsersPage = () => {
                             description="Nieuwe rol-, profiel- en toegangsacties worden vanaf nu automatisch vastgelegd."
                             className="py-10"
                           />
+                        ) : filteredUserActivity.length === 0 ? (
+                          <EmptyState
+                            icon={History}
+                            title="Geen activiteit voor dit filter"
+                            description="Kies een ander filter om meer events te zien."
+                            className="py-10"
+                          />
                         ) : (
                           <div className="relative">
                             <div className="absolute left-[18px] top-5 h-[calc(100%-40px)] w-px bg-border/60" />
                             <div className="space-y-1">
-                              {userActivity.map((event) => {
+                              {filteredUserActivity.map((event) => {
                                 const item = activityPresentation(event);
                                 const Icon = item.icon;
                                 return (
