@@ -183,8 +183,6 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Basis",
     items: [
       { value: "algemeen", label: "Algemeen" },
-      { value: "sla", label: "SLA" },
-      { value: "uitzonderingen", label: "Uitzonderingen" },
       { value: "branding", label: "Branding" },
       { value: "notificaties", label: "Notificaties" },
     ],
@@ -208,12 +206,18 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "Data",
+    title: "Operations",
     items: [
-      { value: "stamgegevens", label: "Stamgegevens" },
-      { value: "rooster-types", label: "Rooster-types" },
+      { value: "operationele-inrichting", label: "Operationele inrichting" },
     ],
   },
+];
+
+const OPERATIONS_NAV_ITEMS: NavItem[] = [
+  { value: "stamgegevens", label: "Stamgegevens" },
+  { value: "rooster-types", label: "Rooster-types" },
+  { value: "sla", label: "SLA" },
+  { value: "uitzonderingen", label: "Uitzonderingen" },
 ];
 
 const Settings = () => {
@@ -602,10 +606,11 @@ const Settings = () => {
 
   // Determine active tab based on URL
   const getActiveTab = () => {
-    if (location.pathname.includes("/stamgegevens")) return "stamgegevens";
-    if (location.pathname.includes("/rooster-types")) return "rooster-types";
-    if (location.pathname.includes("/sla")) return "sla";
-    if (location.pathname.includes("/uitzonderingen")) return "uitzonderingen";
+    if (location.pathname.includes("/operationele-inrichting")) return "operationele-inrichting";
+    if (location.pathname.includes("/stamgegevens")) return "operationele-inrichting";
+    if (location.pathname.includes("/rooster-types")) return "operationele-inrichting";
+    if (location.pathname.includes("/sla")) return "operationele-inrichting";
+    if (location.pathname.includes("/uitzonderingen")) return "operationele-inrichting";
     if (location.pathname.includes("/branding")) return "branding";
     if (location.pathname.includes("/notificaties")) return "notificaties";
     if (location.pathname.includes("/sms")) return "sms";
@@ -622,6 +627,18 @@ const Settings = () => {
   const handleTabChange = (value: string) => {
     if (value === "algemeen") navigate("/settings");
     else navigate(`/settings/${value}`);
+  };
+
+  const getActiveOperationSection = () => {
+    if (location.pathname.includes("/rooster-types")) return "rooster-types";
+    if (location.pathname.includes("/sla")) return "sla";
+    if (location.pathname.includes("/uitzonderingen")) return "uitzonderingen";
+    return "stamgegevens";
+  };
+
+  const activeOperationSection = getActiveOperationSection();
+  const handleOperationSectionChange = (value: string) => {
+    navigate(`/settings/${value}`);
   };
 
   const slaCurrent = JSON.stringify(slaSettings);
@@ -826,11 +843,11 @@ const Settings = () => {
       title: "Operations",
       description: "Masterdata, roosters en prijslogica in balans.",
       icon: Truck,
-      target: "stamgegevens",
+      target: "operationele-inrichting",
       items: [
-        { label: "Adresboek", status: "Actief" },
-        { label: "Rooster-types", status: "Beschikbaar" },
-        { label: "Tarieven en kosten", status: "Onderhoud", subtle: true },
+        { label: "Stamgegevens", status: "Actief" },
+        { label: "SLA", status: slaSettings.enabled ? "Actief" : "Uit" },
+        { label: "Uitzonderingen", status: "Regels", subtle: true },
       ],
     },
     {
@@ -989,53 +1006,6 @@ const Settings = () => {
                 ))}
               </div>
 
-              <div className="hidden">
-                <SettingsOverviewCard
-                  title="Bedrijf"
-                  description="Houd merk, taal en teaminstellingen rustig en consistent op één plek."
-                  icon={Palette}
-                  onClick={() => handleTabChange("branding")}
-                  items={[
-                    { label: "Branding en kleuren", status: logoPreview ? "Klaar" : "Aanvullen" },
-                    { label: "Taal van de omgeving", status: LANGUAGE_OPTIONS.find((opt) => opt.value === currentLang)?.label ?? "Nederlands" },
-                    { label: "Gebruikersbeheer", status: "Beheren", subtle: true },
-                  ]}
-                />
-                <SettingsOverviewCard
-                  title="Operations"
-                  description="De kern van je operationele model: masterdata, roosters en prijslogica."
-                  icon={Truck}
-                  onClick={() => handleTabChange("stamgegevens")}
-                  items={[
-                    { label: "Adresboek", status: "Actief" },
-                    { label: "Rooster-types", status: "Beschikbaar" },
-                    { label: "Tarieven en kosten", status: "Onderhoud", subtle: true },
-                  ]}
-                />
-                <SettingsOverviewCard
-                  title="Communicatie"
-                  description="Bepaal hoe klanten en planners updates, ETA’s en berichten ontvangen."
-                  icon={Smartphone}
-                  onClick={() => handleTabChange("sms")}
-                  items={[
-                    { label: "SMS", status: smsConfigured ? "Klaar" : "Niet compleet" },
-                    { label: "Notificaties", status: `${Object.values(notifications).filter(Boolean).length} actief` },
-                    { label: "Inboxen en ETA", status: "Controleren", subtle: true },
-                  ]}
-                />
-                <SettingsOverviewCard
-                  title="Platform & integraties"
-                  description="Verbind externe systemen en beheer technische toegang vanuit één kalme cluster."
-                  icon={Database}
-                  onClick={() => handleTabChange("integraties")}
-                  items={[
-                    { label: "Connectoren", status: `${connectorSummary.connected} verbonden` },
-                    { label: "Webhooks", status: "Beschikbaar", subtle: true },
-                    { label: "API-tokens", status: "Beheer", subtle: true },
-                  ]}
-                />
-              </div>
-
               <div className="card--luxe p-5 md:p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                   <div className="max-w-sm">
@@ -1148,13 +1118,132 @@ const Settings = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="stamgegevens" className="outline-none space-y-8">
-          <MasterDataSection />
-          <VehicleDocumentTypesSection />
-        </TabsContent>
+        <TabsContent value="operationele-inrichting" className="outline-none space-y-6">
+          <div className="card--luxe p-5 md:p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-[11px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                  Operationele inrichting
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-foreground">Basisregels voor planning en uitvoering</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  Beheer stamdata, roosters, SLA-bewaking en uitzonderingsregels op een plek.
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-4 lg:min-w-[560px]">
+                {OPERATIONS_NAV_ITEMS.map((item) => {
+                  const active = activeOperationSection === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => handleOperationSectionChange(item.value)}
+                      className={cn(
+                        "rounded-xl border px-3 py-2 text-sm transition-colors",
+                        active
+                          ? "border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.36)] text-[hsl(var(--gold-deep))] font-medium"
+                          : "border-[hsl(var(--gold)/0.1)] bg-background/60 text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.14)] hover:text-foreground",
+                      )}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
 
-        <TabsContent value="rooster-types" className="outline-none">
-          <ShiftTemplateSettings />
+          {activeOperationSection === "stamgegevens" && (
+            <div className="space-y-8">
+              <MasterDataSection />
+              <VehicleDocumentTypesSection />
+            </div>
+          )}
+
+          {activeOperationSection === "rooster-types" && <ShiftTemplateSettings />}
+
+          {activeOperationSection === "sla" && (
+            <div className="card--luxe p-6 space-y-6">
+              <div>
+                <p className="text-[11px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                  SLA
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Bepaal wanneer een order als SLA-risico telt en wanneer waarschuwingen moeten verschijnen.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-4 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">SLA-bewaking actief</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Gebruik tenant-eigen deadlines in notificaties en uitzonderingen.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={slaSettings.enabled}
+                    onCheckedChange={(value) => setSlaSettings((prev) => ({ ...prev, enabled: value }))}
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="sla-deadline-hours">SLA deadline in uren</Label>
+                    <Input
+                      id="sla-deadline-hours"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={slaSettings.deadlineHours}
+                      onChange={(e) => setSlaSettings((prev) => ({ ...prev, deadlineHours: Number(e.target.value || 1) }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Na dit aantal uur in `DRAFT` wordt een order als SLA-risico gezien.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sla-warning-minutes">Waarschuwing in minuten</Label>
+                    <Input
+                      id="sla-warning-minutes"
+                      type="number"
+                      min={5}
+                      step={5}
+                      value={slaSettings.warningMinutes}
+                      onChange={(e) => setSlaSettings((prev) => ({ ...prev, warningMinutes: Number(e.target.value || 5) }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Binnen dit venster verschijnt een SLA-waarschuwing voordat de deadline verloopt.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                  <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                    Deadline
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.deadlineHours} uur</p>
+                </div>
+                <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                  <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                    Waarschuwing
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.warningMinutes} min</p>
+                </div>
+                <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
+                  <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                    Status
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.enabled ? "Actief" : "Uit"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeOperationSection === "uitzonderingen" && <ExceptionRulesSettings />}
         </TabsContent>
 
         <TabsContent value="branding" className="outline-none">
@@ -1240,91 +1329,6 @@ const Settings = () => {
               </button>
             </div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="sla" className="outline-none">
-          <div className="card--luxe p-6 space-y-6">
-            <div>
-              <p className="text-[11px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
-                SLA
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Bepaal wanneer een order als SLA-risico telt en wanneer waarschuwingen moeten verschijnen.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-4 space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium">SLA-bewaking actief</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Gebruik tenant-eigen deadlines in notificaties en uitzonderingen.
-                  </p>
-                </div>
-                <Switch
-                  checked={slaSettings.enabled}
-                  onCheckedChange={(value) => setSlaSettings((prev) => ({ ...prev, enabled: value }))}
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="sla-deadline-hours">SLA deadline in uren</Label>
-                  <Input
-                    id="sla-deadline-hours"
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={slaSettings.deadlineHours}
-                    onChange={(e) => setSlaSettings((prev) => ({ ...prev, deadlineHours: Number(e.target.value || 1) }))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Na dit aantal uur in `DRAFT` wordt een order als SLA-risico gezien.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="sla-warning-minutes">Waarschuwing in minuten</Label>
-                  <Input
-                    id="sla-warning-minutes"
-                    type="number"
-                    min={5}
-                    step={5}
-                    value={slaSettings.warningMinutes}
-                    onChange={(e) => setSlaSettings((prev) => ({ ...prev, warningMinutes: Number(e.target.value || 5) }))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Binnen dit venster verschijnt een SLA-waarschuwing voordat de deadline verloopt.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
-                <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
-                  Deadline
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.deadlineHours} uur</p>
-              </div>
-              <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
-                <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
-                  Waarschuwing
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.warningMinutes} min</p>
-              </div>
-              <div className="rounded-2xl border border-[hsl(var(--gold)/0.1)] bg-[hsl(var(--gold-soft)/0.08)] px-4 py-3">
-                <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
-                  Status
-                </p>
-                <p className="mt-2 text-lg font-semibold text-foreground">{slaSettings.enabled ? "Actief" : "Uit"}</p>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="uitzonderingen" className="outline-none">
-          <ExceptionRulesSettings />
         </TabsContent>
 
         <TabsContent value="notificaties" className="outline-none">
@@ -1886,7 +1890,7 @@ const Settings = () => {
           label="Notificaties hebben niet-opgeslagen wijzigingen"
         />
       )}
-      {activeTab === "sla" && (
+      {activeTab === "operationele-inrichting" && activeOperationSection === "sla" && (
         <StickySaveBar
           dirty={slaDirty}
           saving={saveSla.isPending}
