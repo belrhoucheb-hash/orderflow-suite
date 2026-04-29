@@ -154,15 +154,16 @@ function accessLabel(level: AccessLevel) {
   return "Geen";
 }
 
-function AccessStatus({ level }: { level: AccessLevel }) {
+function AccessStatus({ level, overridden }: { level: AccessLevel; overridden: boolean }) {
   return (
     <span className={cn(
       "inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ring-1",
-      level === "full" && "bg-emerald-50 text-emerald-700 ring-emerald-200",
-      level === "limited" && "bg-amber-50 text-amber-700 ring-amber-200",
-      level === "none" && "bg-muted text-muted-foreground ring-border/60",
+      !overridden && "bg-muted/50 text-muted-foreground ring-border/60",
+      level === "full" && overridden && "bg-emerald-50 text-emerald-700 ring-emerald-200",
+      level === "limited" && overridden && "bg-amber-50 text-amber-700 ring-amber-200",
+      level === "none" && overridden && "bg-rose-50 text-rose-700 ring-rose-200",
     )}>
-      <AccessIndicator level={level} />
+      {overridden && <AccessIndicator level={level} />}
       {accessLabel(level)}
     </span>
   );
@@ -283,6 +284,29 @@ const UsersPage = () => {
 
     return lines.length > 0 ? lines : ["Geen beheerimpact buiten dagelijkse operatie"];
   }, [effectiveAccess]);
+
+  const hasAccessOverrides = Object.keys(accessOverrides).length > 0;
+
+  const setModuleAccess = (module: string, level: AccessLevel) => {
+    setAccessOverrides((current) => {
+      const item = accessMatrix.find((entry) => entry.module === module);
+      if (!item || item[configRole] !== level) {
+        return { ...current, [module]: level };
+      }
+
+      const next = { ...current };
+      delete next[module];
+      return next;
+    });
+    setExpandedAccessModule(module);
+    setConfigSaved(false);
+  };
+
+  const resetAccessOverrides = () => {
+    setAccessOverrides({});
+    setExpandedAccessModule(null);
+    setConfigSaved(false);
+  };
 
   useEffect(() => {
     if (!configSaved) return;
@@ -720,10 +744,10 @@ const UsersPage = () => {
                         <Info className="mt-0.5 h-4 w-4 shrink-0" />
                         <div>
                           <h3 className="text-sm font-semibold">Met deze rol</h3>
-                          <div className="mt-2 space-y-1.5">
+                          <div className="mt-3 space-y-2">
                             {impactLines.map((line) => (
                               <div key={line} className="flex items-center gap-2 text-sm">
-                                <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
+                                <CheckCircle2 className="h-4 w-4 text-amber-700" />
                                 {line}
                               </div>
                             ))}
@@ -732,7 +756,23 @@ const UsersPage = () => {
                       </section>
 
                       <section className="overflow-hidden rounded-lg bg-background shadow-sm ring-1 ring-border/30">
-                        <div className="grid grid-cols-[minmax(220px,1fr)_120px_150px_32px] border-b border-border/40 bg-muted/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <div className="flex items-center justify-between gap-3 border-b border-border/30 px-4 py-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Modules</p>
+                            <p className="text-xs text-muted-foreground/60">Standaardrechten blijven stil, afwijkingen vallen op.</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={!hasAccessOverrides}
+                            onClick={resetAccessOverrides}
+                            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Reset alle overrides
+                          </Button>
+                        </div>
+                        <div className="sticky top-0 z-10 grid grid-cols-[minmax(220px,1fr)_112px_132px_28px] border-b border-border/40 bg-background/95 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 backdrop-blur">
                           <div>Module</div>
                           <div>Toegang</div>
                           <div>Override</div>
@@ -746,7 +786,10 @@ const UsersPage = () => {
                             return (
                               <div
                                 key={row.module}
-                                className="transition-colors hover:bg-[#F7F7F7]"
+                                className={cn(
+                                  "cursor-pointer transition-colors hover:bg-[#FAFAFA]",
+                                  expanded && "bg-[#FAFAFA]",
+                                )}
                               >
                                 <div
                                   role="button"
@@ -758,31 +801,27 @@ const UsersPage = () => {
                                       setExpandedAccessModule(expanded ? null : row.module);
                                     }
                                   }}
-                                  className="grid min-h-[56px] w-full grid-cols-[minmax(220px,1fr)_120px_150px_32px] items-center px-4 py-2 text-left"
+                                  className="grid min-h-[52px] w-full grid-cols-[minmax(220px,1fr)_112px_132px_28px] items-center px-4 py-1.5 text-left"
                                 >
                                   <div className="flex items-center gap-3">
-                                    <Icon className="h-4 w-4 text-muted-foreground" />
+                                    <Icon className="h-4 w-4 text-muted-foreground/70" />
                                     <div>
                                       <p className="text-sm font-semibold text-foreground">{row.module}</p>
-                                      <p className="text-xs text-muted-foreground/60">{row.description}</p>
+                                      <p className="text-xs text-muted-foreground/50">{row.description}</p>
                                     </div>
                                   </div>
-                                  <AccessStatus level={row.level} />
+                                  <AccessStatus level={row.level} overridden={overridden} />
                                   <div onClick={(event) => event.stopPropagation()}>
                                     <Select
                                       value={row.level}
                                       onValueChange={(value) => {
-                                        setAccessOverrides((current) => ({
-                                          ...current,
-                                          [row.module]: value as AccessLevel,
-                                        }));
-                                        setExpandedAccessModule(row.module);
-                                        setConfigSaved(false);
+                                        setModuleAccess(row.module, value as AccessLevel);
                                       }}
                                     >
                                       <SelectTrigger className={cn(
-                                        "h-9 rounded-lg bg-background text-xs",
-                                        overridden && "border-amber-300 bg-amber-50/60",
+                                        "h-7 rounded-md border-[#EAEAEA] bg-background px-2 text-xs text-muted-foreground shadow-none",
+                                        "focus:ring-1 focus:ring-amber-200 focus:ring-offset-0",
+                                        overridden && "border-amber-200 bg-amber-50/60 text-amber-800",
                                       )}>
                                         <SelectValue />
                                       </SelectTrigger>
@@ -807,8 +846,7 @@ const UsersPage = () => {
                                           name={`access-${row.module}`}
                                           checked={row.level === "none"}
                                           onChange={() => {
-                                            setAccessOverrides((current) => ({ ...current, [row.module]: "none" }));
-                                            setConfigSaved(false);
+                                            setModuleAccess(row.module, "none");
                                           }}
                                         />
                                         Geen toegang
@@ -819,8 +857,7 @@ const UsersPage = () => {
                                           name={`access-${row.module}`}
                                           checked={row.level === "limited"}
                                           onChange={() => {
-                                            setAccessOverrides((current) => ({ ...current, [row.module]: "limited" }));
-                                            setConfigSaved(false);
+                                            setModuleAccess(row.module, "limited");
                                           }}
                                         />
                                         Beperkt
@@ -831,8 +868,7 @@ const UsersPage = () => {
                                           name={`access-${row.module}`}
                                           checked={row.level === "full"}
                                           onChange={() => {
-                                            setAccessOverrides((current) => ({ ...current, [row.module]: "full" }));
-                                            setConfigSaved(false);
+                                            setModuleAccess(row.module, "full");
                                           }}
                                         />
                                         Volledig
