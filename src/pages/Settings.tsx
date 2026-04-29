@@ -72,6 +72,10 @@ const LUXE_ICON_TILE_STYLE = {
 interface NavItem {
   value: string;
   label: string;
+  description?: string;
+  target?: string;
+  aliases?: string[];
+  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }
 interface NavGroup {
   title: string;
@@ -182,26 +186,45 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Basis",
     items: [
-      { value: "algemeen", label: "Algemeen" },
-      { value: "branding", label: "Branding" },
-      { value: "notificaties", label: "Notificaties" },
-    ],
-  },
-  {
-    title: "Communicatie",
-    items: [
-      { value: "sms", label: "SMS" },
-      { value: "eta-meldingen", label: "ETA en klant-meldingen" },
-      { value: "inboxen", label: "Inboxen" },
-      { value: "integraties", label: "Integraties" },
-      { value: "webhooks", label: "Webhooks" },
-      { value: "api-tokens", label: "API-tokens" },
+      { value: "algemeen", label: "Algemeen", description: "Taal en overzicht", icon: Database },
+      { value: "branding", label: "Branding", description: "Logo en huisstijl", icon: Palette },
     ],
   },
   {
     title: "Operations",
     items: [
-      { value: "operationele-inrichting", label: "Operationele inrichting" },
+      {
+        value: "operationele-inrichting",
+        label: "Operationele inrichting",
+        description: "Stamdata en regels",
+        icon: Truck,
+      },
+    ],
+  },
+  {
+    title: "Communicatie",
+    items: [
+      {
+        value: "communicatie",
+        label: "Communicatie",
+        description: "Meldingen en inboxen",
+        target: "notificaties",
+        aliases: ["notificaties", "sms", "eta-meldingen", "inboxen"],
+        icon: Bell,
+      },
+    ],
+  },
+  {
+    title: "Koppelingen",
+    items: [
+      {
+        value: "koppelingen",
+        label: "Koppelingen",
+        description: "API en integraties",
+        target: "integraties",
+        aliases: ["integraties", "webhooks", "api-tokens"],
+        icon: ShieldCheck,
+      },
     ],
   },
 ];
@@ -209,11 +232,140 @@ const NAV_GROUPS: NavGroup[] = [
 const OPERATIONS_NAV_ITEMS: NavItem[] = [
   { value: "stamgegevens", label: "Stamgegevens" },
   { value: "rooster-types", label: "Rooster-types" },
+  { value: "prijslogica", label: "Prijslogica" },
   { value: "sla", label: "SLA" },
   { value: "uitzonderingen", label: "Uitzonderingen" },
-  { value: "tarieven", label: "Tarieven" },
-  { value: "kosten", label: "Kosten" },
 ];
+
+const COMMUNICATION_NAV_ITEMS: NavItem[] = [
+  { value: "notificaties", label: "Notificaties" },
+  { value: "sms", label: "SMS" },
+  { value: "eta-meldingen", label: "ETA-meldingen" },
+  { value: "inboxen", label: "Inboxen" },
+];
+
+const CONNECTION_NAV_ITEMS: NavItem[] = [
+  { value: "integraties", label: "Integraties" },
+  { value: "webhooks", label: "Webhooks" },
+  { value: "api-tokens", label: "API-tokens" },
+];
+
+const TAB_TRIGGER_ITEMS: NavItem[] = [
+  ...NAV_GROUPS.flatMap((group) => group.items),
+  ...COMMUNICATION_NAV_ITEMS,
+  ...CONNECTION_NAV_ITEMS,
+];
+
+const OPERATION_SECTION_COPY: Record<string, { title: string; description: string }> = {
+  stamgegevens: {
+    title: "Stamgegevens en documenten",
+    description: "Beheer adresboek, labels en voertuigdocumenten als vaste basis voor orders en planning.",
+  },
+  "rooster-types": {
+    title: "Rooster-types",
+    description: "Richt standaarddiensten in die planners kunnen gebruiken bij het maken van chauffeursroosters.",
+  },
+  prijslogica: {
+    title: "Prijslogica",
+    description: "Bundel tariefkaarten, toeslagen, brandstofprijs en interne kostensoorten op een plek.",
+  },
+  sla: {
+    title: "SLA-bewaking",
+    description: "Bepaal wanneer orders risico lopen en wanneer planners waarschuwingen moeten krijgen.",
+  },
+  uitzonderingen: {
+    title: "Uitzonderingsregels",
+    description: "Stel in welke operationele signalen zichtbaar zijn en wanneer ze aandacht vragen.",
+  },
+};
+
+const COMMUNICATION_SECTION_COPY: Record<string, { title: string; description: string }> = {
+  notificaties: {
+    title: "Notificaties",
+    description: "Beheer e-mail, SMTP en algemene meldingen voor de operatie.",
+  },
+  sms: {
+    title: "SMS",
+    description: "Richt SMS-providers, templates en statusmomenten voor klantberichten in.",
+  },
+  "eta-meldingen": {
+    title: "ETA-meldingen",
+    description: "Stel klantmeldingen rond aankomsttijden en statusupdates in.",
+  },
+  inboxen: {
+    title: "Inboxen",
+    description: "Koppel mailboxen en intakekanalen aan de orderflow.",
+  },
+};
+
+const CONNECTION_SECTION_COPY: Record<string, { title: string; description: string }> = {
+  integraties: {
+    title: "Integraties",
+    description: "Beheer externe systemen zoals boekhouding, telematica en connectoren.",
+  },
+  webhooks: {
+    title: "Webhooks",
+    description: "Laat externe systemen live meeluisteren met gebeurtenissen in de TMS.",
+  },
+  "api-tokens": {
+    title: "API-tokens",
+    description: "Maak en beheer toegangssleutels voor technische koppelingen.",
+  },
+};
+
+function GroupedSettingsHeader({
+  eyebrow,
+  title,
+  description,
+  items,
+  activeValue,
+  onChange,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  items: NavItem[];
+  activeValue: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-[hsl(var(--gold)/0.14)] bg-card shadow-sm">
+      <div className="border-b border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.32),hsl(var(--card)))] p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] font-display font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]">
+            {eyebrow}
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-foreground">{title}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>
+          </div>
+        </div>
+      </div>
+      <div className="bg-[hsl(var(--gold-soft)/0.12)] px-5 py-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {items.map((item) => {
+            const active = activeValue === item.value;
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => onChange(item.value)}
+                className={cn(
+                  "h-9 rounded-md px-3 text-sm font-medium ring-1 transition-colors",
+                  active
+                    ? "bg-[hsl(var(--gold-soft)/0.72)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.24)]"
+                    : "bg-background text-muted-foreground ring-border/40 hover:bg-[hsl(var(--gold-soft)/0.36)] hover:text-foreground",
+                )}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const Settings = () => {
   const location = useLocation();
@@ -243,7 +395,12 @@ const Settings = () => {
   const [primaryColor, setPrimaryColor] = useState("#3b82f6");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
+  const [invoiceTemplateName, setInvoiceTemplateName] = useState<string | null>(null);
+  const [invoiceTemplateUrl, setInvoiceTemplateUrl] = useState<string | null>(null);
+  const [pendingInvoiceTemplateFile, setPendingInvoiceTemplateFile] = useState<File | null>(null);
+  const [clearInvoiceTemplate, setClearInvoiceTemplate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const invoiceTemplateInputRef = useRef<HTMLInputElement>(null);
   const updateBranding = useUpdateTenantBranding();
 
   const [brandingBaseline, setBrandingBaseline] = useState<string>("");
@@ -254,10 +411,16 @@ const Settings = () => {
       setPrimaryColor(tenant.primaryColor || "#3b82f6");
       setLogoPreview(tenant.logoUrl || null);
       setPendingLogoFile(null);
+      setInvoiceTemplateName(tenant.invoiceTemplateFilename || null);
+      setInvoiceTemplateUrl(tenant.invoiceTemplateUrl || null);
+      setPendingInvoiceTemplateFile(null);
+      setClearInvoiceTemplate(false);
       setBrandingBaseline(JSON.stringify({
         name: tenant.name || "",
         color: tenant.primaryColor || "#3b82f6",
         logoUrl: tenant.logoUrl || null,
+        invoiceTemplateName: tenant.invoiceTemplateFilename || null,
+        invoiceTemplateUrl: tenant.invoiceTemplateUrl || null,
       }));
     }
   }, [tenant]);
@@ -267,6 +430,12 @@ const Settings = () => {
     color: primaryColor,
     // pending-file markeert dirty, ongeacht preview-url
     logoUrl: pendingLogoFile ? "__pending__" : logoPreview,
+    invoiceTemplateName: pendingInvoiceTemplateFile ? pendingInvoiceTemplateFile.name : invoiceTemplateName,
+    invoiceTemplateUrl: pendingInvoiceTemplateFile
+      ? "__pending__"
+      : clearInvoiceTemplate
+        ? null
+        : invoiceTemplateUrl,
   });
   const brandingDirty = brandingBaseline !== "" && brandingCurrent !== brandingBaseline;
   const revertBranding = () => {
@@ -275,6 +444,10 @@ const Settings = () => {
     setPrimaryColor(tenant.primaryColor || "#3b82f6");
     setLogoPreview(tenant.logoUrl || null);
     setPendingLogoFile(null);
+    setInvoiceTemplateName(tenant.invoiceTemplateFilename || null);
+    setInvoiceTemplateUrl(tenant.invoiceTemplateUrl || null);
+    setPendingInvoiceTemplateFile(null);
+    setClearInvoiceTemplate(false);
   };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,13 +464,47 @@ const Settings = () => {
     }
   };
 
+  const handleInvoiceTemplateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Geen PDF", { description: "Upload een factuursjabloon als PDF-bestand." });
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Sjabloon te groot", { description: "Maximaal 10 MB." });
+      e.target.value = "";
+      return;
+    }
+
+    setPendingInvoiceTemplateFile(file);
+    setInvoiceTemplateName(file.name);
+    setInvoiceTemplateUrl(null);
+    setClearInvoiceTemplate(false);
+  };
+
+  const handleClearInvoiceTemplate = () => {
+    setPendingInvoiceTemplateFile(null);
+    setInvoiceTemplateName(null);
+    setInvoiceTemplateUrl(null);
+    setClearInvoiceTemplate(true);
+    if (invoiceTemplateInputRef.current) invoiceTemplateInputRef.current.value = "";
+  };
+
   const handleSaveBranding = async () => {
     await updateBranding.mutateAsync({
       name: companyName,
       primary_color: primaryColor,
       logo_file: pendingLogoFile,
+      invoice_template_file: pendingInvoiceTemplateFile,
+      clear_invoice_template: clearInvoiceTemplate,
     });
     setPendingLogoFile(null);
+    setPendingInvoiceTemplateFile(null);
+    setClearInvoiceTemplate(false);
   };
 
   // Notification settings state
@@ -606,6 +813,7 @@ const Settings = () => {
     if (location.pathname.includes("/rooster-types")) return "operationele-inrichting";
     if (location.pathname.includes("/sla")) return "operationele-inrichting";
     if (location.pathname.includes("/uitzonderingen")) return "operationele-inrichting";
+    if (location.pathname.includes("/prijslogica")) return "operationele-inrichting";
     if (location.pathname.includes("/tarieven")) return "operationele-inrichting";
     if (location.pathname.includes("/kosten")) return "operationele-inrichting";
     if (location.pathname.includes("/branding")) return "branding";
@@ -620,21 +828,51 @@ const Settings = () => {
   };
 
   const handleTabChange = (value: string) => {
-    if (value === "algemeen") navigate("/settings");
-    else navigate(`/settings/${value}`);
+    const item = NAV_GROUPS.flatMap((group) => group.items).find((navItem) => navItem.value === value);
+    const target = item?.target ?? value;
+    if (target === "algemeen") navigate("/settings");
+    else navigate(`/settings/${target}`);
   };
 
   const getActiveOperationSection = () => {
     if (location.pathname.includes("/rooster-types")) return "rooster-types";
+    if (location.pathname.includes("/prijslogica")) return "prijslogica";
+    if (location.pathname.includes("/tarieven")) return "prijslogica";
+    if (location.pathname.includes("/kosten")) return "prijslogica";
     if (location.pathname.includes("/sla")) return "sla";
     if (location.pathname.includes("/uitzonderingen")) return "uitzonderingen";
-    if (location.pathname.includes("/tarieven")) return "tarieven";
-    if (location.pathname.includes("/kosten")) return "kosten";
     return "stamgegevens";
   };
 
   const activeOperationSection = getActiveOperationSection();
+  const activeOperationCopy = OPERATION_SECTION_COPY[activeOperationSection] ?? OPERATION_SECTION_COPY.stamgegevens;
   const handleOperationSectionChange = (value: string) => {
+    navigate(`/settings/${value}`);
+  };
+
+  const getActiveCommunicationSection = () => {
+    if (location.pathname.includes("/sms")) return "sms";
+    if (location.pathname.includes("/eta-meldingen")) return "eta-meldingen";
+    if (location.pathname.includes("/inboxen")) return "inboxen";
+    return "notificaties";
+  };
+
+  const activeCommunicationSection = getActiveCommunicationSection();
+  const activeCommunicationCopy =
+    COMMUNICATION_SECTION_COPY[activeCommunicationSection] ?? COMMUNICATION_SECTION_COPY.notificaties;
+  const handleCommunicationSectionChange = (value: string) => {
+    navigate(`/settings/${value}`);
+  };
+
+  const getActiveConnectionSection = () => {
+    if (location.pathname.includes("/webhooks")) return "webhooks";
+    if (location.pathname.includes("/api-tokens")) return "api-tokens";
+    return "integraties";
+  };
+
+  const activeConnectionSection = getActiveConnectionSection();
+  const activeConnectionCopy = CONNECTION_SECTION_COPY[activeConnectionSection] ?? CONNECTION_SECTION_COPY.integraties;
+  const handleConnectionSectionChange = (value: string) => {
     navigate(`/settings/${value}`);
   };
 
@@ -888,38 +1126,60 @@ const Settings = () => {
       >
         {/* Verborgen TabsList is nodig zodat Radix de controlled value + TabsContent correct orchestreert. */}
         <TabsList className="sr-only" aria-hidden="true">
-          {NAV_GROUPS.flatMap((g) => g.items).map((item) => (
+          {TAB_TRIGGER_ITEMS.map((item) => (
             <TabsTrigger key={item.value} value={item.value}>{item.label}</TabsTrigger>
           ))}
         </TabsList>
 
         {/* Sidebar-navigatie */}
-        <aside className="w-56 shrink-0 border-r border-[hsl(var(--gold)/0.08)] pr-4 py-1 overflow-y-auto">
-          <nav className="space-y-5">
+        <aside className="w-[270px] shrink-0 overflow-y-auto">
+          <nav className="overflow-hidden rounded-xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(180deg,hsl(var(--card)),hsl(var(--gold-soft)/0.16))] shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
             {NAV_GROUPS.map((group) => (
-              <div key={group.title}>
-                <p className="mb-2 px-3 text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep)/0.72)]">
+              <div key={group.title} className="border-b border-[hsl(var(--gold)/0.10)] p-3.5 last:border-b-0">
+                <p className="mb-2.5 px-1 text-[10px] font-display font-semibold uppercase tracking-[0.24em] text-[hsl(var(--gold-deep)/0.72)]">
                   {group.title}
                 </p>
-                <div className="space-y-0.5">
+                <div className="space-y-1.5">
                   {group.items.map((item) => {
-                    const active = activeTab === item.value;
+                    const active = activeTab === item.value || item.aliases?.includes(activeTab);
+                    const Icon = item.icon;
                     return (
                       <button
                         key={item.value}
                         type="button"
                         onClick={() => handleTabChange(item.value)}
                         className={cn(
-                          "w-full text-left px-3 py-2 rounded-xl text-[13px] transition-colors relative",
+                          "group relative w-full rounded-lg px-3 py-2.5 text-left ring-1 transition-all",
                           active
-                            ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.42),hsl(var(--gold-soft)/0.18))] text-[hsl(var(--gold-deep))] font-medium shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.08)]"
-                            : "text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-foreground"
+                            ? "bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.82),hsl(var(--card)))] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.28)] shadow-sm"
+                            : "bg-transparent text-muted-foreground ring-transparent hover:bg-[hsl(var(--gold-soft)/0.30)] hover:text-foreground"
                         )}
                       >
                         {active && (
                           <span className="absolute left-0 top-2.5 bottom-2.5 w-0.5 rounded-full bg-[hsl(var(--gold-deep))]" aria-hidden="true" />
                         )}
-                        {item.label}
+                        <span className="flex items-center gap-3">
+                          {Icon && (
+                            <span
+                              className={cn(
+                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 transition-colors",
+                                active
+                                  ? "bg-card text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.22)]"
+                                  : "bg-background/80 text-muted-foreground ring-border/40 group-hover:bg-card group-hover:text-[hsl(var(--gold-deep))]",
+                              )}
+                            >
+                              <Icon className="h-4 w-4" strokeWidth={1.7} />
+                            </span>
+                          )}
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold leading-5">{item.label}</span>
+                            {item.description && (
+                              <span className="mt-0.5 block truncate text-[11px] font-normal leading-4 text-muted-foreground">
+                                {item.description}
+                              </span>
+                            )}
+                          </span>
+                        </span>
                       </button>
                     );
                   })}
@@ -1117,39 +1377,14 @@ const Settings = () => {
         </TabsContent>
 
         <TabsContent value="operationele-inrichting" className="outline-none space-y-6">
-          <div className="card--luxe p-5 md:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="text-[11px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
-                  Operationele inrichting
-                </p>
-                <h2 className="mt-2 text-xl font-semibold text-foreground">Basisregels voor planning en uitvoering</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  Beheer stamdata, roosters, SLA-bewaking en uitzonderingsregels op een plek.
-                </p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[640px]">
-                {OPERATIONS_NAV_ITEMS.map((item) => {
-                  const active = activeOperationSection === item.value;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      onClick={() => handleOperationSectionChange(item.value)}
-                      className={cn(
-                        "rounded-xl border px-3 py-2 text-sm transition-colors",
-                        active
-                          ? "border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.36)] text-[hsl(var(--gold-deep))] font-medium"
-                          : "border-[hsl(var(--gold)/0.1)] bg-background/60 text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.14)] hover:text-foreground",
-                      )}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <GroupedSettingsHeader
+            eyebrow="Operationele inrichting"
+            title={activeOperationCopy.title}
+            description={activeOperationCopy.description}
+            items={OPERATIONS_NAV_ITEMS}
+            activeValue={activeOperationSection}
+            onChange={handleOperationSectionChange}
+          />
 
           {activeOperationSection === "stamgegevens" && (
             <div className="space-y-8">
@@ -1243,16 +1478,11 @@ const Settings = () => {
 
           {activeOperationSection === "uitzonderingen" && <ExceptionRulesSettings />}
 
-          {activeOperationSection === "tarieven" && (
+          {activeOperationSection === "prijslogica" && (
             <div className="space-y-6">
               <PricingPreview />
               <RateCardSettings />
               <SurchargeSettings />
-            </div>
-          )}
-
-          {activeOperationSection === "kosten" && (
-            <div className="space-y-6">
               <FuelPriceSettings />
               <CostTypeSettings />
             </div>
@@ -1263,71 +1493,184 @@ const Settings = () => {
           <div className="card--luxe p-6 space-y-6">
             <div>
               <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
-                Branding
+                Tenant branding
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">Configureer je bedrijfsidentiteit.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Beheer huisstijl, logo en factuurdocumenten per tenant.
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="companyName">Bedrijfsnaam</Label>
-              <Input
-                id="companyName"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Bedrijfsnaam"
-              />
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="companyName">Bedrijfsnaam</Label>
+                  <Input
+                    id="companyName"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="Bedrijfsnaam"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="primaryColor">Primaire kleur</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      id="primaryColor"
+                      type="color"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="w-16 h-10 p-1 cursor-pointer"
+                    />
+                    <Input
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="max-w-[140px] font-mono text-sm"
+                      placeholder="#000000"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.18)] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]">
+                      Preview
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{companyName || "Bedrijfsnaam"}</p>
+                  </div>
+                  <div
+                    className="h-9 w-9 rounded-full border border-[hsl(var(--gold)/0.22)]"
+                    style={{ backgroundColor: primaryColor }}
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-[hsl(var(--gold)/0.26)] bg-card">
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Logo preview" className="max-h-20 max-w-[180px] object-contain" />
+                  ) : (
+                    <Palette className="h-5 w-5 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="primaryColor">Primaire kleur</Label>
-              <div className="flex items-center gap-3">
-                <Input
-                  id="primaryColor"
-                  type="color"
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="w-16 h-10 p-1 cursor-pointer"
-                />
-                <Input
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="max-w-[140px] font-mono text-sm"
-                  placeholder="#000000"
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-2 rounded-xl border border-[hsl(var(--gold)/0.14)] bg-card p-4">
+                <Label>Logo upload</Label>
+                <div className="flex items-center gap-4">
+                  <div
+                    className="h-20 w-20 rounded-xl border-2 border-dashed border-[hsl(var(--gold)/0.3)] flex items-center justify-center overflow-hidden bg-[hsl(var(--gold-soft)/0.25)] cursor-pointer hover:border-[hsl(var(--gold-deep))] transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {logoPreview ? (
+                      <img src={logoPreview} alt="Logo preview" className="h-full w-full object-contain" />
+                    ) : (
+                      <Upload className="h-5 w-5 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="btn-luxe !h-9"
+                    >
+                      <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      Bestand kiezen
+                    </button>
+                    <p className="text-xs text-muted-foreground">PNG, JPG of SVG. Max 2MB.</p>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml"
+                    className="hidden"
+                    onChange={handleLogoChange}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-[hsl(var(--gold)/0.14)] bg-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label>Factuursjabloon</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      PDF-template voor facturen van deze tenant.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.32)] px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]">
+                    PDF
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.14)] p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.18)] bg-card">
+                    <FileText className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.7} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {invoiceTemplateName || "Nog geen sjabloon gekoppeld"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {pendingInvoiceTemplateFile
+                        ? "Nieuw bestand klaar om op te slaan"
+                        : invoiceTemplateUrl
+                          ? "Actief factuursjabloon"
+                          : "Upload bijvoorbeeld het RCS factuursjabloon"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => invoiceTemplateInputRef.current?.click()}
+                    className="btn-luxe !h-9"
+                  >
+                    <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    PDF kiezen
+                  </button>
+                  {invoiceTemplateUrl && !pendingInvoiceTemplateFile && (
+                    <a
+                      href={invoiceTemplateUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-luxe !h-9"
+                    >
+                      Bekijken
+                    </a>
+                  )}
+                  {(invoiceTemplateName || pendingInvoiceTemplateFile) && (
+                    <button
+                      type="button"
+                      onClick={handleClearInvoiceTemplate}
+                      className="btn-luxe !h-9"
+                    >
+                      Verwijderen
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={invoiceTemplateInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handleInvoiceTemplateChange}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Logo upload</Label>
-              <div className="flex items-center gap-4">
-                <div
-                  className="h-20 w-20 rounded-xl border-2 border-dashed border-[hsl(var(--gold)/0.3)] flex items-center justify-center overflow-hidden bg-[hsl(var(--gold-soft)/0.25)] cursor-pointer hover:border-[hsl(var(--gold-deep))] transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {logoPreview ? (
-                    <img src={logoPreview} alt="Logo preview" className="h-full w-full object-contain" />
-                  ) : (
-                    <Upload className="h-5 w-5 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
-                  )}
+            <div className="rounded-xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.14)] p-4">
+              <div className="flex items-start gap-3">
+                <FileText className="mt-0.5 h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.7} />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Tenant-specifieke documenten</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Dit sjabloon wordt op tenantniveau opgeslagen, zodat Royalty Cargo Solutions, een andere klant
+                    of een latere vestiging elk een eigen factuurtemplate kan gebruiken.
+                  </p>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="btn-luxe !h-9"
-                  >
-                    <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    Bestand kiezen
-                  </button>
-                  <p className="text-xs text-muted-foreground">PNG, JPG of SVG. Max 2MB.</p>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/svg+xml"
-                  className="hidden"
-                  onChange={handleLogoChange}
-                />
               </div>
             </div>
 
@@ -1345,6 +1688,15 @@ const Settings = () => {
         </TabsContent>
 
         <TabsContent value="notificaties" className="outline-none">
+          <div className="space-y-6">
+          <GroupedSettingsHeader
+            eyebrow="Communicatie"
+            title={activeCommunicationCopy.title}
+            description={activeCommunicationCopy.description}
+            items={COMMUNICATION_NAV_ITEMS}
+            activeValue={activeCommunicationSection}
+            onChange={handleCommunicationSectionChange}
+          />
           <div className="card--luxe p-6 space-y-1">
             <div className="pb-4">
               <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
@@ -1461,10 +1813,20 @@ const Settings = () => {
               </button>
             </div>
           </div>
+          </div>
         </TabsContent>
 
         {/* SMS Tab */}
         <TabsContent value="sms" className="outline-none">
+          <div className="space-y-6">
+          <GroupedSettingsHeader
+            eyebrow="Communicatie"
+            title={activeCommunicationCopy.title}
+            description={activeCommunicationCopy.description}
+            items={COMMUNICATION_NAV_ITEMS}
+            activeValue={activeCommunicationSection}
+            onChange={handleCommunicationSectionChange}
+          />
           <div className="card--luxe p-6 space-y-6">
             <div>
               <p className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.16em]">
@@ -1629,10 +1991,19 @@ const Settings = () => {
               </button>
             </div>
           </div>
+          </div>
         </TabsContent>
 
         {/* Integraties Tab , nieuwe connector-platform UI (sprint 8) */}
-        <TabsContent value="integraties" className="outline-none">
+        <TabsContent value="integraties" className="space-y-6 outline-none">
+          <GroupedSettingsHeader
+            eyebrow="Koppelingen"
+            title={activeConnectionCopy.title}
+            description={activeConnectionCopy.description}
+            items={CONNECTION_NAV_ITEMS}
+            activeValue={activeConnectionSection}
+            onChange={handleConnectionSectionChange}
+          />
           {(() => {
             const m = location.pathname.match(/\/integraties\/([\w-]+)/);
             const slug = m?.[1];
@@ -1855,19 +2226,51 @@ const Settings = () => {
         </TabsContent>
 
         {/* Inboxen Tab */}
-        <TabsContent value="inboxen" className="outline-none">
+        <TabsContent value="inboxen" className="space-y-6 outline-none">
+          <GroupedSettingsHeader
+            eyebrow="Communicatie"
+            title={activeCommunicationCopy.title}
+            description={activeCommunicationCopy.description}
+            items={COMMUNICATION_NAV_ITEMS}
+            activeValue={activeCommunicationSection}
+            onChange={handleCommunicationSectionChange}
+          />
           <InboxSettings />
         </TabsContent>
 
-        <TabsContent value="eta-meldingen" className="outline-none">
+        <TabsContent value="eta-meldingen" className="space-y-6 outline-none">
+          <GroupedSettingsHeader
+            eyebrow="Communicatie"
+            title={activeCommunicationCopy.title}
+            description={activeCommunicationCopy.description}
+            items={COMMUNICATION_NAV_ITEMS}
+            activeValue={activeCommunicationSection}
+            onChange={handleCommunicationSectionChange}
+          />
           <EtaNotificationSettings />
         </TabsContent>
 
         <TabsContent value="webhooks" className="space-y-6 outline-none">
+          <GroupedSettingsHeader
+            eyebrow="Koppelingen"
+            title={activeConnectionCopy.title}
+            description={activeConnectionCopy.description}
+            items={CONNECTION_NAV_ITEMS}
+            activeValue={activeConnectionSection}
+            onChange={handleConnectionSectionChange}
+          />
           <WebhookSettings />
         </TabsContent>
 
         <TabsContent value="api-tokens" className="space-y-6 outline-none">
+          <GroupedSettingsHeader
+            eyebrow="Koppelingen"
+            title={activeConnectionCopy.title}
+            description={activeConnectionCopy.description}
+            items={CONNECTION_NAV_ITEMS}
+            activeValue={activeConnectionSection}
+            onChange={handleConnectionSectionChange}
+          />
           <ApiTokenSettings clientId={null} />
         </TabsContent>
         </div>

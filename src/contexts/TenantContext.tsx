@@ -9,6 +9,9 @@ export interface Tenant {
   slug: string;
   logoUrl: string | null;
   primaryColor: string;
+  invoiceTemplateUrl: string | null;
+  invoiceTemplateFilename: string | null;
+  invoiceTemplateUploadedAt: string | null;
 }
 
 interface TenantContextType {
@@ -89,7 +92,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               name: data.name,
               slug: data.slug,
               logoUrl: data.logo_url,
-              primaryColor: data.primary_color || '#dc2626'
+              primaryColor: data.primary_color || '#dc2626',
+              invoiceTemplateUrl: data.invoice_template_url || null,
+              invoiceTemplateFilename: data.invoice_template_filename || null,
+              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null
             };
           }
         } 
@@ -112,7 +118,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               name: data.name,
               slug: data.slug,
               logoUrl: data.logo_url,
-              primaryColor: data.primary_color || '#dc2626'
+              primaryColor: data.primary_color || '#dc2626',
+              invoiceTemplateUrl: data.invoice_template_url || null,
+              invoiceTemplateFilename: data.invoice_template_filename || null,
+              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null
             };
           }
         }
@@ -130,7 +139,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               name: data.name,
               slug: data.slug,
               logoUrl: data.logo_url,
-              primaryColor: data.primary_color || '#dc2626'
+              primaryColor: data.primary_color || '#dc2626',
+              invoiceTemplateUrl: data.invoice_template_url || null,
+              invoiceTemplateFilename: data.invoice_template_filename || null,
+              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null
             };
           } else {
              tenantData = {
@@ -138,7 +150,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
                name: DEFAULT_COMPANY.name,
                slug: "localhost-dev",
                logoUrl: null,
-               primaryColor: "#dc2626"
+               primaryColor: "#dc2626",
+               invoiceTemplateUrl: null,
+               invoiceTemplateFilename: null,
+               invoiceTemplateUploadedAt: null
              };
           }
         }
