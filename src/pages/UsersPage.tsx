@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -7,6 +7,7 @@ import {
   Box,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Crown,
   Ellipsis,
@@ -105,21 +106,20 @@ const configTabs = [
 type AccessLevel = "full" | "limited" | "none";
 
 const accessMatrix = [
-  { module: "Orders", description: "Aanmaken, bekijken en beheren", icon: Box, viewer: "full", medewerker: "full", admin: "full" },
-  { module: "Dispatch", description: "Planning en ritbeheer", icon: Truck, viewer: "none", medewerker: "full", admin: "full" },
-  { module: "Inbox", description: "Berichten en meldingen", icon: Inbox, viewer: "full", medewerker: "full", admin: "full" },
-  { module: "Klanten", description: "Klantgegevens beheren", icon: Users, viewer: "none", medewerker: "full", admin: "full" },
-  { module: "Tarieven", description: "Tarieven en afspraken", icon: FileText, viewer: "none", medewerker: "limited", admin: "full" },
-  { module: "Facturatie", description: "Facturen en creditnota's", icon: FileText, viewer: "none", medewerker: "limited", admin: "full" },
-  { module: "Rapportages", description: "Overzichten en analytics", icon: BarChart3, viewer: "full", medewerker: "full", admin: "full" },
-  { module: "Instellingen", description: "Systeeminstellingen", icon: Settings, viewer: "none", medewerker: "none", admin: "full" },
-  { module: "Gebruikers", description: "Gebruikers en rollen beheren", icon: UserCog, viewer: "none", medewerker: "none", admin: "full" },
-  { module: "Audit logs", description: "Activiteit en logs inzien", icon: History, viewer: "none", medewerker: "none", admin: "full" },
+  { module: "Orders", description: "Aanmaken, bekijken en beheren", icon: Box, medewerker: "full", admin: "full" },
+  { module: "Dispatch", description: "Planning en ritbeheer", icon: Truck, medewerker: "full", admin: "full" },
+  { module: "Inbox", description: "Berichten en meldingen", icon: Inbox, medewerker: "full", admin: "full" },
+  { module: "Klanten", description: "Klantgegevens beheren", icon: Users, medewerker: "full", admin: "full" },
+  { module: "Tarieven", description: "Tarieven en afspraken", icon: FileText, medewerker: "limited", admin: "full" },
+  { module: "Facturatie", description: "Facturen en creditnota's", icon: FileText, medewerker: "limited", admin: "full" },
+  { module: "Rapportages", description: "Overzichten en analytics", icon: BarChart3, medewerker: "full", admin: "full" },
+  { module: "Instellingen", description: "Systeeminstellingen", icon: Settings, medewerker: "none", admin: "full" },
+  { module: "Gebruikers", description: "Gebruikers en rollen beheren", icon: UserCog, medewerker: "none", admin: "full" },
+  { module: "Audit logs", description: "Activiteit en logs inzien", icon: History, medewerker: "none", admin: "full" },
 ] satisfies Array<{
   module: string;
   description: string;
   icon: typeof Box;
-  viewer: AccessLevel;
   medewerker: AccessLevel;
   admin: AccessLevel;
 }>;
@@ -146,6 +146,26 @@ function AccessIndicator({ level }: { level: AccessLevel }) {
   }
 
   return <span className="text-muted-foreground/50">-</span>;
+}
+
+function accessLabel(level: AccessLevel) {
+  if (level === "full") return "Volledig";
+  if (level === "limited") return "Beperkt";
+  return "Geen";
+}
+
+function AccessStatus({ level }: { level: AccessLevel }) {
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ring-1",
+      level === "full" && "bg-emerald-50 text-emerald-700 ring-emerald-200",
+      level === "limited" && "bg-amber-50 text-amber-700 ring-amber-200",
+      level === "none" && "bg-muted text-muted-foreground ring-border/60",
+    )}>
+      <AccessIndicator level={level} />
+      {accessLabel(level)}
+    </span>
+  );
 }
 
 function formatDate(value: string | null) {
@@ -190,6 +210,8 @@ const UsersPage = () => {
   const [configRole, setConfigRole] = useState<UserRole>("medewerker");
   const [configSaved, setConfigSaved] = useState(false);
   const [configTab, setConfigTab] = useState<"profiel" | "toegang" | "activiteit" | "beveiliging" | "instellingen">("profiel");
+  const [expandedAccessModule, setExpandedAccessModule] = useState<string | null>(null);
+  const [accessOverrides, setAccessOverrides] = useState<Record<string, AccessLevel>>({});
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
 
@@ -241,6 +263,33 @@ const UsersPage = () => {
     );
   }, [roleFilter, searchTerm, users]);
 
+  const effectiveAccess = useMemo(() => {
+    return accessMatrix.map((item) => ({
+      ...item,
+      level: accessOverrides[item.module] ?? item[configRole],
+      defaultLevel: item[configRole],
+    }));
+  }, [accessOverrides, configRole]);
+
+  const impactLines = useMemo(() => {
+    const byModule = Object.fromEntries(effectiveAccess.map((item) => [item.module, item.level]));
+    const lines: string[] = [];
+
+    if (byModule.Tarieven === "full") lines.push("Kan tarieven aanpassen");
+    if (byModule.Gebruikers === "full") lines.push("Kan gebruikers beheren");
+    if (byModule.Instellingen === "full") lines.push("Toegang tot instellingen");
+    if (byModule.Facturatie === "full") lines.push("Kan facturatie beheren");
+    if (byModule.Tarieven === "limited") lines.push("Kan tarieven bekijken, niet wijzigen");
+
+    return lines.length > 0 ? lines : ["Geen beheerimpact buiten dagelijkse operatie"];
+  }, [effectiveAccess]);
+
+  useEffect(() => {
+    if (!configSaved) return;
+    const timeout = window.setTimeout(() => setConfigSaved(false), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [configSaved]);
+
   const handleInvite = (event: FormEvent) => {
     event.preventDefault();
     if (!inviteEmail.trim()) {
@@ -256,6 +305,8 @@ const UsersPage = () => {
     setConfigRole(getPrimaryRole(row));
     setConfigSaved(false);
     setConfigTab("toegang");
+    setExpandedAccessModule(null);
+    setAccessOverrides({});
   };
 
   const handleSaveConfig = async (event: FormEvent) => {
@@ -558,12 +609,13 @@ const UsersPage = () => {
                   ))}
                 </div>
 
-                {configSaved && (
-                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 ring-1 ring-emerald-100">
+                <div className={cn(
+                  "mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 ring-1 ring-emerald-100 transition-opacity duration-300",
+                  configSaved ? "opacity-100" : "pointer-events-none opacity-0",
+                )}>
                     <CheckCircle2 className="h-4 w-4" />
                     Wijzigingen opgeslagen
-                  </div>
-                )}
+                </div>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-background to-muted/10 px-7 py-7">
@@ -627,6 +679,8 @@ const UsersPage = () => {
                                 disabled={locked}
                                 onClick={() => {
                                   setConfigRole(role);
+                                  setAccessOverrides({});
+                                  setExpandedAccessModule(null);
                                   setConfigSaved(false);
                                 }}
                                 className={cn(
@@ -662,65 +716,145 @@ const UsersPage = () => {
                         </div>
                       </section>
 
-                      {configRole === "admin" && (
-                        <section className="flex gap-3 rounded-lg bg-amber-50 p-5 text-amber-900 shadow-sm ring-1 ring-amber-100">
-                          <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                          <div>
-                            <h3 className="text-sm font-semibold">Heeft impact op de hele organisatie</h3>
-                            <p className="mt-1 text-sm leading-relaxed">
-                              Deze rol heeft toegang tot gevoelige instellingen en kan wijzigingen aanbrengen die impact hebben op alle gegevens en processen.
-                            </p>
-                          </div>
-                        </section>
-                      )}
-
-                      <section className="overflow-hidden rounded-lg bg-background shadow-sm ring-1 ring-border/30">
-                        <div className="grid grid-cols-[minmax(210px,1.8fr)_repeat(3,minmax(72px,0.7fr))] border-b border-border/40 bg-muted/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          <div>Module</div>
-                          <div className="text-center">Viewer</div>
-                          <div className="text-center">Medewerker</div>
-                          <div className="text-center">Admin</div>
-                        </div>
-                        <div className="divide-y divide-border/30">
-                          {accessMatrix.map((row) => {
-                            const Icon = row.icon;
-                            return (
-                              <div
-                                key={row.module}
-                                className="grid grid-cols-[minmax(210px,1.8fr)_repeat(3,minmax(72px,0.7fr))] items-center px-4 py-3"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <Icon className="h-4 w-4 text-muted-foreground" />
-                                  <div>
-                                    <p className="text-sm font-semibold text-foreground">{row.module}</p>
-                                    <p className="text-xs text-muted-foreground">{row.description}</p>
-                                  </div>
-                                </div>
-                                <div className="flex justify-center"><AccessIndicator level={row.viewer} /></div>
-                                <div className={cn("flex justify-center rounded-md py-1", configRole === "medewerker" && "bg-primary/5")}>
-                                  <AccessIndicator level={row.medewerker} />
-                                </div>
-                                <div className={cn("flex justify-center rounded-md py-1", configRole === "admin" && "bg-amber-50")}>
-                                  <AccessIndicator level={row.admin} />
-                                </div>
+                      <section className="flex gap-3 rounded-lg bg-amber-50 p-5 text-amber-900 shadow-sm ring-1 ring-amber-100">
+                        <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                        <div>
+                          <h3 className="text-sm font-semibold">Met deze rol</h3>
+                          <div className="mt-2 space-y-1.5">
+                            {impactLines.map((line) => (
+                              <div key={line} className="flex items-center gap-2 text-sm">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-600" />
+                                {line}
                               </div>
-                            );
-                          })}
+                            ))}
+                          </div>
                         </div>
                       </section>
 
-                      <section className="flex flex-wrap gap-5 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <AccessIndicator level="full" />
-                          Toegang
+                      <section className="overflow-hidden rounded-lg bg-background shadow-sm ring-1 ring-border/30">
+                        <div className="grid grid-cols-[minmax(220px,1fr)_120px_150px_32px] border-b border-border/40 bg-muted/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <div>Module</div>
+                          <div>Toegang</div>
+                          <div>Override</div>
+                          <div />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <AccessIndicator level="limited" />
-                          Beperkte toegang
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <AccessIndicator level="none" />
-                          Geen toegang
+                        <div className="divide-y divide-border/30">
+                          {effectiveAccess.map((row) => {
+                            const Icon = row.icon;
+                            const expanded = expandedAccessModule === row.module;
+                            const overridden = row.level !== row.defaultLevel;
+                            return (
+                              <div
+                                key={row.module}
+                                className="transition-colors hover:bg-[#F7F7F7]"
+                              >
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => setExpandedAccessModule(expanded ? null : row.module)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                      event.preventDefault();
+                                      setExpandedAccessModule(expanded ? null : row.module);
+                                    }
+                                  }}
+                                  className="grid min-h-[56px] w-full grid-cols-[minmax(220px,1fr)_120px_150px_32px] items-center px-4 py-2 text-left"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <Icon className="h-4 w-4 text-muted-foreground" />
+                                    <div>
+                                      <p className="text-sm font-semibold text-foreground">{row.module}</p>
+                                      <p className="text-xs text-muted-foreground/60">{row.description}</p>
+                                    </div>
+                                  </div>
+                                  <AccessStatus level={row.level} />
+                                  <div onClick={(event) => event.stopPropagation()}>
+                                    <Select
+                                      value={row.level}
+                                      onValueChange={(value) => {
+                                        setAccessOverrides((current) => ({
+                                          ...current,
+                                          [row.module]: value as AccessLevel,
+                                        }));
+                                        setExpandedAccessModule(row.module);
+                                        setConfigSaved(false);
+                                      }}
+                                    >
+                                      <SelectTrigger className={cn(
+                                        "h-9 rounded-lg bg-background text-xs",
+                                        overridden && "border-amber-300 bg-amber-50/60",
+                                      )}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">Geen</SelectItem>
+                                        <SelectItem value="limited">Beperkt</SelectItem>
+                                        <SelectItem value="full">Volledig</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expanded && "rotate-180")} />
+                                </div>
+                                {expanded && (
+                                  <div className="border-t border-border/30 bg-muted/10 px-12 py-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                      {accessLabel(row.level)}
+                                    </p>
+                                    <div className="mt-2 grid gap-2 text-sm text-muted-foreground sm:grid-cols-3">
+                                      <label className="flex items-center gap-2">
+                                        <input
+                                          type="radio"
+                                          name={`access-${row.module}`}
+                                          checked={row.level === "none"}
+                                          onChange={() => {
+                                            setAccessOverrides((current) => ({ ...current, [row.module]: "none" }));
+                                            setConfigSaved(false);
+                                          }}
+                                        />
+                                        Geen toegang
+                                      </label>
+                                      <label className="flex items-center gap-2">
+                                        <input
+                                          type="radio"
+                                          name={`access-${row.module}`}
+                                          checked={row.level === "limited"}
+                                          onChange={() => {
+                                            setAccessOverrides((current) => ({ ...current, [row.module]: "limited" }));
+                                            setConfigSaved(false);
+                                          }}
+                                        />
+                                        Beperkt
+                                      </label>
+                                      <label className="flex items-center gap-2">
+                                        <input
+                                          type="radio"
+                                          name={`access-${row.module}`}
+                                          checked={row.level === "full"}
+                                          onChange={() => {
+                                            setAccessOverrides((current) => ({ ...current, [row.module]: "full" }));
+                                            setConfigSaved(false);
+                                          }}
+                                        />
+                                        Volledig
+                                      </label>
+                                    </div>
+                                    {row.level === "limited" && (
+                                      <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-100">
+                                        <p className="font-semibold">Beperkt</p>
+                                        <p>Mag bekijken</p>
+                                        <p>Mag niet wijzigen</p>
+                                      </div>
+                                    )}
+                                    {overridden && (
+                                      <p className="mt-3 text-xs text-muted-foreground">
+                                        Default: {roleLabels[configRole]} · Override: {accessLabel(row.level)}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </section>
                     </>

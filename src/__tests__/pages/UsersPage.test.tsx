@@ -138,9 +138,12 @@ describe("UsersPage", () => {
 
     expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
     expect(screen.getByText("Toegangsrechten")).toBeInTheDocument();
-    expect(screen.getByText("Viewer")).toBeInTheDocument();
     expect(screen.getByText("Dispatch")).toBeInTheDocument();
-    expect(screen.getByText("Beperkte toegang")).toBeInTheDocument();
+    expect(screen.getByText("Override")).toBeInTheDocument();
+    expect(screen.getAllByText("Beperkt").length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByText("Tarieven"));
+    expect(screen.getByText("Mag bekijken")).toBeInTheDocument();
+    expect(screen.getByText("Mag niet wijzigen")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Profiel" }));
     expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
     await userEvent.click(screen.getByRole("button", { name: "Activiteit" }));
@@ -157,8 +160,9 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /Admin/i }));
 
     expect(screen.getByText("Volledige controle")).toBeInTheDocument();
-    expect(screen.getByText("Heeft impact op de hele organisatie")).toBeInTheDocument();
-    expect(screen.getByText(/impact hebben op alle gegevens en processen/i)).toBeInTheDocument();
+    expect(screen.getByText("Met deze rol")).toBeInTheDocument();
+    expect(screen.getByText("Kan tarieven aanpassen")).toBeInTheDocument();
+    expect(screen.getByText("Kan gebruikers beheren")).toBeInTheDocument();
   });
 
   it("shows table headers", async () => {
