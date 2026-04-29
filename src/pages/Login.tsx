@@ -68,15 +68,40 @@ const Login = () => {
       return;
     }
 
+    const normalizedEmail = loginEmail.trim().toLowerCase();
+    const { data: policyRows } = typeof supabase.rpc === "function"
+      ? await supabase.rpc("office_login_policy" as any, { p_email: normalizedEmail })
+      : { data: null };
+    const loginPolicy = Array.isArray(policyRows) ? policyRows[0] : null;
+    if (loginPolicy?.locked_until && new Date(loginPolicy.locked_until).getTime() > Date.now()) {
+      setLoading(false);
+      setErrorText(`Te veel mislukte pogingen. Probeer opnieuw na ${new Date(loginPolicy.locked_until).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.`);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email: loginEmail,
+      email: normalizedEmail,
       password: loginPassword,
     });
     setLoading(false);
 
     if (error) {
+      if (loginPolicy?.login_protection_enabled !== false) {
+        await supabase.rpc?.("record_office_login_attempt" as any, {
+          p_email: normalizedEmail,
+          p_success: false,
+          p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
+          p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
+        });
+      }
       setErrorText("Ongeldig e-mailadres of wachtwoord");
     } else {
+      await supabase.rpc?.("record_office_login_attempt" as any, {
+        p_email: normalizedEmail,
+        p_success: true,
+        p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
+        p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
+      });
       localStorage.removeItem(DEV_BYPASS_STORAGE_KEY);
       navigate("/");
     }

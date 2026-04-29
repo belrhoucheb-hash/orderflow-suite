@@ -25,6 +25,32 @@ interface OfficeUserSecuritySettings {
   updated_at: string | null;
 }
 
+type OfficeAccessLevel = "none" | "limited" | "full";
+type OfficeAccessActions = {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+};
+
+interface OfficeAccessOverride {
+  module: string;
+  access_level: OfficeAccessLevel;
+  actions: OfficeAccessActions;
+  updated_at: string | null;
+}
+
+interface OfficeUserSession {
+  session_key: string;
+  browser: string | null;
+  platform: string | null;
+  user_agent: string | null;
+  ip_label: string | null;
+  created_at: string;
+  last_seen_at: string;
+  revoked_at: string | null;
+}
+
 interface AdminUsersRequest {
   action:
     | "list"
@@ -125,6 +151,70 @@ function sanitizeSecurityPatch(value: unknown): Partial<OfficeUserSecuritySettin
   if (typeof patch.password_reset_required === "boolean") next.password_reset_required = patch.password_reset_required;
 
   return next as Partial<OfficeUserSecuritySettings>;
+}
+
+function isAccessLevel(value: unknown): value is OfficeAccessLevel {
+  return value === "none" || value === "limited" || value === "full";
+}
+
+function normalizeActions(value: unknown): OfficeAccessActions {
+  const actions = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+  return {
+    view: actions.view === true,
+    create: actions.create === true,
+    edit: actions.edit === true,
+    delete: actions.delete === true,
+  };
+}
+
+function normalizeAccessOverrides(value: unknown): Array<{
+  module: string;
+  access_level: OfficeAccessLevel;
+  actions: OfficeAccessActions;
+}> {
+  const source = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+  return Object.entries(source)
+    .map(([module, raw]) => {
+      if (typeof module !== "string" || module.trim().length === 0) return null;
+      if (typeof raw === "string") {
+        if (!isAccessLevel(raw)) return null;
+        return {
+          module: module.trim(),
+          access_level: raw,
+          actions: normalizeActions({}),
+        };
+      }
+      const row = typeof raw === "object" && raw !== null ? raw as Record<string, unknown> : {};
+      if (!isAccessLevel(row.access_level)) return null;
+      return {
+        module: module.trim(),
+        access_level: row.access_level,
+        actions: normalizeActions(row.actions),
+      };
+    })
+    .filter((row): row is { module: string; access_level: OfficeAccessLevel; actions: OfficeAccessActions } => row !== null);
+}
+
+function normalizeAccessRow(row: Record<string, unknown>): OfficeAccessOverride {
+  return {
+    module: typeof row.module === "string" ? row.module : "",
+    access_level: isAccessLevel(row.access_level) ? row.access_level : "none",
+    actions: normalizeActions(row.actions),
+    updated_at: typeof row.updated_at === "string" ? row.updated_at : null,
+  };
+}
+
+function normalizeSessionRow(row: Record<string, unknown>): OfficeUserSession {
+  return {
+    session_key: typeof row.session_key === "string" ? row.session_key : "",
+    browser: typeof row.browser === "string" ? row.browser : null,
+    platform: typeof row.platform === "string" ? row.platform : null,
+    user_agent: typeof row.user_agent === "string" ? row.user_agent : null,
+    ip_label: typeof row.ip_label === "string" ? row.ip_label : null,
+    created_at: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+    last_seen_at: typeof row.last_seen_at === "string" ? row.last_seen_at : new Date().toISOString(),
+    revoked_at: typeof row.revoked_at === "string" ? row.revoked_at : null,
+  };
 }
 
 async function logUserActivity(
@@ -293,18 +383,41 @@ serve(async (req) => {
       if (!tenantId) return json(400, { error: "tenant_id is verplicht" });
 
       const security = await ensureSecuritySettings(admin, tenantId, body.user_id);
-      const { data: tokens, error: tokenError } = await admin
-        .from("api_tokens")
-        .select("id, name, scopes, token_prefix, last_used_at, revoked_at, created_at")
-        .eq("tenant_id", tenantId)
-        .eq("created_by", body.user_id)
-        .order("created_at", { ascending: false })
-        .limit(10);
+      const [
+        { data: tokens, error: tokenError },
+        { data: accessRows, error: accessError },
+        { data: sessions, error: sessionsError },
+      ] = await Promise.all([
+        admin
+          .from("api_tokens")
+          .select("id, name, scopes, token_prefix, last_used_at, revoked_at, created_at")
+          .eq("tenant_id", tenantId)
+          .eq("created_by", body.user_id)
+          .order("created_at", { ascending: false })
+          .limit(10),
+        admin
+          .from("office_user_access_overrides")
+          .select("module, access_level, actions, updated_at")
+          .eq("tenant_id", tenantId)
+          .eq("user_id", body.user_id)
+          .order("module", { ascending: true }),
+        admin
+          .from("office_user_sessions")
+          .select("session_key, browser, platform, user_agent, ip_label, created_at, last_seen_at, revoked_at")
+          .eq("tenant_id", tenantId)
+          .eq("user_id", body.user_id)
+          .order("last_seen_at", { ascending: false })
+          .limit(10),
+      ]);
       if (tokenError) return json(500, { error: tokenError.message });
+      if (accessError) return json(500, { error: accessError.message });
+      if (sessionsError) return json(500, { error: sessionsError.message });
 
       return json(200, {
         security,
         api_tokens: tokens ?? [],
+        access_overrides: (accessRows ?? []).map((row) => normalizeAccessRow(row)),
+        sessions: (sessions ?? []).map((row) => normalizeSessionRow(row)),
       });
     }
 
@@ -351,6 +464,13 @@ serve(async (req) => {
         .select("extra_security_enabled, verification_method, login_protection_enabled, max_login_attempts, lockout_minutes, password_reset_required, password_reset_sent_at, sessions_revoked_at, updated_at")
         .single();
       if (revokeError) return json(500, { error: revokeError.message });
+
+      await admin
+        .from("office_user_sessions")
+        .update({ revoked_at: revokedAt })
+        .eq("tenant_id", tenantId)
+        .eq("user_id", body.user_id)
+        .is("revoked_at", null);
 
       const { data: targetUser } = await admin.auth.admin.getUserById(body.user_id);
       await admin.auth.admin.updateUserById(body.user_id, {
@@ -511,6 +631,32 @@ serve(async (req) => {
 
     if (body.action === "update_access") {
       if (!body.user_id) return json(400, { error: "user_id is verplicht" });
+      if (!tenantId) return json(400, { error: "tenant_id is verplicht" });
+
+      const overrides = normalizeAccessOverrides(body.access_overrides);
+      const now = new Date().toISOString();
+
+      const { error: deleteError } = await admin
+        .from("office_user_access_overrides")
+        .delete()
+        .eq("tenant_id", tenantId)
+        .eq("user_id", body.user_id);
+      if (deleteError) return json(500, { error: deleteError.message });
+
+      if (overrides.length > 0) {
+        const { error: insertError } = await admin
+          .from("office_user_access_overrides")
+          .insert(overrides.map((override) => ({
+            tenant_id: tenantId,
+            user_id: body.user_id,
+            module: override.module,
+            access_level: override.access_level,
+            actions: override.actions,
+            updated_by: user.id,
+            updated_at: now,
+          })));
+        if (insertError) return json(500, { error: insertError.message });
+      }
 
       await logUserActivity(admin, {
         tenantId,
@@ -518,12 +664,12 @@ serve(async (req) => {
         targetUserId: body.user_id,
         action: "user.access_updated",
         changes: {
-          overrides: body.access_overrides ?? {},
-          override_count: Object.keys(body.access_overrides ?? {}).length,
+          overrides,
+          override_count: overrides.length,
         },
       });
 
-      return json(200, { ok: true });
+      return json(200, { ok: true, access_overrides: overrides });
     }
 
     if (body.action === "reset_password") {

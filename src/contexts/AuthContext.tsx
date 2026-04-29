@@ -3,6 +3,13 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { DEV_BYPASS_USER_ID, readDevBypassUser } from "@/lib/devSession";
+import {
+  defaultAccessByRole,
+  getAccessActions,
+  moduleForPath,
+  normalizeOfficeAccessLevel,
+  type OfficeAccessMap,
+} from "@/lib/officeAccess";
 
 type AppRole = "admin" | "medewerker";
 type EffectiveRole = "admin" | "planner" | "chauffeur";
@@ -14,6 +21,10 @@ interface AuthContextType {
   roles: AppRole[];
   effectiveRole: EffectiveRole;
   isAdmin: boolean;
+  officeAccess: OfficeAccessMap;
+  hasModuleAccess: (module: string, action?: "view" | "create" | "edit" | "delete") => boolean;
+  hasRouteAccess: (pathname: string) => boolean;
+  sessionRevoked: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -37,20 +48,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [officeAccess, setOfficeAccess] = useState<OfficeAccessMap>({});
+  const [sessionRevoked, setSessionRevoked] = useState(false);
   const [isLinkedDriver, setIsLinkedDriver] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const ensureSessionKey = (userId: string) => {
+    const key = `office_session_key:${userId}`;
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const next = crypto.randomUUID();
+    localStorage.setItem(key, next);
+    return next;
+  };
+
+  const browserLabel = () => {
+    const agent = navigator.userAgent;
+    if (agent.includes("Edg/")) return "Edge";
+    if (agent.includes("Chrome/")) return "Chrome";
+    if (agent.includes("Firefox/")) return "Firefox";
+    if (agent.includes("Safari/")) return "Safari";
+    return "Browser";
+  };
+
+  const platformLabel = () => {
+    const platform = navigator.platform || navigator.userAgent;
+    if (/Mac/i.test(platform)) return "MacOS";
+    if (/Win/i.test(platform)) return "Windows";
+    if (/iPhone|iPad/i.test(navigator.userAgent)) return "iOS";
+    if (/Android/i.test(navigator.userAgent)) return "Android";
+    return platform || "Onbekend apparaat";
+  };
 
   const fetchProfileAndRoles = async (userId: string) => {
     if (userId === DEV_BYPASS_USER_ID) {
       setProfile({ display_name: "Local Admin", avatar_url: null });
       setRoles(["admin"]);
+      setOfficeAccess({});
+      setSessionRevoked(false);
       setIsLinkedDriver(false);
       return;
     }
 
-    const [profileRes, rolesRes, driverRes] = await Promise.all([
+    const [profileRes, rolesRes, membershipRes, driverRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url").eq("user_id", userId).single(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
+      supabase.from("tenant_members").select("tenant_id").eq("user_id", userId).maybeSingle(),
       // Driver-lookup is best-effort. Als drivers.user_id kolom niet
       // bestaat op de DB (migratie nog niet gedraaid) laten we de error
       // niet de hele auth-flow blokkeren. isLinkedDriver valt terug op
@@ -68,6 +111,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (rolesRes.data) {
       setRoles(rolesRes.data.map((r) => r.role as AppRole));
+    }
+    const tenantId = membershipRes.data?.tenant_id ?? null;
+    if (tenantId) {
+      const sessionKey = ensureSessionKey(userId);
+      const now = new Date().toISOString();
+      await supabase
+        .from("office_user_sessions" as any)
+        .upsert({
+          tenant_id: tenantId,
+          user_id: userId,
+          session_key: sessionKey,
+          browser: browserLabel(),
+          platform: platformLabel(),
+          user_agent: navigator.userAgent,
+          last_seen_at: now,
+        }, { onConflict: "tenant_id,user_id,session_key" });
+
+      const [{ data: accessRows }, { data: sessionRow }] = await Promise.all([
+        supabase
+          .from("office_user_access_overrides" as any)
+          .select("module, access_level, actions")
+          .eq("tenant_id", tenantId)
+          .eq("user_id", userId),
+        supabase
+          .from("office_user_sessions" as any)
+          .select("revoked_at")
+          .eq("tenant_id", tenantId)
+          .eq("user_id", userId)
+          .eq("session_key", sessionKey)
+          .maybeSingle(),
+      ]);
+
+      const nextAccess: OfficeAccessMap = {};
+      for (const row of accessRows ?? []) {
+        const level = normalizeOfficeAccessLevel(row.access_level);
+        if (!level || typeof row.module !== "string") continue;
+        nextAccess[row.module] = {
+          level,
+          actions: getAccessActions(row.module, level, row.actions),
+        };
+      }
+      setOfficeAccess(nextAccess);
+      setSessionRevoked(Boolean(sessionRow?.revoked_at));
+    } else {
+      setOfficeAccess({});
+      setSessionRevoked(false);
     }
     // User is a linked driver if a driver record with their user_id exists
     setIsLinkedDriver(!!driverRes.data);
@@ -89,6 +178,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setProfile(null);
           setRoles([]);
+          setOfficeAccess({});
+          setSessionRevoked(false);
           setIsLinkedDriver(false);
         }
         setLoading(false);
@@ -111,6 +202,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!user || user.id === DEV_BYPASS_USER_ID) return undefined;
+    const interval = window.setInterval(() => {
+      void fetchProfileAndRoles(user.id);
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [user?.id]);
+
   const signOut = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem("debug_bypass");
@@ -119,6 +218,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setRoles([]);
+    setOfficeAccess({});
+    setSessionRevoked(false);
     setIsLinkedDriver(false);
   };
 
@@ -142,6 +243,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return "planner";
   })();
 
+  const hasModuleAccess = (module: string, action: "view" | "create" | "edit" | "delete" = "view") => {
+    if (officeAccess[module]) return officeAccess[module].actions[action] === true;
+    const role: AppRole = roles.includes("admin") ? "admin" : "medewerker";
+    const level = defaultAccessByRole[role][module] ?? "full";
+    return getAccessActions(module, level)[action] === true;
+  };
+
+  const hasRouteAccess = (pathname: string) => {
+    const module = moduleForPath(pathname);
+    if (!module) return true;
+    return hasModuleAccess(module, "view");
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -151,6 +265,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roles,
         effectiveRole,
         isAdmin: roles.includes("admin"),
+        officeAccess,
+        hasModuleAccess,
+        hasRouteAccess,
+        sessionRevoked,
         loading,
         signOut,
       }}

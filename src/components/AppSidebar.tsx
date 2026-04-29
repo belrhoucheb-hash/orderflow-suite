@@ -60,7 +60,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
-  const { profile, user, signOut, isAdmin, effectiveRole } = useAuth();
+  const { profile, user, signOut, isAdmin, effectiveRole, hasRouteAccess } = useAuth();
   const { tenant } = useTenant();
   const { data: exceptionCount } = useExceptionCount();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
@@ -159,7 +159,7 @@ export function AppSidebar() {
       </SidebarGroupLabel>
       <SidebarGroupContent className={cn(collapsible && collapsedGroups[label] && "hidden")}>
         <SidebarMenu className="space-y-0.5">
-          {items.map((item) => {
+          {items.filter((item) => hasRouteAccess(item.url)).map((item) => {
             const active = isActive(item.url);
             return (
               <SidebarMenuItem key={item.title}>
@@ -314,8 +314,8 @@ export function AppSidebar() {
           </div>
         ))}
 
-        {isAdmin && (
-          renderNavGroup("Beheer", adminItems, true)
+        {isAdmin && adminItems.filter((item) => hasRouteAccess(item.url)).length > 0 && (
+          renderNavGroup("Beheer", adminItems.filter((item) => hasRouteAccess(item.url)), true)
         )}
 
       </SidebarContent>

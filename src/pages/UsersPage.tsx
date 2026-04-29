@@ -38,6 +38,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ROLE_ACCESS, type OfficeRole } from "@/lib/roleAccess";
+import {
+  getAccessActions,
+  limitedActionsByModule,
+  type OfficeAccessAction as AccessAction,
+  type OfficeAccessActions as AccessActions,
+  type OfficeAccessLevel as AccessLevel,
+} from "@/lib/officeAccess";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,12 +112,32 @@ interface UserApiTokenRow {
   created_at: string;
 }
 
+interface UserAccessOverrideRow {
+  module: string;
+  access_level: AccessLevel;
+  actions: AccessActions;
+  updated_at: string | null;
+}
+
+interface UserSessionRow {
+  session_key: string;
+  browser: string | null;
+  platform: string | null;
+  user_agent: string | null;
+  ip_label: string | null;
+  created_at: string;
+  last_seen_at: string;
+  revoked_at: string | null;
+}
+
 interface AdminUsersResponse {
   users?: UserRow[];
   user?: UserRow;
   activity?: UserActivityRow[];
   security?: UserSecuritySettings;
   api_tokens?: UserApiTokenRow[];
+  access_overrides?: UserAccessOverrideRow[];
+  sessions?: UserSessionRow[];
   error?: string;
 }
 
@@ -132,9 +159,6 @@ const configTabs = [
   { id: "instellingen", label: "Instellingen" },
 ] as const;
 
-type AccessLevel = "full" | "limited" | "none";
-type AccessAction = "view" | "create" | "edit" | "delete";
-type AccessActions = Record<AccessAction, boolean>;
 type ActivityFilter = "all" | "login" | "roles" | "access" | "profile" | "invites";
 type UserStatusFilter = "all" | "active" | "inactive";
 
@@ -184,39 +208,6 @@ const activityFilterLabels: Record<ActivityFilter, string> = {
   profile: "Profiel",
   invites: "Uitnodigingen",
 };
-
-const fullActions: AccessActions = {
-  view: true,
-  create: true,
-  edit: true,
-  delete: true,
-};
-
-const noActions: AccessActions = {
-  view: false,
-  create: false,
-  edit: false,
-  delete: false,
-};
-
-const limitedActionsByModule: Record<string, AccessActions> = {
-  Orders: { view: true, create: true, edit: false, delete: false },
-  Dispatch: { view: true, create: false, edit: false, delete: false },
-  Inbox: { view: true, create: true, edit: false, delete: false },
-  Klanten: { view: true, create: true, edit: false, delete: false },
-  Tarieven: { view: true, create: false, edit: false, delete: false },
-  Facturatie: { view: true, create: true, edit: false, delete: false },
-  Rapportages: { view: true, create: false, edit: false, delete: false },
-  Instellingen: { view: true, create: false, edit: false, delete: false },
-  Gebruikers: { view: true, create: false, edit: false, delete: false },
-  "Audit logs": { view: true, create: false, edit: false, delete: false },
-};
-
-function getAccessActions(module: string, level: AccessLevel, customLimitedActions?: AccessActions): AccessActions {
-  if (level === "full") return fullActions;
-  if (level === "none") return noActions;
-  return customLimitedActions ?? limitedActionsByModule[module] ?? { view: true, create: false, edit: false, delete: false };
-}
 
 function getPrimaryRole(user: UserRow): UserRole {
   return user.roles.includes("admin") ? "admin" : "medewerker";
@@ -433,6 +424,8 @@ function useUserSecurity(tenantId?: string | null, userId?: string | null) {
       return {
         security: data.security ?? defaultSecuritySettings,
         apiTokens: data.api_tokens ?? [],
+        accessOverrides: data.access_overrides ?? [],
+        sessions: data.sessions ?? [],
       };
     },
   });
@@ -468,6 +461,8 @@ const UsersPage = () => {
   const { data: securityData, isLoading: securityLoading } = useUserSecurity(tenantId, selectedUser?.user_id);
   const securitySettings = securityData?.security ?? defaultSecuritySettings;
   const userApiTokens = securityData?.apiTokens ?? [];
+  const persistedAccessOverrides = securityData?.accessOverrides ?? [];
+  const userSessions = securityData?.sessions ?? [];
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
 
@@ -509,10 +504,11 @@ const UsersPage = () => {
   });
 
   const updateAccess = useMutation({
-    mutationFn: ({ userId, overrides }: { userId: string; overrides: Record<string, AccessLevel> }) =>
+    mutationFn: ({ userId, overrides }: { userId: string; overrides: Record<string, { access_level: AccessLevel; actions: AccessActions }> }) =>
       callAdminUsers("update_access", { tenant_id: tenantId, user_id: userId, access_overrides: overrides }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser?.user_id] });
+      queryClient.invalidateQueries({ queryKey: ["users-admin-security", tenantId, selectedUser?.user_id] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Toegang loggen mislukt"),
   });
@@ -649,6 +645,22 @@ const UsersPage = () => {
     return () => window.clearTimeout(timeout);
   }, [configSaved]);
 
+  useEffect(() => {
+    if (!selectedUser || securityLoading) return;
+    const nextLevels: Record<string, AccessLevel> = {};
+    const nextActions: Record<string, AccessActions> = {};
+
+    for (const override of persistedAccessOverrides) {
+      nextLevels[override.module] = override.access_level;
+      if (override.access_level === "limited") {
+        nextActions[override.module] = override.actions;
+      }
+    }
+
+    setAccessOverrides(nextLevels);
+    setCustomLimitedActions(nextActions);
+  }, [persistedAccessOverrides, securityLoading, selectedUser?.user_id]);
+
   const handleInvite = (event: FormEvent) => {
     event.preventDefault();
     if (!inviteEmail.trim()) {
@@ -680,6 +692,15 @@ const UsersPage = () => {
     const currentRole = getPrimaryRole(selectedUser);
     const nextName = configName.trim();
     const tasks: Promise<unknown>[] = [];
+    const accessPayload = effectiveAccess.reduce<Record<string, { access_level: AccessLevel; actions: AccessActions }>>((acc, row) => {
+      if (row.level !== row.defaultLevel || customLimitedActions[row.module]) {
+        acc[row.module] = {
+          access_level: row.level,
+          actions: row.actions,
+        };
+      }
+      return acc;
+    }, {});
 
     if (nextName !== (selectedUser.display_name ?? "").trim()) {
       tasks.push(updateProfile.mutateAsync({ userId: selectedUser.user_id, displayName: nextName }));
@@ -687,8 +708,8 @@ const UsersPage = () => {
     if (configRole !== currentRole) {
       tasks.push(updateRole.mutateAsync({ userId: selectedUser.user_id, role: configRole }));
     }
-    if (Object.keys(accessOverrides).length > 0) {
-      tasks.push(updateAccess.mutateAsync({ userId: selectedUser.user_id, overrides: accessOverrides }));
+    if (Object.keys(accessPayload).length > 0 || persistedAccessOverrides.length > 0) {
+      tasks.push(updateAccess.mutateAsync({ userId: selectedUser.user_id, overrides: accessPayload }));
     }
 
     if (tasks.length === 0) {
@@ -1150,7 +1171,7 @@ const UsersPage = () => {
                             <div>
                               <p className="text-sm font-semibold text-foreground">Beveiliging</p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {securitySettings.extra_security_enabled ? "2FA ingeschakeld" : "2FA niet ingeschakeld"}
+                                {securitySettings.extra_security_enabled ? "2FA vereist" : "2FA niet verplicht"}
                               </p>
                             </div>
                           </div>
@@ -1643,7 +1664,7 @@ const UsersPage = () => {
                                 {isUserActive(selectedUser) && securitySettings.login_protection_enabled && securitySettings.extra_security_enabled ? "Account veilig" : "Actie vereist"}
                               </p>
                               <p className="mt-1 text-sm text-muted-foreground">
-                                {securitySettings.extra_security_enabled ? "Geen risico's gedetecteerd" : "2FA is nog niet ingeschakeld"}
+                                {securitySettings.extra_security_enabled ? "2FA is verplicht voor dit account" : "2FA is nog niet verplicht"}
                               </p>
                               <p className="mt-1 text-xs text-muted-foreground">
                                 Laatste controle: {formatDate(securitySettings.updated_at)} · Laatste login: {formatDate(selectedUser.last_sign_in_at)}
@@ -1682,7 +1703,7 @@ const UsersPage = () => {
                             <Info className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--gold-deep))]" />
                             <div>
                               <p className="font-semibold">Aanbeveling</p>
-                              <p className="mt-1 text-[hsl(var(--gold-deep)/0.78)]">Schakel 2FA in voor extra beveiliging van dit account.</p>
+                              <p className="mt-1 text-[hsl(var(--gold-deep)/0.78)]">Maak 2FA verplicht voor extra beveiliging van dit account.</p>
                             </div>
                           </div>
                         </div>
@@ -1714,7 +1735,7 @@ const UsersPage = () => {
                                     ? "bg-[hsl(var(--gold-soft)/0.70)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.20)]"
                                     : "bg-primary-50 text-primary-700 ring-primary-100",
                                 )}>
-                                  {securitySettings.extra_security_enabled ? "Ingeschakeld" : "Niet ingeschakeld"}
+                                  {securitySettings.extra_security_enabled ? "Vereist" : "Niet verplicht"}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
@@ -1762,23 +1783,23 @@ const UsersPage = () => {
                               <div>
                                 <p className="text-sm font-semibold text-foreground">Actieve sessies</p>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                  {selectedUser.last_sign_in_at ? "1 bekende sessie" : "Geen actieve sessie bekend"}
+                                  {userSessions.filter((session) => !session.revoked_at).length} actieve sessie{userSessions.filter((session) => !session.revoked_at).length === 1 ? "" : "s"}
                                 </p>
                               </div>
                             </div>
                             <div className="mt-4 space-y-3">
-                              {selectedUser.last_sign_in_at ? (
+                              {userSessions.filter((session) => !session.revoked_at).length > 0 ? (
                                 <>
                                   <div className="flex items-start justify-between gap-3 rounded-md bg-muted/20 p-3">
                                     <div className="flex items-start gap-2">
                                       <Monitor className="mt-0.5 h-4 w-4 text-muted-foreground" />
                                       <div>
-                                        <p className="text-xs font-medium text-foreground">Laatste bekende sessie</p>
-                                        <p className="mt-1 text-xs text-muted-foreground">Browser en locatie niet vastgelegd · {formatDate(selectedUser.last_sign_in_at)}</p>
+                                        <p className="text-xs font-medium text-foreground">{userSessions.find((session) => !session.revoked_at)?.browser ?? "Onbekende browser"} op {userSessions.find((session) => !session.revoked_at)?.platform ?? "onbekend apparaat"}</p>
+                                        <p className="mt-1 text-xs text-muted-foreground">Laatst gezien: {formatDate(userSessions.find((session) => !session.revoked_at)?.last_seen_at ?? selectedUser.last_sign_in_at)}</p>
                                       </div>
                                     </div>
                                     <span className="rounded-full bg-[hsl(var(--gold-soft)/0.68)] px-2 py-1 text-[11px] font-medium text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.20)]">
-                                      Huidige sessie
+                                      Laatste sessie
                                     </span>
                                   </div>
                                   {securitySettings.sessions_revoked_at && (
@@ -1819,7 +1840,7 @@ const UsersPage = () => {
                             <div className="mt-4 space-y-3 text-xs">
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Sterkte</span>
-                                <span className="rounded-full bg-[hsl(var(--gold-soft)/0.70)] px-2 py-1 font-medium text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.20)]">Sterk</span>
+                                <span className="rounded-full bg-muted px-2 py-1 font-medium text-muted-foreground ring-1 ring-border/50">Niet beschikbaar</span>
                               </div>
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Laatste wijziging</span>
@@ -1992,9 +2013,96 @@ const UsersPage = () => {
                   )}
 
                   {configTab === "instellingen" && (
-                    <section className="rounded-lg bg-card p-5 shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
-                      <h3 className="text-sm font-semibold text-foreground">Instellingen</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">Gebruikersinstellingen worden beheerd via het vaste rechtenprofiel.</p>
+                    <section className="space-y-5">
+                      <div className="rounded-lg bg-card p-5 shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
+                        <h3 className="text-sm font-semibold text-foreground">Inlogbeveiliging</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">Deze velden worden opgeslagen in de database en gebruikt door de login-flow.</p>
+                        <div className="mt-5 grid gap-4 md:grid-cols-3">
+                          <div className="rounded-lg bg-[#F7F7F7] p-4">
+                            <p className="text-xs font-medium text-muted-foreground">Status</p>
+                            <Select
+                              value={securitySettings.login_protection_enabled ? "enabled" : "disabled"}
+                              onValueChange={(value) => updateSecurity.mutate({
+                                userId: selectedUser.user_id,
+                                patch: { login_protection_enabled: value === "enabled" },
+                              })}
+                            >
+                              <SelectTrigger className="mt-2 h-10 bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="enabled">Ingeschakeld</SelectItem>
+                                <SelectItem value="disabled">Uitgeschakeld</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="rounded-lg bg-[#F7F7F7] p-4">
+                            <p className="text-xs font-medium text-muted-foreground">Max. pogingen</p>
+                            <Select
+                              value={String(securitySettings.max_login_attempts)}
+                              onValueChange={(value) => updateSecurity.mutate({
+                                userId: selectedUser.user_id,
+                                patch: { max_login_attempts: Number(value) },
+                              })}
+                            >
+                              <SelectTrigger className="mt-2 h-10 bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[3, 4, 5, 6, 8, 10].map((value) => (
+                                  <SelectItem key={value} value={String(value)}>{value} pogingen</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="rounded-lg bg-[#F7F7F7] p-4">
+                            <p className="text-xs font-medium text-muted-foreground">Vergrendeling</p>
+                            <Select
+                              value={String(securitySettings.lockout_minutes)}
+                              onValueChange={(value) => updateSecurity.mutate({
+                                userId: selectedUser.user_id,
+                                patch: { lockout_minutes: Number(value) },
+                              })}
+                            >
+                              <SelectTrigger className="mt-2 h-10 bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[5, 10, 15, 30, 60, 120].map((value) => (
+                                  <SelectItem key={value} value={String(value)}>{value} minuten</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg bg-card p-5 shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">API toegang</h3>
+                            <p className="mt-1 text-xs text-muted-foreground">Sleutels worden gelezen uit de echte api_tokens tabel.</p>
+                          </div>
+                          <Badge variant="outline" className="text-xs">{userApiTokens.filter((token) => !token.revoked_at).length} actief</Badge>
+                        </div>
+                        <div className="mt-4 grid gap-2">
+                          {userApiTokens.length === 0 ? (
+                            <p className="rounded-lg bg-[#F7F7F7] p-4 text-xs text-muted-foreground">Geen API-sleutels gekoppeld aan deze gebruiker.</p>
+                          ) : (
+                            userApiTokens.map((token) => (
+                              <div key={token.id} className="flex items-center justify-between gap-3 rounded-lg bg-[#F7F7F7] p-4">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">{token.name}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">Prefix {token.token_prefix} · laatst gebruikt {formatDate(token.last_used_at)}</p>
+                                </div>
+                                <Badge variant="outline" className={cn("text-xs", token.revoked_at ? "bg-muted text-muted-foreground" : "bg-[hsl(var(--gold-soft)/0.70)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.20)]")}>
+                                  {token.revoked_at ? "Ingetrokken" : "Actief"}
+                                </Badge>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </section>
                   )}
                 </div>

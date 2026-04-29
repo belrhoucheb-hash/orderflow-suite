@@ -2,14 +2,13 @@ import { Suspense, lazy } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Loader2 } from "lucide-react";
-import { Navigate } from "react-router-dom";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
 
@@ -20,12 +19,16 @@ import NotFound from "@/pages/NotFound";
  * - chauffeur: only /chauffeur
  */
 function RoleGuard({ allow, children }: { allow: Array<"admin" | "planner" | "chauffeur">; children: React.ReactNode }) {
-  const { effectiveRole, loading } = useAuth();
+  const { effectiveRole, loading, hasRouteAccess } = useAuth();
+  const location = useLocation();
   if (loading) return null;
   if (!allow.includes(effectiveRole)) {
     // Redirect to role-appropriate default page
     const defaultPaths: Record<string, string> = { admin: "/", planner: "/", chauffeur: "/chauffeur" };
     return <Navigate to={defaultPaths[effectiveRole] || "/"} replace />;
+  }
+  if (!hasRouteAccess(location.pathname)) {
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 }
