@@ -20,6 +20,7 @@ import {
   type WarehouseInput,
   type Warehouse as WarehouseType,
 } from "@/hooks/useWarehouses";
+import { AddressBookSettings } from "./AddressBookSettings";
 import { LoadingUnitDialog, type LoadingUnitFormValues } from "./LoadingUnitDialog";
 import { RequirementTypeDialog, type RequirementTypeFormValues } from "./RequirementTypeDialog";
 import { useTenant } from "@/contexts/TenantContext";
@@ -433,6 +434,8 @@ export function MasterDataSection() {
 
       {/* Warehouses */}
       <WarehousesSection onRequestDelete={(wh) => setDeleteTarget({ table: "tenant_warehouses", id: wh.id, label: wh.name })} />
+
+      <AddressBookSettings />
 
       <div className="card--luxe p-5 mt-10" style={{ background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.25) 100%)" }}>
         <div className="flex gap-3">

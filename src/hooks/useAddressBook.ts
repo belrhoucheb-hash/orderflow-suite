@@ -81,6 +81,49 @@ export function useAddressBookSearch(search?: string) {
   });
 }
 
+export function useAddressBookEntries(search?: string) {
+  const { tenant } = useTenantOptional();
+  const term = search?.trim() ?? "";
+
+  return useQuery({
+    queryKey: ["address_book_entries", tenant?.id, term],
+    enabled: !!tenant?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const baseSelect = () =>
+        (supabase.from("address_book" as any) as any)
+          .select("*")
+          .eq("tenant_id", tenant!.id)
+          .order("company_name", { ascending: true, nullsFirst: false })
+          .order("city", { ascending: true })
+          .limit(100);
+
+      if (term.length < 2) {
+        const { data, error } = await baseSelect();
+        if (error) throw error;
+        return (data ?? []) as AddressBookEntry[];
+      }
+
+      const columns = ["label", "company_name", "address", "street", "zipcode", "city"];
+      const results = await Promise.all(
+        columns.map(async (column) => {
+          const { data, error } = await baseSelect().ilike(column, `%${term}%`);
+          if (error) throw error;
+          return (data ?? []) as AddressBookEntry[];
+        }),
+      );
+
+      const byId = new Map<string, AddressBookEntry>();
+      results.flat().forEach((entry) => byId.set(entry.id, entry));
+      return [...byId.values()].sort((a, b) => {
+        const company = (a.company_name || a.label).localeCompare(b.company_name || b.label);
+        if (company !== 0) return company;
+        return a.address.localeCompare(b.address);
+      });
+    },
+  });
+}
+
 export function useUpsertAddressBookEntry() {
   const qc = useQueryClient();
   const { tenant } = useTenantOptional();
@@ -138,6 +181,53 @@ export function useUpsertAddressBookEntry() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["address_book_search"] });
+      qc.invalidateQueries({ queryKey: ["address_book_entries"] });
+    },
+  });
+}
+
+export function useUpdateAddressBookEntry() {
+  const qc = useQueryClient();
+  const { tenant } = useTenantOptional();
+
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: Omit<AddressBookEntryInput, "tenant_id"> }) => {
+      if (!tenant?.id) throw new Error("Geen actieve tenant gevonden");
+      if (!isAddressBookReady(input)) throw new Error("Vul minimaal straat, huisnummer en postcode of plaats in");
+
+      const payload = toAddressBookPayload({ ...input, tenant_id: tenant.id });
+      const { data, error } = await (supabase.from("address_book" as any) as any)
+        .update(payload)
+        .eq("tenant_id", tenant.id)
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as AddressBookEntry;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["address_book_search"] });
+      qc.invalidateQueries({ queryKey: ["address_book_entries"] });
+    },
+  });
+}
+
+export function useDeleteAddressBookEntry() {
+  const qc = useQueryClient();
+  const { tenant } = useTenantOptional();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!tenant?.id) throw new Error("Geen actieve tenant gevonden");
+      const { error } = await (supabase.from("address_book" as any) as any)
+        .delete()
+        .eq("tenant_id", tenant.id)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["address_book_search"] });
+      qc.invalidateQueries({ queryKey: ["address_book_entries"] });
     },
   });
 }

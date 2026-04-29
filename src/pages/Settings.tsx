@@ -828,7 +828,7 @@ const Settings = () => {
       icon: Truck,
       target: "stamgegevens",
       items: [
-        { label: "Stamgegevens", status: "Actief" },
+        { label: "Adresboek", status: "Actief" },
         { label: "Rooster-types", status: "Beschikbaar" },
         { label: "Tarieven en kosten", status: "Onderhoud", subtle: true },
       ],
@@ -1007,7 +1007,7 @@ const Settings = () => {
                   icon={Truck}
                   onClick={() => handleTabChange("stamgegevens")}
                   items={[
-                    { label: "Stamgegevens", status: "Actief" },
+                    { label: "Adresboek", status: "Actief" },
                     { label: "Rooster-types", status: "Beschikbaar" },
                     { label: "Tarieven en kosten", status: "Onderhoud", subtle: true },
                   ]}
