@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
+import { ROLE_ACCESS, type OfficeRole } from "@/lib/roleAccess";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-type UserRole = "admin" | "medewerker";
+type UserRole = OfficeRole;
 
 interface UserRow {
   user_id: string;
@@ -63,13 +64,8 @@ const roleStyles: Record<UserRole, string> = {
 };
 
 const roleLabels: Record<UserRole, string> = {
-  admin: "Admin",
-  medewerker: "Medewerker",
-};
-
-const roleDescriptions: Record<UserRole, string> = {
-  admin: "Volledige toegang tot beheer, instellingen en operationele workflows.",
-  medewerker: "Toegang tot dagelijkse planning en uitvoering zonder beheerrechten.",
+  admin: ROLE_ACCESS.admin.label,
+  medewerker: ROLE_ACCESS.medewerker.label,
 };
 
 function getPrimaryRole(user: UserRow): UserRole {
@@ -324,7 +320,7 @@ const UsersPage = () => {
                             {primaryRole === "admin" ? <Shield className="h-2.5 w-2.5 mr-1" /> : <UserCog className="h-2.5 w-2.5 mr-1" />}
                             {roleLabels[primaryRole]}
                           </Badge>
-                          <p className="text-xs text-muted-foreground max-w-[260px]">{roleDescriptions[primaryRole]}</p>
+                          <p className="text-xs text-muted-foreground max-w-[260px]">{ROLE_ACCESS[primaryRole].summary}</p>
                         </div>
                       </td>
                       <td className="px-5 py-4 hidden lg:table-cell">
@@ -470,7 +466,32 @@ const UsersPage = () => {
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">{roleDescriptions[configRole]}</p>
+                <p className="text-xs text-muted-foreground">{ROLE_ACCESS[configRole].summary}</p>
+              </div>
+
+              <div className="rounded-lg border border-border/40 overflow-hidden">
+                <div className="border-b border-border/30 bg-muted/20 px-4 py-3">
+                  <p className="text-sm font-semibold">Rechten voor {ROLE_ACCESS[configRole].label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{ROLE_ACCESS[configRole].routeAccess}</p>
+                </div>
+                <div className="grid gap-0 sm:grid-cols-2">
+                  <div className="p-4 space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Kan</p>
+                    <ul className="space-y-1.5">
+                      {ROLE_ACCESS[configRole].can.map((item) => (
+                        <li key={item} className="text-xs text-foreground leading-relaxed">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="border-t border-border/30 p-4 space-y-2 sm:border-l sm:border-t-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Kan niet</p>
+                    <ul className="space-y-1.5">
+                      {ROLE_ACCESS[configRole].cannot.map((item) => (
+                        <li key={item} className="text-xs text-muted-foreground leading-relaxed">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

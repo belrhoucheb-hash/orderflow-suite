@@ -138,6 +138,8 @@ describe("UsersPage", () => {
 
     expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
     expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
+    expect(screen.getByText("Rechten voor Medewerker")).toBeInTheDocument();
+    expect(screen.getByText("Gebruikers uitnodigen of rollen wijzigen")).toBeInTheDocument();
   });
 
   it("shows table headers", async () => {
