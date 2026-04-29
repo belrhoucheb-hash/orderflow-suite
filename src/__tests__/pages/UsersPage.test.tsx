@@ -137,11 +137,13 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getAllByRole("button", { name: /Configureren/i })[1]);
 
     expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
+    expect(screen.getByText("Toegangsrechten")).toBeInTheDocument();
+    expect(screen.getByText("Viewer")).toBeInTheDocument();
+    expect(screen.getByText("Dispatch")).toBeInTheDocument();
+    expect(screen.getByText("Beperkte toegang")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Profiel" }));
     expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
-    expect(screen.getByText("Toegangsprofiel")).toBeInTheDocument();
-    expect(screen.getByText("Toegangsoverzicht")).toBeInTheDocument();
-    expect(screen.getByText("Dagelijkse operaties")).toBeInTheDocument();
-    expect(screen.getByText("Gebruikers beheren")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Activiteit" }));
     expect(screen.getByText(/Laatste login:/i)).toBeInTheDocument();
   });
 
@@ -156,8 +158,7 @@ describe("UsersPage", () => {
 
     expect(screen.getByText("Volledige controle")).toBeInTheDocument();
     expect(screen.getByText("Heeft impact op de hele organisatie")).toBeInTheDocument();
-    expect(screen.getByText("Dit betekent")).toBeInTheDocument();
-    expect(screen.getByText(/invloed hebben op alle orders en tarieven/i)).toBeInTheDocument();
+    expect(screen.getByText(/impact hebben op alle gegevens en processen/i)).toBeInTheDocument();
   });
 
   it("shows table headers", async () => {

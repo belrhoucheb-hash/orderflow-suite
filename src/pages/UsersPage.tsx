@@ -3,12 +3,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  BarChart3,
+  Box,
   CalendarDays,
   CheckCircle2,
   Clock3,
   Crown,
   Ellipsis,
+  FileText,
   History,
+  Inbox,
   Info,
   KeyRound,
   Loader2,
@@ -16,8 +20,10 @@ import {
   Mail,
   Plus,
   Search,
+  Settings,
   Shield,
   SlidersHorizontal,
+  Truck,
   UserCog,
   UserX,
   Users,
@@ -96,8 +102,50 @@ const configTabs = [
   { id: "instellingen", label: "Instellingen" },
 ] as const;
 
+type AccessLevel = "full" | "limited" | "none";
+
+const accessMatrix = [
+  { module: "Orders", description: "Aanmaken, bekijken en beheren", icon: Box, viewer: "full", medewerker: "full", admin: "full" },
+  { module: "Dispatch", description: "Planning en ritbeheer", icon: Truck, viewer: "none", medewerker: "full", admin: "full" },
+  { module: "Inbox", description: "Berichten en meldingen", icon: Inbox, viewer: "full", medewerker: "full", admin: "full" },
+  { module: "Klanten", description: "Klantgegevens beheren", icon: Users, viewer: "none", medewerker: "full", admin: "full" },
+  { module: "Tarieven", description: "Tarieven en afspraken", icon: FileText, viewer: "none", medewerker: "limited", admin: "full" },
+  { module: "Facturatie", description: "Facturen en creditnota's", icon: FileText, viewer: "none", medewerker: "limited", admin: "full" },
+  { module: "Rapportages", description: "Overzichten en analytics", icon: BarChart3, viewer: "full", medewerker: "full", admin: "full" },
+  { module: "Instellingen", description: "Systeeminstellingen", icon: Settings, viewer: "none", medewerker: "none", admin: "full" },
+  { module: "Gebruikers", description: "Gebruikers en rollen beheren", icon: UserCog, viewer: "none", medewerker: "none", admin: "full" },
+  { module: "Audit logs", description: "Activiteit en logs inzien", icon: History, viewer: "none", medewerker: "none", admin: "full" },
+] satisfies Array<{
+  module: string;
+  description: string;
+  icon: typeof Box;
+  viewer: AccessLevel;
+  medewerker: AccessLevel;
+  admin: AccessLevel;
+}>;
+
 function getPrimaryRole(user: UserRow): UserRole {
   return user.roles.includes("admin") ? "admin" : "medewerker";
+}
+
+function AccessIndicator({ level }: { level: AccessLevel }) {
+  if (level === "full") {
+    return (
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+
+  if (level === "limited") {
+    return (
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+        <Clock3 className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+
+  return <span className="text-muted-foreground/50">-</span>;
 }
 
 function formatDate(value: string | null) {
@@ -207,7 +255,7 @@ const UsersPage = () => {
     setConfigName(row.display_name ?? "");
     setConfigRole(getPrimaryRole(row));
     setConfigSaved(false);
-    setConfigTab("profiel");
+    setConfigTab("toegang");
   };
 
   const handleSaveConfig = async (event: FormEvent) => {
@@ -520,192 +568,224 @@ const UsersPage = () => {
 
               <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-background to-muted/10 px-7 py-7">
                 <div className="space-y-6">
-                  <section className="space-y-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">Profiel</h3>
-                      <p className="text-xs text-muted-foreground">Deze naam wordt in overzichten en auditregels getoond.</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="config-name">Weergavenaam</Label>
-                      <Input
-                        id="config-name"
-                        value={configName}
-                        onChange={(event) => {
-                          setConfigName(event.target.value);
-                          setConfigSaved(false);
-                        }}
-                        placeholder="Naam van de gebruiker"
-                        className="h-11"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="config-email">E-mail</Label>
-                      <Input
-                        id="config-email"
-                        value={selectedUser.email ?? selectedUser.user_id}
-                        readOnly
-                        className="h-11 bg-muted/20"
-                      />
-                    </div>
-                  </section>
-
-                  <section className="space-y-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">Toegangsprofiel</h3>
-                      <p className="text-xs text-muted-foreground">Kies wat deze gebruiker mag doen binnen de organisatie.</p>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {(["medewerker", "admin"] as UserRole[]).map((role) => {
-                        const access = ROLE_ACCESS[role];
-                        const checked = configRole === role;
-                        const locked = selectedUser.user_id === currentUser?.id && getPrimaryRole(selectedUser) === "admin" && role !== "admin";
-                        const Icon = role === "admin" ? Crown : UserCog;
-
-                        return (
-                          <button
-                            key={role}
-                            type="button"
-                            disabled={locked}
-                            onClick={() => {
-                              setConfigRole(role);
-                              setConfigSaved(false);
-                            }}
-                            className={cn(
-                              "group rounded-lg p-5 text-left shadow-sm ring-1 transition-all",
-                              role === "admin"
-                                ? "bg-rose-50/60 ring-rose-100 hover:bg-rose-50 hover:ring-rose-200"
-                                : "bg-background ring-border/30 hover:bg-muted/20 hover:ring-primary/25",
-                              checked && (role === "admin" ? "bg-rose-50 ring-2 ring-rose-300" : "ring-2 ring-primary/35"),
-                              locked && "cursor-not-allowed opacity-50",
-                            )}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={cn(
-                                "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1",
-                                role === "admin"
-                                  ? "bg-white text-rose-700 ring-rose-200"
-                                  : "bg-primary/10 text-primary ring-primary/15",
-                              )}>
-                                <Icon className="h-5 w-5" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-base font-semibold text-foreground">{access.label}</p>
-                                  {checked && <CheckCircle2 className={cn("h-4 w-4", role === "admin" ? "text-rose-700" : "text-primary")} />}
-                                </div>
-                                <p className="mt-1 text-sm font-medium text-foreground/80">
-                                  {role === "admin" ? "Volledige controle" : "Dagelijkse operaties"}
-                                </p>
-                                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{access.routeAccess}</p>
-                                {role === "admin" && (
-                                  <p className="mt-3 text-xs font-medium text-rose-700">Heeft impact op de hele organisatie</p>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  {configRole === "admin" && (
-                    <section className="flex gap-3 rounded-lg bg-amber-50 p-5 text-amber-900 shadow-sm ring-1 ring-amber-100">
-                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  {configTab === "profiel" && (
+                    <section className="space-y-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
                       <div>
-                        <h3 className="text-sm font-semibold">Dit betekent</h3>
-                        <p className="mt-1 text-sm leading-relaxed">
-                          Deze gebruiker kan instellingen wijzigen die invloed hebben op alle orders en tarieven.
-                        </p>
+                        <h3 className="text-sm font-semibold text-foreground">Profiel</h3>
+                        <p className="text-xs text-muted-foreground">Deze naam wordt in overzichten en auditregels getoond.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="config-name">Weergavenaam</Label>
+                        <Input
+                          id="config-name"
+                          value={configName}
+                          onChange={(event) => {
+                            setConfigName(event.target.value);
+                            setConfigSaved(false);
+                          }}
+                          placeholder="Naam van de gebruiker"
+                          className="h-11"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="config-email">E-mail</Label>
+                        <Input
+                          id="config-email"
+                          value={selectedUser.email ?? selectedUser.user_id}
+                          readOnly
+                          className="h-11 bg-muted/20"
+                        />
                       </div>
                     </section>
                   )}
 
-                  <section className="space-y-3 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">Toegangsoverzicht</h3>
-                      <p className="text-xs text-muted-foreground">Vastgelegd in de centrale rolmatrix van OrderFlow.</p>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <div className="mb-3 flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                          <p className="text-sm font-semibold text-foreground">Kan</p>
+                  {configTab === "toegang" && (
+                    <>
+                      <section className="space-y-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-semibold text-foreground">Toegangsrechten</h3>
+                            <p className="text-xs text-muted-foreground">Bepaal tot welke modules en acties deze gebruiker toegang heeft.</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" className="gap-2">
+                            <UserCog className="h-3.5 w-3.5" />
+                            Wijzig rol
+                          </Button>
                         </div>
-                        <div className="space-y-2">
-                          {ROLE_ACCESS[configRole].can.map((item) => (
-                            <div key={item} className="flex gap-2.5 rounded-lg bg-emerald-50/70 px-3 py-2 text-sm text-emerald-950">
-                              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                              <p>{item}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="mb-3 flex items-center gap-2">
-                          <LockKeyhole className="h-4 w-4 text-slate-500" />
-                          <p className="text-sm font-semibold text-foreground">Kan niet</p>
-                        </div>
-                        <div className="space-y-2">
-                          {ROLE_ACCESS[configRole].cannot.map((item) => (
-                            <div key={item} className="flex gap-2.5 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                              <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
-                              <p>{item}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </section>
 
-                  <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <CalendarDays className="h-4 w-4" />
-                        <p className="text-[11px] font-semibold uppercase tracking-wide">Geregistreerd</p>
-                      </div>
-                      <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.created_at)}</p>
-                    </div>
-                    <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock3 className="h-4 w-4" />
-                        <p className="text-[11px] font-semibold uppercase tracking-wide">Laatste login</p>
-                      </div>
-                      <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.last_sign_in_at)}</p>
-                    </div>
-                  </section>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {(["medewerker", "admin"] as UserRole[]).map((role) => {
+                            const access = ROLE_ACCESS[role];
+                            const checked = configRole === role;
+                            const locked = selectedUser.user_id === currentUser?.id && getPrimaryRole(selectedUser) === "admin" && role !== "admin";
+                            const Icon = role === "admin" ? Crown : UserCog;
 
-                  <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-foreground">Snelle acties</h3>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
-                        onClick={() => toast.info("Wachtwoord resetten is nog niet gekoppeld")}
-                      >
-                        <KeyRound className="h-4 w-4" />
-                        Wachtwoord resetten
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
-                        onClick={() => toast.info("Deactiveren is nog niet gekoppeld")}
-                      >
-                        <UserX className="h-4 w-4" />
-                        Gebruiker deactiveren
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm sm:col-span-1"
-                        onClick={() => toast.info("Login geschiedenis is nog niet gekoppeld")}
-                      >
-                        <History className="h-4 w-4" />
-                        Login geschiedenis
-                      </Button>
-                    </div>
-                  </section>
+                            return (
+                              <button
+                                key={role}
+                                type="button"
+                                disabled={locked}
+                                onClick={() => {
+                                  setConfigRole(role);
+                                  setConfigSaved(false);
+                                }}
+                                className={cn(
+                                  "group rounded-lg p-4 text-left shadow-sm ring-1 transition-all",
+                                  role === "admin"
+                                    ? "bg-amber-50/60 ring-amber-200 hover:bg-amber-50"
+                                    : "bg-background ring-border/30 hover:bg-muted/20",
+                                  checked && (role === "admin" ? "ring-2 ring-amber-500" : "ring-2 ring-primary/35"),
+                                  locked && "cursor-not-allowed opacity-50",
+                                )}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className={cn(
+                                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1",
+                                    role === "admin" ? "bg-white text-amber-700 ring-amber-200" : "bg-muted/20 text-foreground ring-border/50",
+                                  )}>
+                                    <Icon className="h-4 w-4" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-sm font-semibold text-foreground">{access.label}</p>
+                                      {checked && <CheckCircle2 className={cn("h-4 w-4", role === "admin" ? "text-amber-700" : "text-primary")} />}
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {role === "admin" ? "Volledige controle" : "Dagelijkse operaties"}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">{access.routeAccess}</p>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+
+                      {configRole === "admin" && (
+                        <section className="flex gap-3 rounded-lg bg-amber-50 p-5 text-amber-900 shadow-sm ring-1 ring-amber-100">
+                          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                          <div>
+                            <h3 className="text-sm font-semibold">Heeft impact op de hele organisatie</h3>
+                            <p className="mt-1 text-sm leading-relaxed">
+                              Deze rol heeft toegang tot gevoelige instellingen en kan wijzigingen aanbrengen die impact hebben op alle gegevens en processen.
+                            </p>
+                          </div>
+                        </section>
+                      )}
+
+                      <section className="overflow-hidden rounded-lg bg-background shadow-sm ring-1 ring-border/30">
+                        <div className="grid grid-cols-[minmax(210px,1.8fr)_repeat(3,minmax(72px,0.7fr))] border-b border-border/40 bg-muted/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <div>Module</div>
+                          <div className="text-center">Viewer</div>
+                          <div className="text-center">Medewerker</div>
+                          <div className="text-center">Admin</div>
+                        </div>
+                        <div className="divide-y divide-border/30">
+                          {accessMatrix.map((row) => {
+                            const Icon = row.icon;
+                            return (
+                              <div
+                                key={row.module}
+                                className="grid grid-cols-[minmax(210px,1.8fr)_repeat(3,minmax(72px,0.7fr))] items-center px-4 py-3"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Icon className="h-4 w-4 text-muted-foreground" />
+                                  <div>
+                                    <p className="text-sm font-semibold text-foreground">{row.module}</p>
+                                    <p className="text-xs text-muted-foreground">{row.description}</p>
+                                  </div>
+                                </div>
+                                <div className="flex justify-center"><AccessIndicator level={row.viewer} /></div>
+                                <div className={cn("flex justify-center rounded-md py-1", configRole === "medewerker" && "bg-primary/5")}>
+                                  <AccessIndicator level={row.medewerker} />
+                                </div>
+                                <div className={cn("flex justify-center rounded-md py-1", configRole === "admin" && "bg-amber-50")}>
+                                  <AccessIndicator level={row.admin} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+
+                      <section className="flex flex-wrap gap-5 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <AccessIndicator level="full" />
+                          Toegang
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <AccessIndicator level="limited" />
+                          Beperkte toegang
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <AccessIndicator level="none" />
+                          Geen toegang
+                        </div>
+                      </section>
+                    </>
+                  )}
+
+                  {configTab === "activiteit" && (
+                    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <CalendarDays className="h-4 w-4" />
+                          <p className="text-[11px] font-semibold uppercase tracking-wide">Geregistreerd</p>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.created_at)}</p>
+                      </div>
+                      <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Clock3 className="h-4 w-4" />
+                          <p className="text-[11px] font-semibold uppercase tracking-wide">Laatste login</p>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.last_sign_in_at)}</p>
+                      </div>
+                    </section>
+                  )}
+
+                  {configTab === "beveiliging" && (
+                    <section className="space-y-3">
+                      <h3 className="text-sm font-semibold text-foreground">Snelle acties</h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
+                          onClick={() => toast.info("Wachtwoord resetten is nog niet gekoppeld")}
+                        >
+                          <KeyRound className="h-4 w-4" />
+                          Wachtwoord resetten
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
+                          onClick={() => toast.info("Deactiveren is nog niet gekoppeld")}
+                        >
+                          <UserX className="h-4 w-4" />
+                          Gebruiker deactiveren
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm sm:col-span-1"
+                          onClick={() => toast.info("Login geschiedenis is nog niet gekoppeld")}
+                        >
+                          <History className="h-4 w-4" />
+                          Login geschiedenis
+                        </Button>
+                      </div>
+                    </section>
+                  )}
+
+                  {configTab === "instellingen" && (
+                    <section className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                      <h3 className="text-sm font-semibold text-foreground">Instellingen</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">Gebruikersinstellingen worden beheerd via het vaste rechtenprofiel.</p>
+                    </section>
+                  )}
                 </div>
               </div>
 
