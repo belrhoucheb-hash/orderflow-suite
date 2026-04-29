@@ -62,14 +62,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 
 type UserRole = OfficeRole;
 
@@ -92,10 +84,34 @@ interface UserActivityRow {
   created_at: string;
 }
 
+interface UserSecuritySettings {
+  extra_security_enabled: boolean;
+  verification_method: "authenticator_app" | "email";
+  login_protection_enabled: boolean;
+  max_login_attempts: number;
+  lockout_minutes: number;
+  password_reset_required: boolean;
+  password_reset_sent_at: string | null;
+  sessions_revoked_at: string | null;
+  updated_at: string | null;
+}
+
+interface UserApiTokenRow {
+  id: string;
+  name: string;
+  scopes: string[];
+  token_prefix: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
 interface AdminUsersResponse {
   users?: UserRow[];
   user?: UserRow;
   activity?: UserActivityRow[];
+  security?: UserSecuritySettings;
+  api_tokens?: UserApiTokenRow[];
   error?: string;
 }
 
@@ -122,6 +138,18 @@ type AccessAction = "view" | "create" | "edit" | "delete";
 type AccessActions = Record<AccessAction, boolean>;
 type ActivityFilter = "all" | "login" | "roles" | "access" | "profile" | "invites";
 type UserStatusFilter = "all" | "active" | "inactive";
+
+const defaultSecuritySettings: UserSecuritySettings = {
+  extra_security_enabled: false,
+  verification_method: "authenticator_app",
+  login_protection_enabled: true,
+  max_login_attempts: 5,
+  lockout_minutes: 15,
+  password_reset_required: false,
+  password_reset_sent_at: null,
+  sessions_revoked_at: null,
+  updated_at: null,
+};
 
 const accessMatrix = [
   { module: "Orders", description: "Aanmaken, bekijken en beheren", icon: Box, medewerker: "full", admin: "full" },
@@ -312,6 +340,24 @@ function activityPresentation(event: UserActivityRow): {
     };
   }
 
+  if (event.action === "user.security_updated") {
+    return {
+      title: "Beveiliging aangepast",
+      description: "Beveiligingsinstellingen zijn bijgewerkt",
+      icon: ShieldCheck,
+      tone: "warning",
+    };
+  }
+
+  if (event.action === "user.sessions_revoked") {
+    return {
+      title: "Sessies vernieuwd",
+      description: "Actieve sessies zijn gemarkeerd voor hercontrole",
+      icon: Monitor,
+      tone: "warning",
+    };
+  }
+
   if (event.action === "user.password_reset_sent") {
     return {
       title: "Wachtwoord reset verstuurd",
@@ -379,6 +425,20 @@ function useUserActivity(tenantId?: string | null, userId?: string | null) {
   });
 }
 
+function useUserSecurity(tenantId?: string | null, userId?: string | null) {
+  return useQuery({
+    queryKey: ["users-admin-security", tenantId, userId],
+    enabled: !!tenantId && !!userId,
+    queryFn: async () => {
+      const data = await callAdminUsers("get_security", { tenant_id: tenantId, user_id: userId });
+      return {
+        security: data.security ?? defaultSecuritySettings,
+        apiTokens: data.api_tokens ?? [],
+      };
+    },
+  });
+}
+
 const UsersPage = () => {
   const queryClient = useQueryClient();
   const { isAdmin, user: currentUser } = useAuth();
@@ -405,6 +465,9 @@ const UsersPage = () => {
   const [activityFiltersOpen, setActivityFiltersOpen] = useState(false);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const { data: userActivity = [], isLoading: activityLoading } = useUserActivity(tenantId, selectedUser?.user_id);
+  const { data: securityData, isLoading: securityLoading } = useUserSecurity(tenantId, selectedUser?.user_id);
+  const securitySettings = securityData?.security ?? defaultSecuritySettings;
+  const userApiTokens = securityData?.apiTokens ?? [];
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
 
@@ -460,6 +523,7 @@ const UsersPage = () => {
     onSuccess: () => {
       toast.success("Resetlink verstuurd");
       queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser?.user_id] });
+      queryClient.invalidateQueries({ queryKey: ["users-admin-security", tenantId, selectedUser?.user_id] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Wachtwoord resetten mislukt"),
   });
@@ -473,6 +537,28 @@ const UsersPage = () => {
       queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser?.user_id] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Deactiveren mislukt"),
+  });
+
+  const updateSecurity = useMutation({
+    mutationFn: ({ userId, patch }: { userId: string; patch: Partial<UserSecuritySettings> }) =>
+      callAdminUsers("update_security", { tenant_id: tenantId, user_id: userId, security_patch: patch }),
+    onSuccess: () => {
+      toast.success("Beveiliging bijgewerkt");
+      queryClient.invalidateQueries({ queryKey: ["users-admin-security", tenantId, selectedUser?.user_id] });
+      queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser?.user_id] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Beveiliging wijzigen mislukt"),
+  });
+
+  const revokeSessions = useMutation({
+    mutationFn: ({ userId }: { userId: string }) =>
+      callAdminUsers("revoke_sessions", { tenant_id: tenantId, user_id: userId }),
+    onSuccess: () => {
+      toast.success("Sessies gemarkeerd voor vernieuwing");
+      queryClient.invalidateQueries({ queryKey: ["users-admin-security", tenantId, selectedUser?.user_id] });
+      queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser?.user_id] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Sessies bijwerken mislukt"),
   });
 
   const filteredUsers = useMemo(() => {
@@ -880,8 +966,8 @@ const UsersPage = () => {
         </DialogContent>
       </Dialog>
 
-      <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-        <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]">
+      <Dialog open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
+        <DialogContent className="flex h-[92vh] w-[calc(100vw-32px)] max-w-[1280px] flex-col gap-0 overflow-hidden p-0">
           {selectedUser && (
             <form onSubmit={handleSaveConfig} className="flex min-h-0 flex-1 flex-col">
               <div className="border-b border-border/30 bg-background px-7 py-6">
@@ -895,12 +981,12 @@ const UsersPage = () => {
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
-                  <SheetHeader className="space-y-0 text-left">
-                    <SheetTitle className="text-base">Gebruiker configureren</SheetTitle>
-                    <SheetDescription className="sr-only">
+                  <DialogHeader className="space-y-0 text-left">
+                    <DialogTitle className="text-base">Gebruiker configureren</DialogTitle>
+                    <DialogDescription className="sr-only">
                       Configureer profiel, rol, toegang en beheeracties voor deze gebruiker.
-                    </SheetDescription>
-                  </SheetHeader>
+                    </DialogDescription>
+                  </DialogHeader>
                 </div>
 
                 <div className="mt-6 flex items-center gap-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
@@ -1387,19 +1473,19 @@ const UsersPage = () => {
                           <div className="flex items-start gap-3">
                             <div className={cn(
                               "flex h-11 w-11 items-center justify-center rounded-full ring-1",
-                              isUserActive(selectedUser)
+                              isUserActive(selectedUser) && securitySettings.login_protection_enabled
                                 ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
                                 : "bg-amber-50 text-amber-700 ring-amber-100",
                             )}>
-                              {isUserActive(selectedUser) ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                              {isUserActive(selectedUser) && securitySettings.login_protection_enabled ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
                             </div>
                             <div>
                               <h3 className="text-base font-semibold text-foreground">Beveiliging</h3>
                               <p className="mt-1 text-sm font-medium text-foreground">
-                                {isUserActive(selectedUser) ? "Account veilig" : "Aandacht nodig"}
+                                {isUserActive(selectedUser) && securitySettings.login_protection_enabled ? "Account veilig" : "Aandacht nodig"}
                               </p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                Laatste controle: vandaag · Laatste login: {formatDate(selectedUser.last_sign_in_at)}
+                                Laatste controle: {formatDate(securitySettings.updated_at)} · Laatste login: {formatDate(selectedUser.last_sign_in_at)}
                               </p>
                             </div>
                           </div>
@@ -1444,23 +1530,50 @@ const UsersPage = () => {
                             <div className="mt-4 space-y-3 text-xs">
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Status</span>
-                                <span className="rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-800 ring-1 ring-amber-100">
-                                  Aanbevolen
+                                <span className={cn(
+                                  "rounded-full px-2 py-1 font-medium ring-1",
+                                  securitySettings.extra_security_enabled
+                                    ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                                    : "bg-amber-50 text-amber-800 ring-amber-100",
+                                )}>
+                                  {securitySettings.extra_security_enabled ? "Ingeschakeld" : "Aanbevolen"}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Methode</span>
-                                <span className="font-medium text-foreground">Verificatie app</span>
+                                <span className="font-medium text-foreground">
+                                  {securitySettings.verification_method === "email" ? "E-mailcode" : "Verificatie app"}
+                                </span>
                               </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="mt-4 w-full"
-                              onClick={() => setConfigTab("instellingen")}
-                            >
-                              Methode wijzigen
-                            </Button>
+                            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={updateSecurity.isPending || securityLoading}
+                                onClick={() => updateSecurity.mutate({
+                                  userId: selectedUser.user_id,
+                                  patch: { extra_security_enabled: !securitySettings.extra_security_enabled },
+                                })}
+                              >
+                                {securitySettings.extra_security_enabled ? "Uitschakelen" : "Inschakelen"}
+                              </Button>
+                              <Select
+                                value={securitySettings.verification_method}
+                                onValueChange={(value) => updateSecurity.mutate({
+                                  userId: selectedUser.user_id,
+                                  patch: { verification_method: value as UserSecuritySettings["verification_method"] },
+                                })}
+                              >
+                                <SelectTrigger className="h-10">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="authenticator_app">Verificatie app</SelectItem>
+                                  <SelectItem value="email">E-mailcode</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
 
                           <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
@@ -1493,14 +1606,20 @@ const UsersPage = () => {
                                 <p className="rounded-md bg-muted/20 p-3 text-xs text-muted-foreground">Deze gebruiker heeft nog geen login geregistreerd.</p>
                               )}
                             </div>
+                            {securitySettings.sessions_revoked_at && (
+                              <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-100">
+                                Sessies gemarkeerd voor hercontrole op {formatDate(securitySettings.sessions_revoked_at)}.
+                              </p>
+                            )}
                             <Button
                               type="button"
                               variant="outline"
                               className="mt-4 w-full"
-                              disabled={selectedUser.user_id !== currentUser?.id}
-                              onClick={() => toast.success("Andere sessies worden bij de volgende login opnieuw gecontroleerd")}
+                              disabled={revokeSessions.isPending || securityLoading}
+                              onClick={() => revokeSessions.mutate({ userId: selectedUser.user_id })}
                             >
-                              Alle andere sessies beëindigen
+                              {revokeSessions.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Sessies opnieuw verifiëren
                             </Button>
                           </div>
                         </div>
@@ -1523,7 +1642,18 @@ const UsersPage = () => {
                               </div>
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Laatste wijziging</span>
-                                <span className="font-medium text-foreground">{formatDate(selectedUser.created_at)}</span>
+                                <span className="font-medium text-foreground">{formatDate(securitySettings.password_reset_sent_at)}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
+                                <span className="text-muted-foreground">Reset vereist</span>
+                                <span className={cn(
+                                  "rounded-full px-2 py-1 font-medium ring-1",
+                                  securitySettings.password_reset_required
+                                    ? "bg-amber-50 text-amber-800 ring-amber-100"
+                                    : "bg-muted/50 text-muted-foreground ring-border/50",
+                                )}>
+                                  {securitySettings.password_reset_required ? "Ja" : "Nee"}
+                                </span>
                               </div>
                             </div>
                             <Button
@@ -1551,25 +1681,70 @@ const UsersPage = () => {
                             <div className="mt-4 space-y-3 text-xs">
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Status</span>
-                                <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700 ring-1 ring-emerald-100">Ingeschakeld</span>
+                                <span className={cn(
+                                  "rounded-full px-2 py-1 font-medium ring-1",
+                                  securitySettings.login_protection_enabled
+                                    ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                                    : "bg-red-50 text-red-700 ring-red-100",
+                                )}>
+                                  {securitySettings.login_protection_enabled ? "Ingeschakeld" : "Uitgeschakeld"}
+                                </span>
                               </div>
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Max. pogingen</span>
-                                <span className="font-medium text-foreground">5 pogingen</span>
+                                <span className="font-medium text-foreground">{securitySettings.max_login_attempts} pogingen</span>
                               </div>
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Vergrendeling</span>
-                                <span className="font-medium text-foreground">15 minuten</span>
+                                <span className="font-medium text-foreground">{securitySettings.lockout_minutes} minuten</span>
                               </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="mt-4 w-full"
-                              onClick={() => setConfigTab("instellingen")}
-                            >
-                              Aanpassen
-                            </Button>
+                            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={updateSecurity.isPending || securityLoading}
+                                onClick={() => updateSecurity.mutate({
+                                  userId: selectedUser.user_id,
+                                  patch: { login_protection_enabled: !securitySettings.login_protection_enabled },
+                                })}
+                              >
+                                {securitySettings.login_protection_enabled ? "Uitzetten" : "Aanzetten"}
+                              </Button>
+                              <Select
+                                value={String(securitySettings.max_login_attempts)}
+                                onValueChange={(value) => updateSecurity.mutate({
+                                  userId: selectedUser.user_id,
+                                  patch: { max_login_attempts: Number(value) },
+                                })}
+                              >
+                                <SelectTrigger className="h-10">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="3">3 pogingen</SelectItem>
+                                  <SelectItem value="5">5 pogingen</SelectItem>
+                                  <SelectItem value="10">10 pogingen</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Select
+                                value={String(securitySettings.lockout_minutes)}
+                                onValueChange={(value) => updateSecurity.mutate({
+                                  userId: selectedUser.user_id,
+                                  patch: { lockout_minutes: Number(value) },
+                                })}
+                              >
+                                <SelectTrigger className="h-10">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="5">5 min</SelectItem>
+                                  <SelectItem value="15">15 min</SelectItem>
+                                  <SelectItem value="30">30 min</SelectItem>
+                                  <SelectItem value="60">60 min</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                         </div>
 
@@ -1636,15 +1811,44 @@ const UsersPage = () => {
                             </div>
                             <div>
                               <p className="text-sm font-semibold text-foreground">API toegang</p>
-                              <p className="mt-1 text-xs text-muted-foreground">Geen actieve API-sleutels voor deze gebruiker.</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {userApiTokens.length === 0
+                                  ? "Geen actieve API-sleutels voor deze gebruiker."
+                                  : `${userApiTokens.filter((token) => !token.revoked_at).length} actieve API-sleutel${userApiTokens.filter((token) => !token.revoked_at).length === 1 ? "" : "s"}.`}
+                              </p>
                             </div>
                           </div>
+                          {userApiTokens.length > 0 && (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {userApiTokens.slice(0, 4).map((token) => (
+                                <div key={token.id} className="rounded-md bg-muted/20 p-3 ring-1 ring-border/30">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <p className="text-xs font-semibold text-foreground">{token.name}</p>
+                                      <p className="mt-1 text-[11px] text-muted-foreground">Sleutel {token.token_prefix}</p>
+                                    </div>
+                                    <span className={cn(
+                                      "rounded-full px-2 py-1 text-[11px] font-medium ring-1",
+                                      token.revoked_at
+                                        ? "bg-muted text-muted-foreground ring-border/50"
+                                        : "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                                    )}>
+                                      {token.revoked_at ? "Ingetrokken" : "Actief"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-2 text-[11px] text-muted-foreground">
+                                    Laatst gebruikt: {formatDate(token.last_used_at)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <Button
                             type="button"
                             variant="outline"
                             onClick={() => setConfigTab("instellingen")}
                           >
-                            Nieuwe sleutel
+                            Beheer sleutels
                           </Button>
                         </div>
                       </div>
@@ -1660,7 +1864,7 @@ const UsersPage = () => {
                 </div>
               </div>
 
-              <SheetFooter className="border-t border-border/30 bg-background px-7 py-4 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] sm:justify-between">
+              <DialogFooter className="border-t border-border/30 bg-background px-7 py-4 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] sm:justify-between">
                 <Button type="button" variant="outline" onClick={() => setSelectedUser(null)}>
                   Annuleren
                 </Button>
@@ -1668,11 +1872,11 @@ const UsersPage = () => {
                   {(updateProfile.isPending || updateRole.isPending || updateAccess.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
                   Wijzigingen opslaan
                 </Button>
-              </SheetFooter>
+              </DialogFooter>
             </form>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

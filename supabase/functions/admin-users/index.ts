@@ -13,6 +13,18 @@ const CORS_OPTIONS = {
 
 type OfficeRole = "admin" | "medewerker";
 
+interface OfficeUserSecuritySettings {
+  extra_security_enabled: boolean;
+  verification_method: "authenticator_app" | "email";
+  login_protection_enabled: boolean;
+  max_login_attempts: number;
+  lockout_minutes: number;
+  password_reset_required: boolean;
+  password_reset_sent_at: string | null;
+  sessions_revoked_at: string | null;
+  updated_at: string | null;
+}
+
 interface AdminUsersRequest {
   action:
     | "list"
@@ -22,6 +34,9 @@ interface AdminUsersRequest {
     | "update_access"
     | "reset_password"
     | "deactivate_user"
+    | "get_security"
+    | "update_security"
+    | "revoke_sessions"
     | "list_activity";
   tenant_id?: string | null;
   user_id?: string;
@@ -30,7 +45,20 @@ interface AdminUsersRequest {
   role?: OfficeRole;
   redirect_to?: string;
   access_overrides?: Record<string, unknown>;
+  security_patch?: Partial<OfficeUserSecuritySettings>;
 }
+
+const DEFAULT_SECURITY: OfficeUserSecuritySettings = {
+  extra_security_enabled: false,
+  verification_method: "authenticator_app",
+  login_protection_enabled: true,
+  max_login_attempts: 5,
+  lockout_minutes: 15,
+  password_reset_required: false,
+  password_reset_sent_at: null,
+  sessions_revoked_at: null,
+  updated_at: null,
+};
 
 function jsonWith(corsHeaders: Record<string, string>, status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -45,6 +73,58 @@ function isRole(value: unknown): value is OfficeRole {
 
 function normalizeEmail(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function normalizeSecurity(row: Record<string, unknown> | null | undefined): OfficeUserSecuritySettings {
+  return {
+    ...DEFAULT_SECURITY,
+    extra_security_enabled: row?.extra_security_enabled === true,
+    verification_method: row?.verification_method === "email" ? "email" : "authenticator_app",
+    login_protection_enabled: row?.login_protection_enabled !== false,
+    max_login_attempts: typeof row?.max_login_attempts === "number" ? row.max_login_attempts : DEFAULT_SECURITY.max_login_attempts,
+    lockout_minutes: typeof row?.lockout_minutes === "number" ? row.lockout_minutes : DEFAULT_SECURITY.lockout_minutes,
+    password_reset_required: row?.password_reset_required === true,
+    password_reset_sent_at: typeof row?.password_reset_sent_at === "string" ? row.password_reset_sent_at : null,
+    sessions_revoked_at: typeof row?.sessions_revoked_at === "string" ? row.sessions_revoked_at : null,
+    updated_at: typeof row?.updated_at === "string" ? row.updated_at : null,
+  };
+}
+
+async function ensureSecuritySettings(
+  admin: ReturnType<typeof createClient>,
+  tenantId: string,
+  userId: string,
+) {
+  const { data: existing, error: existingError } = await admin
+    .from("office_user_security_settings")
+    .select("extra_security_enabled, verification_method, login_protection_enabled, max_login_attempts, lockout_minutes, password_reset_required, password_reset_sent_at, sessions_revoked_at, updated_at")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return normalizeSecurity(existing);
+
+  const { data: created, error: createError } = await admin
+    .from("office_user_security_settings")
+    .insert({ tenant_id: tenantId, user_id: userId })
+    .select("extra_security_enabled, verification_method, login_protection_enabled, max_login_attempts, lockout_minutes, password_reset_required, password_reset_sent_at, sessions_revoked_at, updated_at")
+    .single();
+  if (createError) throw createError;
+  return normalizeSecurity(created);
+}
+
+function sanitizeSecurityPatch(value: unknown): Partial<OfficeUserSecuritySettings> {
+  const patch = typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+  const next: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (typeof patch.extra_security_enabled === "boolean") next.extra_security_enabled = patch.extra_security_enabled;
+  if (patch.verification_method === "authenticator_app" || patch.verification_method === "email") next.verification_method = patch.verification_method;
+  if (typeof patch.login_protection_enabled === "boolean") next.login_protection_enabled = patch.login_protection_enabled;
+  if (typeof patch.max_login_attempts === "number") next.max_login_attempts = Math.min(10, Math.max(3, Math.round(patch.max_login_attempts)));
+  if (typeof patch.lockout_minutes === "number") next.lockout_minutes = Math.min(120, Math.max(5, Math.round(patch.lockout_minutes)));
+  if (typeof patch.password_reset_required === "boolean") next.password_reset_required = patch.password_reset_required;
+
+  return next as Partial<OfficeUserSecuritySettings>;
 }
 
 async function logUserActivity(
@@ -206,6 +286,89 @@ serve(async (req) => {
           ...(events ?? []),
         ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
       });
+    }
+
+    if (body.action === "get_security") {
+      if (!body.user_id) return json(400, { error: "user_id is verplicht" });
+      if (!tenantId) return json(400, { error: "tenant_id is verplicht" });
+
+      const security = await ensureSecuritySettings(admin, tenantId, body.user_id);
+      const { data: tokens, error: tokenError } = await admin
+        .from("api_tokens")
+        .select("id, name, scopes, token_prefix, last_used_at, revoked_at, created_at")
+        .eq("tenant_id", tenantId)
+        .eq("created_by", body.user_id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (tokenError) return json(500, { error: tokenError.message });
+
+      return json(200, {
+        security,
+        api_tokens: tokens ?? [],
+      });
+    }
+
+    if (body.action === "update_security") {
+      if (!body.user_id) return json(400, { error: "user_id is verplicht" });
+      if (!tenantId) return json(400, { error: "tenant_id is verplicht" });
+
+      await ensureSecuritySettings(admin, tenantId, body.user_id);
+      const patch = sanitizeSecurityPatch(body.security_patch);
+      const { data: securityRow, error: securityError } = await admin
+        .from("office_user_security_settings")
+        .update(patch)
+        .eq("tenant_id", tenantId)
+        .eq("user_id", body.user_id)
+        .select("extra_security_enabled, verification_method, login_protection_enabled, max_login_attempts, lockout_minutes, password_reset_required, password_reset_sent_at, sessions_revoked_at, updated_at")
+        .single();
+      if (securityError) return json(500, { error: securityError.message });
+
+      await logUserActivity(admin, {
+        tenantId,
+        actorUserId: user.id,
+        targetUserId: body.user_id,
+        action: "user.security_updated",
+        changes: patch as Record<string, unknown>,
+      });
+
+      return json(200, { ok: true, security: normalizeSecurity(securityRow) });
+    }
+
+    if (body.action === "revoke_sessions") {
+      if (!body.user_id) return json(400, { error: "user_id is verplicht" });
+      if (!tenantId) return json(400, { error: "tenant_id is verplicht" });
+
+      await ensureSecuritySettings(admin, tenantId, body.user_id);
+      const revokedAt = new Date().toISOString();
+      const { data: securityRow, error: revokeError } = await admin
+        .from("office_user_security_settings")
+        .update({
+          sessions_revoked_at: revokedAt,
+          updated_at: revokedAt,
+        })
+        .eq("tenant_id", tenantId)
+        .eq("user_id", body.user_id)
+        .select("extra_security_enabled, verification_method, login_protection_enabled, max_login_attempts, lockout_minutes, password_reset_required, password_reset_sent_at, sessions_revoked_at, updated_at")
+        .single();
+      if (revokeError) return json(500, { error: revokeError.message });
+
+      const { data: targetUser } = await admin.auth.admin.getUserById(body.user_id);
+      await admin.auth.admin.updateUserById(body.user_id, {
+        app_metadata: {
+          ...(targetUser.user?.app_metadata ?? {}),
+          sessions_revoked_at: revokedAt,
+        },
+      });
+
+      await logUserActivity(admin, {
+        tenantId,
+        actorUserId: user.id,
+        targetUserId: body.user_id,
+        action: "user.sessions_revoked",
+        changes: { sessions_revoked_at: revokedAt },
+      });
+
+      return json(200, { ok: true, security: normalizeSecurity(securityRow) });
     }
 
     if (body.action === "invite") {
@@ -377,6 +540,24 @@ serve(async (req) => {
       const { error: resetError } = await admin.auth.resetPasswordForEmail(targetUser.user.email, { redirectTo });
       if (resetError) return json(400, { error: resetError.message });
 
+      let security: OfficeUserSecuritySettings | null = null;
+      if (tenantId) {
+        await ensureSecuritySettings(admin, tenantId, body.user_id);
+        const sentAt = new Date().toISOString();
+        const { data: securityRow } = await admin
+          .from("office_user_security_settings")
+          .update({
+            password_reset_required: true,
+            password_reset_sent_at: sentAt,
+            updated_at: sentAt,
+          })
+          .eq("tenant_id", tenantId)
+          .eq("user_id", body.user_id)
+          .select("extra_security_enabled, verification_method, login_protection_enabled, max_login_attempts, lockout_minutes, password_reset_required, password_reset_sent_at, sessions_revoked_at, updated_at")
+          .maybeSingle();
+        security = normalizeSecurity(securityRow);
+      }
+
       await logUserActivity(admin, {
         tenantId,
         actorUserId: user.id,
@@ -387,7 +568,7 @@ serve(async (req) => {
         },
       });
 
-      return json(200, { ok: true });
+      return json(200, { ok: true, security });
     }
 
     if (body.action === "deactivate_user") {

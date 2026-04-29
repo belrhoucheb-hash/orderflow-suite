@@ -249,6 +249,29 @@ describe("UsersPage", () => {
     expect(screen.getByText("Actieve sessies")).toBeInTheDocument();
     expect(screen.getByText("Inlogbeveiliging")).toBeInTheDocument();
 
+    await userEvent.click(screen.getByRole("button", { name: "Inschakelen" }));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
+        body: expect.objectContaining({
+          action: "update_security",
+          tenant_id: "tenant-1",
+          user_id: "user-2",
+          security_patch: expect.objectContaining({ extra_security_enabled: true }),
+        }),
+      }));
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Sessies opnieuw verifiëren" }));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
+        body: expect.objectContaining({
+          action: "revoke_sessions",
+          tenant_id: "tenant-1",
+          user_id: "user-2",
+        }),
+      }));
+    });
+
     await userEvent.click(screen.getByRole("button", { name: "Reset wachtwoord" }));
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
