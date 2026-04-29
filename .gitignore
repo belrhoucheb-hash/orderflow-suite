@@ -45,4 +45,5 @@ supabase/.branches/
 
 # Local test artifacts
 playwright-report/
+test-results/
 tmp-page-tests.json

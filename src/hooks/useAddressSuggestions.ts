@@ -12,19 +12,24 @@ export interface AddressSuggestion {
  * Queries historical orders for a given client to suggest addresses.
  * Returns the most frequently used pickup and delivery addresses.
  */
-export function useAddressSuggestions(clientName: string | null) {
+export function useAddressSuggestions(clientName: string | null, clientId?: string | null) {
   return useQuery({
-    queryKey: ["address-suggestions", clientName],
-    enabled: !!clientName && clientName.length > 2,
+    queryKey: ["address-suggestions", clientId ?? null, clientName],
+    enabled: Boolean(clientId || (clientName && clientName.length > 2)),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("orders")
         .select("pickup_address, delivery_address, created_at")
-        .ilike("client_name", `%${clientName}%`)
         .neq("status", "DRAFT")
         .neq("status", "CANCELLED")
         .order("created_at", { ascending: false })
         .limit(50);
+
+      query = clientId
+        ? query.eq("client_id", clientId)
+        : query.ilike("client_name", `%${clientName}%`);
+
+      const { data, error } = await query;
 
       if (error) throw error;
       if (!data || data.length === 0) return { pickup: [], delivery: [] };

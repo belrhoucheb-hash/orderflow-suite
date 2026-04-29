@@ -6,7 +6,7 @@
 //
 // Output:
 //   - search:  { results: Array<{ place_id, name, description }> }
-//   - details: { result: { name, street, house_number, zipcode, city, country, phone } | null }
+//   - details: { result: { name, street, house_number, zipcode, city, country, phone, lat, lng } | null }
 //
 // Let op: de Google Cloud-project-sleutel die als GOOGLE_MAPS_API_KEY
 // is geconfigureerd moet de "Places API" (classic) enabled hebben.
@@ -33,6 +33,7 @@ function pickComponent(
 
 function normalizeDetails(data: any) {
   const components: AddressComponent[] = data?.result?.address_components ?? [];
+  const location = data?.result?.geometry?.location ?? {};
   const street = pickComponent(components, "route");
   const house_number = pickComponent(components, "street_number");
   const zipcode = pickComponent(components, "postal_code").toUpperCase().replace(/\s+/g, "");
@@ -43,14 +44,19 @@ function normalizeDetails(data: any) {
   const country = pickComponent(components, "country", "short_name") || "NL";
   const name = String(data?.result?.name ?? "").trim();
   const phone = String(data?.result?.international_phone_number ?? "").trim();
+  const lat = typeof location.lat === "number" ? location.lat : null;
+  const lng = typeof location.lng === "number" ? location.lng : null;
   return {
     name,
+    formatted_address: String(data?.result?.formatted_address ?? "").trim(),
     street: street.trim(),
     house_number: house_number.trim(),
     zipcode,
     city: city.trim(),
     country,
     phone,
+    lat,
+    lng,
   };
 }
 
@@ -120,7 +126,7 @@ serve(async (req) => {
         key,
         language: "nl",
         fields:
-          "name,formatted_address,address_component,international_phone_number",
+          "name,formatted_address,address_component,geometry,international_phone_number",
       });
       const resp = await fetch(
         `https://maps.googleapis.com/maps/api/place/details/json?${params}`,

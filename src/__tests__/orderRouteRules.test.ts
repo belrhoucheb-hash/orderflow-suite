@@ -41,9 +41,9 @@ describe("getOrderRouteRuleIssues", () => {
     );
   });
 
-  it("blokkeert een tijdvenster waarvan eindtijd voor starttijd ligt", () => {
+  it("blokkeert een tijdvenster waarvan eindtijd niet later dan starttijd is", () => {
     const issues = getOrderRouteRuleIssues([
-      { ...validRoute[0], tijd: "14:00", tijdTot: "13:30" },
+      { ...validRoute[0], tijd: "14:00", tijdTot: "14:00" },
       validRoute[1],
     ]);
 
@@ -51,7 +51,7 @@ describe("getOrderRouteRuleIssues", () => {
       expect.arrayContaining([
         expect.objectContaining({
           key: "pickup_time_window",
-          message: "Laadtijd 'tot' kan niet eerder zijn dan laadtijd 'van'.",
+          message: "Laadtijd 'tot' moet later zijn dan laadtijd 'van'.",
         }),
       ]),
     );

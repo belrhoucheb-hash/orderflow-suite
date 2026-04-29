@@ -29,9 +29,10 @@ describe("orderFormSchema", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("zet pickup_address-fout als gestructureerd adres onvolledig is", () => {
+  it("blokkeert alleen als ophaaladres volledig ontbreekt", () => {
     const parsed = orderFormSchema.safeParse({
       ...validBase,
+      pickup_address: "",
       pickup_structured: { street: "", zipcode: "", city: "" },
     });
     expect(parsed.success).toBe(false);
@@ -41,30 +42,39 @@ describe("orderFormSchema", () => {
     }
   });
 
-  it("weigert een pickup_address dat slechts een plaatsnaam is", () => {
+  it("laat een onvolledig ophaaladres door als waarschuwing voor de UI", () => {
     const parsed = orderFormSchema.safeParse({
       ...validBase,
       pickup_address: "Amsterdam",
     });
-    expect(parsed.success).toBe(false);
-    if (!parsed.success) {
-      const addressIssue = parsed.error.issues.find(
-        (i) => i.path[0] === "pickup_address",
-      );
-      expect(addressIssue?.message).toContain("Onvolledig ophaaladres");
-    }
+    expect(parsed.success).toBe(true);
   });
 
-  it("zet delivery_address-fout als structured-adres onvolledig is", () => {
+  it("blokkeert alleen als afleveradres volledig ontbreekt", () => {
     const parsed = orderFormSchema.safeParse({
       ...validBase,
-      delivery_structured: { street: "Havenweg", zipcode: "", city: "Rotterdam" },
+      delivery_address: "",
+      delivery_structured: { street: "", zipcode: "", city: "" },
     });
     expect(parsed.success).toBe(false);
     if (!parsed.success) {
       const paths = parsed.error.issues.map((i) => i.path.join("."));
       expect(paths).toContain("delivery_address");
     }
+  });
+
+  it("accepteert een Google-suggestie zonder postcode zolang de adresregel compleet is", () => {
+    const parsed = orderFormSchema.safeParse({
+      ...validBase,
+      pickup_address: "Willy Sluiterstraat 9, Hendrik-Ido-Ambacht, Nederland",
+      pickup_structured: {
+        street: "Willy Sluiterstraat 9, Hendrik-Ido-Ambacht, Nederland",
+        zipcode: "",
+        city: "",
+      },
+    });
+
+    expect(parsed.success).toBe(true);
   });
 
   it("faalt als klantnaam leeg is", () => {
@@ -96,6 +106,24 @@ describe("orderFormSchema", () => {
       const paths = parsed.error.issues.map((i) => i.path.join("."));
       expect(paths).toContain("quantity");
       expect(paths).toContain("weight_kg");
+    }
+  });
+
+  it("weigert dezelfde locatie voor ophalen en afleveren", () => {
+    const parsed = orderFormSchema.safeParse({
+      ...validBase,
+      delivery_address: "Teststraat 12, 1012 AB Amsterdam",
+      delivery_structured: {
+        street: "Teststraat",
+        zipcode: "1012 AB",
+        city: "Amsterdam",
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      const issue = parsed.error.issues.find((i) => i.path[0] === "delivery_address");
+      expect(issue?.message).toContain("niet hetzelfde");
     }
   });
 });

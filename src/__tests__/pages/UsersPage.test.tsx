@@ -157,6 +157,9 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
 
     expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
+    expect(screen.getByText("Account status")).toBeInTheDocument();
+    expect(screen.getByText("Snelle acties")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Toegang" }));
     expect(screen.getByText("Toegangsrechten")).toBeInTheDocument();
     expect(screen.getByText("Dispatch")).toBeInTheDocument();
     expect(screen.getByText("Override (afwijking van rol)")).toBeInTheDocument();
@@ -167,6 +170,7 @@ describe("UsersPage", () => {
     expect(screen.getByText("Mag tarieven niet bewerken")).toBeInTheDocument();
     expect(screen.getByText("Mag tarieven niet verwijderen")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Profiel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Bewerken" }));
     expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
     await userEvent.click(screen.getByRole("button", { name: "Activiteit" }));
     expect(screen.getByText("Overzicht van belangrijke acties en wijzigingen.")).toBeInTheDocument();
@@ -186,6 +190,7 @@ describe("UsersPage", () => {
     });
 
     await userEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
+    await userEvent.click(screen.getByRole("button", { name: "Toegang" }));
     await userEvent.click(screen.getByRole("button", { name: /Admin/i }));
 
     expect(screen.getByText("Volledige controle")).toBeInTheDocument();

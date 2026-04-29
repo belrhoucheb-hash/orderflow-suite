@@ -15,6 +15,7 @@
 // match wint.
 
 import { supabase } from "@/integrations/supabase/client";
+import { mapDraftStatusToPersisted } from "@/lib/orderDraft";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ export interface BookingInput {
   delivery_address: string | null;
   final_delivery_address?: string | null;
   source?: string | null;
+  status?: "DRAFT" | "READY" | "READY_FOR_PLANNING" | "NEEDS_REVIEW" | "PLANNED" | string | null;
   client_id?: string | null;
   client_name?: string | null;
   weight_kg?: number | null;
@@ -78,6 +80,7 @@ export interface BookingInput {
   delivery_lat?: number | null;
   delivery_lng?: number | null;
   delivery_coords_manual?: boolean;
+  manual_overrides?: Record<string, unknown> | null;
   [key: string]: unknown;
 }
 
@@ -143,6 +146,17 @@ export interface OrderLeg {
 export interface CreateShipmentResult {
   shipment: Shipment;
   legs: OrderLeg[];
+}
+
+const VALID_ORDER_SOURCES = new Set(["INTERN", "EMAIL", "PORTAL", "EDI"]);
+
+function normalizeOrderSource(source: unknown): "INTERN" | "EMAIL" | "PORTAL" | "EDI" {
+  const normalized = String(source ?? "").trim().toUpperCase();
+  if (normalized === "MANUAL" || normalized === "HANDMATIG") return "INTERN";
+  if (VALID_ORDER_SOURCES.has(normalized)) {
+    return normalized as "INTERN" | "EMAIL" | "PORTAL" | "EDI";
+  }
+  return "INTERN";
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -361,13 +375,16 @@ export async function createShipmentWithLegs(
   }
 
   // 1. Shipment
+  const bookingStatus = String(booking.status ?? "READY_FOR_PLANNING").toUpperCase();
+  const normalizedStatus = mapDraftStatusToPersisted(bookingStatus);
+
   const shipmentPayload = {
     tenant_id: tenantId,
     client_id: booking.client_id ?? null,
     client_name: booking.client_name ?? null,
     origin_address: booking.pickup_address ?? null,
     destination_address: booking.delivery_address ?? null,
-    status: "DRAFT",
+    status: normalizedStatus,
     traject_rule_id: rule.id,
     price_total_cents: booking.price_total_cents ?? null,
     pricing: booking.pricing ?? null,
@@ -452,8 +469,8 @@ export async function createShipmentWithLegs(
       delivery_address: to,
       client_id: booking.client_id ?? null,
       client_name: booking.client_name ?? null,
-      source: booking.source ?? null,
-      status: "DRAFT",
+      source: normalizeOrderSource(booking.source),
+      status: normalizedStatus,
       weight_kg: booking.weight_kg ?? null,
       quantity: booking.quantity ?? null,
       unit: booking.unit ?? null,
@@ -480,6 +497,10 @@ export async function createShipmentWithLegs(
         ? booking.delivery_date_str ?? null
         : null,
       dimensions: booking.dimensions ?? null,
+      attachments: {
+        readiness_status: bookingStatus,
+        manual_overrides: booking.manual_overrides ?? null,
+      },
     };
 
     // Google adres-autocomplete: zet gesplitste velden + lat/lng alleen op

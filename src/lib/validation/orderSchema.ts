@@ -29,9 +29,9 @@ export type OrderInput = z.infer<typeof orderInputSchema>;
 // Backend-consumers blijven `orderInputSchema` gebruiken.
 export const UNIT_VALUES = ["Pallets", "Colli", "Box"] as const;
 
-// Gestructureerd adres, parallel aan de composeerde string `pickup_address`.
-// De UI bewaart de Google-gevulde velden los zodat chauffeurs lat/lng krijgen
-// en we in deze schema de volledigheid kunnen afdwingen.
+// Gestructureerd adres, parallel aan de gecomposeerde string `pickup_address`.
+// Google Places geeft in de suggestielijst niet altijd postcode terug. Daarom
+// mag de volledige adresregel als fallback de volledigheid dragen.
 const structuredAddressSchema = z.object({
   street: z.string().trim(),
   zipcode: z.string().trim(),
@@ -41,12 +41,14 @@ const structuredAddressSchema = z.object({
 // Een geldig order-adres moet tenminste een huisnummer of postcode bevatten
 // (minstens één cijfer) en uit meer dan één woord bestaan, anders is het
 // slechts een plaatsnaam. Zie `isValidAddress` in components/inbox/utils.ts.
-function addressLooksComplete(raw: string): boolean {
-  const trimmed = raw.trim();
-  if (!trimmed) return false;
-  if (!/\d/.test(trimmed)) return false;
-  if (trimmed.split(/[\s,]+/).filter(Boolean).length < 2) return false;
-  return true;
+function normalizeAddress(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 export const orderFormSchema = orderInputSchema
@@ -61,39 +63,11 @@ export const orderFormSchema = orderInputSchema
     delivery_structured: structuredAddressSchema,
   })
   .superRefine((data, ctx) => {
-    const pickupFilled =
-      data.pickup_structured.street &&
-      data.pickup_structured.zipcode &&
-      data.pickup_structured.city;
-    if (!pickupFilled) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["pickup_address"],
-        message: "Vul straat, postcode en plaats in",
-      });
-    } else if (!addressLooksComplete(data.pickup_address)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["pickup_address"],
-        message: "Onvolledig ophaaladres, straat en huisnummer vereist",
-      });
-    }
-
-    const deliveryFilled =
-      data.delivery_structured.street &&
-      data.delivery_structured.zipcode &&
-      data.delivery_structured.city;
-    if (!deliveryFilled) {
+    if (normalizeAddress(data.pickup_address) === normalizeAddress(data.delivery_address)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["delivery_address"],
-        message: "Vul straat, postcode en plaats in",
-      });
-    } else if (!addressLooksComplete(data.delivery_address)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["delivery_address"],
-        message: "Onvolledig afleveradres, straat en huisnummer vereist",
+        message: "Afleveradres mag niet hetzelfde zijn als ophaaladres",
       });
     }
   });

@@ -1,4 +1,4 @@
-project_id = "kdszxexyefsbssfhnwxc"
+project_id = "mdcfqircyxltiwfnmjsj"
 
 [functions.parse-order]
 verify_jwt = false
@@ -19,4 +19,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.google-places-business]
+verify_jwt = false
+
+[functions.google-places]
 verify_jwt = false

@@ -95,7 +95,7 @@ export function getOrderRouteRuleIssues(lines: OrderRouteLine[]): OrderRouteRule
   for (const line of orderedStops) {
     const from = parseTimeToMinutes(line.tijd);
     const to = parseTimeToMinutes(line.tijdTot);
-    if (from != null && to != null && to < from) {
+    if (from != null && to != null && to <= from) {
       const isPickup = line.activiteit === "Laden";
       const label = labelForLine(line, deliveries);
       addIssueOnce(issues, {
@@ -103,8 +103,8 @@ export function getOrderRouteRuleIssues(lines: OrderRouteLine[]): OrderRouteRule
         lineId: line.id,
         label,
         message: isPickup
-          ? "Laadtijd 'tot' kan niet eerder zijn dan laadtijd 'van'."
-          : `${label} tijd 'tot' kan niet eerder zijn dan tijd 'van'.`,
+          ? "Laadtijd 'tot' moet later zijn dan laadtijd 'van'."
+          : `${label} tijd 'tot' moet later zijn dan tijd 'van'.`,
       });
     }
   }
@@ -133,7 +133,7 @@ export function getOrderRouteRuleIssues(lines: OrderRouteLine[]): OrderRouteRule
     const current = orderedStops[index];
     const previousMoment = routeMoment(previous, "end");
     const currentMoment = routeMoment(current, "start");
-    if (previousMoment == null || currentMoment == null || currentMoment >= previousMoment) continue;
+    if (previousMoment == null || currentMoment == null || currentMoment > previousMoment) continue;
 
     const previousLabel = labelForLine(previous, deliveries);
     const currentLabel = labelForLine(current, deliveries);

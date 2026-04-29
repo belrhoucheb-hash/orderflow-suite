@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useClientRates } from "@/hooks/useClients";
 import { useVehicleTypes } from "@/hooks/useVehicleTypes";
 import { useOrderPrice, type OrderPriceInput } from "@/hooks/useOrderPrice";
 import type { PriceBreakdown, VehicleType } from "@/types/rateModels";
 
 export interface FinancialTabCargo {
+  totalQuantity?: number;
+  unit?: string;
   totalWeightKg: number;
   maxLengthCm: number;
   maxWidthCm: number;
@@ -27,7 +30,20 @@ interface FinancialTabProps {
   pickupDate?: string;
   pickupTime?: string;
   transportType?: string | null;
+  initialPricing?: FinancialTabPayload | null;
   onPricingChange: (payload: FinancialTabPayload) => void;
+}
+
+type PricingMode = "client_rates" | "standard" | "override";
+
+interface ClientRateLine {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
+  rateType: string;
 }
 
 // Pakt het kleinste actieve voertuigtype dat aan cargo-eisen voldoet.
@@ -54,6 +70,33 @@ function pickSmallestFit(
   return candidates[0] ?? vehicles[0] ?? null;
 }
 
+function parseMoney(value: string): number {
+  return parseFloat(value.replace(",", ".")) || 0;
+}
+
+function formatEuro(value: number): string {
+  return value.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function rateTypeLabel(type: string): string {
+  switch (type) {
+    case "base_rate":
+    case "per_rit":
+      return "Vast ritbedrag";
+    case "per_km":
+      return "Per kilometer";
+    case "per_pallet":
+      return "Per pallet";
+    case "per_kg":
+      return "Per kilo";
+    case "toeslag":
+    case "surcharge":
+      return "Toeslag";
+    default:
+      return type.replace(/_/g, " ");
+  }
+}
+
 export function FinancialTab({
   tenantId,
   clientId,
@@ -61,12 +104,15 @@ export function FinancialTab({
   pickupDate,
   pickupTime,
   transportType,
+  initialPricing,
   onPricingChange,
 }: FinancialTabProps) {
   const { data: vehicleTypes = [], isLoading: vtLoading } = useVehicleTypes();
+  const { data: clientRates = [], isLoading: clientRatesLoading } = useClientRates(clientId ?? null);
 
   // Form state
-  const [pricingMode, setPricingMode] = useState<"standard" | "override">("standard");
+  const [pricingMode, setPricingMode] = useState<PricingMode>("standard");
+  const pricingModeTouchedRef = useRef(false);
   const [vehicleTypeId, setVehicleTypeId] = useState<string>("");
   const [vehicleManual, setVehicleManual] = useState(false);
   const [kmAfstand, setKmAfstand] = useState("");
@@ -77,6 +123,93 @@ export function FinancialTab({
   const [tollAmount, setTollAmount] = useState("");
   const [overrideAmount, setOverrideAmount] = useState("");
   const [overrideReason, setOverrideReason] = useState("");
+  const [jaimyExtraDescription, setJaimyExtraDescription] = useState("");
+  const [jaimyExtraAmount, setJaimyExtraAmount] = useState("");
+  const hydratedPricingKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!initialPricing?.cents || !initialPricing.details) return;
+    const details = initialPricing.details as Record<string, any>;
+    const hydrateKey = JSON.stringify({
+      cents: initialPricing.cents,
+      mode: details.mode,
+      vehicle: details.vehicle_type_id,
+      km: details.km_distance,
+      waiting: details.manual_add_ons?.waiting_hours,
+      stops: details.manual_add_ons?.extra_stops,
+      toll: details.toll_amount,
+      override: details.amount,
+      manualLine: details.manual_line?.amount,
+    });
+    if (hydratedPricingKeyRef.current === hydrateKey) return;
+    hydratedPricingKeyRef.current = hydrateKey;
+
+    if (details.mode === "client_rates") {
+      pricingModeTouchedRef.current = true;
+      setPricingMode("client_rates");
+      const manualLine = details.manual_line as { description?: string; amount?: number } | null | undefined;
+      if (manualLine?.description) setJaimyExtraDescription(manualLine.description);
+      if (typeof manualLine?.amount === "number" && manualLine.amount > 0) {
+        setJaimyExtraAmount(String(manualLine.amount).replace(".", ","));
+      }
+      return;
+    }
+
+    if (details.mode === "override") {
+      pricingModeTouchedRef.current = true;
+      setPricingMode("override");
+      if (typeof details.amount === "number" && details.amount > 0) {
+        setOverrideAmount(String(details.amount).replace(".", ","));
+      }
+      if (typeof details.reason === "string") setOverrideReason(details.reason);
+      return;
+    }
+
+    if (details.mode === "engine") {
+      pricingModeTouchedRef.current = true;
+      setPricingMode("standard");
+      if (typeof details.vehicle_type_id === "string") {
+        setVehicleTypeId(details.vehicle_type_id);
+        setVehicleManual(true);
+      }
+      if (typeof details.diesel_included === "boolean") setDieselIncluded(details.diesel_included);
+      if (typeof details.screening_included === "boolean") setScreeningIncluded(details.screening_included);
+      if (typeof details.km_distance === "number" && details.km_distance > 0) {
+        setKmAfstand(String(details.km_distance));
+      }
+      const addOns = details.manual_add_ons as { waiting_hours?: number; extra_stops?: number } | null | undefined;
+      if (typeof addOns?.waiting_hours === "number") setWaitingHours(addOns.waiting_hours);
+      if (typeof addOns?.extra_stops === "number") setExtraStops(addOns.extra_stops);
+      if (typeof details.toll_amount === "number" && details.toll_amount > 0) {
+        setTollAmount(String(details.toll_amount).replace(".", ","));
+      }
+    }
+  }, [initialPricing]);
+
+  const activeClientRates = useMemo(
+    () => clientRates.filter((rate) => rate.is_active !== false),
+    [clientRates],
+  );
+
+  const choosePricingMode = (mode: PricingMode) => {
+    pricingModeTouchedRef.current = true;
+    setPricingMode(mode);
+  };
+
+  useEffect(() => {
+    pricingModeTouchedRef.current = false;
+  }, [clientId]);
+
+  useEffect(() => {
+    if (pricingModeTouchedRef.current) return;
+    if (activeClientRates.length > 0) {
+      setPricingMode("client_rates");
+    } else if (!clientRatesLoading && !vtLoading && vehicleTypes.length === 0) {
+      setPricingMode("override");
+    } else if (pricingMode === "client_rates" || pricingMode === "override") {
+      setPricingMode("standard");
+    }
+  }, [activeClientRates.length, clientRatesLoading, pricingMode, vehicleTypes.length, vtLoading]);
 
   // Auto-select kleinste passend voertuig zodra vehicleTypes geladen / cargo verandert.
   useEffect(() => {
@@ -92,8 +225,9 @@ export function FinancialTab({
     return km > 0 ? Math.ceil(km / 5) * 5 : 0;
   }, [kmAfstand]);
 
-  // Input voor de preview-engine. Enkel tijdens "standard" modus.
-  const priceInput: OrderPriceInput | null = useMemo(() => {
+  // Input voor de preview-engine. De basiskaart blijft bewust zonder handmatige add-ons;
+  // die worden alleen in het totaaloverzicht meegenomen.
+  const basePriceInput: OrderPriceInput | null = useMemo(() => {
     if (pricingMode !== "standard") return null;
     if (!tenantId || !vehicleTypeId || kmRounded <= 0) return null;
     return {
@@ -104,29 +238,128 @@ export function FinancialTab({
       pickup_time_local: pickupTime,
       transport_type: transportType ?? null,
       client_id: clientId ?? null,
-      stop_count: 2 + extraStops,
-      duration_hours: waitingHours,
-      waiting_time_min: waitingHours * 60,
+      stop_count: 2,
+      duration_hours: 0,
+      waiting_time_min: 0,
       diesel_included: dieselIncluded,
       include_optional_purposes: screeningIncluded ? ["screening"] : [],
     };
   }, [
     pricingMode, tenantId, vehicleTypeId, kmRounded, pickupDate, pickupTime,
-    transportType, clientId, extraStops, waitingHours, dieselIncluded, screeningIncluded,
+    transportType, clientId, dieselIncluded, screeningIncluded,
   ]);
 
-  const priceQuery = useOrderPrice(priceInput);
+  const totalPriceInput: OrderPriceInput | null = useMemo(() => {
+    if (!basePriceInput) return null;
+    return {
+      ...basePriceInput,
+      stop_count: 2 + extraStops,
+      duration_hours: waitingHours,
+      waiting_time_min: waitingHours * 60,
+    };
+  }, [basePriceInput, extraStops, waitingHours]);
+
+  const basePriceQuery = useOrderPrice(basePriceInput);
+  const totalPriceQuery = useOrderPrice(totalPriceInput);
 
   const tollNum = parseFloat(tollAmount.replace(",", ".")) || 0;
-  const breakdown: PriceBreakdown | null = priceQuery.data && "breakdown" in priceQuery.data ? priceQuery.data.breakdown : null;
-  const skipped = priceQuery.data && "skipped" in priceQuery.data ? priceQuery.data : null;
+  const breakdown: PriceBreakdown | null = basePriceQuery.data && "breakdown" in basePriceQuery.data ? basePriceQuery.data.breakdown : null;
+  const totalBreakdown: PriceBreakdown | null = totalPriceQuery.data && "breakdown" in totalPriceQuery.data ? totalPriceQuery.data.breakdown : null;
+  const skipped = basePriceQuery.data && "skipped" in basePriceQuery.data ? basePriceQuery.data : null;
 
-  const engineTotal = breakdown ? breakdown.totaal + tollNum : 0;
+  const baseSurchargeTotal = breakdown?.toeslagen.reduce((sum, item) => sum + item.amount, 0) ?? 0;
+  const totalSurchargeTotal = totalBreakdown?.toeslagen.reduce((sum, item) => sum + item.amount, 0) ?? baseSurchargeTotal;
+  const manualAddOnBaseTotal = breakdown && totalBreakdown
+    ? Math.max(0, totalBreakdown.basisbedrag - breakdown.basisbedrag)
+    : 0;
+  const engineTotal = breakdown ? breakdown.basisbedrag + totalSurchargeTotal + manualAddOnBaseTotal + tollNum : 0;
+  const engineBaseTotal = breakdown ? breakdown.basisbedrag : 0;
+  const clientRateLines = useMemo<ClientRateLine[]>(() => {
+    const quantity = cargo?.totalQuantity ?? 0;
+    const weight = cargo?.totalWeightKg ?? 0;
+    const km = kmRounded || parseMoney(kmAfstand);
+
+    return activeClientRates
+      .map((rate) => {
+        let lineQuantity = 1;
+        let unit = "stuk";
+        let include = true;
+
+        switch (rate.rate_type) {
+          case "base_rate":
+          case "per_rit":
+            lineQuantity = 1;
+            unit = "rit";
+            break;
+          case "per_km":
+            lineQuantity = km;
+            unit = "km";
+            include = km > 0;
+            break;
+          case "per_pallet":
+            lineQuantity = quantity;
+            unit = "pallet";
+            include = quantity > 0;
+            break;
+          case "per_kg":
+            lineQuantity = weight;
+            unit = "kg";
+            include = weight > 0;
+            break;
+          case "toeslag":
+          case "surcharge":
+            lineQuantity = 1;
+            unit = "stuk";
+            break;
+          default:
+            lineQuantity = 1;
+            unit = "stuk";
+            break;
+        }
+
+        const unitPrice = Number(rate.amount) || 0;
+        return include ? {
+          id: rate.id,
+          description: rate.description || rateTypeLabel(rate.rate_type),
+          quantity: lineQuantity,
+          unit,
+          unitPrice,
+          total: Math.round(lineQuantity * unitPrice * 100) / 100,
+          rateType: rate.rate_type,
+        } : null;
+      })
+      .filter(Boolean) as ClientRateLine[];
+  }, [activeClientRates, cargo?.totalQuantity, cargo?.totalWeightKg, kmAfstand, kmRounded]);
+
+  const jaimyExtraNum = parseMoney(jaimyExtraAmount);
+  const clientRatesSubtotal = clientRateLines.reduce((sum, line) => sum + line.total, 0);
+  const clientRatesTotal = clientRatesSubtotal + (jaimyExtraNum > 0 ? jaimyExtraNum : 0);
 
   // Payload sturen naar parent zodra er iets meetbaars verandert.
   useEffect(() => {
+    if (pricingMode === "client_rates") {
+      if (clientRatesTotal > 0) {
+        onPricingChange({
+          cents: Math.round(clientRatesTotal * 100),
+          details: {
+            mode: "client_rates",
+            source: "jaimy",
+            lines: clientRateLines,
+            manual_line: jaimyExtraNum > 0 ? {
+              description: jaimyExtraDescription || "Handmatige tariefregel",
+              amount: jaimyExtraNum,
+            } : null,
+            total: clientRatesTotal,
+          },
+        });
+      } else {
+        if (clientRatesLoading) return;
+        onPricingChange({ cents: null, details: null });
+      }
+      return;
+    }
     if (pricingMode === "override") {
-      const amt = parseFloat(overrideAmount.replace(",", ".")) || 0;
+      const amt = parseMoney(overrideAmount);
       if (amt > 0) {
         onPricingChange({
           cents: Math.round(amt * 100),
@@ -142,6 +375,7 @@ export function FinancialTab({
       return;
     }
     if (!breakdown) {
+      if (basePriceQuery.isFetching || totalPriceQuery.isFetching || basePriceQuery.isLoading || totalPriceQuery.isLoading) return;
       onPricingChange({ cents: null, details: null });
       return;
     }
@@ -150,29 +384,37 @@ export function FinancialTab({
       details: {
         mode: "engine",
         engine_version: "v2-2026-04",
-        rate_card_id: priceQuery.data && "rate_card_id" in priceQuery.data ? priceQuery.data.rate_card_id : null,
+        rate_card_id: basePriceQuery.data && "rate_card_id" in basePriceQuery.data ? basePriceQuery.data.rate_card_id : null,
         vehicle_type_id: vehicleTypeId,
         diesel_included: dieselIncluded,
         screening_included: screeningIncluded,
         km_distance: parseFloat(kmAfstand) || 0,
         km_rounded: kmRounded,
         line_items: breakdown.regels,
-        surcharges: breakdown.toeslagen,
+        surcharges: totalBreakdown?.toeslagen ?? breakdown.toeslagen,
+        manual_add_ons: {
+          waiting_hours: waitingHours,
+          extra_stops: extraStops,
+          base_amount: manualAddOnBaseTotal,
+        },
         toll_amount: tollNum,
-        subtotal_engine: breakdown.totaal,
+        subtotal_engine: breakdown.basisbedrag + totalSurchargeTotal + manualAddOnBaseTotal,
         total: engineTotal,
       },
     });
   }, [
     pricingMode, overrideAmount, overrideReason,
-    breakdown, engineTotal, priceQuery.data,
+    clientRateLines, clientRatesTotal, jaimyExtraDescription, jaimyExtraNum,
+    breakdown, totalBreakdown, engineTotal, basePriceQuery.data, manualAddOnBaseTotal, totalSurchargeTotal,
+    basePriceQuery.isFetching, totalPriceQuery.isFetching, basePriceQuery.isLoading, totalPriceQuery.isLoading,
+    waitingHours, extraStops,
     vehicleTypeId, dieselIncluded, screeningIncluded,
-    kmAfstand, kmRounded, tollNum, onPricingChange,
+    kmAfstand, kmRounded, tollNum, clientRatesLoading, onPricingChange,
   ]);
 
   const selectedVehicle = vehicleTypes.find((vt) => vt.id === vehicleTypeId) ?? null;
 
-  if (vtLoading) {
+  if (false && vtLoading && pricingMode !== "client_rates") {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground p-6">
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -181,7 +423,7 @@ export function FinancialTab({
     );
   }
 
-  if (vehicleTypes.length === 0) {
+  if (false && vehicleTypes.length === 0 && pricingMode !== "client_rates") {
     return (
       <div className="p-6 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-sm">
         <div className="flex gap-3">
@@ -195,7 +437,7 @@ export function FinancialTab({
     );
   }
 
-  if (skipped) {
+  if (false && skipped) {
     return (
       <div className="p-6 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-sm">
         <div className="flex gap-3">
@@ -205,7 +447,7 @@ export function FinancialTab({
             <p>{skipped.reason}. Zet de tariefmotor aan via tenant-instellingen, of gebruik de modus "Afwijkend tarief".</p>
             <button
               type="button"
-              onClick={() => setPricingMode("override")}
+              onClick={() => choosePricingMode("override")}
               className="mt-3 px-3 py-1.5 text-xs rounded-md border border-amber-400 hover:bg-amber-100"
             >
               Afwijkend tarief gebruiken
@@ -216,12 +458,137 @@ export function FinancialTab({
     );
   }
 
-  const priceError = priceQuery.error instanceof Error ? priceQuery.error.message : null;
+  const priceError =
+    basePriceQuery.error instanceof Error
+      ? basePriceQuery.error.message
+      : totalPriceQuery.error instanceof Error
+        ? totalPriceQuery.error.message
+        : null;
 
   return (
     <div className="max-w-[1320px] mx-auto px-6 pt-4 pb-8 space-y-5">
+      <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.18)] bg-white p-2 shadow-[0_16px_40px_-34px_hsl(var(--gold-deep)_/_0.65)]">
+        <div className="grid gap-2 md:grid-cols-3">
+          {[
+            { key: "client_rates" as const, title: "Klanttarief", subtitle: "Jaimy structuur" },
+            { key: "standard" as const, title: "Tariefmotor", subtitle: "Matrix en voertuigtype" },
+            { key: "override" as const, title: "Handmatig", subtitle: "Vrij bedrag" },
+          ].map((mode) => (
+            <button
+              key={mode.key}
+              type="button"
+              onClick={() => choosePricingMode(mode.key)}
+              disabled={mode.key === "client_rates" && !clientId}
+              className={cn(
+                "rounded-xl px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-45",
+                pricingMode === mode.key
+                  ? "bg-[hsl(var(--gold-soft)_/_0.55)] text-[hsl(var(--gold-deep))] shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.30)]"
+                  : "hover:bg-[hsl(var(--gold-soft)_/_0.25)]",
+              )}
+            >
+              <span className="block text-sm font-semibold">{mode.title}</span>
+              <span className="block text-xs text-muted-foreground">{mode.subtitle}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {pricingMode === "client_rates" && (
+        <section className="card--luxe p-6 relative">
+          <span className="card-chapter">I</span>
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                01 · Klanttarief
+              </div>
+              <h3 className="section-title">Tarief invoeren volgens Jaimy</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Gebruikt de bestaande klanttarieven: ritbedrag, km, pallet/kg en toeslagen. Pas alleen de vrije regel aan als er maatwerk is.
+              </p>
+            </div>
+            <div className="rounded-full border border-[hsl(var(--gold)_/_0.24)] bg-[hsl(var(--gold-soft)_/_0.32)] px-3 py-1 text-xs font-semibold text-[hsl(var(--gold-deep))]">
+              {activeClientRates.length} regels
+            </div>
+          </div>
+
+          {clientRatesLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Klanttarieven laden...
+            </div>
+          )}
+
+          {!clientRatesLoading && activeClientRates.length === 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              Geen klanttarieven gevonden. Vul hieronder een handmatig tarief in of beheer de klanttarieven op de klantenkaart.
+            </div>
+          )}
+
+          {activeClientRates.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-[hsl(var(--gold)_/_0.18)] bg-white">
+              <div className="grid grid-cols-[1fr_90px_110px_120px] gap-3 border-b border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.24)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <span>Regel</span>
+                <span className="text-right">Aantal</span>
+                <span className="text-right">Tarief</span>
+                <span className="text-right">Totaal</span>
+              </div>
+              {clientRateLines.length > 0 ? clientRateLines.map((line) => (
+                <div key={line.id} className="grid grid-cols-[1fr_90px_110px_120px] gap-3 border-b border-[hsl(var(--gold)_/_0.10)] px-4 py-3 text-sm last:border-b-0">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-foreground">{line.description}</div>
+                    <div className="text-xs text-muted-foreground">{rateTypeLabel(line.rateType)}</div>
+                  </div>
+                  <div className="text-right tabular-nums">{line.quantity.toLocaleString("nl-NL")} {line.unit}</div>
+                  <div className="text-right tabular-nums">€ {formatEuro(line.unitPrice)}</div>
+                  <div className="text-right font-semibold tabular-nums">€ {formatEuro(line.total)}</div>
+                </div>
+              )) : (
+                <div className="px-4 py-5 text-sm text-muted-foreground">
+                  Vul afstand, aantal of gewicht in om de variabele klanttarieven te berekenen.
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-5 grid gap-4 md:grid-cols-[1fr_180px]">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Extra regel / reden</label>
+              <Input
+                value={jaimyExtraDescription}
+                onChange={(e) => setJaimyExtraDescription(e.target.value)}
+                placeholder="Bijv. Schiphol-toeslag, wachtkosten, maatwerk"
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Bedrag</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">€</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={jaimyExtraAmount}
+                  onChange={(e) => setJaimyExtraAmount(e.target.value)}
+                  placeholder="0,00"
+                  className="h-11 rounded-xl pl-7 tabular-nums"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-center justify-between rounded-2xl border border-[hsl(var(--gold)_/_0.24)] bg-[hsl(var(--gold-soft)_/_0.26)] px-5 py-4">
+            <div>
+              <div className="text-sm font-semibold">Subtotaal excl. BTW</div>
+              <div className="text-xs text-muted-foreground">Klanttarief plus eventuele vrije regel</div>
+            </div>
+            <div className="text-2xl font-semibold tabular-nums text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+              € {formatEuro(clientRatesTotal)}
+            </div>
+          </div>
+        </section>
+      )}
       {/* ══ Chapter I · Tariefstructuur ══ */}
-      <section className="card--luxe p-6 relative">
+      {pricingMode !== "client_rates" && <section className="card--luxe p-6 relative">
         <span className="card-chapter">I</span>
         <div className="mb-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
@@ -235,6 +602,37 @@ export function FinancialTab({
 
         {pricingMode === "standard" && (
           <div>
+            {vtLoading && (
+              <div className="mb-4 flex items-center gap-2 rounded-xl border border-[hsl(var(--gold)_/_0.18)] bg-[hsl(var(--gold-soft)_/_0.22)] p-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Voertuigtypen laden...
+              </div>
+            )}
+
+            {!vtLoading && vehicleTypes.length === 0 && (
+              <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="flex gap-3">
+                  <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold mb-1">Geen voertuigtypen geconfigureerd</div>
+                    <p>Gebruik Handmatig of Klanttarief om nu toch een tarief vast te leggen. Voertuigtypen zijn alleen nodig voor de automatische tariefmotor.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {skipped && (
+              <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                <div className="flex gap-3">
+                  <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold mb-1">Tariefmotor staat uit</div>
+                    <p>{skipped.reason}. Gebruik Handmatig of Klanttarief om nu toch een tarief vast te leggen.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-x-5 gap-y-4">
               <div>
                 <label className="text-xs font-medium text-muted-foreground block mb-1">
@@ -337,9 +735,9 @@ export function FinancialTab({
                   Tarief {selectedVehicle?.name ?? "—"}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1 tabular-nums">
-                  {priceQuery.isFetching && <span>Berekenen...</span>}
-                  {!priceQuery.isFetching && !breakdown && <span>Vul voertuig en km in</span>}
-                  {!priceQuery.isFetching && breakdown && (
+                  {(basePriceQuery.isFetching || totalPriceQuery.isFetching) && <span>Berekenen...</span>}
+                  {!basePriceQuery.isFetching && !totalPriceQuery.isFetching && !breakdown && <span>Vul voertuig en km in</span>}
+                  {!basePriceQuery.isFetching && !totalPriceQuery.isFetching && breakdown && (
                     <>
                       <span className="text-foreground">{kmRounded} km</span>
                       {breakdown.regels.length > 0 && (
@@ -353,7 +751,7 @@ export function FinancialTab({
                 className="text-2xl font-semibold tabular-nums text-[hsl(var(--gold-deep))]"
                 style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.02em" }}
               >
-                € {engineTotal.toFixed(2).replace(".", ",")}
+                € {engineBaseTotal.toFixed(2).replace(".", ",")}
               </span>
             </div>
 
@@ -365,7 +763,7 @@ export function FinancialTab({
 
             <button
               type="button"
-              onClick={() => setPricingMode("override")}
+              onClick={() => choosePricingMode("override")}
               className="mt-4 px-3.5 py-2 text-xs text-muted-foreground hover:text-[hsl(var(--gold-deep))] inline-flex items-center gap-2 rounded-md transition-colors"
               style={{ border: "1px dashed hsl(var(--border))" }}
             >
@@ -417,15 +815,15 @@ export function FinancialTab({
             </div>
             <button
               type="button"
-              onClick={() => setPricingMode("standard")}
+              onClick={() => choosePricingMode(activeClientRates.length > 0 ? "client_rates" : "standard")}
               className="mt-4 px-3.5 py-2 text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-2 rounded-md transition-colors"
               style={{ border: "1px dashed hsl(var(--border))" }}
             >
-              ← Terug naar standaard km-berekening
+              Terug naar {activeClientRates.length > 0 ? "klanttarief" : "standaard km-berekening"}
             </button>
           </div>
         )}
-      </section>
+      </section>}
 
       {/* ══ Chapter II · Toeslagen en add-ons ══ */}
       {pricingMode === "standard" && (
@@ -441,13 +839,13 @@ export function FinancialTab({
             </p>
           </div>
 
-          {breakdown && breakdown.toeslagen.length > 0 && (
+          {totalBreakdown && totalBreakdown.toeslagen.length > 0 && (
             <div className="mb-5">
               <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground mb-3">
                 Automatisch toegepaste toeslagen
               </div>
               <div className="space-y-1.5">
-                {breakdown.toeslagen.map((t, i) => (
+                {totalBreakdown.toeslagen.map((t, i) => (
                   <div key={`${t.name}-${i}`} className="flex justify-between items-baseline text-xs">
                     <span className="text-muted-foreground">{t.name}</span>
                     <span className="tabular-nums font-medium" style={{ fontFamily: "var(--font-display)" }}>
@@ -529,7 +927,7 @@ export function FinancialTab({
       )}
 
       {/* ══ Chapter III · Totaaloverzicht ══ */}
-      <section className="card--luxe p-6 relative">
+      {pricingMode !== "client_rates" && <section className="card--luxe p-6 relative">
         <span className="card-chapter">III</span>
         <div className="mb-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
@@ -540,6 +938,26 @@ export function FinancialTab({
         </div>
 
         <div className="max-w-[560px] ml-auto tabular-nums space-y-3">
+          {pricingMode === "client_rates" && clientRateLines.length > 0 && (
+            <>
+              {clientRateLines.map((line) => (
+                <div key={line.id} className="flex justify-between items-baseline">
+                  <span className="text-xs text-muted-foreground">{line.description}</span>
+                  <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>
+                    € {formatEuro(line.total)}
+                  </span>
+                </div>
+              ))}
+              {jaimyExtraNum > 0 && (
+                <div className="flex justify-between items-baseline">
+                  <span className="text-xs text-muted-foreground">{jaimyExtraDescription || "Handmatige tariefregel"}</span>
+                  <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>
+                    € {formatEuro(jaimyExtraNum)}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
           {pricingMode === "standard" && breakdown && (
             <>
               <div className="flex justify-between items-baseline">
@@ -548,7 +966,7 @@ export function FinancialTab({
                   € {breakdown.basisbedrag.toFixed(2).replace(".", ",")}
                 </span>
               </div>
-              {breakdown.toeslagen.map((t, i) => (
+              {(totalBreakdown?.toeslagen ?? breakdown.toeslagen).map((t, i) => (
                 <div key={`${t.name}-${i}`} className="flex justify-between items-baseline">
                   <span className="text-xs text-muted-foreground">{t.name}</span>
                   <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>
@@ -556,6 +974,14 @@ export function FinancialTab({
                   </span>
                 </div>
               ))}
+              {manualAddOnBaseTotal > 0 && (
+                <div className="flex justify-between items-baseline">
+                  <span className="text-xs text-muted-foreground">Wachturen / extra stops</span>
+                  <span className="text-sm font-medium" style={{ fontFamily: "var(--font-display)" }}>
+                    â‚¬ {manualAddOnBaseTotal.toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+              )}
               {tollNum > 0 && (
                 <div className="flex justify-between items-baseline">
                   <span className="text-xs text-muted-foreground">Tolheffing / andere</span>
@@ -581,7 +1007,7 @@ export function FinancialTab({
             </div>
           </div>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

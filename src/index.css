@@ -1355,6 +1355,78 @@
   z-index: 4 !important;
 }
 
+.route-preview-marker {
+  position: relative;
+  display: grid;
+  height: 34px;
+  width: 34px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 999px 999px 999px 8px;
+  background: hsl(var(--gold));
+  color: #17130b;
+  box-shadow: 0 12px 24px -14px hsl(var(--gold-deep) / 0.9), 0 2px 8px hsl(0 0% 0% / 0.16);
+  transform: rotate(-45deg);
+}
+
+.route-preview-marker__code {
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  transform: rotate(45deg);
+}
+
+.route-preview-marker__number {
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  display: grid;
+  height: 17px;
+  min-width: 17px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #17130b;
+  color: hsl(var(--gold));
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  transform: rotate(45deg);
+}
+
+.route-preview-marker--warehouse {
+  background: #ffffff;
+  color: hsl(var(--gold-deep));
+  border-color: hsl(var(--gold));
+}
+
+.route-preview-marker--destination {
+  background: #17130b;
+  color: hsl(var(--gold));
+  border-color: hsl(var(--gold));
+}
+
+.route-preview-marker--destination .route-preview-marker__number {
+  background: hsl(var(--gold));
+  color: #17130b;
+}
+
+.route-preview-marker-tooltip {
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: hsl(var(--gold)) !important;
+  box-shadow: 0 8px 18px -14px hsl(var(--gold-deep) / 0.9) !important;
+  color: #17130b !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  padding: 4px 6px !important;
+}
+
+.route-preview-marker-tooltip::before {
+  display: none !important;
+}
+
 /* Inbox luxe AI highlights — 3 levels of confidence */
 .inbox-hl {
   font-weight: 500;

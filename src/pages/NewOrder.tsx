@@ -32,6 +32,7 @@ import { ZodError } from "zod";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useTenantOptional } from "@/contexts/TenantContext";
+import { useAuthOptional } from "@/contexts/AuthContext";
 import {
   useClient,
   useClients,
@@ -49,6 +50,14 @@ import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequest
 import { learnAddress, resolveClientAddress } from "@/lib/addressResolver";
 import { orderFormSchema } from "@/lib/validation/orderSchema";
 import { getOrderRouteRuleIssues, type OrderRouteRuleIssue } from "@/lib/validation/orderRouteRules";
+import {
+  ORDER_PRICING_ENGINE_VERSION,
+  ORDER_VALIDATION_ENGINE_VERSION,
+  validateOrderDraft,
+  type OrderDraft,
+  type ReadinessIssue,
+  type ReadinessSeverity,
+} from "@/lib/orderDraft";
 import { useAddressSuggestions } from "@/hooks/useAddressSuggestions";
 import {
   useAddressBookSearch,
@@ -65,6 +74,7 @@ import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
 type WizardStep = "intake" | "route" | "cargo" | "financial" | "review";
+type ServerDraftLifecycleStatus = "DRAFT" | "PENDING" | "NEEDS_REVIEW" | "PLANNED" | "CANCELLED" | "ON_HOLD";
 
 interface FreightLine {
   id: string;
@@ -367,6 +377,53 @@ function normalizeLookup(value: string | null | undefined): string {
     .trim();
 }
 
+function addressLooksIncompleteWarning(address: AddressValue, composed: string | null | undefined): string | null {
+  if (!composed?.trim()) return null;
+  if (!address.street || (!address.zipcode && !address.city)) {
+    return "Adres is onvolledig: controleer straat, postcode en plaats.";
+  }
+  if (address.zipcode && address.city && !/\d/.test(address.zipcode)) {
+    return "Postcode lijkt niet te kloppen bij de plaats.";
+  }
+  return null;
+}
+
+function cargoRowIssue(row: CargoRow, index: number): string | null {
+  const hasAnyValue = Boolean(row.aantal || row.gewicht || row.omschrijving || row.adr || row.lengte || row.breedte || row.hoogte);
+  if (!hasAnyValue) return null;
+  const label = `Ladingregel ${index + 1}`;
+  if (!row.eenheid) return `${label}: eenheid is verplicht.`;
+  if ((parseInt(row.aantal) || 0) <= 0) return `${label}: aantal moet groter zijn dan 0.`;
+  if ((parseFloat(row.gewicht) || 0) <= 0) return `${label}: gewicht moet groter zijn dan 0.`;
+  return null;
+}
+
+function vehicleCapacityIssue(
+  vehicleType: string,
+  cargo: FinancialTabCargo,
+): string | null {
+  if (!vehicleType) return null;
+  const normalized = vehicleType.toLowerCase();
+  const capacity = normalized.includes("bestel")
+    ? { label: "Bestelbus", maxWeightKg: 1200, maxPallets: 6, maxLengthCm: 420, maxWidthCm: 180, maxHeightCm: 190 }
+    : normalized.includes("trailer")
+      ? { label: "Trailer", maxWeightKg: 24000, maxPallets: 33, maxLengthCm: 1360, maxWidthCm: 250, maxHeightCm: 280 }
+      : normalized.includes("vracht")
+        ? { label: "Vrachtwagen", maxWeightKg: 12000, maxPallets: 18, maxLengthCm: 750, maxWidthCm: 245, maxHeightCm: 260 }
+        : null;
+  if (!capacity) return null;
+  if (cargo.totalWeightKg > capacity.maxWeightKg) {
+    return `Voertuig ongeschikt: ${capacity.label} kan maximaal ${capacity.maxWeightKg.toLocaleString("nl-NL")} kg laden.`;
+  }
+  if ((cargo.unit || "").toLowerCase().includes("pallet") && (cargo.totalQuantity ?? 0) > capacity.maxPallets) {
+    return `Voertuig ongeschikt: ${capacity.label} heeft maximaal ${capacity.maxPallets} palletplaatsen.`;
+  }
+  if (cargo.maxLengthCm > capacity.maxLengthCm || cargo.maxWidthCm > capacity.maxWidthCm || cargo.maxHeightCm > capacity.maxHeightCm) {
+    return `Voertuig ongeschikt: afmetingen passen niet globaal in ${capacity.label}.`;
+  }
+  return null;
+}
+
 function routeQuestionForIssue(issue: OrderRouteRuleIssue | undefined): 1 | 2 | 3 | 4 {
   if (!issue) return 4;
   if (issue.key === "route_duplicate") return issue.label === "Levermoment" ? 2 : 4;
@@ -497,6 +554,17 @@ interface RouteLegInsight {
   hasGps: boolean;
 }
 
+interface GooglePlaceDetailsResult {
+  formatted_address?: string;
+  street?: string;
+  house_number?: string;
+  zipcode?: string;
+  city?: string;
+  country?: string;
+  lat?: number | null;
+  lng?: number | null;
+}
+
 function toRad(value: number): number {
   return (value * Math.PI) / 180;
 }
@@ -569,6 +637,24 @@ function buildRouteLegInsights(
       hasGps: distance != null,
     };
   });
+}
+
+function addressValueFromGoogleDetails(
+  details: GooglePlaceDetailsResult,
+  fallbackAddress: string,
+): AddressValue {
+  return {
+    ...bestEffortAddressValue(details.formatted_address || fallbackAddress, details.country || "NL"),
+    street: details.street || details.formatted_address || fallbackAddress,
+    house_number: details.house_number || "",
+    house_number_suffix: "",
+    zipcode: details.zipcode || "",
+    city: details.city || "",
+    country: details.country || "NL",
+    lat: typeof details.lat === "number" ? details.lat : null,
+    lng: typeof details.lng === "number" ? details.lng : null,
+    coords_manual: false,
+  };
 }
 
 function composeSearchLabel(address: AddressValue): string {
@@ -694,6 +780,7 @@ function toAddressSuggestionOption(option: PlannerLocationOption): AddressSugges
 const NewOrder = () => {
   const navigate = useNavigate();
   const { tenant } = useTenantOptional();
+  const { user } = useAuthOptional();
   const [searchParams] = useSearchParams();
   const initialClientId = searchParams.get("client_id");
   const fromOrderId = searchParams.get("from_order_id");
@@ -730,6 +817,7 @@ const NewOrder = () => {
   const [clientId, setClientId] = useState<string | null>(null);
   const [clientQuestionConfirmed, setClientQuestionConfirmed] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
+  const clientListToggleUntilRef = useRef(0);
   const { data: clientSuggestions = [] } = useClients(clientName.trim() || undefined);
   const clientListOpen = clientOpen && clientSuggestions.length > 0;
   const smartClientLookup = useMemo(() => extractClientHint(smartInput), [smartInput]);
@@ -753,6 +841,10 @@ const NewOrder = () => {
   const [referentie, setReferentie] = useState("");
   const [draftRestored, setDraftRestored] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
+  const [serverDraftId, setServerDraftId] = useState<string | null>(null);
+  const [serverDraftReady, setServerDraftReady] = useState(false);
+  const serverDraftCreateStartedRef = useRef(false);
+  const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pickupLookup, setPickupLookup] = useState("");
   const [deliveryLookup, setDeliveryLookup] = useState("");
 
@@ -824,6 +916,10 @@ const NewOrder = () => {
     if (!tenant?.id || initialClientId || fromOrderId) return null;
     return `new-order-draft:${tenant.id}`;
   }, [tenant?.id, initialClientId, fromOrderId]);
+  const serverDraftStorageKey = useMemo(() => {
+    if (!tenant?.id || initialClientId || fromOrderId) return null;
+    return `new-order-draft-id:${tenant.id}`;
+  }, [tenant?.id, initialClientId, fromOrderId]);
 
   // Prefill vanuit ?client_id=, geïnitieerd vanuit de klantenlijst of
   // klant-detail ("Nieuwe order voor deze klant"). We fetchen de klant en
@@ -834,6 +930,7 @@ const NewOrder = () => {
   const prefillApplied = useRef(false);
   const clientDefaultsAppliedRef = useRef<string | null>(null);
   const learnedAliasKeysRef = useRef(new Set<string>());
+  const routeGpsResolveAttemptsRef = useRef(new Set<string>());
   const { data: prefillClient } = useClient(initialClientId);
   const { data: prefillOrders } = useClientOrders(initialClientId);
 
@@ -1403,32 +1500,102 @@ const NewOrder = () => {
   }, [cargoTotals.totAantal, cargoTotals.totGewicht, financialCargo.maxLengthCm, klepNodig, prioriteit]);
 
   useEffect(() => {
-    if (!transportTypeManual && suggestedTransportType) {
-      setTransportType(prev => prev === suggestedTransportType ? prev : suggestedTransportType);
-    }
-  }, [suggestedTransportType, transportTypeManual]);
+    if (afdelingManual || !transportType) return;
+    const nextAfdeling = transportType === "Luchtvracht" ? "EXPORT" : "OPS";
+    setAfdeling(prev => prev === nextAfdeling ? prev : nextAfdeling);
+  }, [afdelingManual, transportType]);
 
-  useEffect(() => {
-    if (!voertuigtypeManual && suggestedVehicleType) {
-      setVoertuigtype(prev => prev === suggestedVehicleType ? prev : suggestedVehicleType);
-    }
-  }, [suggestedVehicleType, voertuigtypeManual]);
+  const orderDraft = useMemo<OrderDraft>(() => {
+    const sortedLossen = freightLines.filter((line) => line.activiteit === "Lossen");
+    const stops = freightLines
+      .map((line) => {
+        const isPickup = line.activiteit === "Laden";
+        const deliveryIndex = isPickup ? -1 : sortedLossen.findIndex((delivery) => delivery.id === line.id);
+        const isFinalDelivery = !isPickup && deliveryIndex === sortedLossen.length - 1;
+        const address = addressValueFromFreightLine(line);
+        return {
+          id: line.id,
+          type: isPickup ? "pickup" as const : isFinalDelivery ? "delivery" as const : "stop" as const,
+          label: isPickup ? "Ophalen" : isFinalDelivery ? "Eindbestemming" : `Stop ${deliveryIndex + 1}`,
+          sequence: isPickup ? 0 : deliveryIndex + 1,
+          address: {
+            display: line.locatie || "",
+            street: address.street,
+            zipcode: address.zipcode,
+            city: address.city,
+            lat: line.lat ?? address.lat,
+            lng: line.lng ?? address.lng,
+            source: line.coords_manual || address.coords_manual ? "manual" as const : (line.lat != null && line.lng != null) || address.lat != null ? "google" as const : null,
+          },
+          date: line.datum || null,
+          timeFrom: line.tijd || null,
+          timeTo: line.tijdTot || null,
+        };
+      })
+      .sort((a, b) => a.sequence - b.sequence);
 
+    const cargoLines = cargoRows
+      .filter((row) => row.aantal || row.gewicht || row.eenheid || row.omschrijving || row.lengte || row.breedte || row.hoogte)
+      .map((row) => ({
+        id: row.id,
+        quantity: parseInt(row.aantal) || 0,
+        unit: row.eenheid || "",
+        weightKg: parseFloat(row.gewicht) || 0,
+        lengthCm: parseFloat(row.lengte) || 0,
+        widthCm: parseFloat(row.breedte) || 0,
+        heightCm: parseFloat(row.hoogte) || 0,
+      }));
+
+    return {
+      clientId,
+      clientName,
+      contactName: contactpersoon || null,
+      stops,
+      cargoLines,
+      transport: {
+        type: transportType || null,
+        department: afdeling || null,
+        vehicleType: voertuigtype || null,
+        secure: shipmentSecure,
+        pmtMethod: pmtMethode || null,
+        manualOverrides: {
+          transportType: transportTypeManual,
+          department: afdelingManual,
+          vehicleType: voertuigtypeManual,
+        },
+      },
+      pricing: { totalCents: pricingPayload.cents },
+    };
+  }, [
+    afdeling,
+    afdelingManual,
+    cargoRows,
+    clientId,
+    clientName,
+    contactpersoon,
+    freightLines,
+    pmtMethode,
+    pricingPayload.cents,
+    shipmentSecure,
+    transportType,
+    transportTypeManual,
+    voertuigtype,
+    voertuigtypeManual,
+  ]);
+  const orderReadiness = useMemo(() => validateOrderDraft(orderDraft), [orderDraft]);
   const routeRuleIssues = useMemo(() => getOrderRouteRuleIssues(freightLines), [freightLines]);
-
-  const plannerWarnings = useMemo(() => {
-    const warnings: string[] = [];
-    const pickupLine = freightLines.find(f => f.activiteit === "Laden");
-    const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
-    routeRuleIssues.forEach((issue) => warnings.push(issue.message));
-    if (voertuigtype === "Bestelbus" && cargoTotals.totGewicht > 1200) {
-      warnings.push("Gewicht is hoog voor een bestelbus. Overweeg vrachtwagen.");
-    }
-    if (transportType === "Express" && !pickupLine?.tijd && !deliveryLine?.tijd) {
-      warnings.push("Express zonder expliciet tijdslot kan planningruis geven.");
-    }
-    return warnings;
-  }, [cargoTotals.totGewicht, freightLines, routeRuleIssues, transportType, voertuigtype]);
+  const cargoRuleIssues = useMemo(
+    () => cargoRows.map(cargoRowIssue).filter(Boolean) as string[],
+    [cargoRows],
+  );
+  const vehicleRuleIssue = useMemo(
+    () => vehicleCapacityIssue(voertuigtype, financialCargo),
+    [financialCargo, voertuigtype],
+  );
+  const plannerWarnings = useMemo(
+    () => orderReadiness.warnings.map((warning) => warning.label),
+    [orderReadiness.warnings],
+  );
 
   const plannerSummary = useMemo(() => {
     const pickupLine = freightLines.find(f => f.activiteit === "Laden");
@@ -1453,22 +1620,10 @@ const NewOrder = () => {
     [smartClientMatches, smartInput],
   );
 
-  const wizardMissing = useMemo(() => {
-    const pickupLine = freightLines.find(f => f.activiteit === "Laden");
-    const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
-    return [
-      !(clientId || (clientQuestionConfirmed && clientName.trim().length >= 2)) && "klant",
-      !pickupLine?.locatie && "ophaaladres",
-      !deliveryLine?.locatie && "afleveradres",
-      pickupLine?.locatie && deliveryLine?.locatie && normalizeLookup(pickupLine.locatie) === normalizeLookup(deliveryLine.locatie) && "adrescontrole",
-      !cargoTotals.totAantal && "aantal",
-      !cargoTotals.totGewicht && "gewicht",
-      (!pickupLine?.datum || !deliveryLine?.datum) && "tijdvenster",
-      routeRuleIssues.length > 0 && "tijdvolgorde",
-      showPmt && !shipmentSecure && !pmtMethode && "screening",
-      !pricingPayload.cents && "tarief",
-    ].filter(Boolean) as string[];
-  }, [cargoTotals.totAantal, cargoTotals.totGewicht, clientId, clientName, clientQuestionConfirmed, freightLines, pmtMethode, pricingPayload.cents, routeRuleIssues.length, shipmentSecure, showPmt]);
+  const wizardMissing = useMemo(
+    () => Array.from(new Set(orderReadiness.blockers.map((blocker) => blocker.key))),
+    [orderReadiness.blockers],
+  );
 
   const vehicleMatchScore = useMemo(() => {
     if (!suggestedVehicleType && !voertuigtype) return 0;
@@ -1558,6 +1713,47 @@ const NewOrder = () => {
       ? `${routeMapPlottedCount}/${routeMapStops.length} GPS-punten`
       : "Kaart op GPS-punten";
   const routeLegInsights = buildRouteLegInsights(routeMapStops, voertuigtype || suggestedVehicleType || "");
+  useEffect(() => {
+    if (!supabase.functions?.invoke) return;
+    const missingGpsStops = routeMapStops.filter((stop) => {
+      const line = stop.line;
+      return line?.id && line.locatie && (line.lat == null || line.lng == null);
+    });
+    if (missingGpsStops.length === 0) return;
+
+    missingGpsStops.forEach((stop) => {
+      const line = stop.line;
+      if (!line) return;
+      const query = line.locatie.trim();
+      const cacheKey = `${line.id}:${normalizeLookup(query)}`;
+      if (query.length < 4 || routeGpsResolveAttemptsRef.current.has(cacheKey)) return;
+      routeGpsResolveAttemptsRef.current.add(cacheKey);
+
+      void (async () => {
+        try {
+          const { data: searchData, error: searchError } = await supabase.functions.invoke("google-places", {
+            body: { input: query },
+          });
+          if (searchError) throw new Error(searchError.message);
+          const predictions = (searchData as { predictions?: Array<{ place_id?: string }> })?.predictions ?? [];
+          const placeId = predictions[0]?.place_id;
+          if (!placeId) return;
+
+          const { data: detailsData, error: detailsError } = await supabase.functions.invoke("google-places-business", {
+            body: { mode: "details", place_id: placeId },
+          });
+          if (detailsError) throw new Error(detailsError.message);
+          const details = (detailsData as { result?: GooglePlaceDetailsResult | null })?.result;
+          if (!details || details.lat == null || details.lng == null) return;
+
+          updateFreightLineAddress(line.id, addressValueFromGoogleDetails(details, query));
+        } catch (error) {
+          routeGpsResolveAttemptsRef.current.delete(cacheKey);
+          console.warn("Kon route-adres niet automatisch naar GPS omzetten", error);
+        }
+      })();
+    });
+  }, [routeMapStops, updateFreightLineAddress]);
   const requiredTextClass = (missing: boolean) => missing ? "text-red-600" : "text-foreground";
   const previewTextClass = (missing: boolean) => missing ? "text-red-600" : "text-foreground";
   const requiredFieldClass = (missing: boolean) => missing ? "border-red-200 bg-red-50/40 placeholder:text-red-500" : "";
@@ -1568,8 +1764,12 @@ const NewOrder = () => {
     adrescontrole: "Ander afleveradres kiezen",
     aantal: "Aantal invullen",
     gewicht: "Gewicht invullen",
+    eenheid: "Eenheid kiezen",
+    pickupdatum: "Ophaaldatum kiezen",
+    ladingregel: "Ladingregel herstellen",
     tijdvenster: "Tijdvenster plannen",
     tijdvolgorde: "Tijdvolgorde corrigeren",
+    voertuig: "Voertuig aanpassen",
     screening: "EDD/X-RAY kiezen",
     tarief: "Tarief controleren",
   };
@@ -2241,7 +2441,215 @@ const NewOrder = () => {
     delivery_time_window: "time",
     route_sequence: "time",
     route_duplicate: "delivery",
+    vehicle_capacity: "transport",
+    pmt_method: "security",
   };
+
+  const readinessItems = orderReadiness.issues as Array<ReadinessIssue & { target: WizardFocusTarget; severity: ReadinessSeverity }>;
+  const readinessBlockers = orderReadiness.blockers;
+  const readinessWarnings = orderReadiness.warnings;
+  const readinessInfos = orderReadiness.infos;
+  const readinessStatus = orderReadiness.status;
+  const readinessTone = readinessBlockers.length > 0 ? "red" : readinessWarnings.length > 0 ? "amber" : "green";
+  const readinessTitle = readinessBlockers.length > 0
+    ? `${readinessBlockers.length} punt${readinessBlockers.length > 1 ? "en" : ""} nodig voor ready`
+    : readinessWarnings.length > 0
+      ? "Ready met aandachtspunten"
+      : "Ready voor planning";
+
+  const validationSnapshot = useMemo(() => ({
+    engineVersion: ORDER_VALIDATION_ENGINE_VERSION,
+    status: orderReadiness.status,
+    persistedStatus: orderReadiness.persistedStatus,
+    score: orderReadiness.score,
+    blockers: orderReadiness.blockers.map(({ id, key, label, detail, severity, target }) => ({ id, key, label, detail, severity, target })),
+    warnings: orderReadiness.warnings.map(({ id, key, label, detail, severity, target }) => ({ id, key, label, detail, severity, target })),
+    infos: orderReadiness.infos.map(({ id, key, label, detail, severity, target }) => ({ id, key, label, detail, severity, target })),
+    validatedAt: new Date().toISOString(),
+  }), [orderReadiness]);
+
+  const manualOverridesSnapshot = useMemo(() => ({
+    transport_type: transportTypeManual && transportType
+      ? { value: transportType, reason: "Handmatig ingesteld door planner" }
+      : null,
+    vehicle_type: voertuigtypeManual && voertuigtype
+      ? { value: voertuigtype, reason: "Handmatig ingesteld door planner" }
+      : null,
+    afdeling: afdelingManual && afdeling
+      ? { value: afdeling, reason: "Handmatig ingesteld door planner" }
+      : null,
+  }), [afdeling, afdelingManual, transportType, transportTypeManual, voertuigtype, voertuigtypeManual]);
+
+  const serverDraftPayload = useMemo(() => ({
+    lifecycle: {
+      model: "draft-shipment-trip",
+      draftStatus: readinessStatus,
+    },
+    validationEngineVersion: ORDER_VALIDATION_ENGINE_VERSION,
+    pricingEngineVersion: ORDER_PRICING_ENGINE_VERSION,
+    orderDraft,
+    form: draftPayload,
+    wizard: {
+      step: wizardStep,
+      intakeActiveQuestion,
+      routeActiveQuestion,
+      cargoActiveQuestion,
+      reviewActiveQuestion,
+    },
+    pricingPayload,
+    savedAt: new Date().toISOString(),
+  }), [
+    cargoActiveQuestion,
+    draftPayload,
+    intakeActiveQuestion,
+    orderDraft,
+    pricingPayload,
+    readinessStatus,
+    reviewActiveQuestion,
+    routeActiveQuestion,
+    wizardStep,
+  ]);
+
+  const upsertServerDraft = useCallback(async (nextStatus: ServerDraftLifecycleStatus = "DRAFT", committedShipmentId?: string | null) => {
+    if (!tenant?.id || initialClientId || fromOrderId) return null;
+    let draftId = serverDraftId;
+    const actorId = user?.id ?? null;
+    const payload = {
+      tenant_id: tenant.id,
+      status: nextStatus,
+      payload: serverDraftPayload,
+      validation_result: validationSnapshot,
+      manual_overrides: manualOverridesSnapshot,
+      validation_engine_version: ORDER_VALIDATION_ENGINE_VERSION,
+      pricing_engine_version: ORDER_PRICING_ENGINE_VERSION,
+      updated_by: actorId,
+      ...(committedShipmentId ? { committed_shipment_id: committedShipmentId, committed_at: new Date().toISOString() } : {}),
+    };
+
+    if (!draftId) {
+      const { data, error } = await (supabase as any)
+        .from("order_drafts")
+        .insert({ ...payload, created_by: actorId })
+        .select("id")
+        .single();
+      if (error) throw error;
+      draftId = data?.id ?? null;
+      if (draftId) {
+        setServerDraftId(draftId);
+        if (serverDraftStorageKey) window.localStorage.setItem(serverDraftStorageKey, draftId);
+      }
+      return draftId;
+    }
+
+    const { data: updatedDraft, error } = await (supabase as any)
+      .from("order_drafts")
+      .update(payload)
+      .eq("id", draftId)
+      .eq("tenant_id", tenant.id)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!updatedDraft?.id) {
+      if (serverDraftStorageKey) window.localStorage.removeItem(serverDraftStorageKey);
+      setServerDraftId(null);
+      const { data, error: insertError } = await (supabase as any)
+        .from("order_drafts")
+        .insert({ ...payload, created_by: actorId })
+        .select("id")
+        .single();
+      if (insertError) throw insertError;
+      draftId = data?.id ?? null;
+      if (draftId) {
+        setServerDraftId(draftId);
+        if (serverDraftStorageKey) window.localStorage.setItem(serverDraftStorageKey, draftId);
+      }
+    }
+    return draftId;
+  }, [
+    fromOrderId,
+    initialClientId,
+    manualOverridesSnapshot,
+    serverDraftId,
+    serverDraftPayload,
+    serverDraftStorageKey,
+    tenant?.id,
+    user?.id,
+    validationSnapshot,
+  ]);
+
+  useEffect(() => {
+    if (!tenant?.id || initialClientId || fromOrderId || !serverDraftStorageKey || serverDraftReady || serverDraftCreateStartedRef.current) return;
+    serverDraftCreateStartedRef.current = true;
+    const existingDraftId = window.localStorage.getItem(serverDraftStorageKey);
+    if (existingDraftId) {
+      setServerDraftId(existingDraftId);
+      setServerDraftReady(true);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from("order_drafts")
+          .insert({
+            tenant_id: tenant.id,
+            status: "DRAFT",
+            payload: serverDraftPayload,
+            validation_result: validationSnapshot,
+            manual_overrides: manualOverridesSnapshot,
+            validation_engine_version: ORDER_VALIDATION_ENGINE_VERSION,
+            pricing_engine_version: ORDER_PRICING_ENGINE_VERSION,
+            created_by: user?.id ?? null,
+            updated_by: user?.id ?? null,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        const id = data?.id ?? null;
+        if (id) {
+          setServerDraftId(id);
+          window.localStorage.setItem(serverDraftStorageKey, id);
+        }
+        setServerDraftReady(true);
+      } catch (error) {
+        console.warn("[NewOrder] server draft kon niet worden aangemaakt:", error);
+        serverDraftCreateStartedRef.current = false;
+        setServerDraftReady(true);
+      }
+    })();
+  }, [
+    fromOrderId,
+    initialClientId,
+    manualOverridesSnapshot,
+    serverDraftReady,
+    serverDraftStorageKey,
+    serverDraftPayload,
+    tenant?.id,
+    user?.id,
+    validationSnapshot,
+  ]);
+
+  useEffect(() => {
+    if (!serverDraftReady || !serverDraftId || !draftRestored || !prefillReady || initialClientId || fromOrderId) return;
+    if (draftAutosaveTimerRef.current) window.clearTimeout(draftAutosaveTimerRef.current);
+    draftAutosaveTimerRef.current = window.setTimeout(() => {
+      void upsertServerDraft("DRAFT")
+        .then(() => setLastDraftSavedAt(new Date().toISOString()))
+        .catch((error) => console.warn("[NewOrder] server draft autosave faalde:", error));
+    }, 900);
+    return () => {
+      if (draftAutosaveTimerRef.current) window.clearTimeout(draftAutosaveTimerRef.current);
+    };
+  }, [
+    draftRestored,
+    formSignature,
+    fromOrderId,
+    initialClientId,
+    prefillReady,
+    serverDraftId,
+    serverDraftReady,
+    upsertServerDraft,
+  ]);
 
   // 8.12 - Save ALL form fields to the database, not just a subset.
   // Fields without a dedicated DB column are stored in the `attachments` JSON
@@ -2249,6 +2657,30 @@ const NewOrder = () => {
   const handleSave = async (andClose: boolean) => {
     const pickupLine = freightLines.find(f => f.activiteit === "Laden");
     const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
+
+    if (!andClose) {
+      if (draftStorageKey) {
+        window.localStorage.setItem(draftStorageKey, formSignature);
+      }
+      await upsertServerDraft("DRAFT").catch((error) => {
+        console.warn("[NewOrder] server draft opslaan faalde:", error);
+        toast.warning("Lokaal concept opgeslagen, serverconcept nog niet bijgewerkt");
+      });
+      setDirty(false);
+      toast.success("Concept opgeslagen", {
+        description: serverDraftId ? `Draft ${serverDraftId.slice(0, 8)} blijft veilig bewaard.` : "De order blijft als draft staan totdat je gereedmeldt.",
+      });
+      return;
+    }
+
+    if (orderReadiness.blockers.length > 0) {
+      const firstBlocker = orderReadiness.blockers[0];
+      focusWizardTarget(firstBlocker.target as WizardFocusTarget);
+      toast.error(`${orderReadiness.blockers.length} punt${orderReadiness.blockers.length > 1 ? "en" : ""} nodig om gereed te melden`, {
+        description: orderReadiness.blockers.map((blocker) => blocker.label).join(" | "),
+      });
+      return;
+    }
 
     // Centrale validatie via orderFormSchema.parse. De schema dekt nu ook de
     // gestructureerde adres-checks (street/zipcode/city plus de "is geen losse
@@ -2295,6 +2727,30 @@ const NewOrder = () => {
       throw err;
     }
 
+    const ruleErrors: Record<string, string> = {};
+    if (!pickupLine?.datum) {
+      ruleErrors.pickup_time_window = "Pickup datum is verplicht.";
+    }
+    if (cargoRuleIssues.length > 0) {
+      ruleErrors.quantity = cargoRuleIssues[0];
+    }
+    if (vehicleRuleIssue) {
+      ruleErrors.vehicle_capacity = vehicleRuleIssue;
+    }
+    if (showPmt && !shipmentSecure && !pmtMethode) {
+      ruleErrors.pmt_method = "Kies EDD of X-RAY als luchtvracht niet Secure is.";
+    }
+    if (Object.keys(ruleErrors).length > 0) {
+      setErrors(ruleErrors);
+      const firstErrorKey = Object.keys(ruleErrors)[0];
+      openWizardFocusTarget(validationTargetByErrorKey[firstErrorKey] ?? "client");
+      const count = Object.keys(ruleErrors).length;
+      toast.error(`Formulier bevat ${count} validatiefout${count > 1 ? "en" : ""}`, {
+        description: Object.values(ruleErrors).join(" | "),
+      });
+      return;
+    }
+
     if (routeRuleIssues.length > 0) {
       const routeErrors = routeRuleIssues.reduce<Record<string, string>>((acc, issue) => {
         const key = issue.key === "route_duplicate" ? "delivery_address" : issue.key;
@@ -2312,17 +2768,27 @@ const NewOrder = () => {
     }
 
     setErrors({});
-    if (pricingPayload.cents == null) {
-      openWizardFocusTarget("pricing");
-      toast.error("Tarief ontbreekt", {
-        description: "Controleer het tarief voordat je de order aanmaakt.",
-      });
-      return;
-    }
-
     setSaving(true);
     try {
       if (!tenant?.id) throw new Error("Geen actieve tenant gevonden");
+      if (serverDraftId) {
+        const { data: draftRow, error: draftFetchError } = await (supabase as any)
+          .from("order_drafts")
+          .select("committed_shipment_id")
+          .eq("id", serverDraftId)
+          .eq("tenant_id", tenant.id)
+          .maybeSingle();
+        if (draftFetchError) throw draftFetchError;
+        if (draftRow?.committed_shipment_id) {
+          toast.info("Deze draft was al gereedgemeld", {
+            description: "Ik voorkom een dubbele order en open de orderlijst.",
+          });
+          setDirty(false);
+          skipDirtyGuardRef.current = true;
+          navigate("/orders");
+          return;
+        }
+      }
 
       const lossenLocaties = freightLines
         .filter(f => f.activiteit === "Lossen" && f.locatie?.trim())
@@ -2374,6 +2840,7 @@ const NewOrder = () => {
         delivery_address: deliveryLine?.locatie || null,
         final_delivery_address: finalDeliveryAddress,
         source: "INTERN",
+        status: readinessStatus,
         client_name: clientName.trim(),
         client_id: clientId,
         transport_type: transportType || null,
@@ -2426,9 +2893,24 @@ const NewOrder = () => {
         delivery_lat: deliveryAddr.lat,
         delivery_lng: deliveryAddr.lng,
         delivery_coords_manual: deliveryAddr.coords_manual,
+        manual_overrides: {
+          transport_type: transportTypeManual && transportType
+            ? { value: transportType, reason: "Handmatig ingesteld door planner" }
+            : null,
+          vehicle_type: voertuigtypeManual && voertuigtype
+            ? { value: voertuigtype, reason: "Handmatig ingesteld door planner" }
+            : null,
+          afdeling: afdelingManual && afdeling
+            ? { value: afdeling, reason: "Handmatig ingesteld door planner" }
+            : null,
+        },
       };
 
       const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);
+      await upsertServerDraft("PENDING", shipment.id).catch((error) => {
+        console.warn("[NewOrder] server draft commit snapshot faalde:", error);
+        toast.warning("Order is gereedgemeld, maar draft-audit kon niet volledig worden bijgewerkt");
+      });
       const addressBookWrites: Array<Promise<unknown>> = [];
       const pickupAddressBookLabelValue =
         pickupAddressBookLabel?.key === buildAddressBookKey(pickupAddr)
@@ -2590,18 +3072,20 @@ const NewOrder = () => {
 
       const baseMsg =
         legs.length > 1
-          ? `Shipment aangemaakt met ${legs.length} legs (${legs.map((l) => l.leg_role).join(" + ")})`
-          : "Order aangemaakt";
+          ? `Order gereedgemeld met ${legs.length} legs (${legs.map((l) => l.leg_role).join(" + ")})`
+          : "Order gereedgemeld";
       toast.success(
         exportRappelCreated ? `${baseMsg} — Rappel voor eindbestemming is aangemaakt` : baseMsg,
       );
-      // Na opslaan altijd wegnavigeren, anders maakt een tweede klik een duplicaat.
-      // Opslaan & sluiten gaat naar de lijst, Opslaan opent de detailpagina zodat
-      // verdere bewerkingen via OrderDetail (update-pad) lopen.
+      // Na gereedmelden altijd wegnavigeren; dezelfde draft_id blijft idempotent
+      // en voorkomt dat refresh of dubbelklikken een dubbele order maakt.
       skipDirtyGuardRef.current = true;
       setDirty(false);
       if (draftStorageKey) {
         window.localStorage.removeItem(draftStorageKey);
+      }
+      if (serverDraftStorageKey) {
+        window.localStorage.removeItem(serverDraftStorageKey);
       }
       if (andClose) {
         navigate("/orders");
@@ -2793,9 +3277,6 @@ const NewOrder = () => {
     inferAfdelingAsync(pickup, delivery, tenant?.id).then((inferred) => {
       if (cancelled) return;
       setInferredAfdeling(inferred ?? null);
-      if (!afdelingManual) {
-        setAfdeling(inferred ?? "");
-      }
     });
     return () => { cancelled = true; };
   }, [freightLines, afdelingManual, tenant?.id]);
@@ -3003,7 +3484,7 @@ const NewOrder = () => {
             disabled={saving}
             className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_36px_-24px_hsl(var(--gold-deep)_/_0.85)] transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b] disabled:opacity-50"
           >
-            Order aanmaken & plannen
+            Order gereedmelden
             <ArrowRight className="h-4 w-4" />
           </button>
         ) : showContinue ? (
@@ -3028,6 +3509,7 @@ const NewOrder = () => {
       pickupDate={financialPickupDate}
       pickupTime={financialPickupTime}
       transportType={transportType}
+      initialPricing={pricingPayload}
       onPricingChange={setPricingPayload}
     />
   );
@@ -3133,7 +3615,7 @@ const NewOrder = () => {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold)_/_0.88)]">Ritflow</div>
-            <div className="mt-0.5 text-sm font-medium text-white">{wizardMissing.length ? `${wizardMissing.length} open punten` : "Klaar om aan te maken"}</div>
+            <div className="mt-0.5 text-sm font-medium text-white">{readinessTitle}</div>
           </div>
           <span className="rounded-full border border-[hsl(var(--gold)_/_0.24)] bg-[hsl(var(--gold)_/_0.12)] px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--gold)_/_0.92)]">
             {wizardProgress}%
@@ -3205,15 +3687,19 @@ const NewOrder = () => {
           type="button"
           onClick={() => {
             const firstMissing = wizardMissing[0];
-            const targetByItem: Record<string, "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing"> = {
+            const targetByItem: Record<string, WizardFocusTarget> = {
               klant: "client",
               ophaaladres: "pickup",
               afleveradres: "delivery",
               adrescontrole: "delivery",
               aantal: "quantity",
               gewicht: "weight",
+              eenheid: "quantity",
+              pickupdatum: "time",
+              ladingregel: "quantity",
               tijdvenster: "time",
               tijdvolgorde: "time",
+              voertuig: "transport",
               screening: "security",
               tarief: "pricing",
             };
@@ -3226,35 +3712,32 @@ const NewOrder = () => {
         </button>
         <div className={cn(
           "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
-          wizardMissing.length ? "bg-red-50 text-red-700" : "bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))]",
+          readinessTone === "red"
+            ? "bg-red-50 text-red-700"
+            : readinessTone === "amber"
+              ? "bg-amber-50 text-amber-800"
+              : "bg-emerald-50 text-emerald-700",
         )}>
-          {wizardMissing.length ? `${wizardMissing.length} open` : "Compleet"}
+          {readinessBlockers.length ? `${readinessBlockers.length} nodig` : "Ready"}
         </div>
       </div>
-      {wizardMissing.length > 0 && (
+      {readinessItems.length > 0 && (
         <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-          {wizardMissing.slice(0, 4).map((item) => (
+          {readinessItems.slice(0, 4).map((item) => (
             <button
-              key={item}
+              key={item.id}
               type="button"
-              onClick={() => {
-                const targetByItem: Record<string, "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing"> = {
-                  klant: "client",
-                  ophaaladres: "pickup",
-                  afleveradres: "delivery",
-                  adrescontrole: "delivery",
-                  aantal: "quantity",
-                  gewicht: "weight",
-                  tijdvenster: "time",
-                  tijdvolgorde: "time",
-                  screening: "security",
-                  tarief: "pricing",
-                };
-                focusWizardTarget(targetByItem[item] ?? "client");
-              }}
-              className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700"
+              onClick={() => focusWizardTarget(item.target)}
+              className={cn(
+                "shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium",
+                item.severity === "BLOCKER"
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : item.severity === "WARNING"
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-slate-200 bg-slate-50 text-slate-600",
+              )}
             >
-              {wizardMissingLabel[item] ?? item}
+              {item.label}
             </button>
           ))}
         </div>
@@ -3272,8 +3755,11 @@ const NewOrder = () => {
           <div className={cn("mt-2 text-lg font-semibold", missingClient ? "text-red-200" : "text-white")}>{clientName || "Nieuwe opdracht"}</div>
           <div className="mt-1 text-xs text-white/60">{klantReferentie || "Referentie volgt"}</div>
           <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-[hsl(var(--gold)_/_0.10)] px-3 py-1 text-[11px] font-medium text-[hsl(var(--gold)_/_0.90)]">
-            <span className={cn("h-1.5 w-1.5 rounded-full", wizardMissing.length ? "bg-red-300" : "bg-[hsl(var(--gold))]")} />
-            {wizardMissing.length ? `${wizardMissing.length} open` : "Compleet"}
+            <span className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              readinessTone === "red" ? "bg-red-300" : readinessTone === "amber" ? "bg-amber-300" : "bg-[hsl(var(--gold))]",
+            )} />
+            {readinessStatus}
           </div>
         </div>
 
@@ -3377,36 +3863,58 @@ const NewOrder = () => {
             </button>
           </div>
 
-          <div className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.14)] p-4">
-            <div className="text-sm font-semibold">{wizardMissing.length ? "Nog nodig" : "Status"}</div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {wizardMissing.length > 0 ? wizardMissing.map((item) => (
+          <div className={cn(
+            "rounded-xl border p-4",
+            readinessTone === "red"
+              ? "border-red-200 bg-red-50/70"
+              : readinessTone === "amber"
+                ? "border-amber-200 bg-amber-50/70"
+                : "border-emerald-200 bg-emerald-50/70",
+          )}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Order readiness</div>
+                <div className="mt-1 text-sm font-semibold">{readinessTitle}</div>
+              </div>
+              <span className={cn(
+                "shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold",
+                readinessTone === "red"
+                  ? "bg-red-100 text-red-700"
+                  : readinessTone === "amber"
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-emerald-100 text-emerald-700",
+              )}>
+                {readinessStatus}
+              </span>
+            </div>
+            <div className="mt-3 space-y-2">
+              {readinessItems.length > 0 ? readinessItems.slice(0, 7).map((item) => (
                 <button
-                  key={item}
+                  key={item.id}
                   type="button"
-                  onClick={() => {
-                    const targetByItem: Record<string, "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing"> = {
-                      klant: "client",
-                      ophaaladres: "pickup",
-                      afleveradres: "delivery",
-                      adrescontrole: "delivery",
-                      aantal: "quantity",
-                      gewicht: "weight",
-                      tijdvenster: "time",
-                      tijdvolgorde: "time",
-                      screening: "security",
-                      tarief: "pricing",
-                    };
-                    focusWizardTarget(targetByItem[item] ?? "client");
-                  }}
-                  className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+                  onClick={() => focusWizardTarget(item.target)}
+                  className="flex w-full items-start gap-2 rounded-lg bg-white/70 px-3 py-2 text-left transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)_/_0.35)]"
                 >
-                  {wizardMissingLabel[item] ?? item}
+                  <span className={cn(
+                    "mt-1 h-2 w-2 shrink-0 rounded-full",
+                    item.severity === "BLOCKER" ? "bg-red-500" : item.severity === "WARNING" ? "bg-amber-500" : "bg-slate-400",
+                  )} />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-semibold text-foreground">{item.label}</span>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">{item.detail}</span>
+                  </span>
                 </button>
               )) : (
-                <span className="text-xs text-muted-foreground">Alles klaar voor aanmaken.</span>
+                <span className="text-xs text-muted-foreground">Alles klaar voor planning.</span>
               )}
             </div>
+            {(readinessBlockers.length > 0 || readinessWarnings.length > 0 || readinessInfos.length > 0) && (
+              <div className="mt-3 flex gap-2 text-[10px] font-semibold text-muted-foreground">
+                <span>{readinessBlockers.length} blocker</span>
+                <span>{readinessWarnings.length} warning</span>
+                <span>{readinessInfos.length} info</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -3438,7 +3946,7 @@ const NewOrder = () => {
             <button
               type="button"
               onClick={attemptCancel}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-border/60 bg-white px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-[0_8px_22px_-18px_hsl(var(--foreground)_/_0.45)] transition hover:border-slate-500 hover:bg-slate-950 hover:text-white active:translate-y-px active:bg-black focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-300/60"
             >
               Annuleren
             </button>
@@ -3453,7 +3961,7 @@ const NewOrder = () => {
               type="button"
               onClick={() => handleSave(false)}
               disabled={saving}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-4 text-sm font-medium text-foreground shadow-[0_10px_28px_-24px_hsl(var(--gold-deep)_/_0.70)] transition hover:bg-[hsl(var(--gold-soft)_/_0.28)] disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-[hsl(var(--gold)_/_0.42)] bg-[hsl(var(--gold-soft)_/_0.20)] px-4 text-sm font-semibold text-[hsl(var(--gold-deep))] shadow-[0_12px_30px_-22px_hsl(var(--gold-deep)_/_0.85)] transition hover:border-[hsl(var(--gold)_/_0.72)] hover:bg-[hsl(var(--gold-deep))] hover:text-white active:translate-y-px active:bg-[hsl(var(--gold))] active:text-[#17130b] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[hsl(var(--gold)_/_0.24)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Bewaar concept
             </button>
@@ -3467,7 +3975,7 @@ const NewOrder = () => {
                 boxShadow: "0 1px 2px hsl(var(--primary) / 0.4), 0 4px 12px -2px hsl(var(--primary) / 0.3), inset 0 1px 0 hsl(0 0% 100% / 0.2), inset 0 -1px 0 hsl(0 0% 0% / 0.1)",
               }}
             >
-              Opslaan & sluiten
+              Order gereedmelden
             </button>
           </div>
         </div>
@@ -3579,7 +4087,7 @@ const NewOrder = () => {
                     <p className="text-xs text-muted-foreground mt-1">Geen extra wizard-schermen. Gewoon bovenaan plakken, voorstel laten invullen en daarna direct verder in het formulier.</p>
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    {lastDraftSavedAt ? `Concept opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "Ctrl/Cmd+S opslaan · Shift+Ctrl/Cmd+S opslaan & sluiten"}
+                    {lastDraftSavedAt ? `Concept opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "Ctrl/Cmd+S concept · Shift+Ctrl/Cmd+S gereedmelden"}
                   </div>
                 </div>
 
@@ -3707,7 +4215,7 @@ const NewOrder = () => {
                     <p className="text-xs text-muted-foreground mt-1">Kies een template, hervat een concept en laat het systeem route en middelen voorstellen.</p>
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    {lastDraftSavedAt ? `Concept opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "Ctrl/Cmd+S opslaan · Shift+Ctrl/Cmd+S opslaan & sluiten"}
+                    {lastDraftSavedAt ? `Concept opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "Ctrl/Cmd+S concept · Shift+Ctrl/Cmd+S gereedmelden"}
                   </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -3791,7 +4299,13 @@ const NewOrder = () => {
                     flowLabelClass,
                     clientNeedsConfirmation ? "text-[hsl(var(--gold-deep))]" : requiredTextClass(missingClient),
                   )}>Klant <span className={clientNeedsConfirmation ? "text-[hsl(var(--gold-deep))]" : "text-red-600"}>*</span></label>
-                <Popover open={clientListOpen} onOpenChange={setClientOpen}>
+                <Popover
+                  open={clientListOpen}
+                  onOpenChange={(open) => {
+                    if (open && Date.now() < clientListToggleUntilRef.current) return;
+                    setClientOpen(open);
+                  }}
+                >
                     <PopoverAnchor asChild>
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -3821,6 +4335,7 @@ const NewOrder = () => {
                             }
                           }}
                           onFocus={() => {
+                            if (Date.now() < clientListToggleUntilRef.current) return;
                             if (clientSuggestions.length > 0) setClientOpen(true);
                           }}
                           placeholder="Typ klantnaam of kies uit lijst…"
@@ -3835,10 +4350,23 @@ const NewOrder = () => {
                         />
                         <button
                           type="button"
-                          aria-label="Toon klantenlijst"
+                          aria-label={clientListOpen ? "Verberg klantenlijst" : "Toon klantenlijst"}
                           aria-expanded={clientListOpen}
-                          onMouseDown={e => e.preventDefault()}
-                          onClick={() => setClientOpen(!clientListOpen)}
+                          onPointerDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const nextOpen = !clientListOpen;
+                            clientListToggleUntilRef.current = Date.now() + (nextOpen ? 0 : 350);
+                            setClientOpen(nextOpen);
+                          }}
                           className="absolute right-1.5 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground"
                         >
                           <ChevronDown className={cn("h-4 w-4 transition-transform", clientListOpen && "rotate-180")} />
@@ -4609,6 +5137,11 @@ const NewOrder = () => {
                           Voorstel: {suggestedTransportType}
                         </span>
                       )}
+                      {transportTypeManual && transportType && (
+                        <span className="mt-1 block text-[10px] tracking-wider text-muted-foreground">
+                          Handmatig ingesteld door planner
+                        </span>
+                      )}
                     </div>
 
                     <div>
@@ -4628,6 +5161,11 @@ const NewOrder = () => {
                       {suggestedVehicleType && (
                         <span className="mt-1 block text-[10px] tracking-wider text-[hsl(var(--gold-deep))]">
                           Voorstel: {suggestedVehicleType}
+                        </span>
+                      )}
+                      {voertuigtypeManual && voertuigtype && (
+                        <span className="mt-1 block text-[10px] tracking-wider text-muted-foreground">
+                          Handmatig ingesteld door planner
                         </span>
                       )}
                     </div>
@@ -4659,6 +5197,11 @@ const NewOrder = () => {
                           Overschreven door planner, automatisch zou {inferredAfdeling} zijn
                         </span>
                       )}
+                      {afdelingManual && afdeling && (
+                        <span className="mt-1 block text-[10px] tracking-wider text-muted-foreground">
+                          Handmatig ingesteld door planner
+                        </span>
+                      )}
                       {errors.afdeling && <span className="text-[11px] text-red-500">{errors.afdeling}</span>}
                     </div>
                   </div>
@@ -4679,7 +5222,7 @@ const NewOrder = () => {
 
                       {true && (
                         <div className="space-y-4">
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                             {(["secure", "edd", "xray"] as const).map((method) => (
                               <button
                                 key={method}
@@ -4694,23 +5237,23 @@ const NewOrder = () => {
                                   setPmtMethode(method);
                                 }}
                                 className={cn(
-                                  "flex min-w-0 items-start gap-2 rounded-2xl border bg-white px-3 py-3 text-left transition hover:border-[hsl(var(--gold)_/_0.45)] hover:bg-[hsl(var(--gold-soft)_/_0.20)]",
+                                  "flex min-h-[132px] min-w-0 flex-col rounded-2xl border bg-white p-4 text-left transition hover:border-[hsl(var(--gold)_/_0.45)] hover:bg-[hsl(var(--gold-soft)_/_0.20)]",
                                   (method === "secure" ? shipmentSecure : !shipmentSecure && pmtMethode === method)
                                     ? "border-[hsl(var(--gold)_/_0.65)] shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.20)]"
                                     : "border-border/70",
                                 )}
                               >
-                                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))]">
+                                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold-soft))] text-sm font-semibold text-[hsl(var(--gold-deep))]">
                                   {method === "secure" ? "OK" : method === "edd" ? "EDD" : "XR"}
                                 </span>
-                                <span className="min-w-0">
-                                  <span className="block break-words text-sm font-semibold leading-snug">
+                                <span className="mt-4 min-w-0">
+                                  <span className="block break-words text-base font-semibold leading-tight">
                                     {method === "secure" ? "Secure" : method === "edd" ? "EDD · Hondenscan" : "X-RAY · Rontgenscan"}
                                   </span>
                                   <span className="hidden">
                                     {method === "edd" ? "EDD · Hondenscan" : "X-RAY · Rontgenscan"}
                                   </span>
-                                  <span className="mt-1 block break-words text-xs leading-snug text-muted-foreground">
+                                  <span className="mt-2 block max-w-[18rem] break-words text-sm leading-relaxed text-muted-foreground">
                                     {method === "secure" ? "Al beveiligd aangeleverd" : method === "edd" ? "Screening via operator/hondenteam" : "Screening via rontgenstraat"}
                                   </span>
                                   <span className="hidden">
@@ -5447,7 +5990,7 @@ const NewOrder = () => {
                       disabled={saving}
                       className="inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:opacity-50"
                     >
-                      Order aanmaken & plannen
+                      Order gereedmelden
                       <ArrowRight className="h-4 w-4" />
                     </button>
                   )}
