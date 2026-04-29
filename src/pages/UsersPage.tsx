@@ -1170,7 +1170,7 @@ const UsersPage = () => {
                             Reset alle overrides
                           </Button>
                         </div>
-                        <div className="sticky top-0 z-10 grid grid-cols-[minmax(220px,1fr)_112px_132px_28px] border-b border-[hsl(var(--gold)/0.16)] bg-card/95 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 backdrop-blur">
+                        <div className="sticky top-0 z-10 grid grid-cols-[minmax(220px,1fr)_128px_164px_28px] gap-x-4 border-b border-[hsl(var(--gold)/0.16)] bg-card/95 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 backdrop-blur">
                           <div>Module</div>
                           <div>Toegang</div>
                           <div>Override (afwijking van rol)</div>
@@ -1199,7 +1199,7 @@ const UsersPage = () => {
                                       setExpandedAccessModule(expanded ? null : row.module);
                                     }
                                   }}
-                                  className="grid min-h-[52px] w-full grid-cols-[minmax(220px,1fr)_112px_132px_28px] items-center px-4 py-1.5 text-left"
+                                  className="grid min-h-[52px] w-full grid-cols-[minmax(220px,1fr)_128px_164px_28px] items-center gap-x-4 px-4 py-1.5 text-left"
                                 >
                                   <div className="flex items-center gap-3">
                                     <Icon className="h-4 w-4 text-muted-foreground/70" />
@@ -1217,7 +1217,7 @@ const UsersPage = () => {
                                       }}
                                     >
                                       <SelectTrigger className={cn(
-                                        "h-7 rounded-md border-[#EAEAEA] bg-transparent px-2 text-xs text-muted-foreground shadow-none [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-50",
+                                        "h-7 rounded-md border-[#EAEAEA] bg-transparent px-3 text-xs text-muted-foreground shadow-none [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-50",
                                         "focus:ring-1 focus:ring-[hsl(var(--gold)/0.24)] focus:ring-offset-0",
                                         overridden && "border-[hsl(var(--gold)/0.28)] text-[hsl(var(--gold-deep))]",
                                       )}>
@@ -1544,7 +1544,7 @@ const UsersPage = () => {
 
                       <div className="grid items-stretch gap-5 xl:grid-cols-3">
                         <div className="space-y-5">
-                          <div className="flex min-h-[232px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                          <div className="flex h-[268px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className={cn(
                                 "flex h-9 w-9 items-center justify-center rounded-full ring-1",
@@ -1578,7 +1578,7 @@ const UsersPage = () => {
                                 </span>
                               </div>
                             </div>
-                            <div className="mt-auto grid gap-2 pt-4 sm:grid-cols-2">
+                            <div className="mt-auto grid gap-2 pt-6 sm:grid-cols-2">
                               <Button
                                 type="button"
                                 variant="outline"
@@ -1608,7 +1608,7 @@ const UsersPage = () => {
                             </div>
                           </div>
 
-                          <div className="flex min-h-[232px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                          <div className="flex h-[268px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.18)]">
                                 <Monitor className="h-4 w-4 opacity-70" />
@@ -1660,7 +1660,7 @@ const UsersPage = () => {
                         </div>
 
                         <div className="space-y-5">
-                          <div className="flex min-h-[232px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                          <div className="flex h-[268px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.18)]">
                                 <KeyRound className="h-4 w-4 opacity-70" />
@@ -1692,7 +1692,7 @@ const UsersPage = () => {
                             </Button>
                           </div>
 
-                          <div className="flex min-h-[232px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                          <div className="flex h-[268px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/50">
                                 <LockKeyhole className="h-4 w-4 opacity-70" />
@@ -1734,7 +1734,7 @@ const UsersPage = () => {
                           </div>
                         </div>
 
-                        <div className="min-h-[484px] rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                        <div className="min-h-[556px] rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-base font-semibold text-foreground">Recente activiteit</p>
