@@ -4,19 +4,51 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
-const mockSupabaseFrom = vi.fn();
+const mockInvoke = vi.fn();
+
+const users = [
+  {
+    user_id: "user-1",
+    display_name: "Admin User",
+    avatar_url: null,
+    created_at: "2025-01-01T00:00:00Z",
+    email: "admin@test.nl",
+    last_sign_in_at: "2025-01-10T00:00:00Z",
+    roles: ["admin"],
+  },
+  {
+    user_id: "user-2",
+    display_name: "Regular User",
+    avatar_url: null,
+    created_at: "2025-01-05T00:00:00Z",
+    email: "regular@test.nl",
+    last_sign_in_at: null,
+    roles: ["medewerker"],
+  },
+];
 
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
-    session: { user: { id: "user-1" } }, user: { id: "user-1", email: "admin@test.nl" },
-    profile: { display_name: "Admin User", avatar_url: null }, roles: ["admin"],
-    effectiveRole: "admin", isAdmin: true, loading: false, signOut: vi.fn(),
+    session: { user: { id: "user-1" } },
+    user: { id: "user-1", email: "admin@test.nl" },
+    profile: { display_name: "Admin User", avatar_url: null },
+    roles: ["admin"],
+    effectiveRole: "admin",
+    isAdmin: true,
+    loading: false,
+    signOut: vi.fn(),
   }),
+}));
+
+vi.mock("@/contexts/TenantContext", () => ({
+  useTenantOptional: () => ({ tenant: { id: "tenant-1" } }),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: (...args: any[]) => mockSupabaseFrom(...args),
+    functions: {
+      invoke: (...args: any[]) => mockInvoke(...args),
+    },
   },
 }));
 
@@ -30,32 +62,11 @@ vi.mock("framer-motion", async () => ({
 import UsersPage from "@/pages/UsersPage";
 
 function setupDefaultMocks() {
-  mockSupabaseFrom.mockImplementation((table: string) => {
-    if (table === "profiles") {
-      return {
-        select: vi.fn().mockResolvedValue({
-          data: [
-            { user_id: "user-1", display_name: "Admin User", avatar_url: null, created_at: "2025-01-01T00:00:00Z" },
-            { user_id: "user-2", display_name: "Regular User", avatar_url: null, created_at: "2025-01-05T00:00:00Z" },
-          ],
-          error: null,
-        }),
-      };
+  mockInvoke.mockImplementation((_functionName: string, options: { body?: any }) => {
+    if (options.body?.action === "list") {
+      return Promise.resolve({ data: { users }, error: null });
     }
-    if (table === "user_roles") {
-      return {
-        select: vi.fn().mockResolvedValue({
-          data: [{ user_id: "user-1", role: "admin" }, { user_id: "user-2", role: "medewerker" }],
-          error: null,
-        }),
-        insert: vi.fn().mockResolvedValue({ error: null }),
-        delete: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      };
-    }
-    return { select: vi.fn().mockResolvedValue({ data: [], error: null }) };
+    return Promise.resolve({ data: { ok: true }, error: null });
   });
 }
 
@@ -66,7 +77,7 @@ function renderUsersPage() {
       <MemoryRouter>
         <UsersPage />
       </MemoryRouter>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -83,15 +94,25 @@ describe("UsersPage", () => {
     });
   });
 
-  it("shows user list after loading", async () => {
+  it("loads users through the admin-users function", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Admin User")).toBeInTheDocument();
-      expect(screen.getByText("Regular User")).toBeInTheDocument();
+      expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
+        body: expect.objectContaining({ action: "list", tenant_id: "tenant-1" }),
+      }));
     });
   });
 
-  it("shows user stats (admin count, medewerker count)", async () => {
+  it("shows user list after loading", async () => {
+    renderUsersPage();
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Admin User")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Regular User")).toBeInTheDocument();
+      expect(screen.getByText("regular@test.nl")).toBeInTheDocument();
+    });
+  });
+
+  it("shows user stats", async () => {
     renderUsersPage();
     await waitFor(() => {
       expect(screen.getByText("Totaal")).toBeInTheDocument();
@@ -103,27 +124,16 @@ describe("UsersPage", () => {
   it("shows role badges", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("admin")).toBeInTheDocument();
-      expect(screen.getByText("medewerker")).toBeInTheDocument();
+      expect(screen.getAllByText("Admin").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Medewerker").length).toBeGreaterThan(0);
     });
   });
 
-  it("shows role change select for admin users (handleRoleChange)", async () => {
+  it("shows role change selects for admin users", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Admin User")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Admin User")).toBeInTheDocument();
     });
-    // Admin should see role change controls
-    const selects = screen.getAllByRole("combobox");
-    expect(selects.length).toBeGreaterThan(0);
-  });
-
-  it("shows role change selects for admin user", async () => {
-    renderUsersPage();
-    await waitFor(() => {
-      expect(screen.getByText("Admin User")).toBeInTheDocument();
-    });
-    // Admin should see role change controls (combobox selects)
     const selects = screen.getAllByRole("combobox");
     expect(selects.length).toBeGreaterThan(0);
   });
@@ -133,13 +143,43 @@ describe("UsersPage", () => {
     await waitFor(() => {
       expect(screen.getByText("Gebruiker")).toBeInTheDocument();
       expect(screen.getByText("Rol")).toBeInTheDocument();
+      expect(screen.getByText("Acties")).toBeInTheDocument();
     });
   });
 
-  it("shows Acties column header for admin", async () => {
+  it("filters users by email", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Acties")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Regular User")).toBeInTheDocument();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText("Zoek op naam, e-mail of rol"), "regular@test.nl");
+
+    expect(screen.queryByDisplayValue("Admin User")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("Regular User")).toBeInTheDocument();
+  });
+
+  it("invites a new user", async () => {
+    renderUsersPage();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Uitnodigen/i })).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /Uitnodigen/i }));
+    await userEvent.type(screen.getByLabelText("Naam"), "Nieuwe Planner");
+    await userEvent.type(screen.getByLabelText("E-mail"), "nieuw@test.nl");
+    await userEvent.click(screen.getByRole("button", { name: /Versturen/i }));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
+        body: expect.objectContaining({
+          action: "invite",
+          email: "nieuw@test.nl",
+          display_name: "Nieuwe Planner",
+          role: "medewerker",
+          tenant_id: "tenant-1",
+        }),
+      }));
     });
   });
 });
