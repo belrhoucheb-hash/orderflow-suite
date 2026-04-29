@@ -49,6 +49,14 @@ export function normalizeCompanyName(value: string | null | undefined): string {
     .trim();
 }
 
+function companyAcronym(value: string): string {
+  return value
+    .split(" ")
+    .filter((part) => part.length > 0)
+    .map((part) => part[0])
+    .join("");
+}
+
 export function buildAddressBookKey(value: AddressBookValue): string {
   return [
     normalizeAddressPart(value.country || "NL").toUpperCase(),
@@ -80,6 +88,8 @@ export function isSameAddressBookCompany(
   const existingParts = existing.split(" ").filter(Boolean);
   const nextParts = next.split(" ").filter(Boolean);
   if (existingParts.length === 0 || nextParts.length === 0) return false;
+  if (nextParts.length === 1 && nextParts[0] === companyAcronym(existing)) return true;
+  if (existingParts.length === 1 && existingParts[0] === companyAcronym(next)) return true;
   if (existingParts[0] !== nextParts[0]) return false;
 
   const existingSet = new Set(existingParts);
