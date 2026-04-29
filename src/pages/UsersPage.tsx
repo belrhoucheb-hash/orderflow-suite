@@ -1471,16 +1471,16 @@ const UsersPage = () => {
                       <div className={cn(
                         "rounded-lg p-6 shadow-sm ring-1",
                         isUserActive(selectedUser) && securitySettings.login_protection_enabled && securitySettings.extra_security_enabled
-                          ? "bg-emerald-50/60 ring-emerald-100"
-                          : "bg-amber-50/60 ring-amber-100",
+                          ? "bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.58),hsl(var(--card)))] ring-[hsl(var(--gold)/0.20)]"
+                          : "bg-[linear-gradient(135deg,var(--primary-50),hsl(var(--card)))] ring-primary-100",
                       )}>
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                           <div className="flex items-start gap-3">
                             <div className={cn(
                               "flex h-12 w-12 items-center justify-center rounded-full ring-1",
                               isUserActive(selectedUser) && securitySettings.login_protection_enabled && securitySettings.extra_security_enabled
-                                ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-                                : "bg-amber-50 text-amber-700 ring-amber-100",
+                                ? "bg-[hsl(var(--gold-soft)/0.75)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.24)]"
+                                : "bg-primary-50 text-primary-700 ring-primary-100",
                             )}>
                               {isUserActive(selectedUser) && securitySettings.login_protection_enabled && securitySettings.extra_security_enabled ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
                             </div>
@@ -1524,12 +1524,12 @@ const UsersPage = () => {
                       </div>
 
                       {!securitySettings.extra_security_enabled && (
-                        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-100">
+                        <div className="rounded-lg bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.72),hsl(var(--card)))] px-4 py-3 text-sm text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.22)]">
                           <div className="flex gap-3">
-                            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                            <Info className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--gold-deep))]" />
                             <div>
                               <p className="font-semibold">Aanbeveling</p>
-                              <p className="mt-1 text-amber-900/75">Schakel 2FA in voor extra beveiliging van dit account.</p>
+                              <p className="mt-1 text-[hsl(var(--gold-deep)/0.78)]">Schakel 2FA in voor extra beveiliging van dit account.</p>
                             </div>
                           </div>
                         </div>
@@ -1542,8 +1542,8 @@ const UsersPage = () => {
                               <div className={cn(
                                 "flex h-9 w-9 items-center justify-center rounded-full ring-1",
                                 securitySettings.extra_security_enabled
-                                  ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-                                  : "bg-amber-50 text-amber-700 ring-amber-100",
+                                  ? "bg-[hsl(var(--gold-soft)/0.72)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.22)]"
+                                  : "bg-primary-50 text-primary-700 ring-primary-100",
                               )}>
                                 <Shield className="h-4 w-4 opacity-70" />
                               </div>
@@ -1558,8 +1558,8 @@ const UsersPage = () => {
                                 <span className={cn(
                                   "rounded-full px-2 py-1 font-medium ring-1",
                                   securitySettings.extra_security_enabled
-                                    ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-                                    : "bg-amber-50 text-amber-800 ring-amber-100",
+                                    ? "bg-[hsl(var(--gold-soft)/0.70)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.20)]"
+                                    : "bg-primary-50 text-primary-700 ring-primary-100",
                                 )}>
                                   {securitySettings.extra_security_enabled ? "Ingeschakeld" : "Niet ingeschakeld"}
                                 </span>
@@ -1603,7 +1603,7 @@ const UsersPage = () => {
 
                           <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.18)]">
                                 <Monitor className="h-4 w-4 opacity-70" />
                               </div>
                               <div>
@@ -1624,12 +1624,12 @@ const UsersPage = () => {
                                         <p className="mt-1 text-xs text-muted-foreground">Browser en locatie niet vastgelegd · {formatDate(selectedUser.last_sign_in_at)}</p>
                                       </div>
                                     </div>
-                                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
+                                    <span className="rounded-full bg-[hsl(var(--gold-soft)/0.68)] px-2 py-1 text-[11px] font-medium text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.20)]">
                                       Huidige sessie
                                     </span>
                                   </div>
                                   {securitySettings.sessions_revoked_at && (
-                                    <div className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-xs text-amber-800 ring-1 ring-amber-100">
+                                    <div className="flex items-start gap-2 rounded-md bg-[hsl(var(--gold-soft)/0.65)] p-3 text-xs text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.22)]">
                                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                       <span>Andere sessies gemarkeerd voor hercontrole op {formatDate(securitySettings.sessions_revoked_at)}.</span>
                                     </div>
@@ -1655,7 +1655,7 @@ const UsersPage = () => {
                         <div className="space-y-5">
                           <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.18)]">
                                 <KeyRound className="h-4 w-4 opacity-70" />
                               </div>
                               <div>
@@ -1666,7 +1666,7 @@ const UsersPage = () => {
                             <div className="mt-4 space-y-3 text-xs">
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Sterkte</span>
-                                <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700 ring-1 ring-emerald-100">Sterk</span>
+                                <span className="rounded-full bg-[hsl(var(--gold-soft)/0.70)] px-2 py-1 font-medium text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.20)]">Sterk</span>
                               </div>
                               <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
                                 <span className="text-muted-foreground">Laatste wijziging</span>
@@ -1701,7 +1701,7 @@ const UsersPage = () => {
                                 <span className={cn(
                                   "rounded-full px-2 py-1 font-medium ring-1",
                                   securitySettings.login_protection_enabled
-                                    ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                                    ? "bg-[hsl(var(--gold-soft)/0.70)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.20)]"
                                     : "bg-red-50 text-red-700 ring-red-100",
                                 )}>
                                   {securitySettings.login_protection_enabled ? "Ingeschakeld" : "Uitgeschakeld"}
@@ -1765,9 +1765,9 @@ const UsersPage = () => {
                                   <div key={event.id} className="flex gap-3 border-b border-border/25 py-3.5 last:border-b-0">
                                     <div className={cn(
                                       "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1",
-                                      event.action === "user.password_reset_sent" && "bg-blue-50 text-blue-700 ring-blue-100",
-                                      event.action !== "user.password_reset_sent" && item.tone === "warning" && "bg-amber-50 text-amber-700 ring-amber-100",
-                                      event.action !== "user.password_reset_sent" && item.tone !== "warning" && "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                                      event.action === "user.password_reset_sent" && "bg-[hsl(var(--gold-soft)/0.62)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.18)]",
+                                      event.action !== "user.password_reset_sent" && item.tone === "warning" && "bg-primary-50 text-primary-700 ring-primary-100",
+                                      event.action !== "user.password_reset_sent" && item.tone !== "warning" && "bg-[hsl(var(--gold-soft)/0.62)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.18)]",
                                     )}>
                                       <Icon className="h-4 w-4" />
                                     </div>
