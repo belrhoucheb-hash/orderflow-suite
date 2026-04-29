@@ -139,7 +139,7 @@ describe("UsersPage", () => {
     expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
     expect(screen.getByText("Toegangsrechten")).toBeInTheDocument();
     expect(screen.getByText("Dispatch")).toBeInTheDocument();
-    expect(screen.getByText("Override")).toBeInTheDocument();
+    expect(screen.getByText("Override (afwijking van rol)")).toBeInTheDocument();
     expect(screen.getAllByText("Beperkt").length).toBeGreaterThan(0);
     await userEvent.click(screen.getByText("Tarieven"));
     expect(screen.getByText("Mag bekijken")).toBeInTheDocument();
@@ -161,8 +161,8 @@ describe("UsersPage", () => {
 
     expect(screen.getByText("Volledige controle")).toBeInTheDocument();
     expect(screen.getByText("Met deze rol")).toBeInTheDocument();
-    expect(screen.getByText("Kan tarieven aanpassen")).toBeInTheDocument();
-    expect(screen.getByText("Kan gebruikers beheren")).toBeInTheDocument();
+    expect(screen.getByText("Tarieven aanpassen")).toBeInTheDocument();
+    expect(screen.getByText("Gebruikers beheren")).toBeInTheDocument();
   });
 
   it("shows table headers", async () => {

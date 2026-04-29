@@ -131,7 +131,7 @@ function getPrimaryRole(user: UserRow): UserRole {
 function AccessIndicator({ level }: { level: AccessLevel }) {
   if (level === "full") {
     return (
-      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/60">
         <CheckCircle2 className="h-3.5 w-3.5" />
       </span>
     );
@@ -139,7 +139,7 @@ function AccessIndicator({ level }: { level: AccessLevel }) {
 
   if (level === "limited") {
     return (
-      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200">
         <Clock3 className="h-3.5 w-3.5" />
       </span>
     );
@@ -159,11 +159,11 @@ function AccessStatus({ level, overridden }: { level: AccessLevel; overridden: b
     <span className={cn(
       "inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ring-1",
       !overridden && "bg-muted/50 text-muted-foreground ring-border/60",
-      level === "full" && overridden && "bg-emerald-50 text-emerald-700 ring-emerald-200",
+      level === "full" && overridden && "bg-muted/50 text-muted-foreground ring-border/60",
       level === "limited" && overridden && "bg-amber-50 text-amber-700 ring-amber-200",
-      level === "none" && overridden && "bg-rose-50 text-rose-700 ring-rose-200",
+      level === "none" && overridden && "bg-muted/40 text-muted-foreground ring-border/50",
     )}>
-      {overridden && <AccessIndicator level={level} />}
+      {overridden && level !== "none" && <AccessIndicator level={level} />}
       {accessLabel(level)}
     </span>
   );
@@ -276,10 +276,10 @@ const UsersPage = () => {
     const byModule = Object.fromEntries(effectiveAccess.map((item) => [item.module, item.level]));
     const lines: string[] = [];
 
-    if (byModule.Tarieven === "full") lines.push("Kan tarieven aanpassen");
-    if (byModule.Gebruikers === "full") lines.push("Kan gebruikers beheren");
-    if (byModule.Instellingen === "full") lines.push("Toegang tot instellingen");
-    if (byModule.Facturatie === "full") lines.push("Kan facturatie beheren");
+    if (byModule.Tarieven === "full") lines.push("Tarieven aanpassen");
+    if (byModule.Gebruikers === "full") lines.push("Gebruikers beheren");
+    if (byModule.Instellingen === "full") lines.push("Instellingen wijzigen");
+    if (byModule.Facturatie === "full") lines.push("Facturatie beheren");
     if (byModule.Tarieven === "limited") lines.push("Kan tarieven bekijken, niet wijzigen");
 
     return lines.length > 0 ? lines : ["Geen beheerimpact buiten dagelijkse operatie"];
@@ -759,7 +759,7 @@ const UsersPage = () => {
                         <div className="flex items-center justify-between gap-3 border-b border-border/30 px-4 py-3">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Modules</p>
-                            <p className="text-xs text-muted-foreground/60">Standaardrechten blijven stil, afwijkingen vallen op.</p>
+                            <p className="text-xs text-muted-foreground/60">Standaardrechten + afwijkingen per module</p>
                           </div>
                           <Button
                             type="button"
@@ -775,7 +775,7 @@ const UsersPage = () => {
                         <div className="sticky top-0 z-10 grid grid-cols-[minmax(220px,1fr)_112px_132px_28px] border-b border-border/40 bg-background/95 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 backdrop-blur">
                           <div>Module</div>
                           <div>Toegang</div>
-                          <div>Override</div>
+                          <div>Override (afwijking van rol)</div>
                           <div />
                         </div>
                         <div className="divide-y divide-border/30">
@@ -819,9 +819,9 @@ const UsersPage = () => {
                                       }}
                                     >
                                       <SelectTrigger className={cn(
-                                        "h-7 rounded-md border-[#EAEAEA] bg-background px-2 text-xs text-muted-foreground shadow-none",
+                                        "h-7 rounded-md border-[#EAEAEA] bg-transparent px-2 text-xs text-muted-foreground shadow-none [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-50",
                                         "focus:ring-1 focus:ring-amber-200 focus:ring-offset-0",
-                                        overridden && "border-amber-200 bg-amber-50/60 text-amber-800",
+                                        overridden && "border-amber-200 text-amber-800",
                                       )}>
                                         <SelectValue />
                                       </SelectTrigger>
