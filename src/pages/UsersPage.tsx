@@ -1,7 +1,21 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { CalendarDays, Clock3, Loader2, Mail, Plus, Search, Settings2, Shield, UserCog, Users } from "lucide-react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Crown,
+  Loader2,
+  LockKeyhole,
+  Mail,
+  Plus,
+  Search,
+  Settings2,
+  Shield,
+  UserCog,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -419,99 +433,164 @@ const UsersPage = () => {
       </Dialog>
 
       <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Gebruiker configureren</SheetTitle>
-            <SheetDescription>
-              Pas profiel en toegangsniveau aan voor dit kantooraccount.
-            </SheetDescription>
-          </SheetHeader>
-
+        <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           {selectedUser && (
-            <form onSubmit={handleSaveConfig} className="mt-6 space-y-6">
-              <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-11 w-11 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-sm font-semibold text-white shadow-sm">
+            <form onSubmit={handleSaveConfig} className="flex min-h-0 flex-1 flex-col">
+              <div className="border-b border-border/40 bg-muted/10 px-6 py-5">
+                <SheetHeader className="space-y-1 pr-8">
+                  <SheetTitle className="text-xl">Gebruiker configureren</SheetTitle>
+                  <SheetDescription>
+                    Beheer profiel, rol en toegang vanuit een vast rechtenprofiel.
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="mt-5 flex items-center gap-4 rounded-lg border border-border/50 bg-background p-4 shadow-sm">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground shadow-sm">
                     {(selectedUser.display_name || selectedUser.email || "?").slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{selectedUser.display_name || "Onbekend"}</p>
-                    <p className="text-xs text-muted-foreground truncate">{selectedUser.email ?? selectedUser.user_id}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-base font-semibold text-foreground">{selectedUser.display_name || "Onbekend"}</p>
+                      <Badge variant="outline" className={cn("text-xs", roleStyles[getPrimaryRole(selectedUser)])}>
+                        {roleLabels[getPrimaryRole(selectedUser)]}
+                      </Badge>
+                    </div>
+                    <p className="mt-0.5 truncate text-sm text-muted-foreground">{selectedUser.email ?? selectedUser.user_id}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="config-name">Weergavenaam</Label>
-                <Input
-                  id="config-name"
-                  value={configName}
-                  onChange={(event) => setConfigName(event.target.value)}
-                  placeholder="Naam van de gebruiker"
-                />
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+                <div className="space-y-7">
+                  <section className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Profiel</h3>
+                      <p className="text-xs text-muted-foreground">Deze naam wordt in overzichten en auditregels getoond.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="config-name">Weergavenaam</Label>
+                      <Input
+                        id="config-name"
+                        value={configName}
+                        onChange={(event) => setConfigName(event.target.value)}
+                        placeholder="Naam van de gebruiker"
+                        className="h-11"
+                      />
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Toegangsprofiel</h3>
+                      <p className="text-xs text-muted-foreground">{ROLE_ACCESS[configRole].summary}</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(["medewerker", "admin"] as UserRole[]).map((role) => {
+                        const access = ROLE_ACCESS[role];
+                        const checked = configRole === role;
+                        const locked = selectedUser.user_id === currentUser?.id && getPrimaryRole(selectedUser) === "admin" && role !== "admin";
+                        const Icon = role === "admin" ? Crown : UserCog;
+
+                        return (
+                          <button
+                            key={role}
+                            type="button"
+                            disabled={locked}
+                            onClick={() => setConfigRole(role)}
+                            className={cn(
+                              "group rounded-lg border p-4 text-left transition-all",
+                              checked
+                                ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20"
+                                : "border-border/50 bg-background hover:border-primary/40 hover:bg-muted/20",
+                              locked && "cursor-not-allowed opacity-50",
+                            )}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={cn(
+                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+                                checked ? "border-primary/20 bg-primary/10 text-primary" : "border-border/50 bg-muted/30 text-muted-foreground",
+                              )}>
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-semibold">{access.label}</p>
+                                  {checked && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                                </div>
+                                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{access.routeAccess}</p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Toegangsoverzicht</h3>
+                      <p className="text-xs text-muted-foreground">Vastgelegd in de centrale rolmatrix van OrderFlow.</p>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border border-border/50 bg-background">
+                      <div className="grid gap-0 md:grid-cols-2">
+                        <div className="p-4">
+                          <div className="mb-3 flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Toegestaan</p>
+                          </div>
+                          <div className="space-y-2.5">
+                            {ROLE_ACCESS[configRole].can.map((item) => (
+                              <div key={item} className="flex gap-2.5">
+                                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                                <p className="text-sm leading-relaxed text-foreground">{item}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="border-t border-border/40 bg-muted/10 p-4 md:border-l md:border-t-0">
+                          <div className="mb-3 flex items-center gap-2">
+                            <LockKeyhole className="h-4 w-4 text-muted-foreground" />
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Afgeschermd</p>
+                          </div>
+                          <div className="space-y-2.5">
+                            {ROLE_ACCESS[configRole].cannot.map((item) => (
+                              <div key={item} className="flex gap-2.5">
+                                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
+                                <p className="text-sm leading-relaxed text-muted-foreground">{item}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-border/40 bg-background p-4">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <CalendarDays className="h-4 w-4" />
+                        <p className="text-[11px] font-semibold uppercase tracking-wide">Geregistreerd</p>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.created_at)}</p>
+                    </div>
+                    <div className="rounded-lg border border-border/40 bg-background p-4">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock3 className="h-4 w-4" />
+                        <p className="text-[11px] font-semibold uppercase tracking-wide">Laatste login</p>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.last_sign_in_at)}</p>
+                    </div>
+                  </section>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Rol en toegang</Label>
-                <Select
-                  value={configRole}
-                  onValueChange={(value) => setConfigRole(value as UserRole)}
-                  disabled={selectedUser.user_id === currentUser?.id && getPrimaryRole(selectedUser) === "admin"}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="medewerker">Medewerker</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">{ROLE_ACCESS[configRole].summary}</p>
-              </div>
-
-              <div className="rounded-lg border border-border/40 overflow-hidden">
-                <div className="border-b border-border/30 bg-muted/20 px-4 py-3">
-                  <p className="text-sm font-semibold">Rechten voor {ROLE_ACCESS[configRole].label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{ROLE_ACCESS[configRole].routeAccess}</p>
-                </div>
-                <div className="grid gap-0 sm:grid-cols-2">
-                  <div className="p-4 space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Kan</p>
-                    <ul className="space-y-1.5">
-                      {ROLE_ACCESS[configRole].can.map((item) => (
-                        <li key={item} className="text-xs text-foreground leading-relaxed">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="border-t border-border/30 p-4 space-y-2 sm:border-l sm:border-t-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Kan niet</p>
-                    <ul className="space-y-1.5">
-                      {ROLE_ACCESS[configRole].cannot.map((item) => (
-                        <li key={item} className="text-xs text-muted-foreground leading-relaxed">{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-border/40 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Geregistreerd</p>
-                  <p className="mt-1 text-sm font-medium">{formatDate(selectedUser.created_at)}</p>
-                </div>
-                <div className="rounded-lg border border-border/40 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Laatste login</p>
-                  <p className="mt-1 text-sm font-medium">{formatDate(selectedUser.last_sign_in_at)}</p>
-                </div>
-              </div>
-
-              <SheetFooter>
+              <SheetFooter className="border-t border-border/40 bg-background px-6 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.04)]">
                 <Button type="button" variant="outline" onClick={() => setSelectedUser(null)}>
                   Annuleren
                 </Button>
                 <Button type="submit" disabled={updateProfile.isPending || updateRole.isPending} className="gap-2">
                   {(updateProfile.isPending || updateRole.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Opslaan
+                  Wijzigingen opslaan
                 </Button>
               </SheetFooter>
             </form>
