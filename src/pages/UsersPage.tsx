@@ -116,8 +116,8 @@ interface AdminUsersResponse {
 }
 
 const roleStyles: Record<UserRole, string> = {
-  admin: "bg-primary/10 text-primary border-primary/20",
-  medewerker: "bg-blue-500/8 text-blue-700 border-blue-200/60",
+  admin: "bg-[hsl(var(--gold-soft)/0.78)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.24)]",
+  medewerker: "bg-muted/50 text-muted-foreground border-border/60",
 };
 
 const roleLabels: Record<UserRole, string> = {
@@ -239,7 +239,7 @@ function AccessIndicator({ level }: { level: AccessLevel }) {
 
   if (level === "limited") {
     return (
-      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.72)] text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.22)]">
         <Clock3 className="h-3.5 w-3.5" />
       </span>
     );
@@ -260,7 +260,7 @@ function AccessStatus({ level, overridden }: { level: AccessLevel; overridden: b
       "inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ring-1",
       !overridden && "bg-muted/50 text-muted-foreground ring-border/60",
       level === "full" && overridden && "bg-muted/50 text-muted-foreground ring-border/60",
-      level === "limited" && overridden && "bg-amber-50 text-amber-700 ring-amber-200",
+      level === "limited" && overridden && "bg-[hsl(var(--gold-soft)/0.72)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.22)]",
       level === "none" && overridden && "bg-muted/40 text-muted-foreground ring-border/50",
     )}>
       {overridden && level !== "none" && <AccessIndicator level={level} />}
@@ -723,8 +723,8 @@ const UsersPage = () => {
         ) : undefined}
       />
 
-      <div className="bg-card rounded-lg shadow-sm border border-border/40 overflow-hidden">
-        <div className="p-5 border-b border-border/30 bg-gradient-to-b from-background to-muted/10">
+      <div className="overflow-hidden rounded-lg border border-[hsl(var(--gold)/0.14)] bg-card shadow-sm">
+        <div className="border-b border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.32),hsl(var(--card)))] p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">Gebruikersbeheer</p>
@@ -756,7 +756,7 @@ const UsersPage = () => {
                 onClick={() => setUserFiltersOpen((open) => !open)}
                 className={cn(
                   "gap-2",
-                  userFiltersOpen && "border-amber-200 bg-amber-50 text-amber-800",
+                  userFiltersOpen && "border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.62)] text-[hsl(var(--gold-deep))]",
                 )}
               >
                 <SlidersHorizontal className="h-4 w-4" />
@@ -766,7 +766,7 @@ const UsersPage = () => {
           </div>
 
           {userFiltersOpen && (
-            <div className="mt-4 flex flex-col gap-3 rounded-lg bg-background/70 p-3 ring-1 ring-border/30 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-4 flex flex-col gap-3 rounded-lg bg-card/80 p-3 ring-1 ring-[hsl(var(--gold)/0.16)] sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold text-foreground">Filters</p>
                 <p className="text-xs text-muted-foreground">Filter de lijst op actieve en inactieve gebruikers.</p>
@@ -784,7 +784,7 @@ const UsersPage = () => {
                     className={cn(
                       "h-8 rounded-md px-2.5 text-xs font-medium transition-colors ring-1",
                       statusFilter === value
-                        ? "bg-amber-50 text-amber-800 ring-amber-200"
+                        ? "bg-[hsl(var(--gold-soft)/0.72)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.24)]"
                         : "bg-background text-muted-foreground ring-border/40 hover:text-foreground",
                     )}
                   >
@@ -824,7 +824,7 @@ const UsersPage = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border/30 bg-muted/10">
+                <tr className="border-b border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.20)]">
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Gebruiker</th>
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Rol</th>
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">Status</th>
@@ -846,11 +846,11 @@ const UsersPage = () => {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: idx * 0.02 }}
-                      className="hover:bg-amber-50/20 transition-colors duration-150"
+                      className="transition-colors duration-150 hover:bg-[hsl(var(--gold-soft)/0.24)]"
                     >
                       <td className="px-5 py-5 min-w-[300px]">
                         <div className="flex items-center gap-3.5">
-                          <div className="h-11 w-11 rounded-full bg-gradient-to-br from-amber-100 to-stone-100 flex items-center justify-center text-xs font-semibold text-stone-800 shrink-0 shadow-sm ring-1 ring-black/5">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,hsl(var(--gold-soft)),hsl(var(--card)))] text-xs font-semibold text-[hsl(var(--gold-deep))] shadow-sm ring-1 ring-[hsl(var(--gold)/0.18)]">
                             {(row.display_name || row.email || "?").slice(0, 2).toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -873,7 +873,7 @@ const UsersPage = () => {
                       </td>
                       <td className="px-5 py-5 hidden md:table-cell">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-emerald-500" : "bg-muted-foreground/50")} />
+                          <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-[hsl(var(--gold-deep))]" : "bg-muted-foreground/50")} />
                           {active ? "Actief" : "Inactief"}
                         </div>
                       </td>
@@ -905,7 +905,7 @@ const UsersPage = () => {
           </div>
         )}
 
-        <div className="flex items-center justify-between px-5 py-3 border-t border-border/30 bg-muted/10">
+        <div className="flex items-center justify-between border-t border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.18)] px-5 py-3">
           <p className="text-xs text-muted-foreground">
             {filteredUsers.length} van {users.length} gebruiker{users.length !== 1 ? "s" : ""}
           </p>
@@ -970,7 +970,7 @@ const UsersPage = () => {
         <DialogContent className="flex h-[92vh] w-[calc(100vw-32px)] max-w-[1280px] flex-col gap-0 overflow-hidden p-0">
           {selectedUser && (
             <form onSubmit={handleSaveConfig} className="flex min-h-0 flex-1 flex-col">
-              <div className="border-b border-border/30 bg-background px-7 py-6">
+              <div className="border-b border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.28),hsl(var(--background)))] px-7 py-6">
                 <div className="flex items-center gap-3 pr-8">
                   <Button
                     type="button"
@@ -989,15 +989,15 @@ const UsersPage = () => {
                   </DialogHeader>
                 </div>
 
-                <div className="mt-6 flex items-center gap-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-100 to-stone-100 text-lg font-semibold text-stone-800 shadow-sm ring-1 ring-black/5">
+                <div className="mt-6 flex items-center gap-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-[hsl(var(--gold)/0.16)]">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,hsl(var(--gold-soft)),hsl(var(--card)))] text-lg font-semibold text-[hsl(var(--gold-deep))] shadow-sm ring-1 ring-[hsl(var(--gold)/0.22)]">
                     {(selectedUser.display_name || selectedUser.email || "?").slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-lg font-semibold text-foreground">{selectedUser.display_name || "Onbekend"}</p>
                     <p className="mt-0.5 text-sm text-muted-foreground">{roleLabels[getPrimaryRole(selectedUser)]} gebruiker</p>
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="secondary" className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-100">
+                      <Badge variant="secondary" className="rounded-full bg-[hsl(var(--gold-soft)/0.72)] px-2.5 py-1 text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.20)]">
                         Actief
                       </Badge>
                       <span>Laatste login: {formatDate(selectedUser.last_sign_in_at)}</span>
@@ -1008,7 +1008,7 @@ const UsersPage = () => {
                   </Badge>
                 </div>
 
-                <div className="mt-6 flex gap-6 border-b border-border/40">
+                <div className="mt-6 flex gap-6 border-b border-[hsl(var(--gold)/0.18)]">
                   {configTabs.map((tab) => (
                     <button
                       key={tab.id}
@@ -1017,7 +1017,7 @@ const UsersPage = () => {
                       className={cn(
                         "border-b-2 px-0 pb-3 text-sm transition-colors",
                         configTab === tab.id
-                          ? "border-amber-600 text-amber-700"
+                          ? "border-[hsl(var(--gold-deep))] text-[hsl(var(--gold-deep))]"
                           : "border-transparent text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -1027,7 +1027,7 @@ const UsersPage = () => {
                 </div>
 
                 <div className={cn(
-                  "mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 ring-1 ring-emerald-100 transition-opacity duration-300",
+                  "mt-3 flex items-center gap-2 rounded-lg bg-[hsl(var(--gold-soft)/0.72)] px-3 py-2 text-sm font-medium text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.20)] transition-opacity duration-300",
                   configSaved ? "opacity-100" : "pointer-events-none opacity-0",
                 )}>
                     <CheckCircle2 className="h-4 w-4" />
@@ -1035,10 +1035,10 @@ const UsersPage = () => {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-background to-muted/10 px-7 py-7">
+              <div className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--gold-soft)/0.14))] px-7 py-7">
                 <div className="space-y-6">
                   {configTab === "profiel" && (
-                    <section className="space-y-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                    <section className="space-y-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">Profiel</h3>
                         <p className="text-xs text-muted-foreground">Deze naam wordt in overzichten en auditregels getoond.</p>
@@ -1070,7 +1070,7 @@ const UsersPage = () => {
 
                   {configTab === "toegang" && (
                     <>
-                      <section className="space-y-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                      <section className="space-y-4 rounded-lg bg-card p-5 shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <h3 className="text-sm font-semibold text-foreground">Toegangsrechten</h3>
@@ -1101,23 +1101,23 @@ const UsersPage = () => {
                                 className={cn(
                                   "group rounded-lg p-4 text-left shadow-sm ring-1 transition-all",
                                   role === "admin"
-                                    ? "bg-amber-50/60 ring-amber-200 hover:bg-amber-50"
+                                    ? "bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.66),hsl(var(--card)))] ring-[hsl(var(--gold)/0.24)] hover:bg-[hsl(var(--gold-soft)/0.62)]"
                                     : "bg-background ring-border/30 hover:bg-muted/20",
-                                  checked && (role === "admin" ? "ring-2 ring-amber-500" : "ring-2 ring-primary/35"),
+                                  checked && (role === "admin" ? "ring-2 ring-[hsl(var(--gold)/0.58)]" : "ring-2 ring-[hsl(var(--gold)/0.32)]"),
                                   locked && "cursor-not-allowed opacity-50",
                                 )}
                               >
                                 <div className="flex items-start gap-3">
                                   <div className={cn(
                                     "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1",
-                                    role === "admin" ? "bg-white text-amber-700 ring-amber-200" : "bg-muted/20 text-foreground ring-border/50",
+                                    role === "admin" ? "bg-white text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.24)]" : "bg-muted/20 text-foreground ring-border/50",
                                   )}>
                                     <Icon className="h-4 w-4" />
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center justify-between gap-2">
                                       <p className="text-sm font-semibold text-foreground">{access.label}</p>
-                                      {checked && <CheckCircle2 className={cn("h-4 w-4", role === "admin" ? "text-amber-700" : "text-primary")} />}
+                                      {checked && <CheckCircle2 className="h-4 w-4 text-[hsl(var(--gold-deep))]" />}
                                     </div>
                                     <p className="mt-1 text-xs text-muted-foreground">
                                       {role === "admin" ? "Volledige controle" : "Dagelijkse operaties"}
@@ -1131,14 +1131,14 @@ const UsersPage = () => {
                         </div>
                       </section>
 
-                      <section className="flex gap-3 rounded-lg bg-amber-50 p-5 text-amber-900 shadow-sm ring-1 ring-amber-100">
+                      <section className="flex gap-3 rounded-lg bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.72),hsl(var(--card)))] p-5 text-[hsl(var(--gold-deep))] shadow-sm ring-1 ring-[hsl(var(--gold)/0.22)]">
                         <Info className="mt-0.5 h-4 w-4 shrink-0" />
                         <div>
                           <h3 className="text-sm font-semibold">Met deze rol</h3>
                           <div className="mt-3 space-y-2">
                             {impactLines.map((line) => (
                               <div key={line} className="flex items-center gap-2 text-sm">
-                                <CheckCircle2 className="h-4 w-4 text-amber-700" />
+                                <CheckCircle2 className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
                                 {line}
                               </div>
                             ))}
@@ -1146,8 +1146,8 @@ const UsersPage = () => {
                         </div>
                       </section>
 
-                      <section className="overflow-hidden rounded-lg bg-background shadow-sm ring-1 ring-border/30">
-                        <div className="flex items-center justify-between gap-3 border-b border-border/30 px-4 py-3">
+                      <section className="overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
+                        <div className="flex items-center justify-between gap-3 border-b border-[hsl(var(--gold)/0.14)] px-4 py-3">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Modules</p>
                             <p className="text-xs text-muted-foreground/60">Standaardrechten + afwijkingen per module</p>
@@ -1163,7 +1163,7 @@ const UsersPage = () => {
                             Reset alle overrides
                           </Button>
                         </div>
-                        <div className="sticky top-0 z-10 grid grid-cols-[minmax(220px,1fr)_112px_132px_28px] border-b border-border/40 bg-background/95 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 backdrop-blur">
+                        <div className="sticky top-0 z-10 grid grid-cols-[minmax(220px,1fr)_112px_132px_28px] border-b border-[hsl(var(--gold)/0.16)] bg-card/95 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 backdrop-blur">
                           <div>Module</div>
                           <div>Toegang</div>
                           <div>Override (afwijking van rol)</div>
@@ -1178,8 +1178,8 @@ const UsersPage = () => {
                               <div
                                 key={row.module}
                                 className={cn(
-                                  "cursor-pointer transition-colors hover:bg-[#FAFAFA]",
-                                  expanded && "bg-[#FAFAFA]",
+                                  "cursor-pointer transition-colors hover:bg-[hsl(var(--gold-soft)/0.22)]",
+                                  expanded && "bg-[hsl(var(--gold-soft)/0.22)]",
                                 )}
                               >
                                 <div
@@ -1211,8 +1211,8 @@ const UsersPage = () => {
                                     >
                                       <SelectTrigger className={cn(
                                         "h-7 rounded-md border-[#EAEAEA] bg-transparent px-2 text-xs text-muted-foreground shadow-none [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-50",
-                                        "focus:ring-1 focus:ring-amber-200 focus:ring-offset-0",
-                                        overridden && "border-amber-200 text-amber-800",
+                                        "focus:ring-1 focus:ring-[hsl(var(--gold)/0.24)] focus:ring-offset-0",
+                                        overridden && "border-[hsl(var(--gold)/0.28)] text-[hsl(var(--gold-deep))]",
                                       )}>
                                         <SelectValue />
                                       </SelectTrigger>
@@ -1237,7 +1237,7 @@ const UsersPage = () => {
                                         </p>
                                       </div>
                                       {overridden && row.level === "limited" && (
-                                        <p className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-100">
+                                    <p className="rounded-full bg-[hsl(var(--gold-soft)/0.72)] px-2.5 py-1 text-xs font-medium text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.20)]">
                                           Beperkt omdat: {roleLabels[configRole]} rol is overschreven
                                         </p>
                                       )}
@@ -1291,7 +1291,7 @@ const UsersPage = () => {
                                             )}
                                           >
                                             {allowed ? (
-                                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                              <CheckCircle2 className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
                                             ) : (
                                               <LockKeyhole className="h-3.5 w-3.5 text-muted-foreground/60" />
                                             )}
@@ -1306,11 +1306,11 @@ const UsersPage = () => {
                                     </div>
 
                                     {row.level === "limited" && (
-                                      <div className="mt-3 rounded-lg bg-amber-50 px-3 py-3 text-xs text-amber-900 ring-1 ring-amber-100">
+                                      <div className="mt-3 rounded-lg bg-[hsl(var(--gold-soft)/0.62)] px-3 py-3 text-xs text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.20)]">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                           <div>
                                             <p className="font-semibold">Beperkt is concreet vastgelegd</p>
-                                            <p className="text-amber-900/70">Bekijken staat aan; wijzigen en verwijderen blijven standaard uit.</p>
+                                            <p className="text-[hsl(var(--gold-deep)/0.72)]">Bekijken staat aan; wijzigen en verwijderen blijven standaard uit.</p>
                                           </div>
                                           <Button
                                             type="button"
@@ -1320,7 +1320,7 @@ const UsersPage = () => {
                                               ...current,
                                               [row.module]: !current[row.module],
                                             }))}
-                                            className="h-7 px-2 text-xs text-amber-900 hover:bg-amber-100"
+                                            className="h-7 px-2 text-xs text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.85)]"
                                           >
                                             Beperkt aanpassen
                                           </Button>
@@ -1328,7 +1328,7 @@ const UsersPage = () => {
                                         {advancedLimitedModules[row.module] && (
                                           <div className="mt-3 grid gap-2 sm:grid-cols-4">
                                             {(Object.keys(actionLabels) as AccessAction[]).map((action) => (
-                                              <label key={action} className="flex items-center gap-2 rounded-md bg-white/60 px-2 py-1.5 ring-1 ring-amber-100">
+                                              <label key={action} className="flex items-center gap-2 rounded-md bg-white/60 px-2 py-1.5 ring-1 ring-[hsl(var(--gold)/0.18)]">
                                                 <input
                                                   type="checkbox"
                                                   checked={row.actions[action]}
@@ -1352,7 +1352,7 @@ const UsersPage = () => {
                   )}
 
                   {configTab === "activiteit" && (
-                    <section className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                    <section className="rounded-lg bg-card p-5 shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="text-sm font-semibold text-foreground">Activiteit</h3>
@@ -1365,7 +1365,7 @@ const UsersPage = () => {
                           onClick={() => setActivityFiltersOpen((open) => !open)}
                           className={cn(
                             "h-9 gap-2 rounded-md bg-background px-3 text-xs",
-                            activityFiltersOpen && "border-amber-200 bg-amber-50 text-amber-800",
+                            activityFiltersOpen && "border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.62)] text-[hsl(var(--gold-deep))]",
                           )}
                         >
                           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -1374,7 +1374,7 @@ const UsersPage = () => {
                       </div>
 
                       {activityFiltersOpen && (
-                        <div className="mt-4 flex flex-col gap-3 rounded-lg bg-muted/20 p-3 ring-1 ring-border/30 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="mt-4 flex flex-col gap-3 rounded-lg bg-[hsl(var(--gold-soft)/0.22)] p-3 ring-1 ring-[hsl(var(--gold)/0.14)] sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <p className="text-xs font-semibold text-foreground">Filter activiteit</p>
                             <p className="text-xs text-muted-foreground">Toon alleen het type events dat je wilt controleren.</p>
@@ -1388,7 +1388,7 @@ const UsersPage = () => {
                                 className={cn(
                                   "h-8 rounded-md px-2.5 text-xs font-medium transition-colors ring-1",
                                   activityFilter === filter
-                                    ? "bg-amber-50 text-amber-800 ring-amber-200"
+                                    ? "bg-[hsl(var(--gold-soft)/0.72)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.24)]"
                                     : "bg-background text-muted-foreground ring-border/40 hover:text-foreground",
                                 )}
                               >
@@ -1438,8 +1438,8 @@ const UsersPage = () => {
                                   <div key={event.id} className="relative flex gap-4 py-3">
                                     <div className={cn(
                                       "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1",
-                                      item.tone === "success" && "bg-emerald-50 text-emerald-700 ring-emerald-100",
-                                      item.tone === "warning" && "bg-amber-50 text-amber-700 ring-amber-100",
+                                      item.tone === "success" && "bg-[hsl(var(--gold-soft)/0.70)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.20)]",
+                                      item.tone === "warning" && "bg-primary-50 text-primary-700 ring-primary-100",
                                       item.tone === "neutral" && "bg-muted/70 text-foreground ring-border/50",
                                     )}>
                                       <Icon className="h-4 w-4" />
@@ -1786,7 +1786,7 @@ const UsersPage = () => {
                         </div>
                       </div>
 
-                      <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                      <div className="rounded-lg bg-card p-4 shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-start gap-3">
                             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/50">
@@ -1814,7 +1814,7 @@ const UsersPage = () => {
                                       "rounded-full px-2 py-1 text-[11px] font-medium ring-1",
                                       token.revoked_at
                                         ? "bg-muted text-muted-foreground ring-border/50"
-                                        : "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                                        : "bg-[hsl(var(--gold-soft)/0.70)] text-[hsl(var(--gold-deep))] ring-[hsl(var(--gold)/0.20)]",
                                     )}>
                                       {token.revoked_at ? "Ingetrokken" : "Actief"}
                                     </span>
@@ -1839,7 +1839,7 @@ const UsersPage = () => {
                   )}
 
                   {configTab === "instellingen" && (
-                    <section className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                    <section className="rounded-lg bg-card p-5 shadow-sm ring-1 ring-[hsl(var(--gold)/0.14)]">
                       <h3 className="text-sm font-semibold text-foreground">Instellingen</h3>
                       <p className="mt-1 text-sm text-muted-foreground">Gebruikersinstellingen worden beheerd via het vaste rechtenprofiel.</p>
                     </section>
@@ -1847,11 +1847,11 @@ const UsersPage = () => {
                 </div>
               </div>
 
-              <DialogFooter className="border-t border-border/30 bg-background px-7 py-4 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] sm:justify-between">
+              <DialogFooter className="border-t border-[hsl(var(--gold)/0.14)] bg-card px-7 py-4 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] sm:justify-between">
                 <Button type="button" variant="outline" onClick={() => setSelectedUser(null)}>
                   Annuleren
                 </Button>
-                <Button type="submit" disabled={updateProfile.isPending || updateRole.isPending || updateAccess.isPending} className="gap-2 bg-stone-950 text-white hover:bg-stone-800">
+                <Button type="submit" disabled={updateProfile.isPending || updateRole.isPending || updateAccess.isPending} className="gap-2 bg-[hsl(var(--ink))] text-white hover:bg-[hsl(var(--gold-deep))]">
                   {(updateProfile.isPending || updateRole.isPending || updateAccess.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
                   Wijzigingen opslaan
                 </Button>
