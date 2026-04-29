@@ -176,6 +176,13 @@ export function AddressBookSettings() {
     }
   };
 
+  const keepGooglePlacesInsideDialog = (event: Event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest(".pac-container")) {
+      event.preventDefault();
+    }
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-3 px-1 md:flex-row md:items-center md:justify-between">
@@ -280,7 +287,10 @@ export function AddressBookSettings() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => (open ? setDialogOpen(true) : closeDialog())}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent
+          className="max-w-2xl"
+          onInteractOutside={keepGooglePlacesInsideDialog}
+        >
           <DialogHeader>
             <DialogTitle>{editing ? "Adres bewerken" : "Adres toevoegen"}</DialogTitle>
           </DialogHeader>
