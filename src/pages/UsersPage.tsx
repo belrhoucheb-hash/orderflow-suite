@@ -10,7 +10,6 @@ import {
   ChevronDown,
   Clock3,
   Crown,
-  Ellipsis,
   FileText,
   History,
   Inbox,
@@ -716,7 +715,7 @@ const UsersPage = () => {
         title="Gebruikers"
         subtitle="Beheer toegang, rollen en profielgegevens voor kantooraccounts."
         actions={isAdmin ? (
-          <Button onClick={() => setInviteOpen(true)} className="gap-2">
+          <Button onClick={() => setInviteOpen(true)} className="gap-2 bg-[hsl(var(--ink))] text-white hover:bg-[hsl(var(--gold-deep))]">
             <Plus className="h-4 w-4" />
             Uitnodigen
           </Button>
@@ -814,7 +813,7 @@ const UsersPage = () => {
             description={users.length === 0 ? "Nodig de eerste gebruiker uit om toegang te geven." : "Pas je zoekterm aan om gebruikers te tonen."}
             className="py-16"
             action={isAdmin && users.length === 0 ? (
-              <Button onClick={() => setInviteOpen(true)} className="gap-2">
+              <Button onClick={() => setInviteOpen(true)} className="gap-2 bg-[hsl(var(--ink))] text-white hover:bg-[hsl(var(--gold-deep))]">
                 <Plus className="h-4 w-4" />
                 Uitnodigen
               </Button>
@@ -822,7 +821,14 @@ const UsersPage = () => {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[38%]" />
+                <col className="w-[20%]" />
+                <col className="w-[18%]" />
+                <col className="w-[16%]" />
+                {isAdmin && <col className="w-[8%]" />}
+              </colgroup>
               <thead>
                 <tr className="border-b border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.20)]">
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Gebruiker</th>
@@ -887,13 +893,14 @@ const UsersPage = () => {
                         <td className="px-5 py-5 text-right">
                           <Button
                             type="button"
-                            variant="ghost"
-                            size="icon"
+                            variant="outline"
+                            size="sm"
                             onClick={() => openConfig(row)}
-                            aria-label={`Configureren ${row.display_name || row.email || "gebruiker"}`}
-                            className="h-8 w-8"
+                            aria-label={`Bewerken ${row.display_name || row.email || "gebruiker"}`}
+                            className="h-8 gap-1.5 border-[hsl(var(--gold)/0.20)] px-2.5 text-xs text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.55)]"
                           >
-                            <Ellipsis className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
+                            Bewerken
                           </Button>
                         </td>
                       )}
@@ -957,7 +964,7 @@ const UsersPage = () => {
               <Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>
                 Annuleren
               </Button>
-              <Button type="submit" disabled={inviteUser.isPending} className="gap-2">
+              <Button type="submit" disabled={inviteUser.isPending} className="gap-2 bg-[hsl(var(--ink))] text-white hover:bg-[hsl(var(--gold-deep))]">
                 {inviteUser.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                 Versturen
               </Button>
@@ -1535,9 +1542,9 @@ const UsersPage = () => {
                         </div>
                       )}
 
-                      <div className="grid gap-5 xl:grid-cols-[1fr_1fr_1.35fr]">
+                      <div className="grid items-stretch gap-5 xl:grid-cols-3">
                         <div className="space-y-5">
-                          <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                          <div className="flex min-h-[232px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className={cn(
                                 "flex h-9 w-9 items-center justify-center rounded-full ring-1",
@@ -1571,7 +1578,7 @@ const UsersPage = () => {
                                 </span>
                               </div>
                             </div>
-                            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                            <div className="mt-auto grid gap-2 pt-4 sm:grid-cols-2">
                               <Button
                                 type="button"
                                 variant="outline"
@@ -1601,7 +1608,7 @@ const UsersPage = () => {
                             </div>
                           </div>
 
-                          <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                          <div className="flex min-h-[232px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.18)]">
                                 <Monitor className="h-4 w-4 opacity-70" />
@@ -1642,7 +1649,7 @@ const UsersPage = () => {
                             <Button
                               type="button"
                               variant="outline"
-                              className="mt-4 w-full"
+                              className="mt-auto w-full"
                               disabled={revokeSessions.isPending || securityLoading}
                               onClick={() => revokeSessions.mutate({ userId: selectedUser.user_id })}
                             >
@@ -1653,7 +1660,7 @@ const UsersPage = () => {
                         </div>
 
                         <div className="space-y-5">
-                          <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                          <div className="flex min-h-[232px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)/0.18)]">
                                 <KeyRound className="h-4 w-4 opacity-70" />
@@ -1676,7 +1683,7 @@ const UsersPage = () => {
                             <Button
                               type="button"
                               variant="outline"
-                              className="mt-4 w-full"
+                              className="mt-auto w-full"
                               disabled={!selectedUser.email || resetPassword.isPending}
                               onClick={() => resetPassword.mutate({ userId: selectedUser.user_id })}
                             >
@@ -1685,7 +1692,7 @@ const UsersPage = () => {
                             </Button>
                           </div>
 
-                          <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                          <div className="flex min-h-[232px] flex-col rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                             <div className="flex items-start gap-3">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/50">
                                 <LockKeyhole className="h-4 w-4 opacity-70" />
@@ -1719,7 +1726,7 @@ const UsersPage = () => {
                             <Button
                               type="button"
                               variant="outline"
-                              className="mt-4 w-full"
+                              className="mt-auto w-full"
                               onClick={() => setConfigTab("instellingen")}
                             >
                               Instellingen aanpassen
@@ -1727,7 +1734,7 @@ const UsersPage = () => {
                           </div>
                         </div>
 
-                        <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
+                        <div className="min-h-[484px] rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/20">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-base font-semibold text-foreground">Recente activiteit</p>
