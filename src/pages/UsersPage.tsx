@@ -104,6 +104,8 @@ const configTabs = [
 ] as const;
 
 type AccessLevel = "full" | "limited" | "none";
+type AccessAction = "view" | "create" | "edit" | "delete";
+type AccessActions = Record<AccessAction, boolean>;
 
 const accessMatrix = [
   { module: "Orders", description: "Aanmaken, bekijken en beheren", icon: Box, medewerker: "full", admin: "full" },
@@ -123,6 +125,46 @@ const accessMatrix = [
   medewerker: AccessLevel;
   admin: AccessLevel;
 }>;
+
+const actionLabels: Record<AccessAction, string> = {
+  view: "Bekijken",
+  create: "Aanmaken",
+  edit: "Bewerken",
+  delete: "Verwijderen",
+};
+
+const fullActions: AccessActions = {
+  view: true,
+  create: true,
+  edit: true,
+  delete: true,
+};
+
+const noActions: AccessActions = {
+  view: false,
+  create: false,
+  edit: false,
+  delete: false,
+};
+
+const limitedActionsByModule: Record<string, AccessActions> = {
+  Orders: { view: true, create: true, edit: false, delete: false },
+  Dispatch: { view: true, create: false, edit: false, delete: false },
+  Inbox: { view: true, create: true, edit: false, delete: false },
+  Klanten: { view: true, create: true, edit: false, delete: false },
+  Tarieven: { view: true, create: false, edit: false, delete: false },
+  Facturatie: { view: true, create: true, edit: false, delete: false },
+  Rapportages: { view: true, create: false, edit: false, delete: false },
+  Instellingen: { view: true, create: false, edit: false, delete: false },
+  Gebruikers: { view: true, create: false, edit: false, delete: false },
+  "Audit logs": { view: true, create: false, edit: false, delete: false },
+};
+
+function getAccessActions(module: string, level: AccessLevel, customLimitedActions?: AccessActions): AccessActions {
+  if (level === "full") return fullActions;
+  if (level === "none") return noActions;
+  return customLimitedActions ?? limitedActionsByModule[module] ?? { view: true, create: false, edit: false, delete: false };
+}
 
 function getPrimaryRole(user: UserRow): UserRole {
   return user.roles.includes("admin") ? "admin" : "medewerker";
@@ -213,6 +255,8 @@ const UsersPage = () => {
   const [configTab, setConfigTab] = useState<"profiel" | "toegang" | "activiteit" | "beveiliging" | "instellingen">("profiel");
   const [expandedAccessModule, setExpandedAccessModule] = useState<string | null>(null);
   const [accessOverrides, setAccessOverrides] = useState<Record<string, AccessLevel>>({});
+  const [advancedLimitedModules, setAdvancedLimitedModules] = useState<Record<string, boolean>>({});
+  const [customLimitedActions, setCustomLimitedActions] = useState<Record<string, AccessActions>>({});
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
 
@@ -269,18 +313,21 @@ const UsersPage = () => {
       ...item,
       level: accessOverrides[item.module] ?? item[configRole],
       defaultLevel: item[configRole],
+      actions: getAccessActions(item.module, accessOverrides[item.module] ?? item[configRole], customLimitedActions[item.module]),
     }));
-  }, [accessOverrides, configRole]);
+  }, [accessOverrides, configRole, customLimitedActions]);
 
   const impactLines = useMemo(() => {
-    const byModule = Object.fromEntries(effectiveAccess.map((item) => [item.module, item.level]));
+    const byModule = Object.fromEntries(effectiveAccess.map((item) => [item.module, item]));
     const lines: string[] = [];
 
-    if (byModule.Tarieven === "full") lines.push("Tarieven aanpassen");
-    if (byModule.Gebruikers === "full") lines.push("Gebruikers beheren");
-    if (byModule.Instellingen === "full") lines.push("Instellingen wijzigen");
-    if (byModule.Facturatie === "full") lines.push("Facturatie beheren");
-    if (byModule.Tarieven === "limited") lines.push("Kan tarieven bekijken, niet wijzigen");
+    if (byModule.Tarieven?.actions.edit) lines.push("Tarieven aanpassen");
+    if (byModule.Tarieven?.level === "limited" && byModule.Tarieven.actions.view && !byModule.Tarieven.actions.edit) {
+      lines.push("Tarieven bekijken, niet aanpassen");
+    }
+    if (byModule.Gebruikers?.actions.edit) lines.push("Gebruikers beheren");
+    if (byModule.Instellingen?.actions.edit) lines.push("Instellingen wijzigen");
+    if (byModule.Facturatie?.actions.edit) lines.push("Facturatie beheren");
 
     return lines.length > 0 ? lines : ["Geen beheerimpact buiten dagelijkse operatie"];
   }, [effectiveAccess]);
@@ -299,12 +346,28 @@ const UsersPage = () => {
       return next;
     });
     setExpandedAccessModule(module);
+    if (level !== "limited") {
+      setAdvancedLimitedModules((current) => ({ ...current, [module]: false }));
+    }
     setConfigSaved(false);
   };
 
   const resetAccessOverrides = () => {
     setAccessOverrides({});
     setExpandedAccessModule(null);
+    setAdvancedLimitedModules({});
+    setCustomLimitedActions({});
+    setConfigSaved(false);
+  };
+
+  const setLimitedAction = (module: string, action: AccessAction, value: boolean) => {
+    setCustomLimitedActions((current) => ({
+      ...current,
+      [module]: {
+        ...(current[module] ?? limitedActionsByModule[module] ?? getAccessActions(module, "limited")),
+        [action]: value,
+      },
+    }));
     setConfigSaved(false);
   };
 
@@ -331,6 +394,8 @@ const UsersPage = () => {
     setConfigTab("toegang");
     setExpandedAccessModule(null);
     setAccessOverrides({});
+    setAdvancedLimitedModules({});
+    setCustomLimitedActions({});
   };
 
   const handleSaveConfig = async (event: FormEvent) => {
@@ -705,6 +770,8 @@ const UsersPage = () => {
                                   setConfigRole(role);
                                   setAccessOverrides({});
                                   setExpandedAccessModule(null);
+                                  setAdvancedLimitedModules({});
+                                  setCustomLimitedActions({});
                                   setConfigSaved(false);
                                 }}
                                 className={cn(
@@ -836,9 +903,21 @@ const UsersPage = () => {
                                 </div>
                                 {expanded && (
                                   <div className="border-t border-border/30 bg-muted/10 px-12 py-3">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                      {accessLabel(row.level)}
-                                    </p>
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                          {row.module}
+                                        </p>
+                                        <p className="text-sm font-semibold text-foreground">
+                                          {accessLabel(row.level)} geselecteerd
+                                        </p>
+                                      </div>
+                                      {overridden && row.level === "limited" && (
+                                        <p className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-100">
+                                          Beperkt omdat: {roleLabels[configRole]} rol is overschreven
+                                        </p>
+                                      )}
+                                    </div>
                                     <div className="mt-2 grid gap-2 text-sm text-muted-foreground sm:grid-cols-3">
                                       <label className="flex items-center gap-2">
                                         <input
@@ -874,17 +953,69 @@ const UsersPage = () => {
                                         Volledig
                                       </label>
                                     </div>
+                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                      {(Object.keys(actionLabels) as AccessAction[]).map((action) => {
+                                        const allowed = row.actions[action];
+                                        return (
+                                          <div
+                                            key={action}
+                                            className={cn(
+                                              "flex items-center gap-2 rounded-md px-3 py-2 text-xs ring-1",
+                                              allowed
+                                                ? "bg-background text-foreground ring-border/40"
+                                                : "bg-muted/30 text-muted-foreground ring-border/30",
+                                            )}
+                                          >
+                                            {allowed ? (
+                                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                            ) : (
+                                              <LockKeyhole className="h-3.5 w-3.5 text-muted-foreground/60" />
+                                            )}
+                                            <span>
+                                              {allowed
+                                                ? `Mag ${row.module.toLowerCase()} ${actionLabels[action].toLowerCase()}`
+                                                : `Mag ${row.module.toLowerCase()} niet ${actionLabels[action].toLowerCase()}`}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
                                     {row.level === "limited" && (
-                                      <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-100">
-                                        <p className="font-semibold">Beperkt</p>
-                                        <p>Mag bekijken</p>
-                                        <p>Mag niet wijzigen</p>
+                                      <div className="mt-3 rounded-lg bg-amber-50 px-3 py-3 text-xs text-amber-900 ring-1 ring-amber-100">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <div>
+                                            <p className="font-semibold">Beperkt is concreet vastgelegd</p>
+                                            <p className="text-amber-900/70">Bekijken staat aan; wijzigen en verwijderen blijven standaard uit.</p>
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setAdvancedLimitedModules((current) => ({
+                                              ...current,
+                                              [row.module]: !current[row.module],
+                                            }))}
+                                            className="h-7 px-2 text-xs text-amber-900 hover:bg-amber-100"
+                                          >
+                                            Beperkt aanpassen
+                                          </Button>
+                                        </div>
+                                        {advancedLimitedModules[row.module] && (
+                                          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                                            {(Object.keys(actionLabels) as AccessAction[]).map((action) => (
+                                              <label key={action} className="flex items-center gap-2 rounded-md bg-white/60 px-2 py-1.5 ring-1 ring-amber-100">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={row.actions[action]}
+                                                  onChange={(event) => setLimitedAction(row.module, action, event.target.checked)}
+                                                />
+                                                {actionLabels[action]}
+                                              </label>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
-                                    {overridden && (
-                                      <p className="mt-3 text-xs text-muted-foreground">
-                                        Default: {roleLabels[configRole]} · Override: {accessLabel(row.level)}
-                                      </p>
                                     )}
                                   </div>
                                 )}

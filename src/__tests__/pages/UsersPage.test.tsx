@@ -142,8 +142,10 @@ describe("UsersPage", () => {
     expect(screen.getByText("Override (afwijking van rol)")).toBeInTheDocument();
     expect(screen.getAllByText("Beperkt").length).toBeGreaterThan(0);
     await userEvent.click(screen.getByText("Tarieven"));
-    expect(screen.getByText("Mag bekijken")).toBeInTheDocument();
-    expect(screen.getByText("Mag niet wijzigen")).toBeInTheDocument();
+    expect(screen.getByText("Beperkt geselecteerd")).toBeInTheDocument();
+    expect(screen.getByText("Mag tarieven bekijken")).toBeInTheDocument();
+    expect(screen.getByText("Mag tarieven niet bewerken")).toBeInTheDocument();
+    expect(screen.getByText("Mag tarieven niet verwijderen")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Profiel" }));
     expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
     await userEvent.click(screen.getByRole("button", { name: "Activiteit" }));
