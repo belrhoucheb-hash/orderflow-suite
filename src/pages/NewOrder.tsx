@@ -1214,7 +1214,7 @@ const NewOrder = () => {
 
     const seen = new Set<string>();
     return options.filter((option) => {
-      const key = normalizeLookup(option.addressString || option.label);
+      const key = `${normalizeLookup(option.label)}|${normalizeLookup(option.addressString || option.label)}`;
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -1300,7 +1300,7 @@ const NewOrder = () => {
 
     const seen = new Set<string>();
     return options.filter((option) => {
-      const key = normalizeLookup(option.addressString || option.label);
+      const key = `${normalizeLookup(option.label)}|${normalizeLookup(option.addressString || option.label)}`;
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -2441,6 +2441,7 @@ const NewOrder = () => {
       if (pickupLine?.locatie) {
         addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
           label: pickupAddressBookLabelValue || pickupLine.locatie,
+          company_name: pickupAddressBookLabelValue,
           address: pickupLine.locatie,
           street: pickupAddr.street,
           house_number: pickupAddr.house_number,
@@ -2461,6 +2462,7 @@ const NewOrder = () => {
       if (deliveryLine?.locatie) {
         addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
           label: deliveryAddressBookLabelValue || deliveryLine.locatie,
+          company_name: deliveryAddressBookLabelValue,
           address: deliveryLine.locatie,
           street: deliveryAddr.street,
           house_number: deliveryAddr.house_number,

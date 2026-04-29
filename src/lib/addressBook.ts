@@ -39,6 +39,16 @@ export function normalizeZipcode(value: string | null | undefined): string {
   return normalizeAddressPart(value).replace(/\s+/g, "");
 }
 
+export function normalizeCompanyName(value: string | null | undefined): string {
+  const normalized = normalizeAddressPart(value).replace(/\bb v\b/g, "bv");
+  const legalSuffixes = new Set(["bv", "nv", "vof", "cv", "ltd", "llc", "inc", "gmbh", "sa", "sarl", "plc"]);
+  return normalized
+    .split(" ")
+    .filter((part) => part && !legalSuffixes.has(part))
+    .join(" ")
+    .trim();
+}
+
 export function buildAddressBookKey(value: AddressBookValue): string {
   return [
     normalizeAddressPart(value.country || "NL").toUpperCase(),
@@ -48,6 +58,33 @@ export function buildAddressBookKey(value: AddressBookValue): string {
     normalizeAddressPart(value.house_number),
     normalizeAddressPart(value.house_number_suffix),
   ].join("|");
+}
+
+export function buildAddressBookCompanyKey(value: Pick<AddressBookEntryInput, "company_name" | "label" | "address">): string {
+  return normalizeCompanyName(value.company_name || value.label || value.address);
+}
+
+export function buildAddressBookIdentityKey(value: AddressBookEntryInput): string {
+  return `${buildAddressBookCompanyKey(value)}|${buildAddressBookKey(value)}`;
+}
+
+export function isSameAddressBookCompany(
+  existingName: string | null | undefined,
+  nextName: string | null | undefined,
+): boolean {
+  const existing = normalizeCompanyName(existingName);
+  const next = normalizeCompanyName(nextName);
+  if (!existing || !next) return existing === next;
+  if (existing === next) return true;
+
+  const existingParts = existing.split(" ").filter(Boolean);
+  const nextParts = next.split(" ").filter(Boolean);
+  if (existingParts.length === 0 || nextParts.length === 0) return false;
+  if (existingParts[0] !== nextParts[0]) return false;
+
+  const existingSet = new Set(existingParts);
+  const nextSet = new Set(nextParts);
+  return nextParts.every((part) => existingSet.has(part)) || existingParts.every((part) => nextSet.has(part));
 }
 
 export function isAddressBookReady(value: AddressBookValue): boolean {
@@ -76,13 +113,15 @@ export function toAddressBookPayload(input: AddressBookEntryInput) {
         coords_manual: Boolean(input.coords_manual),
       },
       { includeLocality: true },
-    );
+  );
   const label = input.label?.trim() || input.company_name?.trim() || address;
+  const company_name = input.company_name?.trim() || label;
+  const normalized_company_key = buildAddressBookCompanyKey({ company_name, label, address });
 
   return {
     tenant_id: input.tenant_id,
     label,
-    company_name: input.company_name?.trim() || null,
+    company_name,
     address,
     street: input.street.trim(),
     house_number: input.house_number?.trim() || "",
@@ -97,6 +136,7 @@ export function toAddressBookPayload(input: AddressBookEntryInput) {
     notes: input.notes?.trim() || null,
     time_window_start: input.time_window_start || null,
     time_window_end: input.time_window_end || null,
+    normalized_company_key,
     normalized_key,
     source: input.source || "manual",
     usage_count: 1,

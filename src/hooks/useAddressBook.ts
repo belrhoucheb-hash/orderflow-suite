@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import {
-  buildAddressBookKey,
+  isSameAddressBookCompany,
   isAddressBookReady,
   toAddressBookPayload,
   type AddressBookEntryInput,
@@ -29,6 +29,7 @@ export interface AddressBookEntry {
   time_window_end: string | null;
   usage_count: number;
   last_used_at: string | null;
+  normalized_company_key: string;
   normalized_key: string;
   source: string;
   created_at: string;
@@ -90,12 +91,26 @@ export function useUpsertAddressBookEntry() {
       if (!isAddressBookReady(input)) return null;
 
       const payload = toAddressBookPayload({ ...input, tenant_id: tenant.id });
-      const { data: existing, error: lookupError } = await (supabase.from("address_book" as any) as any)
-        .select("id, usage_count, label, company_name, location_type")
+      const { data: exactExisting, error: exactLookupError } = await (supabase.from("address_book" as any) as any)
+        .select("id, usage_count, label, company_name, location_type, normalized_company_key")
         .eq("tenant_id", tenant.id)
-        .eq("normalized_key", buildAddressBookKey(payload))
+        .eq("normalized_key", payload.normalized_key)
+        .eq("normalized_company_key", payload.normalized_company_key)
         .maybeSingle();
+      if (exactLookupError) throw exactLookupError;
+
+      const { data: sameAddressRows, error: lookupError } = exactExisting?.id
+        ? { data: [], error: null }
+        : await (supabase.from("address_book" as any) as any)
+        .select("id, usage_count, label, company_name, location_type, normalized_company_key")
+        .eq("tenant_id", tenant.id)
+        .eq("normalized_key", payload.normalized_key);
       if (lookupError) throw lookupError;
+
+      const existing = (exactExisting as AddressBookEntry | null) || ((sameAddressRows ?? []) as AddressBookEntry[]).find((entry) =>
+        entry.normalized_company_key === payload.normalized_company_key ||
+        isSameAddressBookCompany(entry.company_name || entry.label, payload.company_name || payload.label),
+      );
 
       if (existing?.id) {
         const { data, error } = await (supabase.from("address_book" as any) as any)
@@ -103,6 +118,7 @@ export function useUpsertAddressBookEntry() {
             ...payload,
             label: existing.label || payload.label,
             company_name: existing.company_name || payload.company_name,
+            normalized_company_key: existing.normalized_company_key || payload.normalized_company_key,
             location_type: mergeLocationType(existing.location_type, payload.location_type),
             usage_count: Number(existing.usage_count ?? 0) + 1,
           })
