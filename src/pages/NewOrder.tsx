@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route, ChevronDown } from "lucide-react";
+import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route, ChevronDown, Sparkles, ArrowRight, CircleAlert, CheckCircle2, ClipboardPaste, Truck, Search, Pencil } from "lucide-react";
+import L from "leaflet";
+import type { LatLngExpression } from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { AddressAutocomplete as LegacyAddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   AddressAutocomplete,
@@ -45,7 +48,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
 import { learnAddress, resolveClientAddress } from "@/lib/addressResolver";
 import { orderFormSchema } from "@/lib/validation/orderSchema";
+import { getOrderRouteRuleIssues, type OrderRouteRuleIssue } from "@/lib/validation/orderRouteRules";
 import { useAddressSuggestions } from "@/hooks/useAddressSuggestions";
+import {
+  useAddressBookSearch,
+  useUpsertAddressBookEntry,
+  type AddressBookEntry,
+} from "@/hooks/useAddressBook";
+import { buildAddressBookKey } from "@/lib/addressBook";
 // Orders-audit is server-side via trigger `audit_orders`.
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { LuxeTimePicker } from "@/components/LuxeTimePicker";
@@ -54,6 +64,7 @@ import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
 
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
+type WizardStep = "intake" | "route" | "cargo" | "financial" | "review";
 
 interface FreightLine {
   id: string;
@@ -123,6 +134,26 @@ interface PlannerTemplate {
   shipmentSecure?: boolean;
 }
 
+interface SmartOrderDraft {
+  raw: string;
+  clientHint: string;
+  pickupHint: string;
+  deliveryHint: string;
+  pickupDate: string;
+  pickupFrom: string;
+  pickupTo: string;
+  deliveryDate: string;
+  deliveryBefore: string;
+  quantity: string;
+  unit: "Pallets" | "Colli" | "Box";
+  weightKg: string;
+  reference: string;
+  priority: "Standaard" | "Spoed" | "Retour";
+  missing: string[];
+  matchedClientId?: string | null;
+  matchedClientName?: string | null;
+}
+
 const today = new Date().toISOString().split("T")[0];
 const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
@@ -167,8 +198,377 @@ const QUICK_TEMPLATES: PlannerTemplate[] = [
   },
 ];
 
+const WIZARD_STEPS: { key: WizardStep; label: string; hint: string }[] = [
+  { key: "intake", label: "Klant", hint: "Opdrachtgever kiezen" },
+  { key: "route", label: "Route", hint: "Stops, adressen en tijdvensters" },
+  { key: "cargo", label: "Transport", hint: "Lading, gewicht en voertuig" },
+  { key: "financial", label: "Tarief", hint: "Prijs en toeslagen" },
+  { key: "review", label: "Controle", hint: "Valideren en aanmaken" },
+];
+
+function toIsoDate(offsetDays = 0): string {
+  const next = new Date();
+  next.setDate(next.getDate() + offsetDays);
+  return next.toISOString().slice(0, 10);
+}
+
+function normalizeSmartText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findKeywordIndex(haystack: string, keywords: string[]): number {
+  const lower = normalizeSmartText(haystack).toLowerCase();
+  const hits = keywords
+    .map((keyword) => {
+      const idx = lower.indexOf(keyword.toLowerCase());
+      return idx >= 0 ? idx : Number.POSITIVE_INFINITY;
+    })
+    .filter((idx) => Number.isFinite(idx));
+  return hits.length > 0 ? Math.min(...hits) : -1;
+}
+
+function extractClientHint(raw: string): string {
+  const splitIndex = findKeywordIndex(raw, [" ophalen ", " pickup ", " laden ", " van "]);
+  const beforePickup = splitIndex >= 0 ? raw.slice(0, splitIndex) : raw;
+  const cleaned = beforePickup
+    .replace(/\b(?:vandaag|morgen|spoed|retour|ref(?:erentie)?|po|order(?:nummer)?)\b.*$/i, "")
+    .split(",")[0]
+    ?.trim() ?? "";
+  return cleaned;
+}
+
+function extractSegment(raw: string, keywords: string[], untilKeywords: string[]): string {
+  const normalized = normalizeSmartText(raw);
+  const startPattern = new RegExp(`\\b(?:${keywords.join("|")})\\b`, "i");
+  const startMatch = normalized.match(startPattern);
+  if (!startMatch || startMatch.index == null) return "";
+
+  const fromStart = normalized.slice(startMatch.index + startMatch[0].length).trim();
+  const stopPattern = new RegExp(`\\b(?:${untilKeywords.join("|")})\\b`, "i");
+  const stopMatch = fromStart.match(stopPattern);
+  const segment = stopMatch?.index != null ? fromStart.slice(0, stopMatch.index) : fromStart;
+  return segment.replace(/\s+/g, " ").trim();
+}
+
+function extractTimeRange(segment: string): { from: string; to: string } {
+  const range = segment.match(/(\d{1,2}[:.]\d{2})\s*(?:-|tot|t\/m)\s*(\d{1,2}[:.]\d{2})/i);
+  if (!range) return { from: "", to: "" };
+  return {
+    from: range[1].replace(".", ":").padStart(5, "0"),
+    to: range[2].replace(".", ":").padStart(5, "0"),
+  };
+}
+
+function extractBeforeTime(segment: string): string {
+  const before = normalizeSmartText(segment).match(/\b(?:voor|before)\s*(\d{1,2}[:.]\d{2})/i);
+  return before?.[1]?.replace(".", ":").padStart(5, "0") ?? "";
+}
+
+function extractExactTime(segment: string): string {
+  const normalized = normalizeSmartText(segment);
+  const direct = normalized.match(/\b(?:om|at)?\s*(\d{1,2}[:.]\d{2})\b/i);
+  return direct?.[1]?.replace(".", ":").padStart(5, "0") ?? "";
+}
+
+function extractDateValue(raw: string): string {
+  const normalized = normalizeSmartText(raw).toLowerCase();
+  if (/\bvandaag\b/.test(normalized)) return toIsoDate(0);
+  if (/\bmorgen\b/.test(normalized)) return toIsoDate(1);
+
+  const explicit = normalized.match(/\b(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{2,4}))?\b/);
+  if (!explicit) return "";
+
+  const day = Number(explicit[1]);
+  const month = Number(explicit[2]);
+  const currentYear = new Date().getFullYear();
+  const year = explicit[3] ? Number(explicit[3].length === 2 ? `20${explicit[3]}` : explicit[3]) : currentYear;
+  if (!day || !month || !year) return "";
+
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+}
+
+function cleanupLocationText(value: string): string {
+  return normalizeSmartText(value)
+    .replace(/\b(?:vandaag|morgen)\b.*$/i, "")
+    .replace(/\b(?:voor|before)\s*\d{1,2}[:.]\d{2}\b.*$/i, "")
+    .replace(/\b\d{1,2}[:.]\d{2}\s*(?:-|tot)\s*\d{1,2}[:.]\d{2}\b.*$/i, "")
+    .replace(/\bom\s*\d{1,2}[:.]\d{2}\b.*$/i, "")
+    .replace(/\b\d+\s*(?:pallets?|colli|box|kg)\b.*$/i, "")
+    .replace(/[.,;]\s*$/g, "")
+    .trim();
+}
+
+function parseSmartOrderInput(raw: string, clientMatches: Client[]): SmartOrderDraft {
+  const pickupSegment = extractSegment(raw, ["ophalen", "pickup", "laden", "van"], ["afleveren", "delivery", "lossen", "naar", "vandaag", "morgen"]);
+  const deliverySegment = extractSegment(raw, ["afleveren", "delivery", "lossen", "naar"], ["vandaag", "morgen", "spoed", "retour", "ref", "po"]);
+  const pickupRange = extractTimeRange(raw);
+  const deliveryRange = extractTimeRange(deliverySegment);
+  const pickupExact = extractExactTime(pickupSegment);
+  const deliveryExact = extractExactTime(deliverySegment || raw);
+  const deliveryBefore = extractBeforeTime(deliverySegment || raw);
+  const weightMatch = raw.match(/(\d+(?:[.,]\d+)?)\s*kg\b/i);
+  const palletMatch = raw.match(/(\d+)\s*pallets?\b/i);
+  const colliMatch = raw.match(/(\d+)\s*colli\b/i);
+  const boxMatch = raw.match(/(\d+)\s*box(?:en)?\b/i);
+  const referenceMatch = raw.match(/\b(?:ref(?:erentie)?|po|order(?:nummer)?)\s*[:#-]?\s*([A-Za-z0-9/_-]+)/i);
+  const parsedDate = extractDateValue(raw);
+  const matchedClient = clientMatches.find((client) => raw.toLowerCase().includes(client.name.toLowerCase()))
+    ?? clientMatches.find((client) => extractClientHint(raw).toLowerCase().includes(client.name.toLowerCase()))
+    ?? clientMatches[0]
+    ?? null;
+
+  const quantityMatch = palletMatch ?? colliMatch ?? boxMatch;
+  const unit = palletMatch ? "Pallets" : colliMatch ? "Colli" : "Box";
+
+  const draft: SmartOrderDraft = {
+    raw,
+    clientHint: matchedClient?.name ?? extractClientHint(raw),
+    pickupHint: cleanupLocationText(pickupSegment),
+    deliveryHint: cleanupLocationText(deliverySegment),
+    pickupDate: parsedDate,
+    pickupFrom: pickupRange.from || pickupExact,
+    pickupTo: pickupRange.to,
+    deliveryDate: parsedDate,
+    deliveryBefore: deliveryBefore || deliveryRange.to || deliveryExact,
+    quantity: quantityMatch?.[1] ?? "",
+    unit,
+    weightKg: weightMatch?.[1]?.replace(",", ".") ?? "",
+    reference: referenceMatch?.[1] ?? "",
+    priority: /\bspoed|express\b/i.test(raw) ? "Spoed" : /\bretour\b/i.test(raw) ? "Retour" : "Standaard",
+    missing: [],
+    matchedClientId: matchedClient?.id ?? null,
+    matchedClientName: matchedClient?.name ?? null,
+  };
+
+  draft.missing = [
+    !draft.clientHint && "klant",
+    !draft.pickupHint && "ophaaladres",
+    !draft.deliveryHint && "afleveradres",
+    !draft.quantity && "aantal",
+    !draft.weightKg && "gewicht",
+    !draft.pickupDate && !draft.deliveryDate && !draft.pickupFrom && !draft.deliveryBefore && "datum/tijd",
+  ].filter(Boolean) as string[];
+
+  return draft;
+}
+
 function normalizeLookup(value: string | null | undefined): string {
-  return (value ?? "").trim().toLowerCase();
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function routeQuestionForIssue(issue: OrderRouteRuleIssue | undefined): 1 | 2 | 3 | 4 {
+  if (!issue) return 4;
+  if (issue.key === "route_duplicate") return issue.label === "Levermoment" ? 2 : 4;
+  if (issue.key === "pickup_time_window") return 3;
+  return 4;
+}
+
+function routeMarkerMeta(label: string, index: number, total: number) {
+  if (index === 0 || label === "Ophalen") {
+    return { code: "L", title: "Laden", tone: "pickup" };
+  }
+  if (index === total - 1) {
+    return { code: "B", title: "Bestemming", tone: "destination" };
+  }
+  return { code: "W", title: "Tussenstop", tone: "warehouse" };
+}
+
+interface RoutePreviewMapStop {
+  id: string;
+  label: string;
+  line?: FreightLine | null;
+  onClick: () => void;
+}
+
+function RoutePreviewMap({ stops }: { stops: RoutePreviewMapStop[] }) {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const mappedStops = stops
+    .map((stop, index) => {
+      const lat = stop.line?.lat;
+      const lng = stop.line?.lng;
+      if (lat == null || lng == null) return null;
+      return {
+        ...stop,
+        index,
+        position: [lat, lng] as LatLngExpression,
+      };
+    })
+    .filter(Boolean) as Array<RoutePreviewMapStop & { index: number; position: LatLngExpression }>;
+  const positions = mappedStops.map((stop) => stop.position);
+
+  useEffect(() => {
+    const node = mapRef.current;
+    if (!node || positions.length === 0) return;
+
+    const map = L.map(node, {
+      center: positions[0],
+      zoom: positions.length === 1 ? 14 : 9,
+      zoomControl: true,
+      attributionControl: false,
+      dragging: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      boxZoom: false,
+      keyboard: true,
+      tap: true,
+    });
+    mapInstanceRef.current = map;
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+    if (positions.length > 1) {
+      L.polyline(positions, {
+        color: "hsl(var(--gold))",
+        weight: 4,
+        opacity: 0.78,
+      }).addTo(map);
+      map.fitBounds(L.latLngBounds(positions), { padding: [18, 18], maxZoom: 13, animate: false });
+    } else {
+      map.setView(positions[0], 14, { animate: false });
+    }
+
+    mappedStops.forEach((stop) => {
+      const meta = routeMarkerMeta(stop.label, stop.index, stops.length);
+      const marker = L.divIcon({
+        className: "",
+        html: `
+          <div class="route-preview-marker route-preview-marker--${meta.tone}" title="${meta.title}">
+            <span class="route-preview-marker__code">${meta.code}</span>
+            <span class="route-preview-marker__number">${stop.index + 1}</span>
+          </div>
+        `,
+        iconSize: [34, 38],
+        iconAnchor: [17, 32],
+      });
+
+      L.marker(stop.position, { icon: marker })
+        .addTo(map)
+        .bindTooltip(String(stop.index + 1), {
+          direction: "top",
+          offset: [0, -28],
+          opacity: 0.95,
+          className: "route-preview-marker-tooltip",
+        })
+        .on("click", stop.onClick);
+    });
+
+    window.setTimeout(() => map.invalidateSize(), 0);
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, [mappedStops, positions]);
+
+  if (positions.length === 0) {
+    return (
+      <div className="relative h-32 rounded-xl bg-[linear-gradient(90deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px)] bg-[length:22px_22px]">
+        <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">
+          Kaart verschijnt zodra GPS-punten bekend zijn
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={mapRef} className="h-32 w-full rounded-xl" aria-label="Routekaart" />
+  );
+}
+
+interface RouteLegInsight {
+  id: string;
+  fromLabel: string;
+  toLabel: string;
+  distanceLabel: string;
+  durationLabel: string;
+  etaLabel: string;
+  hasGps: boolean;
+}
+
+function toRad(value: number): number {
+  return (value * Math.PI) / 180;
+}
+
+function roadDistanceKm(from: FreightLine, to: FreightLine): number | null {
+  if (from.lat == null || from.lng == null || to.lat == null || to.lng == null) return null;
+  const earthKm = 6371;
+  const dLat = toRad(to.lat - from.lat);
+  const dLng = toRad(to.lng - from.lng);
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const straightKm = 2 * earthKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.max(1, straightKm * 1.28);
+}
+
+function routeAverageSpeedKmh(vehicle: string): number {
+  const normalized = vehicle.toLowerCase();
+  if (normalized.includes("bus")) return 72;
+  if (normalized.includes("vracht") || normalized.includes("truck")) return 62;
+  return 66;
+}
+
+function parseRouteDeparture(line: FreightLine): Date | null {
+  if (!line.datum || !line.tijd) return null;
+  const date = new Date(`${line.datum}T${line.tijd}`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDuration(minutes: number): string {
+  const rounded = Math.max(1, Math.round(minutes));
+  const hours = Math.floor(rounded / 60);
+  const mins = rounded % 60;
+  if (hours <= 0) return `${mins} min`;
+  return `${hours}u ${mins.toString().padStart(2, "0")}`;
+}
+
+function formatEta(date: Date): string {
+  return date.toLocaleString("nl-NL", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function buildRouteLegInsights(
+  stops: RoutePreviewMapStop[],
+  vehicle: string,
+): RouteLegInsight[] {
+  const speed = routeAverageSpeedKmh(vehicle);
+  return stops.slice(0, -1).map((stop, index) => {
+    const next = stops[index + 1];
+    const from = stop.line;
+    const to = next.line;
+    const distance = from && to ? roadDistanceKm(from, to) : null;
+    const minutes = distance == null ? null : (distance / speed) * 60;
+    const departure = from ? parseRouteDeparture(from) : null;
+    const eta = departure && minutes != null
+      ? new Date(departure.getTime() + minutes * 60_000)
+      : null;
+
+    return {
+      id: `${stop.id}-${next.id}`,
+      fromLabel: stop.label,
+      toLabel: next.label,
+      distanceLabel: distance == null ? "GPS nodig" : `± ${Math.round(distance)} km`,
+      durationLabel: minutes == null ? "ETA volgt" : `± ${formatDuration(minutes)}`,
+      etaLabel: eta ? `ETA ${formatEta(eta)}` : "Datum/tijd nodig",
+      hasGps: distance != null,
+    };
+  });
 }
 
 function composeSearchLabel(address: AddressValue): string {
@@ -204,6 +604,27 @@ function bestEffortAddressValue(address: string | null | undefined, fallbackCoun
   };
 }
 
+function hasUsableAddress(addr: AddressValue): boolean {
+  const street = addr.street.trim();
+  const hasLocality = Boolean(addr.zipcode.trim() || addr.city.trim());
+  const hasResolvedLocation = addr.lat != null && addr.lng != null;
+  const looksLikeFullGoogleLabel = street.includes(",");
+
+  return Boolean(street && (hasLocality || hasResolvedLocation || looksLikeFullGoogleLabel));
+}
+
+function addressValueFromFreightLine(line: FreightLine | null | undefined): AddressValue {
+  if (!line?.locatie) {
+    return { ...EMPTY_ADDRESS, country: "NL" };
+  }
+  return {
+    ...bestEffortAddressValue(line.locatie),
+    lat: line.lat ?? null,
+    lng: line.lng ?? null,
+    coords_manual: line.coords_manual ?? false,
+  };
+}
+
 function addressFromClientRecord(client: Client | null | undefined, type: "main" | "shipping"): AddressValue {
   if (!client) return { ...EMPTY_ADDRESS };
   if (type === "shipping") {
@@ -229,6 +650,20 @@ function addressFromClientRecord(client: Client | null | undefined, type: "main"
     lat: client.lat,
     lng: client.lng,
     coords_manual: client.coords_manual,
+  };
+}
+
+function addressFromAddressBookEntry(entry: AddressBookEntry): AddressValue {
+  return {
+    street: entry.street || "",
+    house_number: entry.house_number || "",
+    house_number_suffix: entry.house_number_suffix || "",
+    zipcode: entry.zipcode || "",
+    city: entry.city || "",
+    country: entry.country || "NL",
+    lat: entry.lat,
+    lng: entry.lng,
+    coords_manual: entry.coords_manual,
   };
 }
 
@@ -267,6 +702,16 @@ const NewOrder = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [mainTab, setMainTab] = useState<MainTab>("algemeen");
   const [bottomTab, setBottomTab] = useState<BottomTab>("vrachmeen");
+  const [wizardStep, setWizardStep] = useState<WizardStep>("intake");
+  const [intakeActiveQuestion, setIntakeActiveQuestion] = useState<1 | 2>(1);
+  const [intakeManualBack, setIntakeManualBack] = useState(false);
+  const [routeActiveQuestion, setRouteActiveQuestion] = useState<1 | 2 | 3 | 4>(1);
+  const [routeManualBack, setRouteManualBack] = useState(false);
+  const [cargoActiveQuestion, setCargoActiveQuestion] = useState<1 | 2 | 3>(1);
+  const [cargoManualBack, setCargoManualBack] = useState(false);
+  const [reviewActiveQuestion, setReviewActiveQuestion] = useState<1 | 2 | 3>(1);
+  const [smartInput, setSmartInput] = useState("");
+  const [smartApplied, setSmartApplied] = useState(false);
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -283,11 +728,15 @@ const NewOrder = () => {
   // Form state
   const [clientName, setClientName] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
+  const [clientQuestionConfirmed, setClientQuestionConfirmed] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
   const { data: clientSuggestions = [] } = useClients(clientName.trim() || undefined);
+  const clientListOpen = clientOpen && clientSuggestions.length > 0;
+  const smartClientLookup = useMemo(() => extractClientHint(smartInput), [smartInput]);
+  const { data: smartClientMatches = [] } = useClients(smartClientLookup || undefined);
   const { data: selectedClient } = useClient(clientId);
   const { data: clientLocations = [] } = useClientLocations(clientId);
-  const { data: addressSuggestions } = useAddressSuggestions(clientName.trim() || null);
+  const { data: addressSuggestions } = useAddressSuggestions(clientName.trim() || null, clientId || null);
   const { data: clientContacts = [] } = useClientContacts(clientId);
   const [contactpersoon, setContactpersoon] = useState("");
   const [prioriteit, setPrioriteit] = useState("Standaard");
@@ -362,10 +811,15 @@ const NewOrder = () => {
   // via lat/lng exact weten waar ze moeten zijn (Jaimy's Webfleet/TomTom-issue).
   const [pickupAddr, setPickupAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
   const [deliveryAddr, setDeliveryAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
+  const [pickupAddressBookLabel, setPickupAddressBookLabel] = useState<{ label: string; key: string } | null>(null);
+  const [deliveryAddressBookLabel, setDeliveryAddressBookLabel] = useState<{ label: string; key: string } | null>(null);
   const { data: pickupClientMatches = [] } = useClients(pickupLookup.trim() || undefined);
   const { data: deliveryClientMatches = [] } = useClients(deliveryLookup.trim() || undefined);
   const { data: pickupLocationMatches = [] } = useTenantLocationSearch(pickupLookup);
   const { data: deliveryLocationMatches = [] } = useTenantLocationSearch(deliveryLookup);
+  const { data: pickupAddressBookMatches = [] } = useAddressBookSearch(pickupLookup);
+  const { data: deliveryAddressBookMatches = [] } = useAddressBookSearch(deliveryLookup);
+  const upsertAddressBookEntry = useUpsertAddressBookEntry();
   const draftStorageKey = useMemo(() => {
     if (!tenant?.id || initialClientId || fromOrderId) return null;
     return `new-order-draft:${tenant.id}`;
@@ -412,8 +866,12 @@ const NewOrder = () => {
 
   const handlePickupAddrChange = useCallback((v: AddressValue) => {
     setPickupAddr(v);
+    setPickupAddressBookLabel((prev) => {
+      if (!prev) return null;
+      return prev.key === buildAddressBookKey(v) ? prev : null;
+    });
     clearError("pickup_address");
-    const composed = composeAddressString(v, { includeLocality: true });
+    const composed = hasUsableAddress(v) ? composeAddressString(v, { includeLocality: true }) : "";
     // Sync plain-string locatie zodat trajectRouter-preview, isValidAddress
     // en afdeling-inferentie blijven werken zonder aanpassingen. Daarnaast
     // ook lat/lng/coords_manual op de leg zetten voor toekomstige hub-routing
@@ -427,8 +885,12 @@ const NewOrder = () => {
 
   const handleDeliveryAddrChange = useCallback((v: AddressValue) => {
     setDeliveryAddr(v);
+    setDeliveryAddressBookLabel((prev) => {
+      if (!prev) return null;
+      return prev.key === buildAddressBookKey(v) ? prev : null;
+    });
     clearError("delivery_address");
-    const composed = composeAddressString(v, { includeLocality: true });
+    const composed = hasUsableAddress(v) ? composeAddressString(v, { includeLocality: true }) : "";
     if (primaryLossenId) {
       setFreightLines(prev => prev.map(l => l.id === primaryLossenId ? {
         ...l, locatie: composed, lat: v.lat, lng: v.lng, coords_manual: v.coords_manual,
@@ -470,11 +932,27 @@ const NewOrder = () => {
 
   const updateFreightLine = (id: string, field: keyof FreightLine, value: string) => {
     setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+    if (field === "datum" || field === "tijd" || field === "tijdTot") {
+      setErrors(prev => {
+        if (!prev.pickup_time_window && !prev.delivery_time_window && !prev.route_sequence) return prev;
+        const next = { ...prev };
+        delete next.pickup_time_window;
+        delete next.delivery_time_window;
+        delete next.route_sequence;
+        return next;
+      });
+    }
     // Wanneer iets de locatie-string van de primaire Laden/Lossen-regel wijzigt
     // buiten de Google-adres-flow om, kunnen adres en lat/lng uiteenlopen.
     // Markeer coords dan als handmatig zodat chauffeurs geen verouderde
     // coordinaten krijgen en de planner het verschil ziet.
     if (field === "locatie") {
+      setErrors(prev => {
+        if (!prev.route_duplicate) return prev;
+        const next = { ...prev };
+        delete next.route_duplicate;
+        return next;
+      });
       if (id === primaryLadenId) {
         setPickupAddr(prev => (prev.coords_manual ? prev : { ...prev, coords_manual: true }));
       } else if (id === primaryLossenId) {
@@ -482,6 +960,32 @@ const NewOrder = () => {
       }
     }
   };
+
+  const updateFreightLineAddress = useCallback((id: string, value: AddressValue, option?: PlannerLocationOption) => {
+    const composed =
+      option?.addressString ||
+      (hasUsableAddress(value) ? composeAddressString(value, { includeLocality: true }) : "") ||
+      composeSearchLabel(value) ||
+      value.street;
+
+    setFreightLines(prev => prev.map(line => line.id === id ? {
+      ...line,
+      locatie: composed,
+      lat: value.lat,
+      lng: value.lng,
+      coords_manual: value.coords_manual,
+      opmerkingen: option?.notesHint || line.opmerkingen,
+      tijd: option?.timeWindowStart || line.tijd,
+      tijdTot: option?.timeWindowEnd || line.tijdTot,
+    } : line));
+    setErrors(prev => {
+      if (!prev.route_duplicate && !prev.delivery_address) return prev;
+      const next = { ...prev };
+      delete next.route_duplicate;
+      delete next.delivery_address;
+      return next;
+    });
+  }, []);
 
   const maybeLearnClientAlias = useCallback(async (selection: AddressResolvedSelection) => {
     if (!tenant?.id || !clientId) return;
@@ -538,12 +1042,12 @@ const NewOrder = () => {
   // Bij blur checken we of de drie kritische velden gevuld zijn. Zo niet,
   // dan zetten we meteen een error neer zodat de gebruiker niet pas bij
   // submit ziet dat straat, postcode of plaats ontbreken.
-  const validateStructuredAddress = (addr: AddressValue): string | null => {
-    if (!addr.street.trim() || !addr.zipcode.trim() || !addr.city.trim()) {
-      return "Vul straat, postcode en plaats in";
-    }
-    return null;
-  };
+    const validateStructuredAddress = (addr: AddressValue): string | null => {
+      if (!hasUsableAddress(addr)) {
+        return "Vul minimaal straat en postcode of plaats in";
+      }
+      return null;
+    };
   const handlePickupAddrBlur = () => {
     const err = validateStructuredAddress(pickupAddr);
     if (err) setErrors(prev => ({ ...prev, pickup_address: err }));
@@ -692,6 +1196,22 @@ const NewOrder = () => {
       });
     });
 
+    pickupAddressBookMatches.forEach((entry) => {
+      const value = addressFromAddressBookEntry(entry);
+      const composed = composeAddressString(value, { includeLocality: true }) || entry.address;
+      options.push({
+        id: `pickup-address-book-${entry.id}`,
+        label: entry.company_name || entry.label,
+        subtitle: composed,
+        badge: "Adresboek",
+        value,
+        addressString: composed,
+        notesHint: entry.notes || undefined,
+        timeWindowStart: entry.time_window_start,
+        timeWindowEnd: entry.time_window_end,
+      });
+    });
+
     const seen = new Set<string>();
     return options.filter((option) => {
       const key = normalizeLookup(option.addressString || option.label);
@@ -699,7 +1219,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.pickup, clientLocations, pickupClientMatches, pickupLocationMatches, selectedClient]);
+  }, [addressSuggestions?.pickup, clientLocations, pickupAddressBookMatches, pickupClientMatches, pickupLocationMatches, selectedClient]);
 
   const deliveryQuickOptions = useMemo<PlannerLocationOption[]>(() => {
     const options: PlannerLocationOption[] = [];
@@ -762,6 +1282,22 @@ const NewOrder = () => {
       });
     });
 
+    deliveryAddressBookMatches.forEach((entry) => {
+      const value = addressFromAddressBookEntry(entry);
+      const composed = composeAddressString(value, { includeLocality: true }) || entry.address;
+      options.push({
+        id: `delivery-address-book-${entry.id}`,
+        label: entry.company_name || entry.label,
+        subtitle: composed,
+        badge: "Adresboek",
+        value,
+        addressString: composed,
+        notesHint: entry.notes || undefined,
+        timeWindowStart: entry.time_window_start,
+        timeWindowEnd: entry.time_window_end,
+      });
+    });
+
     const seen = new Set<string>();
     return options.filter((option) => {
       const key = normalizeLookup(option.addressString || option.label);
@@ -769,7 +1305,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.delivery, clientLocations, deliveryClientMatches, deliveryLocationMatches]);
+  }, [addressSuggestions?.delivery, clientLocations, deliveryAddressBookMatches, deliveryClientMatches, deliveryLocationMatches]);
 
   const addToFreightSummary = () => {
     const ladenLine = freightLines.find(f => f.activiteit === "Laden");
@@ -841,12 +1377,14 @@ const NewOrder = () => {
 
   // Cargo-samenvatting voor FinancialTab, voertuigkeuze op basis van lading.
   const financialCargo: FinancialTabCargo = useMemo(() => ({
+    totalQuantity: cargoTotals.totAantal,
+    unit: cargoTotals.primaryUnit || transportEenheid,
     totalWeightKg: cargoTotals.totGewicht,
     maxLengthCm: Math.max(0, ...cargoRows.map(r => parseFloat(r.lengte) || 0)),
     maxWidthCm: Math.max(0, ...cargoRows.map(r => parseFloat(r.breedte) || 0)),
     maxHeightCm: Math.max(0, ...cargoRows.map(r => parseFloat(r.hoogte) || 0)),
     requiresTailgate: klepNodig,
-  }), [cargoRows, cargoTotals.totGewicht, klepNodig]);
+  }), [cargoRows, cargoTotals.primaryUnit, cargoTotals.totAantal, cargoTotals.totGewicht, klepNodig, transportEenheid]);
 
   const financialPickupLine = freightLines.find(f => f.activiteit === "Laden");
   const financialPickupDate = financialPickupLine?.datum || undefined;
@@ -876,19 +1414,13 @@ const NewOrder = () => {
     }
   }, [suggestedVehicleType, voertuigtypeManual]);
 
+  const routeRuleIssues = useMemo(() => getOrderRouteRuleIssues(freightLines), [freightLines]);
+
   const plannerWarnings = useMemo(() => {
     const warnings: string[] = [];
     const pickupLine = freightLines.find(f => f.activiteit === "Laden");
     const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
-    if (pickupLine?.datum && deliveryLine?.datum && deliveryLine.datum < pickupLine.datum) {
-      warnings.push("Losdatum ligt voor de laaddatum.");
-    }
-    if (pickupLine?.tijd && pickupLine?.tijdTot && pickupLine.tijdTot < pickupLine.tijd) {
-      warnings.push("Ophaaltijd tot ligt voor ophaaltijd van.");
-    }
-    if (deliveryLine?.tijd && deliveryLine?.tijdTot && deliveryLine.tijdTot < deliveryLine.tijd) {
-      warnings.push("Aflevertijd tot ligt voor aflevertijd van.");
-    }
+    routeRuleIssues.forEach((issue) => warnings.push(issue.message));
     if (voertuigtype === "Bestelbus" && cargoTotals.totGewicht > 1200) {
       warnings.push("Gewicht is hoog voor een bestelbus. Overweeg vrachtwagen.");
     }
@@ -896,7 +1428,7 @@ const NewOrder = () => {
       warnings.push("Express zonder expliciet tijdslot kan planningruis geven.");
     }
     return warnings;
-  }, [cargoTotals.totGewicht, freightLines, transportType, voertuigtype]);
+  }, [cargoTotals.totGewicht, freightLines, routeRuleIssues, transportType, voertuigtype]);
 
   const plannerSummary = useMemo(() => {
     const pickupLine = freightLines.find(f => f.activiteit === "Laden");
@@ -916,11 +1448,431 @@ const NewOrder = () => {
   // prefill is). Elke state-wijziging daarna kantelt `dirty`. We gebruiken
   // een serialized signature zodat nieuwe form-velden geen expliciete
   // onChange-hook vereisen.
+  const smartDraft = useMemo(
+    () => parseSmartOrderInput(smartInput, smartClientMatches),
+    [smartClientMatches, smartInput],
+  );
+
+  const wizardMissing = useMemo(() => {
+    const pickupLine = freightLines.find(f => f.activiteit === "Laden");
+    const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
+    return [
+      !(clientId || (clientQuestionConfirmed && clientName.trim().length >= 2)) && "klant",
+      !pickupLine?.locatie && "ophaaladres",
+      !deliveryLine?.locatie && "afleveradres",
+      pickupLine?.locatie && deliveryLine?.locatie && normalizeLookup(pickupLine.locatie) === normalizeLookup(deliveryLine.locatie) && "adrescontrole",
+      !cargoTotals.totAantal && "aantal",
+      !cargoTotals.totGewicht && "gewicht",
+      (!pickupLine?.datum || !deliveryLine?.datum) && "tijdvenster",
+      routeRuleIssues.length > 0 && "tijdvolgorde",
+      showPmt && !shipmentSecure && !pmtMethode && "screening",
+      !pricingPayload.cents && "tarief",
+    ].filter(Boolean) as string[];
+  }, [cargoTotals.totAantal, cargoTotals.totGewicht, clientId, clientName, clientQuestionConfirmed, freightLines, pmtMethode, pricingPayload.cents, routeRuleIssues.length, shipmentSecure, showPmt]);
+
+  const vehicleMatchScore = useMemo(() => {
+    if (!suggestedVehicleType && !voertuigtype) return 0;
+    if (voertuigtype && suggestedVehicleType && voertuigtype === suggestedVehicleType) return 92;
+    if (voertuigtype && suggestedVehicleType && voertuigtype !== suggestedVehicleType) return 76;
+    return suggestedVehicleType ? 88 : 0;
+  }, [suggestedVehicleType, voertuigtype]);
+
+  const wizardStepIndex = WIZARD_STEPS.findIndex((step) => step.key === wizardStep);
+  const wizardProgress = Math.round(((wizardStepIndex + 1) / WIZARD_STEPS.length) * 100);
+  const pickupLine = freightLines.find(f => f.activiteit === "Laden");
+  const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
+  const extraDeliveryLines = freightLines.filter(f => f.activiteit === "Lossen").slice(1);
+  const deliveryStops = [deliveryLine, ...extraDeliveryLines].filter(Boolean) as FreightLine[];
+  const pickupRouteIssue = routeRuleIssues.find((issue) => issue.lineId === pickupLine?.id);
+  const primaryDeliveryRouteIssue = routeRuleIssues.find((issue) => issue.lineId === deliveryLine?.id && issue.key !== "route_duplicate");
+  const isMultiLegRoute = deliveryStops.length > 1;
+  const getDeliveryStopLabel = (index: number, total = deliveryStops.length) => {
+    if (total <= 1) return "Afleveren";
+    if (index === total - 1) return "Eindbestemming";
+    return `Stop ${index + 1}`;
+  };
+  const routeLocationSummary = [
+    pickupLine?.locatie,
+    ...deliveryStops.map(line => line.locatie),
+  ].filter(Boolean).join(" -> ");
+  const clientInputReady = clientName.trim().length >= 2;
+  const clientAnswered = Boolean(clientId || (clientQuestionConfirmed && clientInputReady));
+  const cargoReady = cargoTotals.totAantal > 0 && cargoTotals.totGewicht > 0;
+  const missingClient = !clientAnswered;
+  const missingPickupAddress = !pickupLine?.locatie;
+  const missingDeliveryAddress = !deliveryLine?.locatie;
+  const pickupAndDeliverySame = Boolean(
+    pickupLine?.locatie &&
+    deliveryLine?.locatie &&
+    normalizeLookup(pickupLine.locatie) === normalizeLookup(deliveryLine.locatie),
+  );
+  const missingQuantity = !cargoTotals.totAantal;
+  const missingWeight = !cargoTotals.totGewicht;
+  const missingPickupTimeWindow = !pickupLine?.datum;
+  const missingDeliveryTimeWindow = !deliveryLine?.datum;
+  const missingTimeWindow = missingPickupTimeWindow || missingDeliveryTimeWindow;
+  const routeReady = Boolean(
+    clientAnswered &&
+    pickupLine?.locatie &&
+    deliveryLine?.locatie &&
+    !pickupAndDeliverySame &&
+    !missingTimeWindow &&
+    routeRuleIssues.length === 0,
+  );
+  const routePreviewStops = [
+    {
+      id: pickupLine?.id || "pickup",
+      label: "Ophalen",
+      line: pickupLine,
+      missingAddress: missingPickupAddress,
+      missingDate: missingPickupTimeWindow,
+      issue: routeRuleIssues.find((issue) => issue.lineId === pickupLine?.id),
+      onClick: () => focusWizardTarget("pickup"),
+      fallback: "Ophaaladres kiezen",
+    },
+    ...deliveryStops.map((line, index) => ({
+      id: line.id,
+      label: getDeliveryStopLabel(index, deliveryStops.length),
+      line,
+      missingAddress: index === 0 ? missingDeliveryAddress : !line.locatie,
+      missingDate: index === 0 ? missingDeliveryTimeWindow : !line.datum,
+      issue: routeRuleIssues.find((issue) => issue.lineId === line.id),
+      onClick: () => {
+        if (index === 0) {
+          focusWizardTarget("delivery");
+          return;
+        }
+        setWizardStep("route");
+        setRouteManualBack(true);
+        setRouteActiveQuestion(4);
+      },
+      fallback: index === 0 ? "Afleveradres kiezen" : "Stop invullen",
+    })),
+  ];
+  const routeMapStops = routePreviewStops.filter(stop => stop.line?.locatie);
+  const routeMapPlottedCount = routeMapStops.filter(stop => stop.line?.lat != null && stop.line?.lng != null).length;
+  const routeMapMissingGpsCount = Math.max(routeMapStops.length - routeMapPlottedCount, 0);
+  const routeMapStatusLabel = routeMapStops.length === 0
+    ? "Route preview"
+    : routeMapMissingGpsCount > 0
+      ? `${routeMapPlottedCount}/${routeMapStops.length} GPS-punten`
+      : "Kaart op GPS-punten";
+  const routeLegInsights = buildRouteLegInsights(routeMapStops, voertuigtype || suggestedVehicleType || "");
+  const requiredTextClass = (missing: boolean) => missing ? "text-red-600" : "text-foreground";
+  const previewTextClass = (missing: boolean) => missing ? "text-red-600" : "text-foreground";
+  const requiredFieldClass = (missing: boolean) => missing ? "border-red-200 bg-red-50/40 placeholder:text-red-500" : "";
+  const wizardMissingLabel: Record<string, string> = {
+    klant: "Klant kiezen",
+    ophaaladres: "Ophaaladres kiezen",
+    afleveradres: "Afleveradres kiezen",
+    adrescontrole: "Ander afleveradres kiezen",
+    aantal: "Aantal invullen",
+    gewicht: "Gewicht invullen",
+    tijdvenster: "Tijdvenster plannen",
+    tijdvolgorde: "Tijdvolgorde corrigeren",
+    screening: "EDD/X-RAY kiezen",
+    tarief: "Tarief controleren",
+  };
+  const pricingLabel = pricingPayload.cents != null
+    ? `EUR ${(pricingPayload.cents / 100).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : "Nog geen tarief";
+  const pmtLabel = !showPmt
+    ? "Niet nodig"
+    : shipmentSecure
+      ? "Secure"
+      : pmtMethode
+        ? pmtMethode === "edd" ? "EDD" : "X-RAY"
+        : "Screening kiezen";
+  const currentFlowCue =
+    wizardStep === "intake"
+      ? "Start met de opdrachtgever"
+      : wizardStep === "route"
+        ? missingPickupAddress
+          ? "Kies het ophaaladres"
+          : missingDeliveryAddress
+            ? "Route gestart: kies afleveradres"
+            : missingPickupTimeWindow
+              ? "Route staat: plan laadmoment"
+              : missingDeliveryTimeWindow
+                ? "Route staat: plan levermoment"
+              : "Route compleet"
+          : wizardStep === "cargo"
+            ? missingQuantity
+              ? "Vul de lading"
+              : missingWeight
+                ? "Aantal staat: voeg gewicht toe"
+                : "Lading compleet"
+            : wizardStep === "financial"
+              ? pricingPayload.cents != null
+                ? "Tarief staat klaar"
+                : "Controleer het tarief"
+          : wizardMissing.length
+            ? "Controleer open punten"
+            : "Klaar om aan te maken";
+  const clientNeedsConfirmation = clientInputReady && !clientAnswered;
+  const intakeQuestion = missingClient
+    ? { step: "Klant", title: "Voor welke klant is deze order?", hint: "Typ minimaal 2 tekens en bevestig met Enter of Volgende stap." }
+    : { step: "Referentie", title: "Welke referentie en instructies horen erbij?", hint: "Vul alleen aan wat de planner straks nodig heeft." };
+  const routeQuestion = missingPickupAddress
+    ? { step: "Ophaaladres", title: "Waar wordt de lading opgehaald?", hint: "Begin met het laadadres. De loslocatie komt daarna." }
+    : missingDeliveryAddress
+      ? { step: "Volgende stop", title: "Wat is de volgende stop of eindbestemming?", hint: "Dit kan een losadres, warehouse, crossdock of eindbestemming zijn." }
+      : missingPickupTimeWindow
+        ? { step: "Laadmoment", title: "Wanneer wordt de lading opgehaald?", hint: "Kies datum en tijdvenster voor laden." }
+        : { step: "Levermoment", title: "Wanneer moet de lading daar zijn?", hint: "Kies datum en tijdvenster voor lossen of overdracht." };
+  const cargoQuestion = missingQuantity
+    ? { step: "Aantal", title: "Hoeveel eenheden vervoer je?", hint: "Start met het aantal pallets, colli of boxen." }
+    : missingWeight
+      ? { step: "Gewicht", title: "Wat is het totale gewicht?", hint: "Daarmee kunnen voertuig en planning meteen worden ingeschat." }
+      : { step: "Klaar", title: "Lading staat goed genoeg voor planning", hint: "Je kunt nu details zoals afmetingen, ADR of voertuig aanvullen." };
+  const routeSuggestedQuestion = missingPickupAddress
+    ? 1
+    : missingDeliveryAddress
+      ? 2
+      : missingPickupTimeWindow
+        ? 3
+        : missingDeliveryTimeWindow
+          ? 4
+          : routeQuestionForIssue(routeRuleIssues[0]);
+  const cargoSuggestedQuestion = missingQuantity ? 1 : missingWeight ? 2 : 3;
+
+  useEffect(() => {
+    if (!clientAnswered) {
+      setIntakeActiveQuestion(1);
+      setIntakeManualBack(false);
+    }
+  }, [clientAnswered, intakeManualBack]);
+
+  useEffect(() => {
+    setRouteActiveQuestion((current) => {
+      if (current > routeSuggestedQuestion) return routeSuggestedQuestion as 1 | 2 | 3 | 4;
+      return current;
+    });
+    if (routeActiveQuestion > routeSuggestedQuestion) setRouteManualBack(false);
+  }, [routeActiveQuestion, routeSuggestedQuestion]);
+
+  useEffect(() => {
+    if (cargoActiveQuestion > cargoSuggestedQuestion) {
+      setCargoManualBack(false);
+      setCargoActiveQuestion(cargoSuggestedQuestion as 1 | 2 | 3);
+    }
+  }, [cargoActiveQuestion, cargoSuggestedQuestion]);
+
+  const wizardStepStatus = useCallback((key: WizardStep) => {
+    if (key === "intake") return clientAnswered ? "Compleet" : "Nog invullen";
+    if (key === "route") return routeReady ? "Compleet" : "Nog invullen";
+    if (key === "cargo") return cargoReady ? "Compleet" : "Nog invullen";
+    if (key === "financial") return pricingPayload.cents != null ? "Tarief klaar" : "Controleren";
+    return wizardMissing.length === 0 ? "Klaar voor aanmaken" : `${wizardMissing.length} open`;
+  }, [cargoReady, clientAnswered, pricingPayload.cents, routeReady, wizardMissing.length]);
+
+  const applySmartDraft = useCallback(() => {
+    if (!smartInput.trim()) {
+      toast.error("Plak eerst ordertekst of intake-informatie");
+      return;
+    }
+
+    const nextDraft = parseSmartOrderInput(smartInput, smartClientMatches);
+
+    if (nextDraft.matchedClientId && nextDraft.matchedClientName) {
+      setClientId(nextDraft.matchedClientId);
+      setClientName(nextDraft.matchedClientName);
+      setClientOpen(false);
+    } else if (nextDraft.clientHint) {
+      setClientName(nextDraft.clientHint);
+    }
+
+    setPrioriteit(nextDraft.priority);
+    if (nextDraft.reference) setKlantReferentie(nextDraft.reference);
+
+    if (nextDraft.pickupHint) {
+      handlePickupAddrChange(bestEffortAddressValue(nextDraft.pickupHint));
+      setPickupLookup(nextDraft.pickupHint);
+    }
+    if (nextDraft.deliveryHint) {
+      handleDeliveryAddrChange(bestEffortAddressValue(nextDraft.deliveryHint));
+      setDeliveryLookup(nextDraft.deliveryHint);
+    }
+
+    setFreightLines(prev => prev.map((line) => {
+      if (line.activiteit === "Laden") {
+        return {
+          ...line,
+          locatie: nextDraft.pickupHint || line.locatie,
+          datum: nextDraft.pickupDate || line.datum,
+          tijd: nextDraft.pickupFrom || line.tijd,
+          tijdTot: nextDraft.pickupTo || line.tijdTot,
+        };
+      }
+      if (line.activiteit === "Lossen") {
+        return {
+          ...line,
+          locatie: nextDraft.deliveryHint || line.locatie,
+          datum: nextDraft.deliveryDate || nextDraft.pickupDate || line.datum,
+          tijdTot: nextDraft.deliveryBefore || line.tijdTot,
+        };
+      }
+      return line;
+    }));
+
+    setCargoRows(prev => {
+      const first = prev[0] ?? {
+        id: crypto.randomUUID(),
+        aantal: "",
+        eenheid: "Pallets" as const,
+        gewicht: "",
+        lengte: "",
+        breedte: "",
+        hoogte: "",
+        stapelbaar: true,
+        adr: "",
+        omschrijving: "",
+      };
+      return [{
+        ...first,
+        aantal: nextDraft.quantity || first.aantal,
+        eenheid: nextDraft.unit || first.eenheid,
+        gewicht: nextDraft.weightKg || first.gewicht,
+        omschrijving: first.omschrijving || (nextDraft.reference ? `Ref ${nextDraft.reference}` : ""),
+      }];
+    });
+
+    setSmartApplied(true);
+    setWizardStep("route");
+    setMainTab("algemeen");
+    toast.success("Ordervoorstel ingevuld", {
+      description: nextDraft.missing.length > 0
+        ? `Nog aanvullen: ${nextDraft.missing.join(", ")}`
+        : "Route, klant en lading zijn voorgesteld.",
+    });
+  }, [handleDeliveryAddrChange, handlePickupAddrChange, smartClientMatches, smartInput]);
+
+  const goToNextWizardStep = useCallback(() => {
+    if (wizardStep === "intake" && intakeActiveQuestion === 1 && !clientAnswered) {
+      if (clientInputReady) {
+        setClientQuestionConfirmed(true);
+        setIntakeManualBack(false);
+        setWizardStep("route");
+        setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+      } else {
+        setErrors(prev => ({ ...prev, client_name: "Typ minimaal 2 tekens of kies een klant uit de lijst." }));
+      }
+      return;
+    }
+    if (wizardStep === "intake" && intakeActiveQuestion === 1 && clientAnswered) {
+      setIntakeManualBack(false);
+      setWizardStep("route");
+      setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+      return;
+    }
+    if (wizardStep === "route") {
+      if (routeActiveQuestion === 1 && missingPickupAddress) {
+        toast.error("Ophaaladres ontbreekt", { description: "Kies eerst waar de lading wordt opgehaald." });
+        return;
+      }
+      if (routeActiveQuestion === 2 && missingDeliveryAddress) {
+        toast.error("Volgende stop ontbreekt", { description: "Kies een losadres, warehouse of eindbestemming." });
+        return;
+      }
+      if (routeActiveQuestion >= 2 && pickupAndDeliverySame) {
+        setErrors(prev => ({
+          ...prev,
+          delivery_address: "Afleveradres mag niet hetzelfde zijn als ophaaladres.",
+        }));
+        setRouteManualBack(true);
+        setRouteActiveQuestion(2);
+        toast.error("Adrescontrole", { description: "Ophalen en afleveren moeten verschillende locaties zijn." });
+        return;
+      }
+      if (routeActiveQuestion === 3 && missingPickupTimeWindow) {
+        toast.error("Laadmoment ontbreekt", { description: "Kies minimaal de datum waarop wordt opgehaald." });
+        return;
+      }
+      if (routeActiveQuestion === 4 && missingDeliveryTimeWindow) {
+        toast.error("Levermoment ontbreekt", { description: "Kies minimaal de datum waarop geleverd of overgedragen wordt." });
+        return;
+      }
+      const blockingRouteIssue = routeRuleIssues.find((issue) => routeActiveQuestion >= routeQuestionForIssue(issue));
+      if (blockingRouteIssue) {
+        const errorKey = blockingRouteIssue.key === "route_duplicate" ? "delivery_address" : blockingRouteIssue.key;
+        setErrors(prev => ({
+          ...prev,
+          [errorKey]: blockingRouteIssue.message,
+        }));
+        setRouteManualBack(true);
+        setRouteActiveQuestion(routeQuestionForIssue(blockingRouteIssue));
+        toast.error("Routecontrole", { description: blockingRouteIssue.message });
+        return;
+      }
+    }
+    if (wizardStep === "route" && routeActiveQuestion < routeSuggestedQuestion) {
+      setRouteManualBack(false);
+      setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+      return;
+    }
+    if (wizardStep === "cargo" && cargoActiveQuestion < cargoSuggestedQuestion) {
+      setCargoManualBack(false);
+      setCargoActiveQuestion(cargoSuggestedQuestion as 1 | 2 | 3);
+      return;
+    }
+    setWizardStep((current) => {
+      if (current === "intake") return "route";
+      if (current === "route") return "cargo";
+      if (current === "cargo") return "financial";
+      if (current === "financial") return "review";
+      return "review";
+    });
+  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, intakeActiveQuestion, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, wizardStep]);
+
+  const goToPreviousWizardStep = useCallback(() => {
+    if (wizardStep === "intake" && intakeActiveQuestion === 2) {
+      setIntakeManualBack(true);
+      setIntakeActiveQuestion(1);
+      return;
+    }
+    if (wizardStep === "route" && routeActiveQuestion > 1) {
+      setRouteManualBack(true);
+      setRouteActiveQuestion((routeActiveQuestion - 1) as 1 | 2 | 3 | 4);
+      return;
+    }
+    if (wizardStep === "cargo" && cargoActiveQuestion > 1) {
+      setCargoManualBack(true);
+      setCargoActiveQuestion((cargoActiveQuestion - 1) as 1 | 2 | 3);
+      return;
+    }
+    if (wizardStep === "review" && reviewActiveQuestion > 1) {
+      setReviewActiveQuestion((reviewActiveQuestion - 1) as 1 | 2 | 3);
+      return;
+    }
+    if (wizardStep === "review") {
+      setWizardStep("financial");
+      return;
+    }
+    if (wizardStep === "financial") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
+      setCargoActiveQuestion(3);
+      return;
+    }
+    if (wizardStep === "cargo") {
+      setWizardStep("route");
+      setRouteManualBack(true);
+      setRouteActiveQuestion(missingPickupTimeWindow ? 3 : 4);
+      return;
+    }
+    if (wizardStep === "route") {
+      setWizardStep("intake");
+      setIntakeManualBack(true);
+      setIntakeActiveQuestion(1);
+    }
+  }, [cargoActiveQuestion, intakeActiveQuestion, missingPickupTimeWindow, reviewActiveQuestion, routeActiveQuestion, wizardStep]);
+
   const [prefillReady, setPrefillReady] = useState(!initialClientId && !fromOrderId);
   const [dirty, setDirty] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const baselineSignatureRef = useRef<string | null>(null);
   const skipDirtyGuardRef = useRef(false);
+  const flowHydratedRef = useRef(false);
 
   const formSignature = useMemo(() => JSON.stringify({
     clientName, clientId, contactpersoon, prioriteit, klantReferentie,
@@ -997,7 +1949,10 @@ const NewOrder = () => {
     }
     try {
       const parsed = JSON.parse(raw) as Partial<typeof draftPayload> & { savedAt?: string };
-      if (parsed.clientName) setClientName(parsed.clientName);
+      if (parsed.clientName) {
+        setClientName(parsed.clientName);
+        if (parsed.clientName.trim().length >= 2) setClientQuestionConfirmed(true);
+      }
       if (parsed.clientId) setClientId(parsed.clientId);
       if (parsed.contactpersoon) setContactpersoon(parsed.contactpersoon);
       if (parsed.prioriteit) setPrioriteit(parsed.prioriteit);
@@ -1028,6 +1983,143 @@ const NewOrder = () => {
       setDraftRestored(true);
     }
   }, [draftPayload, draftRestored, draftStorageKey, prefillReady]);
+
+  useEffect(() => {
+    if (!draftRestored || flowHydratedRef.current) return;
+    flowHydratedRef.current = true;
+
+    const restoredClientAnswered = clientAnswered || clientName.trim().length >= 2;
+    if (!restoredClientAnswered) {
+      setWizardStep("intake");
+      setIntakeActiveQuestion(1);
+      return;
+    }
+
+    if (missingPickupAddress) {
+      setWizardStep("route");
+      setRouteActiveQuestion(1);
+      return;
+    }
+
+    if (missingDeliveryAddress) {
+      setWizardStep("route");
+      setRouteActiveQuestion(2);
+      return;
+    }
+
+    if (missingTimeWindow) {
+      setWizardStep("route");
+      setRouteActiveQuestion(missingPickupTimeWindow ? 3 : 4);
+      return;
+    }
+
+    if (missingQuantity) {
+      setWizardStep("cargo");
+      setCargoActiveQuestion(1);
+      return;
+    }
+
+    if (missingWeight) {
+      setWizardStep("cargo");
+      setCargoActiveQuestion(2);
+      return;
+    }
+
+    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
+      setWizardStep("cargo");
+      setCargoActiveQuestion(3);
+      return;
+    }
+
+    if (pricingPayload.cents == null) {
+      setWizardStep("financial");
+      return;
+    }
+
+    setWizardStep("review");
+    setReviewActiveQuestion(1);
+  }, [
+    afdeling,
+    clientAnswered,
+    clientName,
+    draftRestored,
+    missingDeliveryAddress,
+    missingPickupAddress,
+    missingPickupTimeWindow,
+    missingQuantity,
+    missingTimeWindow,
+    missingWeight,
+    pricingPayload.cents,
+    suggestedTransportType,
+    suggestedVehicleType,
+    transportType,
+    voertuigtype,
+  ]);
+
+  useEffect(() => {
+    if (!draftRestored || intakeManualBack || wizardStep !== "intake" || !clientAnswered) return;
+
+    if (missingPickupAddress) {
+      setWizardStep("route");
+      setRouteActiveQuestion(1);
+      return;
+    }
+
+    if (missingDeliveryAddress) {
+      setWizardStep("route");
+      setRouteActiveQuestion(2);
+      return;
+    }
+
+    if (missingTimeWindow) {
+      setWizardStep("route");
+      setRouteActiveQuestion(missingPickupTimeWindow ? 3 : 4);
+      return;
+    }
+
+    if (missingQuantity) {
+      setWizardStep("cargo");
+      setCargoActiveQuestion(1);
+      return;
+    }
+
+    if (missingWeight) {
+      setWizardStep("cargo");
+      setCargoActiveQuestion(2);
+      return;
+    }
+
+    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
+      setWizardStep("cargo");
+      setCargoActiveQuestion(3);
+      return;
+    }
+
+    if (pricingPayload.cents == null) {
+      setWizardStep("financial");
+      return;
+    }
+
+    setWizardStep("review");
+    setReviewActiveQuestion(1);
+  }, [
+    afdeling,
+    clientAnswered,
+    draftRestored,
+    intakeManualBack,
+    missingDeliveryAddress,
+    missingPickupAddress,
+    missingPickupTimeWindow,
+    missingQuantity,
+    missingTimeWindow,
+    missingWeight,
+    pricingPayload.cents,
+    suggestedTransportType,
+    suggestedVehicleType,
+    transportType,
+    voertuigtype,
+    wizardStep,
+  ]);
 
   useEffect(() => {
     if (!draftStorageKey || !prefillReady || !draftRestored) return;
@@ -1067,7 +2159,91 @@ const NewOrder = () => {
     navigate("/orders");
   };
 
-  // 8.12 – Save ALL form fields to the database, not just a subset.
+  type WizardFocusTarget = "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "transport" | "security" | "pricing";
+
+  const openWizardFocusTarget = (target: WizardFocusTarget) => {
+    setMainTab("algemeen");
+
+    if (target === "client") {
+      setWizardStep("intake");
+      setIntakeManualBack(true);
+      setIntakeActiveQuestion(1);
+    }
+    if (target === "pickup") {
+      setWizardStep("route");
+      setRouteManualBack(true);
+      setRouteActiveQuestion(1);
+    }
+    if (target === "delivery") {
+      setWizardStep("route");
+      setRouteManualBack(true);
+      setRouteActiveQuestion(2);
+    }
+    if (target === "time") {
+      setWizardStep("route");
+      setRouteManualBack(true);
+      setRouteActiveQuestion(
+        missingPickupTimeWindow
+          ? 3
+          : missingDeliveryTimeWindow
+            ? 4
+            : routeQuestionForIssue(routeRuleIssues[0]),
+      );
+    }
+    if (target === "quantity") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
+      setCargoActiveQuestion(1);
+    }
+    if (target === "weight") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
+      setCargoActiveQuestion(2);
+    }
+    if (target === "transport" || target === "security") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
+      setCargoActiveQuestion(3);
+    }
+    if (target === "pricing") {
+      setWizardStep("financial");
+    }
+
+    window.setTimeout(() => {
+      const selectorByTarget: Record<WizardFocusTarget, string> = {
+        client: "input[placeholder^='Typ klantnaam']",
+        pickup: "input[placeholder='Typ bedrijfsnaam, straat of dockadres']",
+        delivery: "input[placeholder^='Typ warehouse']",
+        quantity: "input[placeholder='Bijv. 6']",
+        weight: "input[placeholder='Bijv. 850']",
+        time: "input[type='date'], input[type='time']",
+        transport: "[role='combobox']",
+        security: "button[aria-checked]",
+        pricing: "input[placeholder='0']",
+      };
+      const element = document.querySelector<HTMLElement>(selectorByTarget[target]);
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      element?.focus();
+    }, 150);
+  };
+
+  const validationTargetByErrorKey: Record<string, WizardFocusTarget> = {
+    client_name: "client",
+    pickup_address: "pickup",
+    pickup_structured: "pickup",
+    delivery_address: "delivery",
+    delivery_structured: "delivery",
+    quantity: "quantity",
+    unit: "quantity",
+    weight_kg: "weight",
+    afdeling: "transport",
+    pickup_time_window: "time",
+    delivery_time_window: "time",
+    route_sequence: "time",
+    route_duplicate: "delivery",
+  };
+
+  // 8.12 - Save ALL form fields to the database, not just a subset.
   // Fields without a dedicated DB column are stored in the `attachments` JSON
   // column as structured metadata so nothing is lost.
   const handleSave = async (andClose: boolean) => {
@@ -1078,8 +2254,8 @@ const NewOrder = () => {
     // gestructureerde adres-checks (street/zipcode/city plus de "is geen losse
     // plaatsnaam"-regel) via superRefine, dus elke ZodError vertaalt direct
     // naar een UI-veldfout zonder parallelle if/else-ketens.
-    const quantityNum = quantity ? parseInt(quantity) : NaN;
-    const weightNum = weightKg ? parseFloat(weightKg) : NaN;
+    const quantityNum = cargoTotals.totAantal || (quantity ? parseInt(quantity) : NaN);
+    const weightNum = cargoTotals.totGewicht || (weightKg ? parseFloat(weightKg) : NaN);
     try {
       orderFormSchema.parse({
         client_name: clientName,
@@ -1087,7 +2263,7 @@ const NewOrder = () => {
         delivery_address: deliveryLine?.locatie ?? "",
         quantity: Number.isFinite(quantityNum) ? quantityNum : undefined,
         weight_kg: Number.isFinite(weightNum) ? weightNum : undefined,
-        unit: transportEenheid,
+        unit: cargoTotals.primaryUnit || transportEenheid,
         afdeling: afdeling,
         pickup_structured: {
           street: pickupAddr.street,
@@ -1108,8 +2284,8 @@ const NewOrder = () => {
           if (key && !newErrors[key]) newErrors[key] = issue.message;
         }
         setErrors(newErrors);
-        setMainTab("algemeen");
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        const firstErrorKey = Object.keys(newErrors)[0];
+        openWizardFocusTarget(validationTargetByErrorKey[firstErrorKey] ?? "client");
         const count = Object.keys(newErrors).length;
         toast.error(`Formulier bevat ${count} validatiefout${count > 1 ? "en" : ""}`, {
           description: Object.values(newErrors).join(" | "),
@@ -1119,7 +2295,31 @@ const NewOrder = () => {
       throw err;
     }
 
+    if (routeRuleIssues.length > 0) {
+      const routeErrors = routeRuleIssues.reduce<Record<string, string>>((acc, issue) => {
+        const key = issue.key === "route_duplicate" ? "delivery_address" : issue.key;
+        if (!acc[key]) acc[key] = issue.message;
+        return acc;
+      }, {});
+      setErrors(routeErrors);
+      const firstErrorKey = Object.keys(routeErrors)[0];
+      openWizardFocusTarget(validationTargetByErrorKey[firstErrorKey] ?? "time");
+      const count = Object.keys(routeErrors).length;
+      toast.error(`Route bevat ${count} logische fout${count > 1 ? "en" : ""}`, {
+        description: Object.values(routeErrors).join(" | "),
+      });
+      return;
+    }
+
     setErrors({});
+    if (pricingPayload.cents == null) {
+      openWizardFocusTarget("pricing");
+      toast.error("Tarief ontbreekt", {
+        description: "Controleer het tarief voordat je de order aanmaakt.",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       if (!tenant?.id) throw new Error("Geen actieve tenant gevonden");
@@ -1173,7 +2373,7 @@ const NewOrder = () => {
         pickup_address: pickupLine?.locatie || null,
         delivery_address: deliveryLine?.locatie || null,
         final_delivery_address: finalDeliveryAddress,
-        source: "MANUAL",
+        source: "INTERN",
         client_name: clientName.trim(),
         client_id: clientId,
         transport_type: transportType || null,
@@ -1229,6 +2429,83 @@ const NewOrder = () => {
       };
 
       const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);
+      const addressBookWrites: Array<Promise<unknown>> = [];
+      const pickupAddressBookLabelValue =
+        pickupAddressBookLabel?.key === buildAddressBookKey(pickupAddr)
+          ? pickupAddressBookLabel.label
+          : null;
+      const deliveryAddressBookLabelValue =
+        deliveryAddressBookLabel?.key === buildAddressBookKey(deliveryAddr)
+          ? deliveryAddressBookLabel.label
+          : null;
+      if (pickupLine?.locatie) {
+        addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
+          label: pickupAddressBookLabelValue || pickupLine.locatie,
+          address: pickupLine.locatie,
+          street: pickupAddr.street,
+          house_number: pickupAddr.house_number,
+          house_number_suffix: pickupAddr.house_number_suffix,
+          zipcode: pickupAddr.zipcode,
+          city: pickupAddr.city,
+          country: pickupAddr.country,
+          lat: pickupAddr.lat,
+          lng: pickupAddr.lng,
+          coords_manual: pickupAddr.coords_manual,
+          location_type: "pickup",
+          notes: pickupLine.opmerkingen || null,
+          time_window_start: pickupLine.tijd || null,
+          time_window_end: pickupLine.tijdTot || null,
+          source: "order",
+        }));
+      }
+      if (deliveryLine?.locatie) {
+        addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
+          label: deliveryAddressBookLabelValue || deliveryLine.locatie,
+          address: deliveryLine.locatie,
+          street: deliveryAddr.street,
+          house_number: deliveryAddr.house_number,
+          house_number_suffix: deliveryAddr.house_number_suffix,
+          zipcode: deliveryAddr.zipcode,
+          city: deliveryAddr.city,
+          country: deliveryAddr.country,
+          lat: deliveryAddr.lat,
+          lng: deliveryAddr.lng,
+          coords_manual: deliveryAddr.coords_manual,
+          location_type: "delivery",
+          notes: deliveryLine.opmerkingen || null,
+          time_window_start: deliveryLine.tijd || null,
+          time_window_end: deliveryLine.tijdTot || null,
+          source: "order",
+        }));
+      }
+      for (const line of extraDeliveryLines) {
+        if (!line.locatie) continue;
+        const value = addressValueFromFreightLine(line);
+        addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
+          label: line.locatie,
+          address: line.locatie,
+          street: value.street,
+          house_number: value.house_number,
+          house_number_suffix: value.house_number_suffix,
+          zipcode: value.zipcode,
+          city: value.city,
+          country: value.country,
+          lat: value.lat,
+          lng: value.lng,
+          coords_manual: value.coords_manual,
+          location_type: "delivery",
+          notes: line.opmerkingen || null,
+          time_window_start: line.tijd || null,
+          time_window_end: line.tijdTot || null,
+          source: "order",
+        }));
+      }
+      if (addressBookWrites.length > 0) {
+        await Promise.all(addressBookWrites).catch((error) => {
+          console.warn("[NewOrder] adresboek bijwerken faalde:", error);
+          toast.warning("Order opgeslagen, maar adresboek kon niet volledig worden bijgewerkt");
+        });
+      }
       // Audit wordt server-side door trigger `audit_orders` per leg-INSERT geschreven.
 
       // §22 Info-tracking: insert info-requests voor elk veld dat "volgt van klant"
@@ -1571,43 +2848,602 @@ const NewOrder = () => {
     { key: "overige_referenties", label: "OVERIGE REFERENTIES" },
   ];
 
+  const wizardNextActionLabel =
+    wizardStep === "intake" && intakeActiveQuestion === 1
+      ? clientNeedsConfirmation
+        ? "Bevestig klant"
+        : "Volgende stap"
+      : wizardStep === "intake"
+        ? "Voeg route toe"
+        : wizardStep === "route"
+          ? routeActiveQuestion === 1
+            ? "Bevestig ophaaladres"
+            : routeActiveQuestion === 2
+              ? "Bevestig stop"
+              : routeActiveQuestion === 3
+                ? "Plan levermoment"
+                : "Plan lading"
+          : wizardStep === "cargo"
+            ? cargoActiveQuestion === 1
+              ? "Bevestig aantal"
+              : cargoActiveQuestion === 2
+                ? "Bevestig gewicht"
+                : "Bereken tarief"
+            : wizardStep === "financial"
+              ? "Ga naar controle"
+            : "Controleer order";
+  const canGoBackInUberflow =
+    wizardStep === "intake"
+      ? intakeActiveQuestion > 1
+      : wizardStep === "route"
+        ? true
+        : wizardStep === "cargo"
+          ? true
+          : true;
+  const flowLabelClass = "mb-2 block text-sm font-medium text-muted-foreground";
+  const flowInputClass = "h-14 rounded-2xl border-[hsl(var(--gold)_/_0.22)] bg-white px-4 text-base shadow-[inset_0_1px_0_hsl(var(--gold)_/_0.10),0_12px_34px_-30px_hsl(var(--gold-deep)_/_0.65)] transition focus-visible:border-[hsl(var(--gold)_/_0.62)] focus-visible:ring-4 focus-visible:ring-[hsl(var(--gold)_/_0.18)]";
+
+  const renderQuestionPrompt = (
+    question: { step: string; title: string; hint: string },
+    _complete = false,
+    _ready = false,
+  ) => (
+    <div className="mb-7">
+      <div className="max-w-2xl text-[1.45rem] font-semibold leading-tight text-foreground md:text-[1.7rem]" style={{ fontFamily: "var(--font-display)" }}>
+        {question.title}
+      </div>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{question.hint}</p>
+    </div>
+  );
+
+  const conversationalCardClass = (level = 0) => cn(
+    "relative animate-in fade-in slide-in-from-bottom-3 duration-500 rounded-[2rem] p-6 md:p-9",
+    level === 0 && "border border-[hsl(var(--gold)_/_0.18)] bg-[linear-gradient(180deg,#fff_0%,#fff_72%,hsl(var(--gold-soft)_/_0.16)_100%)] shadow-[0_24px_70px_-54px_hsl(var(--foreground)_/_0.7),0_0_0_1px_hsl(var(--gold)_/_0.08)]",
+    level > 0 && "ml-5 md:ml-10",
+    level > 0 && "before:absolute before:-left-5 before:top-0 before:h-full before:w-px before:bg-[hsl(var(--gold)_/_0.32)] md:before:-left-6",
+    level > 0 && "after:absolute after:-left-5 after:top-8 after:h-px after:w-5 after:bg-[hsl(var(--gold)_/_0.32)] md:after:-left-6 md:after:w-6",
+  );
+
+  const uberFlowShellClass = "relative overflow-hidden rounded-[2.25rem] border border-[hsl(var(--gold)_/_0.16)] bg-[radial-gradient(circle_at_84%_0%,hsl(var(--gold-soft)_/_0.28),transparent_30%),#fff] p-6 shadow-[0_30px_95px_-70px_hsl(var(--foreground)_/_0.75),0_0_0_1px_hsl(var(--gold)_/_0.08)] md:p-8";
+
+  const renderCollapsedAnswer = (
+    label: string,
+    value: string,
+    onEdit: () => void,
+    mutedValue?: string,
+  ) => (
+    <button
+      type="button"
+      onClick={onEdit}
+      className="flex w-full animate-in fade-in slide-in-from-top-1 items-center justify-between gap-3 rounded-2xl bg-white/90 px-4 py-3 text-left shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.18),0_14px_36px_-32px_hsl(var(--gold-deep)_/_0.58)] transition hover:bg-[hsl(var(--gold-soft)_/_0.18)] focus:outline-none focus:ring-4 focus:ring-[hsl(var(--gold)_/_0.16)]"
+    >
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold))] text-[#17130b] shadow-[0_6px_18px_-10px_hsl(var(--gold-deep)_/_0.75)]">
+          <Check className="h-3 w-3" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-xs font-medium text-muted-foreground">{label}</span>
+          <span className="block truncate text-sm font-medium text-foreground">{value || mutedValue || "Ingevuld"}</span>
+        </span>
+      </span>
+      <span className="shrink-0 text-[11px] font-semibold text-[hsl(var(--gold-deep))]">Wijzig</span>
+    </button>
+  );
+
+  const renderCollapsedFacts = (
+    facts: Array<{ label: string; value: string; onEdit: () => void }>,
+  ) => (
+    <div className="flex w-full animate-in fade-in slide-in-from-top-1 items-center justify-between gap-3 rounded-2xl bg-white/90 px-4 py-3 shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.18),0_14px_36px_-32px_hsl(var(--gold-deep)_/_0.58)]">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+        {facts.map((fact) => (
+          <button
+            key={fact.label}
+            type="button"
+            onClick={fact.onEdit}
+            className="inline-flex min-w-0 items-center gap-2 rounded-full px-1 py-0.5 text-left transition hover:bg-[hsl(var(--gold-soft)_/_0.28)] focus:outline-none focus:ring-4 focus:ring-[hsl(var(--gold)_/_0.16)]"
+          >
+            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold))] text-[#17130b]">
+              <Check className="h-3 w-3" />
+            </span>
+            <span className="truncate text-sm font-medium text-foreground">{fact.value}</span>
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={facts[0]?.onEdit}
+        aria-label="Wijzig afgeronde transportgegevens"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[hsl(var(--gold-deep))] transition hover:bg-[hsl(var(--gold-soft)_/_0.36)] hover:text-foreground focus:outline-none focus:ring-4 focus:ring-[hsl(var(--gold)_/_0.16)]"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+
+  const renderUberStepHeader = (label: string, title: string, _hint: string) => (
+    <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]">
+          {label}
+        </div>
+        <h2 className="mt-2 text-[1.45rem] font-semibold leading-tight text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+          {title}
+        </h2>
+      </div>
+      <div className="shrink-0 rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-[hsl(var(--gold-soft)_/_0.36)] px-3 py-1 text-xs font-semibold text-[hsl(var(--gold-deep))]">
+        {wizardProgress}%
+      </div>
+    </div>
+  );
+
+  const renderWizardFooter = () => {
+    const showCreate = wizardStep === "review" && reviewActiveQuestion === 2;
+    const showContinue = wizardStep !== "review";
+    const inlineTransportControls = wizardStep === "cargo" && cargoActiveQuestion >= 3 && !missingQuantity && !missingWeight;
+    if (inlineTransportControls) return null;
+    if (!canGoBackInUberflow && !showCreate && !showContinue) return null;
+
+    return (
+      <div className="mt-6 flex items-center justify-between gap-2 flex-wrap">
+        {canGoBackInUberflow && (
+          <button
+            type="button"
+            onClick={goToPreviousWizardStep}
+            className="inline-flex items-center justify-center rounded-full border border-border/60 bg-white px-4 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
+          >
+            Vorige vraag
+          </button>
+        )}
+        {showCreate ? (
+          <button
+            type="button"
+            onClick={() => handleSave(true)}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_36px_-24px_hsl(var(--gold-deep)_/_0.85)] transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b] disabled:opacity-50"
+          >
+            Order aanmaken & plannen
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        ) : showContinue ? (
+          <button
+            type="button"
+            onClick={goToNextWizardStep}
+            className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_36px_-24px_hsl(var(--gold-deep)_/_0.85)] transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
+          >
+            {wizardNextActionLabel}
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderProductionFinancialTab = () => (
+    <FinancialTab
+      tenantId={tenant?.id}
+      clientId={clientId}
+      cargo={financialCargo}
+      pickupDate={financialPickupDate}
+      pickupTime={financialPickupTime}
+      transportType={transportType}
+      onPricingChange={setPricingPayload}
+    />
+  );
+
+  const focusWizardTarget = useCallback((target: "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing") => {
+    setMainTab("algemeen");
+
+    if (target === "client") {
+      setWizardStep("intake");
+      setIntakeManualBack(true);
+      setIntakeActiveQuestion(1);
+    }
+    if (target === "pickup") {
+      setWizardStep("route");
+      setRouteManualBack(true);
+      setRouteActiveQuestion(1);
+    }
+    if (target === "delivery") {
+      setWizardStep("route");
+      setRouteManualBack(true);
+      setRouteActiveQuestion(2);
+    }
+    if (target === "time") {
+      setWizardStep("route");
+      setRouteManualBack(true);
+      setRouteActiveQuestion(
+        missingPickupTimeWindow
+          ? 3
+          : missingDeliveryTimeWindow
+            ? 4
+            : routeQuestionForIssue(routeRuleIssues[0]),
+      );
+    }
+    if (target === "quantity") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
+      setCargoActiveQuestion(1);
+    }
+    if (target === "weight") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
+      setCargoActiveQuestion(2);
+    }
+    if (target === "security") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
+      setCargoActiveQuestion(3);
+    }
+    if (target === "pricing") {
+      setWizardStep("financial");
+    }
+
+    window.setTimeout(() => {
+      const selectorByTarget: Record<typeof target, string> = {
+        client: "input[placeholder='Typ klantnaam of kies uit lijst…']",
+        pickup: "input[placeholder='Typ bedrijfsnaam, straat of dockadres']",
+        delivery: "input[placeholder^='Typ warehouse']",
+        quantity: "input[placeholder='Bijv. 6']",
+        weight: "input[placeholder='Bijv. 850']",
+        time: "input[type='date'], input[type='time']",
+        security: "button[role='switch']",
+        pricing: "input[placeholder='0']",
+      };
+      const element = document.querySelector<HTMLElement>(selectorByTarget[target]);
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      element?.focus();
+    }, 120);
+  }, [missingDeliveryTimeWindow, missingPickupTimeWindow, routeRuleIssues]);
+
+  const goToWizardModule = useCallback((step: WizardStep) => {
+    setMainTab("algemeen");
+    setWizardStep(step);
+    if (step === "intake") {
+      setIntakeManualBack(true);
+      setIntakeActiveQuestion(1);
+      return;
+    }
+    if (step === "route") {
+      setRouteManualBack(true);
+      setRouteActiveQuestion((routeSuggestedQuestion || 1) as 1 | 2 | 3 | 4);
+      return;
+    }
+    if (step === "cargo") {
+      setCargoManualBack(true);
+      setCargoActiveQuestion((cargoSuggestedQuestion || 1) as 1 | 2 | 3);
+      return;
+    }
+    setReviewActiveQuestion(1);
+  }, [cargoSuggestedQuestion, routeSuggestedQuestion]);
+
+  const renderFlowModules = (variant: "side" | "top" = "side") => {
+    const isSide = variant === "side";
+
+    return (
+      <div className={cn(
+        "relative overflow-hidden bg-[linear-gradient(145deg,#11100e_0%,#15110a_54%,#0f0e0c_100%)] p-4 text-white",
+        isSide
+          ? "rounded-none border-y border-white/8 shadow-none"
+          : "rounded-2xl shadow-[0_24px_65px_-48px_hsl(var(--foreground)_/_0.82)] lg:hidden",
+      )}>
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--gold)_/_0.72)] to-transparent" />
+        <span className="pointer-events-none absolute -right-12 -top-16 h-36 w-36 rounded-full bg-[hsl(var(--gold)_/_0.12)] blur-3xl" />
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold)_/_0.88)]">Ritflow</div>
+            <div className="mt-0.5 text-sm font-medium text-white">{wizardMissing.length ? `${wizardMissing.length} open punten` : "Klaar om aan te maken"}</div>
+          </div>
+          <span className="rounded-full border border-[hsl(var(--gold)_/_0.24)] bg-[hsl(var(--gold)_/_0.12)] px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--gold)_/_0.92)]">
+            {wizardProgress}%
+          </span>
+        </div>
+
+        <div className={cn(isSide ? "relative space-y-1.5" : "grid grid-cols-4 gap-2")}>
+          {isSide && <span className="absolute bottom-7 left-[0.9rem] top-7 w-px bg-gradient-to-b from-[hsl(var(--gold)_/_0.55)] via-[hsl(var(--gold)_/_0.22)] to-white/5" />}
+          {WIZARD_STEPS.map((step, index) => {
+            const active = step.key === wizardStep;
+            const stepStatus = wizardStepStatus(step.key);
+            const done = stepStatus.includes("Compleet") || stepStatus.includes("Klaar") || stepStatus.includes("Tarief klaar");
+
+            return (
+              <button
+                key={step.key}
+                type="button"
+                onClick={() => goToWizardModule(step.key)}
+                className={cn(
+                  "group relative w-full text-left transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)_/_0.35)]",
+                  isSide
+                    ? "flex items-center gap-3 rounded-xl border border-transparent px-2.5 py-2.5 hover:bg-[hsl(var(--gold)_/_0.08)]"
+                    : "rounded-2xl border border-transparent bg-white/5 px-2 py-2 text-center hover:bg-[hsl(var(--gold)_/_0.08)]",
+                  active && (isSide
+                    ? "border-[hsl(var(--gold)_/_0.20)] bg-[hsl(var(--gold)_/_0.12)] text-white shadow-[inset_2px_0_0_hsl(var(--gold)_/_0.86),0_16px_36px_-30px_hsl(var(--gold)_/_0.8)]"
+                    : "border-[hsl(var(--gold)_/_0.18)] bg-[hsl(var(--gold)_/_0.12)] text-white shadow-[inset_0_-2px_0_hsl(var(--gold)_/_0.86)]"),
+                )}
+              >
+                <span className={cn(
+                  "relative z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all duration-300",
+                  done
+                    ? "bg-[hsl(var(--gold))] text-[#17130b] shadow-[0_8px_22px_-12px_hsl(var(--gold)_/_0.9)]"
+                    : active
+                      ? "bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))] ring-1 ring-[hsl(var(--gold)_/_0.45)]"
+                      : "bg-white/8 text-white/55 ring-1 ring-white/10",
+                  !isSide && "mx-auto mb-1",
+                )}>
+                  <span className="relative z-10">{done ? <Check className="h-3.5 w-3.5" /> : index + 1}</span>
+                </span>
+                <span className={cn("min-w-0", isSide ? "flex-1" : "block")}>
+                  <span className={cn(
+                    "block font-semibold",
+                    isSide ? "text-sm" : "text-[11px]",
+                    !active && "text-white/86",
+                  )}>{step.label}</span>
+                  {isSide && (
+                    !done || active ? (
+                      <span className={cn(
+                        "mt-0.5 block truncate text-xs",
+                        active ? "text-[hsl(var(--gold)_/_0.78)]" : "text-white/42",
+                      )}>
+                        {stepStatus}
+                      </span>
+                    ) : null
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderMobileOrderPreview = () => (
+    <div className="sticky top-0 z-20 -mx-4 mb-4 border-b border-border/60 bg-white/95 px-4 py-3 shadow-sm backdrop-blur xl:hidden">
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            const firstMissing = wizardMissing[0];
+            const targetByItem: Record<string, "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing"> = {
+              klant: "client",
+              ophaaladres: "pickup",
+              afleveradres: "delivery",
+              adrescontrole: "delivery",
+              aantal: "quantity",
+              gewicht: "weight",
+              tijdvenster: "time",
+              tijdvolgorde: "time",
+              screening: "security",
+              tarief: "pricing",
+            };
+            if (firstMissing) focusWizardTarget(targetByItem[firstMissing] ?? "client");
+          }}
+          className="min-w-0 flex-1 text-left"
+        >
+          <div className="truncate text-sm font-semibold text-foreground">{clientName || "Nieuwe opdracht"}</div>
+          <div className="mt-0.5 truncate text-xs text-muted-foreground">{currentFlowCue}</div>
+        </button>
+        <div className={cn(
+          "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+          wizardMissing.length ? "bg-red-50 text-red-700" : "bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))]",
+        )}>
+          {wizardMissing.length ? `${wizardMissing.length} open` : "Compleet"}
+        </div>
+      </div>
+      {wizardMissing.length > 0 && (
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+          {wizardMissing.slice(0, 4).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => {
+                const targetByItem: Record<string, "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing"> = {
+                  klant: "client",
+                  ophaaladres: "pickup",
+                  afleveradres: "delivery",
+                  adrescontrole: "delivery",
+                  aantal: "quantity",
+                  gewicht: "weight",
+                  tijdvenster: "time",
+                  tijdvolgorde: "time",
+                  screening: "security",
+                  tarief: "pricing",
+                };
+                focusWizardTarget(targetByItem[item] ?? "client");
+              }}
+              className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700"
+            >
+              {wizardMissingLabel[item] ?? item}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderOrderPreview = () => (
+    <aside className="hidden lg:block">
+      <div className="sticky top-4 overflow-hidden rounded-2xl border border-[hsl(var(--gold)_/_0.14)] bg-white shadow-[0_22px_60px_-42px_hsl(var(--foreground)_/_0.65),0_0_0_1px_hsl(var(--gold)_/_0.08)]">
+        <div className="relative overflow-hidden bg-[linear-gradient(145deg,#11100e_0%,#15110a_58%,#0f0e0c_100%)] px-5 py-4 text-white">
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--gold)_/_0.74)] to-transparent" />
+          <span className="pointer-events-none absolute -right-10 -top-14 h-32 w-32 rounded-full bg-[hsl(var(--gold)_/_0.13)] blur-3xl" />
+          <div className="relative text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold)_/_0.86)]">Order preview</div>
+          <div className={cn("mt-2 text-lg font-semibold", missingClient ? "text-red-200" : "text-white")}>{clientName || "Nieuwe opdracht"}</div>
+          <div className="mt-1 text-xs text-white/60">{klantReferentie || "Referentie volgt"}</div>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-[hsl(var(--gold)_/_0.10)] px-3 py-1 text-[11px] font-medium text-[hsl(var(--gold)_/_0.90)]">
+            <span className={cn("h-1.5 w-1.5 rounded-full", wizardMissing.length ? "bg-red-300" : "bg-[hsl(var(--gold))]")} />
+            {wizardMissing.length ? `${wizardMissing.length} open` : "Compleet"}
+          </div>
+        </div>
+
+        {renderFlowModules("side")}
+
+        <div className="space-y-4 p-5">
+          <div>
+            <div className="mb-3 text-xs font-medium text-muted-foreground">Route</div>
+            <div className="mb-4 overflow-hidden rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-[linear-gradient(135deg,#f8f6f1_0%,#ece7dc_52%,#f9f7f2_100%)] p-3 shadow-inner">
+              <div className="relative overflow-hidden rounded-xl">
+                <RoutePreviewMap stops={routeMapStops} />
+                <div className="absolute bottom-2 left-3 rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-[hsl(var(--gold-deep))] shadow-sm">
+                  {routeMapStatusLabel}
+                </div>
+              </div>
+              {routeMapMissingGpsCount > 0 && (
+                <div className="mt-2 rounded-xl border border-[hsl(var(--gold)_/_0.18)] bg-white/70 px-3 py-2 text-[11px] font-medium text-[hsl(var(--gold-deep))]">
+                  {routeMapMissingGpsCount} stop{routeMapMissingGpsCount > 1 ? "s" : ""} zonder GPS-punt. Kies een Google-suggestie om die op de kaart te plotten.
+                </div>
+              )}
+              {routeLegInsights.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {routeLegInsights.map((leg) => (
+                    <div
+                      key={leg.id}
+                      className="rounded-xl border border-white/80 bg-white/75 px-3 py-2 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[11px] font-semibold text-foreground">
+                          {leg.fromLabel} {"->"} {leg.toLabel}
+                        </span>
+                        <span className={cn("shrink-0 text-[11px] font-semibold", leg.hasGps ? "text-[hsl(var(--gold-deep))]" : "text-red-600")}>
+                          {leg.distanceLabel}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                        <span>{leg.durationLabel}</span>
+                        <span>{leg.etaLabel}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="relative space-y-3 pl-6">
+              <span className="absolute bottom-5 left-[0.45rem] top-5 w-px bg-border/70" />
+              {routePreviewStops.map((stop) => (
+                <button
+                  key={stop.id}
+                  type="button"
+                  onClick={stop.onClick}
+                  className="relative block w-full rounded-lg px-2 py-1 text-left transition hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)_/_0.45)]"
+                >
+                  <span className={cn("absolute -left-6 top-1 h-3 w-3 rounded-full ring-4", stop.missingAddress || stop.issue ? "bg-red-500 ring-red-100" : "bg-[hsl(var(--gold))] ring-[hsl(var(--gold-soft))]")} />
+                  <div className="text-xs font-medium text-muted-foreground">{stop.label}</div>
+                  <div className={cn("mt-0.5 text-sm font-medium", previewTextClass(stop.missingAddress))}>{stop.line?.locatie || stop.fallback}</div>
+                  {stop.issue && (
+                    <div className="mt-1 text-xs font-medium text-red-600">{stop.issue.message}</div>
+                  )}
+                  <div className={cn("mt-1 text-xs", stop.missingDate ? "text-muted-foreground" : "text-foreground")}>{[stop.line?.datum, stop.line?.tijd, stop.line?.tijdTot].filter(Boolean).join(" · ") || "Tijdvenster volgt"}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.20)] p-3">
+              <div className="text-[11px] font-medium text-muted-foreground">Lading</div>
+              <div className={cn("mt-1 text-sm font-semibold", previewTextClass(missingQuantity))}>{cargoTotals.totAantal || 0} {cargoTotals.primaryUnit || "eenheden"}</div>
+              <div className={cn("text-xs", previewTextClass(missingWeight))}>{cargoTotals.totGewicht || 0} kg</div>
+            </div>
+            <div className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.20)] p-3">
+              <div className="text-[11px] font-medium text-muted-foreground">Voertuig</div>
+              <div className="mt-1 text-sm font-semibold">{voertuigtype || suggestedVehicleType || "Volgt"}</div>
+              <div className="text-xs text-muted-foreground">{vehicleMatchScore ? `${vehicleMatchScore}% match` : "Nog geen match"}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => focusWizardTarget("security")}
+              className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-white p-3 text-left transition hover:bg-[hsl(var(--gold-soft)_/_0.22)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)_/_0.35)]"
+            >
+              <div className="text-[11px] font-medium text-muted-foreground">Security</div>
+              <div className={cn("mt-1 text-sm font-semibold", showPmt && !shipmentSecure && !pmtMethode ? "text-red-600" : "text-foreground")}>
+                {pmtLabel}
+              </div>
+              <div className="text-xs text-muted-foreground">{showPmt ? "Luchtvracht" : "Niet van toepassing"}</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => focusWizardTarget("pricing")}
+              className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-white p-3 text-left transition hover:bg-[hsl(var(--gold-soft)_/_0.22)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)_/_0.35)]"
+            >
+              <div className="text-[11px] font-medium text-muted-foreground">Tarief</div>
+              <div className={cn("mt-1 text-sm font-semibold", pricingPayload.cents == null ? "text-red-600" : "text-foreground")}>
+                {pricingLabel}
+              </div>
+              <div className="text-xs text-muted-foreground">{pricingPayload.details ? "Tarief gekoppeld" : "Klik om te prijzen"}</div>
+            </button>
+          </div>
+
+          <div className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.14)] p-4">
+            <div className="text-sm font-semibold">{wizardMissing.length ? "Nog nodig" : "Status"}</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {wizardMissing.length > 0 ? wizardMissing.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    const targetByItem: Record<string, "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing"> = {
+                      klant: "client",
+                      ophaaladres: "pickup",
+                      afleveradres: "delivery",
+                      adrescontrole: "delivery",
+                      aantal: "quantity",
+                      gewicht: "weight",
+                      tijdvenster: "time",
+                      tijdvolgorde: "time",
+                      screening: "security",
+                      tarief: "pricing",
+                    };
+                    focusWizardTarget(targetByItem[item] ?? "client");
+                  }}
+                  className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+                >
+                  {wizardMissingLabel[item] ?? item}
+                </button>
+              )) : (
+                <span className="text-xs text-muted-foreground">Alles klaar voor aanmaken.</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+
   return (
-    <div className="-m-6 min-h-[calc(100vh-3rem)] flex flex-col bg-muted/30">
-      {/* ── Luxe hero header ── */}
-      <div className="relative bg-card border-b border-border/50 shrink-0">
+    <div className="-m-6 min-h-[calc(100vh-3rem)] flex flex-col bg-[#f6f4f0]">
+      {/* ── Header ── */}
+      <div className="relative shrink-0">
         <span
           className="absolute top-0 left-0 right-0 h-px pointer-events-none"
-          style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent)" }}
+          style={{ background: "linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.12), transparent)" }}
         />
-        <div className="px-6 py-5 flex items-start justify-between gap-4 flex-wrap">
+        <div className="mx-auto flex max-w-[1120px] items-center justify-between gap-4 px-6 py-7">
           <div>
-            <div className="inline-flex items-center gap-2 mb-2">
-              <span className="w-4 h-px bg-[hsl(var(--gold))]" />
-              <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[hsl(var(--gold-deep))]">
-                Orders · nieuw
-              </span>
+            <div className="mb-1.5 text-xs font-semibold text-[hsl(var(--gold-deep))]">
+              Orders / Nieuwe order
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground leading-tight" style={{ fontFamily: "var(--font-display)" }}>
-              Nieuwe order
+            <h1 className="text-[2rem] font-semibold tracking-tight text-foreground leading-tight" style={{ fontFamily: "var(--font-display)" }}>
+              Bouw de rit
             </h1>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="hidden">
               <IntakeSourceBadge source="MANUAL" className="text-xs px-2 py-0.5" />
               <span className="text-xs text-muted-foreground">Zelfde intake-taal als inbox en portal</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1.5">{todayFormatted}</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={attemptCancel}
-              className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-transparent bg-transparent text-muted-foreground transition-all duration-200 hover:text-foreground hover:bg-[hsl(var(--muted)_/_0.5)]"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-border/60 bg-white px-4 text-sm font-medium text-muted-foreground transition hover:text-foreground"
             >
               Annuleren
             </button>
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-[hsl(var(--border)_/_0.7)] bg-white text-foreground transition-all duration-200 hover:bg-[hsl(var(--muted)_/_0.6)] hover:border-[hsl(var(--border))]"
+              className="hidden"
             >
               Afdrukken
             </button>
@@ -1615,15 +3451,15 @@ const NewOrder = () => {
               type="button"
               onClick={() => handleSave(false)}
               disabled={saving}
-              className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-[hsl(var(--border)_/_0.7)] bg-white text-foreground transition-all duration-200 hover:bg-[hsl(var(--muted)_/_0.6)] hover:border-[hsl(var(--border))] disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-4 text-sm font-medium text-foreground shadow-[0_10px_28px_-24px_hsl(var(--gold-deep)_/_0.70)] transition hover:bg-[hsl(var(--gold-soft)_/_0.28)] disabled:opacity-50"
             >
-              Opslaan
+              Bewaar concept
             </button>
             <button
               type="button"
               onClick={() => handleSave(true)}
               disabled={saving}
-              className="inline-flex items-center justify-center h-10 px-[1.125rem] rounded-[0.625rem] text-sm font-medium cursor-pointer border border-transparent text-white relative overflow-hidden transition-all duration-200 hover:-translate-y-px disabled:opacity-50"
+              className="hidden"
               style={{
                 background: "linear-gradient(180deg, hsl(0 78% 48%) 0%, hsl(0 78% 38%) 100%)",
                 boxShadow: "0 1px 2px hsl(var(--primary) / 0.4), 0 4px 12px -2px hsl(var(--primary) / 0.3), inset 0 1px 0 hsl(0 0% 100% / 0.2), inset 0 -1px 0 hsl(0 0% 0% / 0.1)",
@@ -1635,7 +3471,7 @@ const NewOrder = () => {
         </div>
 
         {/* ── Main tabs ── */}
-        <div className="px-6 flex shrink-0 overflow-x-auto whitespace-nowrap border-t border-border/40">
+        <div className="hidden px-6 shrink-0 overflow-x-auto whitespace-nowrap border-t border-border/40">
           {mainTabs.map(tab => (
             <button
               key={tab.key}
@@ -1655,13 +3491,210 @@ const NewOrder = () => {
             </button>
           ))}
         </div>
+
+        {false && mainTab === "algemeen" && (
+          <div className="border-t border-border/40 bg-muted/20 px-6 py-3">
+            <div className="mx-auto max-w-[1320px]">
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-white px-3 py-2 shadow-sm">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">
+                    {WIZARD_STEPS[wizardStepIndex]?.label}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      Stap {wizardStepIndex + 1} van {WIZARD_STEPS.length}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">{WIZARD_STEPS[wizardStepIndex]?.hint}</div>
+                </div>
+                <div className="hidden min-w-[160px] overflow-hidden rounded-full bg-muted shadow-inner sm:block">
+                  <div
+                    className="h-1.5 rounded-full bg-[hsl(var(--gold))] transition-all"
+                    style={{ width: `${wizardProgress}%` }}
+                  />
+                </div>
+              </div>
+              <div className="mt-2 grid grid-cols-4 overflow-hidden rounded-lg border border-border/60 bg-white shadow-sm">
+                {WIZARD_STEPS.map((step, index) => {
+                  const active = step.key === wizardStep;
+                  const stepStatus = wizardStepStatus(step.key);
+                  const done = stepStatus.includes("Compleet") || stepStatus.includes("Klaar") || stepStatus.includes("Tarief klaar");
+                  return (
+                    <button
+                      key={step.key}
+                      type="button"
+                      onClick={() => setWizardStep(step.key)}
+                      className={cn(
+                        "min-h-[54px] border-r border-border/50 px-2 py-2 text-left transition-all last:border-r-0 sm:px-3",
+                        active
+                          ? "bg-[hsl(var(--gold-soft)_/_0.45)]"
+                          : "bg-white hover:bg-muted/30",
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                          done || active ? "bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))]" : "bg-muted text-muted-foreground",
+                        )}>
+                          {done ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-semibold sm:text-sm">{step.label}</span>
+                          <span className={cn(
+                            "hidden text-[11px] sm:block",
+                            stepStatus.includes("Compleet") || stepStatus.includes("Klaar") || stepStatus.includes("Tarief klaar")
+                              ? "text-foreground"
+                              : "text-amber-700",
+                          )}>
+                            {stepStatus}
+                          </span>
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Body ── */}
       <div className="flex-1 overflow-y-auto">
         {mainTab === "algemeen" && (
-          <div className="max-w-[1320px] mx-auto px-6 pt-4 pb-8 space-y-5">
-            <section className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+          <div className="mx-auto grid max-w-[1120px] gap-6 px-6 pb-10 pt-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0 space-y-6">
+            {renderFlowModules("top")}
+            {false && renderMobileOrderPreview()}
+            {false && (
+            <section className="grid gap-5 xl:grid-cols-[1.65fr_0.95fr]" aria-hidden="true">
+              <div className="card--luxe p-5">
+                <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+                  <div>
+                    <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Slimme intake
+                    </div>
+                    <h3 className="section-title">Plak intake, krijg een ordervoorstel</h3>
+                    <p className="text-xs text-muted-foreground mt-1">Geen extra wizard-schermen. Gewoon bovenaan plakken, voorstel laten invullen en daarna direct verder in het formulier.</p>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {lastDraftSavedAt ? `Concept opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "Ctrl/Cmd+S opslaan · Shift+Ctrl/Cmd+S opslaan & sluiten"}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border/60 bg-white p-4">
+                  <Textarea
+                    value={smartInput}
+                    onChange={(e) => setSmartInput(e.target.value)}
+                    rows={3}
+                    placeholder="Plak klantnaam, adres, ordermail of referentie..."
+                    className="resize-none border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                  />
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={applySmartDraft}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-medium text-white transition hover:opacity-95"
+                    >
+                      <ClipboardPaste className="h-4 w-4" />
+                      Voorstel invullen
+                    </button>
+                    <span className="text-xs text-muted-foreground">
+                      Herkent klant, route, pallets/colli, gewicht, referentie en globale tijdslogica.
+                    </span>
+                  </div>
+                </div>
+
+                {smartInput.trim() && (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Klant</div>
+                      <div className="mt-1 text-sm font-medium">{smartDraft.matchedClientName || smartDraft.clientHint || "Nog niet herkend"}</div>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Ophalen</div>
+                      <div className="mt-1 text-sm font-medium">{smartDraft.pickupHint || "Ontbreekt"}</div>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Afleveren</div>
+                      <div className="mt-1 text-sm font-medium">{smartDraft.deliveryHint || "Ontbreekt"}</div>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Lading</div>
+                      <div className="mt-1 text-sm font-medium">
+                        {smartDraft.quantity || smartDraft.weightKg
+                          ? `${smartDraft.quantity || "?"} ${smartDraft.unit.toLowerCase()} · ${smartDraft.weightKg || "?"} kg`
+                          : "Nog leeg"}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {smartDraft.missing.length > 0 && smartInput.trim() && (
+                  <div className="mt-4 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3">
+                    <div className="inline-flex items-center gap-2 text-xs font-semibold text-amber-800">
+                      <CircleAlert className="h-3.5 w-3.5" />
+                      Nog aan te vullen
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {smartDraft.missing.map((item) => (
+                        <span key={item} className="rounded-full border border-amber-300/60 bg-white px-3 py-1 text-xs text-amber-900">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <aside className="card--luxe p-5 xl:sticky xl:top-5 h-fit">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                  Planner snapshot
+                </div>
+                <h3 className="section-title">Voorstel & controle</h3>
+                <div className="mt-4 space-y-3">
+                  {plannerSummary.map((item) => (
+                    <div key={item.label} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-b-0 last:pb-0">
+                      <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{item.label}</span>
+                      <span className="text-sm text-right">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-2xl border border-border/60 bg-white p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Truck className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+                    Voertuigmatch
+                  </div>
+                  <div className="mt-3 text-2xl font-semibold">{voertuigtype || suggestedVehicleType || "Nog geen voorstel"}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {vehicleMatchScore > 0 ? `${vehicleMatchScore}% match op basis van gewicht, lengte, laadklep en prioriteit.` : "Vul route of lading in voor een voertuigsuggestie."}
+                  </div>
+                </div>
+                {plannerWarnings.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-3">
+                    <div className="text-xs font-semibold text-amber-800">Planner-waarschuwingen</div>
+                    <div className="mt-2 space-y-1">
+                      {plannerWarnings.map((warning) => (
+                        <p key={warning} className="text-xs text-amber-900">{warning}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 px-3 py-3">
+                  <div className="text-xs font-semibold">Nog aan te vullen</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {wizardMissing.length > 0 ? wizardMissing.map((item) => (
+                      <span key={item} className="rounded-full border border-border/60 bg-white px-3 py-1 text-[11px]">
+                        {item}
+                      </span>
+                    )) : (
+                      <span className="text-xs text-emerald-700">Compleet voor aanmaken</span>
+                    )}
+                  </div>
+                </div>
+              </aside>
+            </section>
+            )}
+            <section className="hidden">
               <div className="card--luxe p-5">
                 <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                   <div>
@@ -1732,42 +3765,81 @@ const NewOrder = () => {
               </aside>
             </section>
             {/* ══ Chapter I · Klant & order ══ */}
-            <section className="card--luxe p-6 relative">
-              <span className="card-chapter">I</span>
-              <div className="mb-4">
+            {wizardStep === "intake" && (
+            <>
+            <section className={uberFlowShellClass}>
+              {renderUberStepHeader("01 · Opdracht", "Start met de opdrachtgever", "Een keuze tegelijk. Zodra dit klopt, schuift de volgende vraag erin.")}
+              {false && <span className="card-chapter">I</span>}
+              {false && <div className="mb-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
                   01 · Klant &amp; order
                 </div>
                 <h3 className="section-title">Klantgegevens &amp; referentie</h3>
                 <p className="text-xs text-muted-foreground mt-1">Wie is de klant en waar verwijs je naar.</p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground block mb-1">Klant <span className="text-red-600">*</span></label>
-                  <Popover open={clientOpen && clientSuggestions.length > 0} onOpenChange={setClientOpen}>
+              </div>}
+              <div className="space-y-4">
+                {(
+                <div className={conversationalCardClass(0)}>
+                  {renderQuestionPrompt(
+                    { step: "Klant", title: "Voor welke klant is deze order?", hint: "Typ minimaal 2 tekens. Druk Enter of kies een klant uit de lijst." },
+                    !missingClient,
+                    clientNeedsConfirmation,
+                  )}
+                  <label className={cn(
+                    flowLabelClass,
+                    clientNeedsConfirmation ? "text-[hsl(var(--gold-deep))]" : requiredTextClass(missingClient),
+                  )}>Klant <span className={clientNeedsConfirmation ? "text-[hsl(var(--gold-deep))]" : "text-red-600"}>*</span></label>
+                <Popover open={clientListOpen} onOpenChange={setClientOpen}>
                     <PopoverAnchor asChild>
                       <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           value={clientName}
                           onChange={e => {
                             setClientName(e.target.value);
+                            setClientQuestionConfirmed(false);
                             if (clientId) setClientId(null);
                             setContactpersoon("");
                             setClientOpen(true);
                             clearError("client_name");
                           }}
-                          onFocus={() => setClientOpen(true)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              if (clientInputReady) {
+                                setClientQuestionConfirmed(true);
+                                setIntakeManualBack(false);
+                                setWizardStep("route");
+                                setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+                                setClientOpen(false);
+                                clearError("client_name");
+                              } else {
+                                setErrors(prev => ({ ...prev, client_name: "Typ minimaal 2 tekens of kies een klant uit de lijst." }));
+                              }
+                            }
+                          }}
+                          onFocus={() => {
+                            if (clientSuggestions.length > 0) setClientOpen(true);
+                          }}
                           placeholder="Typ klantnaam of kies uit lijst…"
-                          className={cn("h-9 text-sm pr-8", errors.client_name && "border-red-500")}
+                          className={cn(
+                            flowInputClass,
+                            "pl-11 pr-11",
+                            missingClient && !clientNeedsConfirmation && requiredFieldClass(true),
+                            clientNeedsConfirmation && "border-[hsl(var(--gold)_/_0.45)] bg-white",
+                            errors.client_name && !clientNeedsConfirmation && "border-red-500",
+                          )}
                           autoComplete="off"
                         />
                         <button
                           type="button"
                           aria-label="Toon klantenlijst"
-                          onClick={() => setClientOpen(v => !v)}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                          aria-expanded={clientListOpen}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => setClientOpen(!clientListOpen)}
+                          className="absolute right-1.5 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-accent hover:text-foreground"
                         >
-                          <ChevronDown className={cn("h-4 w-4 transition-transform", clientOpen && "rotate-180")} />
+                          <ChevronDown className={cn("h-4 w-4 transition-transform", clientListOpen && "rotate-180")} />
                         </button>
                       </div>
                     </PopoverAnchor>
@@ -1783,9 +3855,13 @@ const NewOrder = () => {
                           onClick={() => {
                             setClientName(c.name);
                             setClientId(c.id);
+                            setClientQuestionConfirmed(true);
                             setContactpersoon(c.contact_person ?? "");
                             setClientOpen(false);
                             clearError("client_name");
+                            setIntakeManualBack(false);
+                            setWizardStep("route");
+                            setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
                           }}
                           className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-accent focus:bg-accent focus:outline-none"
                         >
@@ -1799,8 +3875,32 @@ const NewOrder = () => {
                       ))}
                     </PopoverContent>
                   </Popover>
-                  {errors.client_name && <span className="text-[11px] text-red-500">{errors.client_name}</span>}
+                  {(errors.client_name || missingClient) && (
+                    <span className={cn("mt-1 block text-[11px]", clientNeedsConfirmation ? "text-[hsl(var(--gold-deep))]" : "text-red-500")}>
+                      {clientNeedsConfirmation
+                        ? "Klantnaam staat klaar. Druk Enter om de volgende vraag te openen."
+                        : errors.client_name || "Typ minimaal 2 tekens of kies een klant uit de lijst."}
+                    </span>
+                  )}
                 </div>
+                )}
+
+                {false && intakeActiveQuestion === 2 && clientAnswered && renderCollapsedAnswer(
+                  "Klant",
+                  clientName,
+                  () => {
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(1);
+                  },
+                )}
+
+                {false && intakeActiveQuestion === 2 && (
+                <div className={conversationalCardClass(0)}>
+                  {renderQuestionPrompt(
+                    { step: "Referentie", title: "Welke referentie en instructies horen erbij?", hint: "Deze stap blijft bewerkbaar terwijl je verdergaat." },
+                    true,
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-4">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-1">Contactpersoon</label>
                   <Select value={contactpersoon} onValueChange={setContactpersoon} disabled={!clientId}>
@@ -1844,6 +3944,9 @@ const NewOrder = () => {
                     className="text-sm resize-none"
                   />
                 </div>
+                  </div>
+                </div>
+                )}
               </div>
               {selectedClient && (
                 <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
@@ -1852,22 +3955,53 @@ const NewOrder = () => {
                     : "Nog geen vaste locaties voor deze klant. Eerdere orderadressen en handmatige invoer blijven beschikbaar."}
                 </div>
               )}
+              {renderWizardFooter()}
             </section>
 
 {/* ══ Chapter II · Vrachtplanning ══ */}
-            <section className="card--luxe p-6 relative">
-              <span className="card-chapter">III</span>
-              <div className="mb-5">
+            </>
+            )}
+
+            {wizardStep === "route" && (
+            <>
+            <section className={uberFlowShellClass}>
+              {renderUberStepHeader("02 · Route", "Bouw de rit op", "Single leg: ophalen en afleveren. Multi-leg: stops toevoegen tot de eindbestemming klopt.")}
+              {false && <span className="card-chapter">II</span>}
+              {false && <div className="mb-5">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
                   02 · Vrachtplanning
                 </div>
                 <h3 className="section-title">Laad- en losstops</h3>
                 <p className="text-xs text-muted-foreground mt-1">Adres, datum en tijdvenster per stop.</p>
-              </div>
+              </div>}
+              <div className="space-y-5">
+                {clientAnswered && renderCollapsedAnswer(
+                  "Klant",
+                  clientName,
+                  () => {
+                    setWizardStep("intake");
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(1);
+                  },
+                )}
 
-              <div className="mb-6 grid gap-6 md:grid-cols-2">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
+                {routeActiveQuestion > 1 && renderCollapsedAnswer(
+                  "Ophalen",
+                  pickupLine?.locatie || "",
+                  () => {
+                    setRouteManualBack(true);
+                    setRouteActiveQuestion(1);
+                  },
+                  "Ophaaladres ingevuld",
+                )}
+
+                {routeActiveQuestion === 1 && (
+                <div className={conversationalCardClass(0)}>
+                  {renderQuestionPrompt(
+                    { step: "Ophaaladres", title: "Waar wordt de lading opgehaald?", hint: "Na een geldig ophaaladres verschijnt de aflevervraag automatisch." },
+                    !missingPickupAddress,
+                  )}
+                  <div className={cn(flowLabelClass, requiredTextClass(missingPickupAddress))}>
                     Ophaaladres
                   </div>
                   <AddressAutocomplete
@@ -1877,161 +4011,305 @@ const NewOrder = () => {
                      error={errors.pickup_address}
                      searchLabel="Zoek ophaaladres"
                      searchPlaceholder="Typ bedrijfsnaam, straat of dockadres"
-                     onSearchInputChange={setPickupLookup}
+                     compactFlow
+                     onSearchInputChange={(value) => {
+                       setPickupLookup(value);
+                       clearError("pickup_address");
+                     }}
                      quickOptions={pickupQuickOptions.map(toAddressSuggestionOption)}
                      onQuickSelect={(option) => {
                        const selected = pickupQuickOptions.find(item => item.id === option.id);
                        if (selected) applyPlannerLocation("pickup", selected);
+                       setPickupAddressBookLabel({ label: option.title, key: buildAddressBookKey(option.value) });
+                       setRouteManualBack(false);
+                       setRouteActiveQuestion(2);
                      }}
                      onResolvedSelection={(selection) => {
                        void maybeLearnClientAlias(selection);
-                     }}
+                       setPickupAddressBookLabel({
+                         label: selection.searchTerm || composeAddressString(selection.value, { includeLocality: true }),
+                         key: buildAddressBookKey(selection.value),
+                       });
+                       setRouteManualBack(false);
+                       setRouteActiveQuestion(2);
+                    }}
                     />
                   </div>
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] mb-2">
-                      Afleveradres
+                )}
+                  {routeActiveQuestion > 2 && renderCollapsedAnswer(
+                    getDeliveryStopLabel(0),
+                    deliveryLine?.locatie || "",
+                    () => {
+                      setRouteManualBack(true);
+                      setRouteActiveQuestion(2);
+                    },
+                    "Afleveradres ingevuld",
+                  )}
+
+                  {routeActiveQuestion === 2 && (
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(
+                      { step: "Volgende stop", title: "Wat is de volgende stop of eindbestemming?", hint: "Bij een single leg is dit afleveren. Bij multi-leg is dit de eerste stop." },
+                      !missingDeliveryAddress,
+                    )}
+                    <div className={cn(flowLabelClass, requiredTextClass(missingDeliveryAddress))}>
+                      {isMultiLegRoute ? "Stop 1" : "Afleveradres"}
                     </div>
                     <AddressAutocomplete
                       value={deliveryAddr}
                       onChange={handleDeliveryAddrChange}
                       onBlur={handleDeliveryAddrBlur}
                       error={errors.delivery_address}
-                      searchLabel="Zoek afleveradres"
-                      searchPlaceholder="Typ bedrijfsnaam, straat of warehouse"
-                      onSearchInputChange={setDeliveryLookup}
+                     searchLabel="Zoek stop of eindbestemming"
+                     searchPlaceholder="Typ warehouse, stad, straat of eindbestemming"
+                      compactFlow
+                      blockedAddresses={pickupLine?.locatie ? [pickupLine.locatie] : []}
+                      blockedMessage="Afleveradres mag niet hetzelfde zijn als het ophaaladres."
+                      onSearchInputChange={(value) => {
+                        setDeliveryLookup(value);
+                        clearError("delivery_address");
+                      }}
                       quickOptions={deliveryQuickOptions.map(toAddressSuggestionOption)}
                       onQuickSelect={(option) => {
                         const selected = deliveryQuickOptions.find(item => item.id === option.id);
                         if (selected) applyPlannerLocation("delivery", selected);
+                        setDeliveryAddressBookLabel({ label: option.title, key: buildAddressBookKey(option.value) });
+                        const nextAddress = normalizeLookup(selected?.addressString || option.title || option.value.street);
+                        if (pickupLine?.locatie && nextAddress === normalizeLookup(pickupLine.locatie)) {
+                          setErrors(prev => ({ ...prev, delivery_address: "Afleveradres mag niet hetzelfde zijn als ophaaladres." }));
+                          toast.error("Adrescontrole", { description: "Kies een andere stop dan het ophaaladres." });
+                          setRouteManualBack(true);
+                          setRouteActiveQuestion(2);
+                          return;
+                        }
+                        setRouteManualBack(false);
+                        setRouteActiveQuestion(3);
                       }}
                       onResolvedSelection={(selection) => {
                         void maybeLearnClientAlias(selection);
+                        setDeliveryAddressBookLabel({
+                          label: selection.searchTerm || composeAddressString(selection.value, { includeLocality: true }),
+                          key: buildAddressBookKey(selection.value),
+                        });
+                        const nextAddress = normalizeLookup(composeAddressString(selection.value, { includeLocality: true }) || selection.searchTerm);
+                        if (pickupLine?.locatie && nextAddress === normalizeLookup(pickupLine.locatie)) {
+                          setErrors(prev => ({ ...prev, delivery_address: "Afleveradres mag niet hetzelfde zijn als ophaaladres." }));
+                          toast.error("Adrescontrole", { description: "Kies een andere stop dan het ophaaladres." });
+                          setRouteManualBack(true);
+                          setRouteActiveQuestion(2);
+                          return;
+                        }
+                        setRouteManualBack(false);
+                        setRouteActiveQuestion(3);
                       }}
                     />
                   </div>
-              </div>
+                  )}
+              {routeActiveQuestion > 3 && renderCollapsedAnswer(
+                "Laadmoment",
+                [pickupLine?.datum, pickupLine?.tijd, pickupLine?.tijdTot].filter(Boolean).join(" · ") || "Laadmoment ingevuld",
+                () => {
+                  setRouteManualBack(true);
+                  setRouteActiveQuestion(3);
+                },
+                "Ophaaltijd ingevuld",
+              )}
 
-              <div className="space-y-0 divide-y divide-[hsl(var(--border)_/_0.4)]">
-                {freightLines.map((line, idx) => (
-                  <div key={line.id} className="py-5 first:pt-0 last:pb-0">
-                    {/* Type + stop-nummer + verwijder */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-6 h-6 rounded-md bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))] inline-flex items-center justify-center">
-                          <Route className="h-3 w-3" />
-                        </span>
-                        <Select value={line.activiteit} onValueChange={v => updateFreightLine(line.id, "activiteit", v)}>
-                          <SelectTrigger className="h-7 w-auto text-sm font-semibold border-0 bg-transparent px-0 shadow-none focus:ring-0 gap-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Laden">Laden</SelectItem>
-                            <SelectItem value="Lossen">Lossen</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <span className="text-[10px] text-muted-foreground tracking-wider uppercase">Stop {idx + 1}</span>
-                      </div>
-                      {freightLines.length > 2 && (
-                        <button
-                          onClick={() => removeFreightLine(line.id)}
-                          className="text-muted-foreground/50 hover:text-muted-foreground transition-colors p-1"
-                          aria-label="Stop verwijderen"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Adres */}
-                    <div className="mb-3">
-                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                        {line.activiteit === "Laden" ? "Ophaaladres" : "Afleveradres"}
-                      </label>
-                      {line.id === primaryLadenId || line.id === primaryLossenId ? (
-                        // De eerste Laden- en Lossen-regel lezen hun adres uit het
-                        // gestructureerde Google-adres hierboven. Een losse input
-                        // zou lat/lng kunnen wegvagen, dus we tonen een readonly
-                        // samenvatting plus een badge.
-                        <div className="space-y-1">
-                          <div className="h-10 text-sm flex items-center rounded-md border border-[hsl(var(--border)_/_0.6)] bg-[hsl(var(--muted)_/_0.4)] px-3 text-foreground">
-                            {line.locatie || <span className="text-muted-foreground">Vul het {line.activiteit === "Laden" ? "ophaaladres" : "afleveradres"} hierboven in</span>}
-                          </div>
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium tracking-wider uppercase text-[hsl(var(--gold-deep))]">
-                            <span className="w-1 h-1 rounded-full bg-[hsl(var(--gold))]" />
-                            Aangeleverd via Google-adres hierboven
-                          </span>
-                        </div>
-                      ) : (
-                        <LegacyAddressAutocomplete
-                          value={line.locatie}
-                          onChange={v => {
-                            updateFreightLine(line.id, "locatie", v);
-                          }}
-                          className="h-10 text-sm"
-                        />
-                      )}
-                    </div>
-
-                    {/* Datum + tijdvenster */}
-                    <div className="grid grid-cols-3 gap-3 mb-3">
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Datum</label>
-                        <LuxeDatePicker
-                          value={line.datum}
-                          onChange={v => updateFreightLine(line.id, "datum", v)}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Tijd van</label>
-                        <LuxeTimePicker
-                          value={line.tijd}
-                          onChange={v => updateFreightLine(line.id, "tijd", v)}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Tijd tot</label>
-                        <LuxeTimePicker
-                          value={line.tijdTot}
-                          onChange={v => updateFreightLine(line.id, "tijdTot", v)}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Extra velden */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Referentie</label>
-                        <Input
-                          value={line.referentie}
-                          onChange={e => updateFreightLine(line.id, "referentie", e.target.value)}
-                          placeholder="PO-nummer"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Contact op locatie</label>
-                        <Input
-                          value={line.contactLocatie}
-                          onChange={e => updateFreightLine(line.id, "contactLocatie", e.target.value)}
-                          placeholder="Naam / telefoon"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground block mb-1.5">Opmerking</label>
-                        <Input
-                          value={line.opmerkingen}
-                          onChange={e => updateFreightLine(line.id, "opmerkingen", e.target.value)}
-                          placeholder="Bv. aanmelden receptie"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                    </div>
+              {routeActiveQuestion === 3 && (
+              <div className={conversationalCardClass(0)}>
+              {renderQuestionPrompt(
+                { step: "Laadmoment", title: "Wanneer wordt de lading opgehaald?", hint: "Kies het laadmoment. Daarna verschijnt de vraag voor levering of overdracht." },
+                !missingPickupTimeWindow,
+              )}
+              {pickupLine && (
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div>
+                    <label className={cn(flowLabelClass, requiredTextClass(missingPickupTimeWindow))}>Datum</label>
+                    <LuxeDatePicker
+                      value={pickupLine.datum}
+                      onChange={v => {
+                        setRouteManualBack(false);
+                        updateFreightLine(pickupLine.id, "datum", v);
+                      }}
+                    />
                   </div>
-                ))}
+                  <div>
+                    <label className={flowLabelClass}>Tijd van</label>
+                    <LuxeTimePicker
+                      value={pickupLine.tijd}
+                      onChange={v => {
+                        setRouteManualBack(false);
+                        updateFreightLine(pickupLine.id, "tijd", v);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className={flowLabelClass}>Tijd tot</label>
+                    <LuxeTimePicker
+                      value={pickupLine.tijdTot}
+                      onChange={v => {
+                        setRouteManualBack(false);
+                        updateFreightLine(pickupLine.id, "tijdTot", v);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              {(errors.pickup_time_window || pickupRouteIssue?.message) && (
+                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                  {errors.pickup_time_window || pickupRouteIssue?.message}
+                </p>
+              )}
+              </div>
+              )}
+
+              {routeActiveQuestion === 4 && (
+              <div className={conversationalCardClass(0)}>
+              {renderQuestionPrompt(
+                { step: "Levermoment", title: "Wanneer moet de lading daar zijn?", hint: "Gebruik dit voor lossen, warehouse-overdracht of eindbestemming." },
+                !missingDeliveryTimeWindow,
+              )}
+              {deliveryLine && (
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div>
+                    <label className={cn(flowLabelClass, requiredTextClass(missingDeliveryTimeWindow))}>Datum</label>
+                    <LuxeDatePicker
+                      value={deliveryLine.datum}
+                      onChange={v => {
+                        setRouteManualBack(false);
+                        updateFreightLine(deliveryLine.id, "datum", v);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className={flowLabelClass}>Tijd van</label>
+                    <LuxeTimePicker
+                      value={deliveryLine.tijd}
+                      onChange={v => {
+                        setRouteManualBack(false);
+                        updateFreightLine(deliveryLine.id, "tijd", v);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className={flowLabelClass}>Tijd tot</label>
+                    <LuxeTimePicker
+                      value={deliveryLine.tijdTot}
+                      onChange={v => {
+                        setRouteManualBack(false);
+                        updateFreightLine(deliveryLine.id, "tijdTot", v);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              {(errors.delivery_time_window || errors.route_sequence || primaryDeliveryRouteIssue?.message) && (
+                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                  {errors.delivery_time_window || errors.route_sequence || primaryDeliveryRouteIssue?.message}
+                </p>
+              )}
+              <div className="mt-4 rounded-2xl border border-[hsl(var(--gold)_/_0.18)] bg-[hsl(var(--gold-soft)_/_0.18)] px-4 py-3 text-xs text-muted-foreground">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span>Meerdere stops, bijvoorbeeld ophalen {"->"} warehouse {"->"} Dubai, blijven onderdeel van dezelfde rit. De laatste stop wordt straks als eindbestemming gebruikt.</span>
+                  <button
+                    type="button"
+                    onClick={addFreightLine}
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-[hsl(var(--gold)_/_0.28)] bg-white px-3 py-1.5 text-xs font-semibold text-[hsl(var(--gold-deep))] transition hover:bg-[hsl(var(--gold-soft)_/_0.32)]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Stop toevoegen
+                  </button>
+                </div>
+              </div>
+              {extraDeliveryLines.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {extraDeliveryLines.map((line, index) => (
+                    <div key={line.id} className="rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white p-4 shadow-[0_16px_34px_rgba(15,23,42,0.07)]">
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-foreground">{getDeliveryStopLabel(index + 1)}</div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">
+                            {index + 1 === deliveryStops.length - 1 ? "Laatste stop van de rit" : "Warehouse, crossdock of tussenstop"}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFreightLine(line.id)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-red-50 hover:text-red-600"
+                          aria-label="Extra stop verwijderen"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="grid gap-4">
+                        <div className="min-w-0">
+                          <label className={flowLabelClass}>{getDeliveryStopLabel(index + 1)}</label>
+                          <AddressAutocomplete
+                            value={addressValueFromFreightLine(line)}
+                            onChange={(value) => updateFreightLineAddress(line.id, value)}
+                            searchLabel="Zoek stop of eindbestemming"
+                            searchPlaceholder="Typ warehouse, stad, straat of eindbestemming"
+                            compactFlow
+                            blockedAddresses={[
+                              pickupLine?.locatie,
+                              ...deliveryStops
+                                .filter((stop) => stop.id !== line.id)
+                                .map((stop) => stop.locatie),
+                            ].filter(Boolean) as string[]}
+                            blockedMessage="Deze stop staat al in de rit."
+                            onSearchInputChange={(value) => {
+                              setDeliveryLookup(value);
+                              clearError("delivery_address");
+                            }}
+                            quickOptions={deliveryQuickOptions.map(toAddressSuggestionOption)}
+                            onQuickSelect={(option) => {
+                              const selected = deliveryQuickOptions.find(item => item.id === option.id);
+                              if (selected) updateFreightLineAddress(line.id, selected.value, selected);
+                            }}
+                            onResolvedSelection={(selection) => {
+                              void maybeLearnClientAlias(selection);
+                              updateFreightLineAddress(line.id, selection.value);
+                            }}
+                          />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                          <div className="min-w-0">
+                            <label className={flowLabelClass}>Datum</label>
+                            <LuxeDatePicker
+                              value={line.datum}
+                              onChange={v => updateFreightLine(line.id, "datum", v)}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <label className={flowLabelClass}>Tijd van</label>
+                            <LuxeTimePicker
+                              value={line.tijd}
+                              onChange={v => updateFreightLine(line.id, "tijd", v)}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <label className={flowLabelClass}>Tijd tot</label>
+                            <LuxeTimePicker
+                              value={line.tijdTot}
+                              onChange={v => updateFreightLine(line.id, "tijdTot", v)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      {routeRuleIssues.find((issue) => issue.lineId === line.id) && (
+                        <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                          {routeRuleIssues.find((issue) => issue.lineId === line.id)?.message}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
+              )}
               </div>
 
+              {false && !missingPickupAddress && !missingDeliveryAddress && (
               <div className="pt-4">
                 <button
                   type="button"
@@ -2041,10 +4319,12 @@ const NewOrder = () => {
                   <Plus className="h-3.5 w-3.5" /> Tussenstop toevoegen
                 </button>
               </div>
+              )}
+              {renderWizardFooter()}
             </section>
 
             {/* ── Traject-preview (onder stops) ── */}
-            {(trajectPreview || previewLoading) && (
+            {false && (trajectPreview || previewLoading) && (
               <div className="card--luxe p-5 relative">
                 {previewLoading && !trajectPreview && (
                   <div className="text-xs text-muted-foreground">Traject wordt berekend…</div>
@@ -2095,6 +4375,12 @@ const NewOrder = () => {
             )}
 
             {/* ══ Chapter III · Transport ══ */}
+            </>
+            )}
+
+            {wizardStep === "cargo" && (
+            <>
+            {false && !missingQuantity && !missingWeight && (
             <section className="card--luxe p-6 relative">
               <span className="card-chapter">II</span>
               <div className="mb-4">
@@ -2179,26 +4465,368 @@ const NewOrder = () => {
                 </div>
               </div>
             </section>
+            )}
 
             
             {/* ══ Chapter IV · Lading ══ */}
-            <section className="card--luxe p-6 relative">
-              <span className="card-chapter">IV</span>
-              <div className="mb-4">
+            <section className={uberFlowShellClass}>
+              {renderUberStepHeader("03 · Transport", "Wat gaat er mee?", "Begin met aantal en gewicht. Details komen pas als de basis klopt.")}
+              {false && <span className="card-chapter">IV</span>}
+              {false && <div className="mb-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
                   04 · Lading
                 </div>
                 <h3 className="section-title">Wat wordt er vervoerd</h3>
                 <p className="text-xs text-muted-foreground mt-1">Voeg meerdere regels toe voor verschillende soorten lading.</p>
-              </div>
+              </div>}
+              {cargoActiveQuestion > 1 && (
+                <div className={cn("mb-8", cargoActiveQuestion >= 3 && "mb-10")}>
+                  {renderCollapsedFacts([
+                    {
+                      label: "Aantal",
+                      value: `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || transportEenheid || "eenheden"}`,
+                      onEdit: () => {
+                        setCargoManualBack(true);
+                        setCargoActiveQuestion(1);
+                      },
+                    },
+                    ...(cargoActiveQuestion > 2 ? [{
+                      label: "Gewicht",
+                      value: `${cargoTotals.totGewicht || 0} kg`,
+                      onEdit: () => {
+                        setCargoManualBack(true);
+                        setCargoActiveQuestion(2);
+                      },
+                    }] : []),
+                  ])}
+                </div>
+              )}
 
+              {cargoActiveQuestion === 1 && cargoRows.slice(0, 1).map(row => (
+                <div key={row.id} className={cn(
+                  conversationalCardClass(0),
+                  "mb-4",
+                  missingQuantity && "border-red-200 bg-red-50/40",
+                )}>
+                  {renderQuestionPrompt(
+                    { step: "Aantal", title: "Hoeveel eenheden vervoer je?", hint: "Na een geldig aantal verschijnt automatisch de gewichtsvraag." },
+                    !missingQuantity,
+                  )}
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                  <div>
+                    <label className={cn(flowLabelClass, requiredTextClass(missingQuantity))}>Aantal eenheden</label>
+                    <Input
+                      type="number"
+                      value={row.aantal}
+                      onChange={e => { updateCargoRow(row.id, "aantal", e.target.value); clearError("quantity"); }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && Number(row.aantal) > 0) {
+                          e.preventDefault();
+                          setCargoManualBack(false);
+                          setCargoActiveQuestion(2);
+                        }
+                      }}
+                      placeholder="Bijv. 6"
+                      className={cn(flowInputClass, "tabular-nums", requiredFieldClass(missingQuantity))}
+                    />
+                  </div>
+                  <div>
+                    <label className={flowLabelClass}>Eenheid</label>
+                    <Select value={row.eenheid} onValueChange={v => { updateCargoRow(row.id, "eenheid", v); clearError("unit"); }}>
+                      <SelectTrigger className={flowInputClass}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pallets">Pallets</SelectItem>
+                        <SelectItem value="Colli">Colli</SelectItem>
+                        <SelectItem value="Box">Box</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  </div>
+                </div>
+              ))}
+
+              {cargoActiveQuestion === 2 && cargoRows.slice(0, 1).map(row => (
+                <div key={row.id} className={cn(
+                  conversationalCardClass(0),
+                  "mb-4",
+                  missingWeight ? "border-red-200 bg-red-50/40" : "border-border/60 bg-white",
+                )}>
+                  {renderQuestionPrompt(
+                    { step: "Gewicht", title: "Wat is het totale gewicht?", hint: "Na een geldig gewicht verschijnen de detailvelden en voertuigkeuzes." },
+                    !missingWeight,
+                  )}
+                  <label className={cn(flowLabelClass, requiredTextClass(missingWeight))}>Gewicht totaal in kg</label>
+                  <Input
+                    type="number"
+                    value={row.gewicht}
+                    onChange={e => { updateCargoRow(row.id, "gewicht", e.target.value); clearError("weight_kg"); }}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && Number(row.gewicht) > 0) {
+                        e.preventDefault();
+                        setCargoManualBack(false);
+                        setCargoActiveQuestion(3);
+                      }
+                    }}
+                    placeholder="Bijv. 850"
+                    className={cn(flowInputClass, "max-w-xs tabular-nums", requiredFieldClass(missingWeight))}
+                  />
+                </div>
+              ))}
+
+              {cargoActiveQuestion >= 3 && !missingQuantity && !missingWeight && (
+                <div className={cn(conversationalCardClass(0), "mb-4")}>
+                  {renderQuestionPrompt(
+                    {
+                      step: "Transport",
+                      title: "Welk transport past hierbij?",
+                      hint: "We doen alvast een voorstel. Pas alleen aan als de planner bewust wil afwijken.",
+                    },
+                    Boolean((transportType || suggestedTransportType) && (voertuigtype || suggestedVehicleType) && afdeling),
+                    Boolean((transportType || suggestedTransportType) && (voertuigtype || suggestedVehicleType)),
+                  )}
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <label className={flowLabelClass}>
+                        Transport type <span className="text-red-600">*</span>
+                      </label>
+                      <Select value={transportType} onValueChange={(value) => { setTransportType(value); setTransportTypeManual(true); }}>
+                        <SelectTrigger className={flowInputClass}>
+                          <SelectValue placeholder="Selecteer..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="FTL">FTL</SelectItem>
+                          <SelectItem value="LTL">LTL</SelectItem>
+                          <SelectItem value="Koel">Koel</SelectItem>
+                          <SelectItem value="Express">Express</SelectItem>
+                          <SelectItem value="Luchtvracht">Luchtvracht</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {suggestedTransportType && (
+                        <span className="mt-1 block text-[10px] tracking-wider text-[hsl(var(--gold-deep))]">
+                          Voorstel: {suggestedTransportType}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className={flowLabelClass}>
+                        Voertuigtype
+                      </label>
+                      <Select value={voertuigtype} onValueChange={(value) => { setVoertuigtype(value); setVoertuigtypeManual(true); }}>
+                        <SelectTrigger className={flowInputClass}>
+                          <SelectValue placeholder="Selecteer..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Vrachtwagen">Vrachtwagen</SelectItem>
+                          <SelectItem value="Bestelbus">Bestelbus</SelectItem>
+                          <SelectItem value="Trailer">Trailer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {suggestedVehicleType && (
+                        <span className="mt-1 block text-[10px] tracking-wider text-[hsl(var(--gold-deep))]">
+                          Voorstel: {suggestedVehicleType}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className={cn(flowLabelClass, requiredTextClass(!afdeling))}>
+                        Afdeling <span className="text-red-600">*</span>
+                      </label>
+                      <Select
+                        value={afdeling || undefined}
+                        onValueChange={v => { setAfdeling(v); setAfdelingManual(true); clearError("afdeling"); }}
+                      >
+                        <SelectTrigger className={cn(flowInputClass, errors.afdeling && "border-red-500")}>
+                          <SelectValue placeholder="Selecteer..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="OPS">Operations</SelectItem>
+                          <SelectItem value="EXPORT">Export</SelectItem>
+                          <SelectItem value="IMPORT">Import</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {!afdelingManual && afdeling && (
+                        <span className="mt-1 block text-[10px] tracking-wider text-[hsl(var(--gold-deep))]">
+                          Automatisch bepaald op basis van traject
+                        </span>
+                      )}
+                      {afdelingManual && inferredAfdeling && inferredAfdeling !== afdeling && (
+                        <span className="mt-1 block text-[10px] tracking-wider text-red-600">
+                          Overschreven door planner, automatisch zou {inferredAfdeling} zijn
+                        </span>
+                      )}
+                      {errors.afdeling && <span className="text-[11px] text-red-500">{errors.afdeling}</span>}
+                    </div>
+                  </div>
+
+                  {showPmt && (
+                    <div className="mt-6 rounded-2xl border border-[hsl(var(--gold)_/_0.18)] bg-[hsl(var(--gold-soft)_/_0.18)] p-4">
+                      <div className="mb-4">
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                            Luchtvracht security
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">Kies direct Secure, EDD of X-RAY</div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Bij EDD of X-RAY verschijnen de PMT-gegevens voor de RCS-verklaring.
+                          </p>
+                        </div>
+                      </div>
+
+                      {true && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            {(["secure", "edd", "xray"] as const).map((method) => (
+                              <button
+                                key={method}
+                                type="button"
+                                onClick={() => {
+                                  if (method === "secure") {
+                                    setShipmentSecure(true);
+                                    setPmtMethode("");
+                                    return;
+                                  }
+                                  setShipmentSecure(false);
+                                  setPmtMethode(method);
+                                }}
+                                className={cn(
+                                  "flex min-w-0 items-start gap-2 rounded-2xl border bg-white px-3 py-3 text-left transition hover:border-[hsl(var(--gold)_/_0.45)] hover:bg-[hsl(var(--gold-soft)_/_0.20)]",
+                                  (method === "secure" ? shipmentSecure : !shipmentSecure && pmtMethode === method)
+                                    ? "border-[hsl(var(--gold)_/_0.65)] shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.20)]"
+                                    : "border-border/70",
+                                )}
+                              >
+                                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))]">
+                                  {method === "secure" ? "OK" : method === "edd" ? "EDD" : "XR"}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block break-words text-sm font-semibold leading-snug">
+                                    {method === "secure" ? "Secure" : method === "edd" ? "EDD · Hondenscan" : "X-RAY · Rontgenscan"}
+                                  </span>
+                                  <span className="hidden">
+                                    {method === "edd" ? "EDD · Hondenscan" : "X-RAY · Rontgenscan"}
+                                  </span>
+                                  <span className="mt-1 block break-words text-xs leading-snug text-muted-foreground">
+                                    {method === "secure" ? "Al beveiligd aangeleverd" : method === "edd" ? "Screening via operator/hondenteam" : "Screening via rontgenstraat"}
+                                  </span>
+                                  <span className="hidden">
+                                    {method === "edd" ? "Screening via operator/hondenteam" : "Screening via rontgenstraat"}
+                                  </span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+
+                          {pmtMethode && (
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div>
+                                <label className={flowLabelClass}>Operator / screeningsbedrijf</label>
+                                <Input
+                                  value={pmtOperator}
+                                  onChange={e => setPmtOperator(e.target.value)}
+                                  placeholder="Bijv. Schiphol Cargo Security"
+                                  className={flowInputClass}
+                                />
+                              </div>
+                              <div>
+                                <label className={flowLabelClass}>PMT-referentie</label>
+                                <Input
+                                  value={pmtReferentie}
+                                  onChange={e => setPmtReferentie(e.target.value)}
+                                  placeholder="PMT-2026-..."
+                                  className={flowInputClass}
+                                />
+                              </div>
+                              <div>
+                                <label className={flowLabelClass}>Datum screening</label>
+                                <LuxeDatePicker value={pmtDatum} onChange={setPmtDatum} />
+                              </div>
+                              <div>
+                                <label className={flowLabelClass}>Locatie screening</label>
+                                <Input
+                                  value={pmtLocatie}
+                                  onChange={e => setPmtLocatie(e.target.value)}
+                                  placeholder="Bijv. Schiphol Zuidoost"
+                                  className={flowInputClass}
+                                />
+                              </div>
+                              <div>
+                                <label className={flowLabelClass}>Seal-nummer</label>
+                                <Input
+                                  value={pmtSeal}
+                                  onChange={e => setPmtSeal(e.target.value)}
+                                  placeholder="Optioneel"
+                                  className={flowInputClass}
+                                />
+                              </div>
+                              <div>
+                                <label className={flowLabelClass}>Keuze bepaald door klant</label>
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={pmtByCustomer}
+                                  onClick={() => setPmtByCustomer(!pmtByCustomer)}
+                                  className={cn(
+                                    "inline-flex min-h-14 w-full min-w-0 items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition",
+                                    pmtByCustomer
+                                      ? "border-[hsl(var(--gold)_/_0.35)] bg-[hsl(var(--gold-soft)_/_0.28)] text-[hsl(var(--gold-deep))]"
+                                      : "border-border/70 bg-white text-muted-foreground",
+                                  )}
+                                >
+                                  <span className="min-w-0 text-left leading-snug">{pmtByCustomer ? "Bevestigd door klant" : "Niet bevestigd"}</span>
+                                  <span className={cn(
+                                    "relative h-6 w-11 shrink-0 rounded-full transition",
+                                    pmtByCustomer ? "bg-[hsl(var(--gold))]" : "bg-border",
+                                  )}>
+                                    <span className={cn(
+                                      "pointer-events-none absolute left-0.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform",
+                                      pmtByCustomer ? "translate-x-5" : "translate-x-0",
+                                    )} />
+                                  </span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-5 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCargoManualBack(true);
+                        setCargoActiveQuestion(2);
+                      }}
+                      className="inline-flex items-center justify-center rounded-full border border-[hsl(var(--gold)_/_0.18)] bg-white px-4 py-2 text-sm font-medium text-muted-foreground transition hover:bg-[hsl(var(--gold-soft)_/_0.24)] hover:text-foreground"
+                    >
+                      Vorige vraag
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWizardStep("financial");
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_36px_-24px_hsl(var(--gold-deep)_/_0.85)] transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
+                    >
+                      Bereken tarief
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {false && !missingQuantity && !missingWeight && (
               <div className="overflow-x-auto mb-4">
                 <table className="w-full text-xs min-w-[900px]">
                   <thead>
                     <tr className="border-b border-border/60 text-muted-foreground">
-                      <th className="text-left font-semibold py-2 pr-2 w-[80px]">Aantal eenheden <span className="text-red-600">*</span></th>
+                      <th className={cn("text-left font-semibold py-2 pr-2 w-[80px]", requiredTextClass(missingQuantity))}>Aantal eenheden <span className="text-red-600">*</span></th>
                       <th className="text-left font-semibold py-2 pr-2 w-[120px]">Eenheid <span className="text-red-600">*</span></th>
-                      <th className="text-left font-semibold py-2 pr-2 w-[100px]">Gewicht (kg) <span className="text-red-600">*</span></th>
+                      <th className={cn("text-left font-semibold py-2 pr-2 w-[100px]", requiredTextClass(missingWeight))}>Gewicht (kg) <span className="text-red-600">*</span></th>
                       <th className="text-left font-semibold py-2 pr-2 w-[180px]">L × B × H (cm)</th>
                       <th className="text-center font-semibold py-2 pr-2 w-[90px]">Stapelbaar</th>
                       <th className="text-left font-semibold py-2 pr-2 w-[110px]">ADR / UN</th>
@@ -2214,7 +4842,8 @@ const NewOrder = () => {
                             type="number"
                             value={row.aantal}
                             onChange={e => { updateCargoRow(row.id, "aantal", e.target.value); clearError("quantity"); }}
-                            className="h-9 text-xs tabular-nums"
+                            placeholder="0"
+                            className={cn("h-9 text-xs tabular-nums", requiredFieldClass(missingQuantity && !row.aantal))}
                           />
                         </td>
                         <td className="py-2 pr-2">
@@ -2232,7 +4861,8 @@ const NewOrder = () => {
                             type="number"
                             value={row.gewicht}
                             onChange={e => { updateCargoRow(row.id, "gewicht", e.target.value); clearError("weight_kg"); }}
-                            className="h-9 text-xs tabular-nums"
+                            placeholder="0"
+                            className={cn("h-9 text-xs tabular-nums", requiredFieldClass(missingWeight && !row.gewicht))}
                           />
                         </td>
                         <td className="py-2 pr-2">
@@ -2283,7 +4913,10 @@ const NewOrder = () => {
                   </tbody>
                 </table>
               </div>
+              )}
 
+              {false && !missingQuantity && !missingWeight && (
+              <>
               <div className="mb-4">
                 <button
                   type="button"
@@ -2326,18 +4959,21 @@ const NewOrder = () => {
                   <span className="sum-value">{cargoTotals.totGewicht.toLocaleString("nl-NL")} <span className="sum-unit">kg</span></span>
                 </div>
                 <div className="sum-card">
-                  <span className="sum-label">Afstand · auto</span>
-                  <span className="sum-value">{afstand || "—"} <span className="sum-unit">km</span></span>
+                  <span className="sum-label">Afstand</span>
+                  <span className="sum-value">{afstand || "-"} <span className="sum-unit">km</span></span>
                 </div>
                 <div className="sum-card">
-                  <span className="sum-label">Duur · auto</span>
-                  <span className="sum-value">{totaleDuur || "—"}</span>
+                  <span className="sum-label">Duur</span>
+                  <span className="sum-value">{totaleDuur || "-"}</span>
                 </div>
               </div>
+              </>
+              )}
+              {renderWizardFooter()}
             </section>
 
             {/* ══ Chapter V · Luchtvracht-beveiliging (PMT) ══ */}
-            {showPmt && (
+            {false && showPmt && (
             <section className="card--luxe p-6 relative">
               <span className="card-chapter">V</span>
               <div className="mb-5">
@@ -2454,6 +5090,7 @@ const NewOrder = () => {
             )}
 
             {/* ═��� Chapter VI · Info volgt van klant ══ */}
+            {false && (
             <section className="card--luxe p-6 relative" style={{ background: "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(45 60% 96%) 100%)" }}>
               <span className="card-chapter">VI</span>
               <div className="mb-4">
@@ -2501,19 +5138,328 @@ const NewOrder = () => {
                   </div>
                 </div>
               )}
+              {renderWizardFooter()}
             </section>
+            )}
+
+            </>
+            )}
+
+            {wizardStep === "financial" && (
+              <section className={uberFlowShellClass}>
+                {renderUberStepHeader("04 · Financieel", "Controleer het tarief", "Dezelfde tariefmotor als productie, direct na transport.")}
+
+                <div className="mb-5 space-y-3">
+                  {renderCollapsedAnswer("Klant", clientName || "Nog geen klant", () => {
+                    setWizardStep("intake");
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(1);
+                  })}
+                  {renderCollapsedAnswer("Route", routeLocationSummary || `${pickupLine?.locatie || "Ophaaladres"} -> ${deliveryLine?.locatie || "Afleveradres"}`, () => {
+                    setWizardStep("route");
+                    setRouteManualBack(true);
+                    setRouteActiveQuestion(missingPickupAddress ? 1 : missingDeliveryAddress ? 2 : missingPickupTimeWindow ? 3 : 4);
+                  })}
+                  {renderCollapsedAnswer("Transport", `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || "eenheden"} · ${cargoTotals.totGewicht || 0} kg · ${transportType || suggestedTransportType || "transport volgt"}`, () => {
+                    setWizardStep("cargo");
+                    setCargoManualBack(true);
+                    setCargoActiveQuestion(3);
+                  })}
+                  {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
+                    setWizardStep("cargo");
+                    setCargoManualBack(true);
+                    setCargoActiveQuestion(3);
+                  })}
+                </div>
+
+                <div className={cn(conversationalCardClass(0), "mb-4 overflow-hidden")}>
+                  {renderQuestionPrompt(
+                    {
+                      step: "Tarief",
+                      title: "Klopt het financiele voorstel?",
+                      hint: "Controleer tarief, toeslagen en eventuele afwijking voordat je naar de eindcontrole gaat.",
+                    },
+                    pricingPayload.cents != null,
+                    true,
+                  )}
+                  <div className="-mx-6 -mb-6 md:-mx-9 md:-mb-9">
+                    {renderProductionFinancialTab()}
+                  </div>
+                </div>
+
+                {renderWizardFooter()}
+              </section>
+            )}
+
+            {wizardStep === "review" && (
+              <section className={uberFlowShellClass}>
+                {renderUberStepHeader("05 · Controle", "Klaar om te plannen?", "Laatste check op opdrachtgever, route, lading en plannerregels.")}
+                {false && <span className="card-chapter">IV</span>}
+                {false && <div className="mb-5 flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                      04 · Controle
+                    </div>
+                    <h3 className="section-title">Order klaarzetten voor planning</h3>
+                    <p className="text-xs text-muted-foreground mt-1">Laatste check op klant, route, lading en plannerregels.</p>
+                  </div>
+                  <div className={cn(
+                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
+                    wizardMissing.length === 0
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-amber-200 bg-amber-50 text-amber-800",
+                  )}>
+                    {wizardMissing.length === 0 ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
+                    {wizardMissing.length === 0 ? "Compleet" : `${wizardMissing.length} aandachtspunten`}
+                  </div>
+                </div>}
+
+                <div className="mb-5 space-y-3">
+                  {renderCollapsedAnswer("Klant", clientName || "Nog geen klant", () => {
+                    setWizardStep("intake");
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(1);
+                  })}
+                  {renderCollapsedAnswer("Route", routeLocationSummary || `${pickupLine?.locatie || "Ophaaladres"} -> ${deliveryLine?.locatie || "Afleveradres"}`, () => {
+                    setWizardStep("route");
+                    setRouteManualBack(true);
+                    setRouteActiveQuestion(missingPickupAddress ? 1 : missingDeliveryAddress ? 2 : missingPickupTimeWindow ? 3 : 4);
+                  })}
+                  {renderCollapsedAnswer("Lading", `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || "eenheden"} · ${cargoTotals.totGewicht || 0} kg`, () => {
+                    setWizardStep("cargo");
+                    setCargoManualBack(true);
+                    setCargoActiveQuestion(missingQuantity ? 1 : 2);
+                  })}
+                  {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
+                    setWizardStep("cargo");
+                    setCargoManualBack(true);
+                    setCargoActiveQuestion(3);
+                  })}
+                  {renderCollapsedAnswer("Financieel", pricingLabel, () => setWizardStep("financial"))}
+                </div>
+
+                {reviewActiveQuestion > 1 && renderCollapsedAnswer(
+                  "Referentie",
+                  klantReferentie.trim() || "Geen klantreferentie",
+                  () => setReviewActiveQuestion(1),
+                )}
+
+                {false && reviewActiveQuestion > 2 && renderCollapsedAnswer(
+                  "Planner",
+                  referentie.trim() || "Geen planner-opmerking",
+                  () => setReviewActiveQuestion(2),
+                )}
+
+                {reviewActiveQuestion === 1 && (
+                  <div className={cn(conversationalCardClass(0), "mb-4")}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Referentie",
+                        title: "Welke referentie hoort bij deze order?",
+                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
+                      },
+                      Boolean(klantReferentie.trim()),
+                      true,
+                    )}
+                    <label className={flowLabelClass}>Klant-referentie</label>
+                    <Input
+                      value={klantReferentie}
+                      onChange={e => setKlantReferentie(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          setReviewActiveQuestion(2);
+                        }
+                      }}
+                      placeholder="PO-nummer of bestelreferentie"
+                      className={flowInputClass}
+                    />
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setReviewActiveQuestion(2)}
+                        className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
+                      >
+                        {klantReferentie.trim() ? "Gebruik referentie" : "Geen referentie"}
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {reviewActiveQuestion === 2 && (
+                  <div className={cn(conversationalCardClass(0), "mb-4")}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Planner",
+                        title: "Moet de planner nog iets weten?",
+                        hint: "Optioneel. Laat leeg als de rit direct ingepland kan worden.",
+                      },
+                      Boolean(referentie.trim()),
+                      true,
+                    )}
+                    <label className={flowLabelClass}>Opmerking voor planner</label>
+                    <Textarea
+                      value={referentie}
+                      onChange={e => setReferentie(e.target.value)}
+                      rows={3}
+                      placeholder="Bijzonderheden, instructies..."
+                      className="min-h-28 resize-none rounded-2xl border-border/70 bg-white px-4 py-3 text-base shadow-[inset_0_1px_0_hsl(var(--foreground)_/_0.04)] transition focus-visible:border-[hsl(var(--gold)_/_0.45)] focus-visible:ring-4 focus-visible:ring-[hsl(var(--gold)_/_0.14)]"
+                    />
+                    {false && <div className="mt-4 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setReviewActiveQuestion(3)}
+                        className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
+                      >
+                        Controleer tarief
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>}
+                  </div>
+                )}
+
+                {false && reviewActiveQuestion === 3 && (
+                  <div className={cn(conversationalCardClass(0), "mb-4 overflow-hidden")}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Financieel",
+                        title: "Klopt het financiele voorstel?",
+                        hint: "Gebruik de tariefmotor of vul een afwijkend tarief in. Dit blijft gekoppeld aan dezelfde order.",
+                      },
+                      pricingPayload.cents != null,
+                      true,
+                    )}
+                    <div className="-mx-6 -mb-6 md:-mx-9 md:-mb-9">
+                      {renderProductionFinancialTab()}
+                    </div>
+                  </div>
+                )}
+
+                {false && <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="rounded-lg border border-border/60 bg-white p-4">
+                    <div className="text-sm font-semibold">Samenvatting</div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {plannerSummary.map((item) => (
+                        <div key={item.label} className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{item.label}</div>
+                          <div className="mt-1 text-sm font-medium">{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-border/60 bg-white p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold">Route</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {routeLocationSummary || `${pickupLine?.locatie || "Ophaaladres ontbreekt"} -> ${deliveryLine?.locatie || "Afleveradres ontbreekt"}`}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep("route")}
+                          className="rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium hover:bg-muted/50"
+                        >
+                          Bewerken
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-white p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold">Lading & planning</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {cargoTotals.totAantal || 0} {cargoTotals.primaryUnit || "eenheden"} · {cargoTotals.totGewicht || 0} kg · {voertuigtype || suggestedVehicleType || "voertuig volgt"}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep("cargo")}
+                          className="rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium hover:bg-muted/50"
+                        >
+                          Bewerken
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                      <div className="text-sm font-semibold">Nog aan te vullen</div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {wizardMissing.length > 0 ? wizardMissing.map((item) => (
+                          <span key={item} className="rounded-full border border-border/60 bg-white px-3 py-1 text-[11px]">
+                            {wizardMissingLabel[item] ?? item}
+                          </span>
+                        )) : (
+                          <span className="text-xs text-emerald-700">Geen open basisvelden.</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>}
+                {renderWizardFooter()}
+              </section>
+            )}
+
+            {false && (
+            <section className="-mt-5 rounded-b-2xl border border-t-0 border-border/60 bg-card px-6 py-4 shadow-[0_12px_28px_-24px_hsl(var(--foreground)_/_0.45)]">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">
+                    {wizardStep === "intake" && "Vul opdrachtgever en orderreferentie in"}
+                    {wizardStep === "route" && "Werk stops, adressen en tijdvensters bij"}
+                    {wizardStep === "cargo" && "Vul lading, voertuig en aanvullende regels aan"}
+                    {wizardStep === "review" && "Controleer of de order klaar is om aan te maken"}
+                  </div>
+                  <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
+                    {wizardMissing.length > 0
+                      ? `Er missen nog ${wizardMissing.join(", ")}.`
+                      : "De basis is compleet. Je kunt nu opslaan of direct aanmaken."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={goToPreviousWizardStep}
+                    disabled={wizardStep === "intake"}
+                    className="inline-flex items-center justify-center rounded-xl border border-border/60 bg-white px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Vorige stap
+                  </button>
+                  {wizardStep !== "review" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        goToNextWizardStep();
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-medium text-white transition hover:opacity-95"
+                    >
+                      {wizardNextActionLabel}
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSave(true)}
+                      disabled={saving}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:opacity-50"
+                    >
+                      Order aanmaken & plannen
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </section>
+            )}
+            </div>
+            {renderOrderPreview()}
           </div>
         )}
 
         {mainTab === "financieel" && (
-          <FinancialTab
-            tenantId={tenant?.id}
-            cargo={financialCargo}
-            pickupDate={financialPickupDate}
-            pickupTime={financialPickupTime}
-            transportType={transportType}
-            onPricingChange={setPricingPayload}
-          />
+          renderProductionFinancialTab()
         )}
 
         {mainTab === "vrachtdossier" && (
@@ -2643,3 +5589,5 @@ const NewOrder = () => {
 };
 
 export default NewOrder;
+
+

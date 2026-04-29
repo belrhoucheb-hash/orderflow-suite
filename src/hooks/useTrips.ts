@@ -6,6 +6,11 @@ import { toast } from "sonner";
 import type { Trip, TripStop, TripStatus, StopStatus, canTransitionTrip, canTransitionStop } from "@/types/dispatch";
 import { logAudit } from "@/lib/auditLog";
 import { emitEventDirect } from "@/hooks/useEventPipeline";
+import {
+  formatDriverCountryRestrictionIssue,
+  getDriverCountryRestrictionIssue,
+  type CountryAwareOrder,
+} from "@/lib/driverCountryRestrictions";
 
 // ─── Fetch trips for a date ─────────────────────────────────
 export function useTrips(date?: string) {
@@ -80,6 +85,36 @@ export function useCreateTrip() {
       planned_start_time?: string;
       stops: { order_id: string; stop_type: "PICKUP" | "INTERMEDIATE" | "DELIVERY"; planned_address: string; stop_sequence: number; planned_latitude?: number | null; planned_longitude?: number | null }[];
     }) => {
+      if (input.driver_id) {
+        const orderIds = [...new Set(input.stops.map((s) => s.order_id).filter(Boolean))];
+        if (orderIds.length > 0) {
+          const [{ data: restrictions, error: restrictionsErr }, { data: orders, error: ordersErr }] =
+            await Promise.all([
+              supabase
+                .from("driver_country_restrictions" as any)
+                .select("*")
+                .eq("driver_id", input.driver_id)
+                .eq("is_active", true),
+              supabase
+                .from("orders" as any)
+                .select("id, order_number, pickup_country, delivery_country, pickup_address, delivery_address")
+                .in("id", orderIds),
+            ]);
+          if (restrictionsErr) throw restrictionsErr;
+          if (ordersErr) throw ordersErr;
+
+          const issue = getDriverCountryRestrictionIssue(
+            input.driver_id,
+            (orders ?? []) as CountryAwareOrder[],
+            (restrictions ?? []) as any[],
+            input.planned_date,
+          );
+          if (issue?.type === "block") {
+            throw new Error(formatDriverCountryRestrictionIssue(issue));
+          }
+        }
+      }
+
       // Create trip
       const { data: trip, error: tripErr } = await supabase
         .from("trips")

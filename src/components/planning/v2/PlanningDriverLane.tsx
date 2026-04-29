@@ -2,6 +2,8 @@ import { UserCircle, Clock, AlertCircle, AlertTriangle, Truck } from "lucide-rea
 import { cn } from "@/lib/utils";
 import type { ConsolidationGroup } from "@/types/consolidation";
 import type { DriverSchedule } from "@/types/rooster";
+import type { DriverCountryRestrictionIssue } from "@/lib/driverCountryRestrictions";
+import { formatDriverCountryRestrictionIssue } from "@/lib/driverCountryRestrictions";
 import { DRIVER_SCHEDULE_STATUS_LABELS } from "@/types/rooster";
 import { ClusterProposalCard } from "./ClusterProposalCard";
 
@@ -22,6 +24,7 @@ interface PlanningDriverLaneProps {
   schedule?: DriverSchedule | null;
   /** Map van vehicle_id naar leesbare label (kenteken of code), voor de tag. */
   vehicleLabels?: Map<string, string>;
+  countryRestrictionIssue?: DriverCountryRestrictionIssue | null;
   onSelectGroup: (groupId: string) => void;
 }
 
@@ -39,6 +42,7 @@ export function PlanningDriverLane({
   plannedHoursThisWeek,
   schedule,
   vehicleLabels,
+  countryRestrictionIssue,
   onSelectGroup,
 }: PlanningDriverLaneProps) {
   const statusBadge = laneStatusBadge(driver.status);
@@ -98,6 +102,18 @@ export function PlanningDriverLane({
                 >
                   <AlertTriangle className="h-3 w-3" />
                   Rooster: {scheduleStatusLabel}
+                </span>
+              )}
+              {countryRestrictionIssue && (
+                <span
+                  className={cn(
+                    "chiplet inline-flex items-center gap-1",
+                    countryRestrictionIssue.type === "block" ? "chiplet--attn" : "chiplet--warn",
+                  )}
+                  title={formatDriverCountryRestrictionIssue(countryRestrictionIssue)}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  {countryRestrictionIssue.type === "block" ? "Landblokkade" : "Landwaarschuwing"} {countryRestrictionIssue.countryCode}
                 </span>
               )}
             </div>

@@ -10,7 +10,7 @@ export function useConsolidationGroups(plannedDate: string | null) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("consolidation_groups")
-        .select("*, consolidation_orders(*, order:orders(id, order_number, client_name, delivery_address, weight_kg, quantity, requirements, time_window_start, time_window_end))")
+        .select("*, consolidation_orders(*, order:orders(id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, weight_kg, quantity, requirements, time_window_start, time_window_end))")
         .eq("planned_date", plannedDate!)
         .order("created_at");
       if (error) throw error;

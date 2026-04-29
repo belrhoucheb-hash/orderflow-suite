@@ -23,6 +23,11 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { ConsolidationGroup } from "@/types/consolidation";
+import { useAllDriverCountryRestrictions } from "@/hooks/useDriverCountryRestrictions";
+import {
+  formatDriverCountryRestrictionIssue,
+  getDriverCountryRestrictionIssue,
+} from "@/lib/driverCountryRestrictions";
 
 interface ClusterDetailPanelProps {
   groupId: string | null;
@@ -54,7 +59,10 @@ interface OrderRow {
   id: string;
   order_number: number;
   client_name: string | null;
+  pickup_address: string | null;
   delivery_address: string | null;
+  pickup_country: string | null;
+  delivery_country: string | null;
   weight_kg: number | null;
   quantity: number | null;
   requirements: string[] | null;
@@ -64,6 +72,7 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
   const qc = useQueryClient();
   const [reason, setReason] = useState("");
   const [actionBusy, setActionBusy] = useState<"confirm" | "reject" | "override" | null>(null);
+  const { data: countryRestrictions = [] } = useAllDriverCountryRestrictions();
 
   // Reset reden-veld bij cluster-wissel
   useEffect(() => setReason(""), [groupId]);
@@ -77,7 +86,7 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
       const { data, error } = await client
         .from("consolidation_groups")
         .select(
-          "*, consolidation_orders(id, order_id, stop_sequence, order:orders(id, order_number, client_name, delivery_address, weight_kg, quantity, requirements))",
+          "*, consolidation_orders(id, order_id, stop_sequence, order:orders(id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, weight_kg, quantity, requirements))",
         )
         .eq("id", groupId!)
         .single();
@@ -120,6 +129,14 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
 
   const open = !!groupId;
   const orders = group?.consolidation_orders ?? [];
+  const countryRestrictionIssue = group?.driver_id
+    ? getDriverCountryRestrictionIssue(
+        group.driver_id,
+        orders.map((co) => co.order),
+        countryRestrictions,
+        group.planned_date,
+      )
+    : null;
 
   const weightCap = vehicle?.vehicle_types?.max_weight_kg ?? vehicle?.capacity_kg ?? 0;
   const palletCap = vehicle?.vehicle_types?.max_pallets ?? vehicle?.capacity_pallets ?? 0;
@@ -132,6 +149,17 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
 
   async function handleConfirm() {
     if (!groupId) return;
+    if (countryRestrictionIssue?.type === "block") {
+      toast.error("Landrestrictie blokkeert deze rit", {
+        description: formatDriverCountryRestrictionIssue(countryRestrictionIssue),
+      });
+      return;
+    }
+    if (countryRestrictionIssue?.type === "warning") {
+      toast.warning("Landrestrictie waarschuwing", {
+        description: formatDriverCountryRestrictionIssue(countryRestrictionIssue),
+      });
+    }
     setActionBusy("confirm");
     try {
       const { error } = await (supabase.rpc as any)("confirm_consolidation_group", { p_group_id: groupId });
@@ -238,6 +266,28 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
                   </div>
                 </div>
               </section>
+
+              {countryRestrictionIssue && (
+                <section
+                  role="alert"
+                  className={cn(
+                    "rounded-lg border p-3 text-sm flex items-start gap-2",
+                    countryRestrictionIssue.type === "block"
+                      ? "border-red-200 bg-red-50 text-red-800"
+                      : "border-amber-200 bg-amber-50 text-amber-800",
+                  )}
+                >
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold">
+                      {countryRestrictionIssue.type === "block" ? "Landblokkade" : "Landwaarschuwing"}
+                    </div>
+                    <div className="text-xs mt-0.5">
+                      {formatDriverCountryRestrictionIssue(countryRestrictionIssue)}
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {/* Beladingsgraad */}
               <section className="space-y-3">
@@ -366,7 +416,7 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  disabled={actionBusy !== null}
+                  disabled={actionBusy !== null || countryRestrictionIssue?.type === "block"}
                   className="btn-luxe btn-luxe--primary flex-1"
                 >
                   {actionBusy === "confirm" ? "Bevestigen..." : "Bevestig"}

@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useVehicles, type FleetVehicle } from "@/hooks/useVehicles";
 import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 import { useDrivers } from "@/hooks/useDrivers";
+import { useAllDriverCountryRestrictions } from "@/hooks/useDriverCountryRestrictions";
 import {
   resolveCoordinates,
   getPostcodeRegion,
@@ -68,11 +69,16 @@ import { useTenant } from "@/contexts/TenantContext";
 import { solveVRP } from "@/lib/vrpSolver";
 import { useLoadPlanningDraft, useSavePlanningDraft, useDeletePlanningDraft, collectWeekDrafts, usePlanningDraftsRealtime } from "@/hooks/usePlanningDrafts";
 import { parseRouteStops } from "@/lib/routeStops";
+import {
+  formatDriverCountryRestrictionIssue,
+  getDriverCountryRestrictionIssue,
+} from "@/lib/driverCountryRestrictions";
 
 const Planning = () => {
   const { data: fleetVehicles = [] } = useVehicles();
   const { data: rawVehicles = [] } = useVehiclesRaw();
   const { data: drivers = [] } = useDrivers();
+  const { data: countryRestrictions = [] } = useAllDriverCountryRestrictions();
 
   // ── Mapping code (uit FleetVehicle.id) naar rauwe DB-UUID, voor rooster-lookup.
   const vehicleCodeToUuid = useMemo(() => {
@@ -250,7 +256,7 @@ const Planning = () => {
       // Fetch orders for selected date: either matching delivery_date or PENDING without date
       const { data, error } = await supabase
         .from("orders")
-        .select("id, order_number, client_name, pickup_address, delivery_address, quantity, weight_kg, requirements, is_weight_per_unit, time_window_start, time_window_end, pickup_time_window_start, pickup_time_window_end, delivery_time_window_start, delivery_time_window_end, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng, delivery_date, pickup_date, info_status, missing_fields, notification_preferences")
+        .select("id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, quantity, weight_kg, requirements, is_weight_per_unit, time_window_start, time_window_end, pickup_time_window_start, pickup_time_window_end, delivery_time_window_start, delivery_time_window_end, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng, delivery_date, pickup_date, info_status, missing_fields, notification_preferences")
         .eq("status", "PENDING")
         .is("vehicle_id", null)
         .order("order_number", { ascending: true });
@@ -377,9 +383,21 @@ const Planning = () => {
       if (hasTag(order, "ADR") && !vehicle.features.includes("ADR")) {
         return `${vehicle.name} heeft geen ADR-uitrusting – niet geschikt voor ADR-orders.`;
       }
+      const selectedDriverId = vehicleDrivers[vehicle.id];
+      if (selectedDriverId) {
+        const issue = getDriverCountryRestrictionIssue(
+          selectedDriverId,
+          [order],
+          countryRestrictions,
+          selectedDate,
+        );
+        if (issue?.type === "block") {
+          return formatDriverCountryRestrictionIssue(issue);
+        }
+      }
       return null;
     },
-    []
+    [countryRestrictions, selectedDate, vehicleDrivers]
   );
 
   const checkDistanceWarning = useCallback(
@@ -614,6 +632,21 @@ const Planning = () => {
         const v = fleetVehicles.find(fv => fv.id === vId);
         const driverId = vehicleDrivers[vId] || null;
         const startTime = vehicleStartTimes[vId] || null;
+
+        const restrictionIssue = getDriverCountryRestrictionIssue(
+          driverId,
+          vOrders,
+          countryRestrictions,
+          plannedDate,
+        );
+        if (restrictionIssue?.type === "block") {
+          throw new Error(formatDriverCountryRestrictionIssue(restrictionIssue));
+        }
+        if (restrictionIssue?.type === "warning") {
+          toast.warning("Landrestrictie waarschuwing", {
+            description: formatDriverCountryRestrictionIssue(restrictionIssue),
+          });
+        }
 
         // 1. Update orders: set status PLANNED + vehicle_id
         for (let i = 0; i < vOrders.length; i++) {

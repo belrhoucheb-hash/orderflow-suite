@@ -22,6 +22,11 @@ import { cn } from "@/lib/utils";
 import { type FleetVehicle } from "@/hooks/useVehicles";
 import { type Driver } from "@/hooks/useDrivers";
 import { useDriverSchedulesForDate } from "@/hooks/useDriverScheduleForDate";
+import { useAllDriverCountryRestrictions } from "@/hooks/useDriverCountryRestrictions";
+import {
+  formatDriverCountryRestrictionIssue,
+  getDriverCountryRestrictionIssue,
+} from "@/lib/driverCountryRestrictions";
 import { findVehicleConflictsOnDate } from "@/lib/roosterConflicts";
 import { type GeoCoord, vehicleColors } from "@/data/geoData";
 import { MapPin, Weight } from "lucide-react";
@@ -86,6 +91,7 @@ export function PlanningVehicleCard({
 
   // ── Rooster-integratie: prefill + conflict-detectie ─────────────────
   const { data: daySchedules = [] } = useDriverSchedulesForDate(selectedDate);
+  const { data: countryRestrictions = [] } = useAllDriverCountryRestrictions();
 
   const rosterHit = useMemo(() => {
     if (!vehicleDbId) return null;
@@ -101,6 +107,21 @@ export function PlanningVehicleCard({
     const conflicts = findVehicleConflictsOnDate(daySchedules);
     return conflicts.has(vehicleDbId);
   }, [daySchedules, vehicleDbId]);
+
+  const restrictionIssueByDriver = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getDriverCountryRestrictionIssue>>();
+    for (const driver of drivers) {
+      map.set(
+        driver.id,
+        getDriverCountryRestrictionIssue(driver.id, assigned, countryRestrictions, selectedDate),
+      );
+    }
+    return map;
+  }, [assigned, countryRestrictions, drivers, selectedDate]);
+
+  const selectedRestrictionIssue = driverId
+    ? (restrictionIssueByDriver.get(driverId) ?? null)
+    : null;
 
   // Prefill-logica: zodra het rooster een werkende chauffeur op dit voertuig
   // aanwijst en de user nog niets heeft gekozen, vul driverId en startTime in
@@ -192,6 +213,20 @@ export function PlanningVehicleCard({
             <span>Dit voertuig heeft meerdere chauffeurs ingepland vandaag</span>
           </div>
         )}
+        {selectedRestrictionIssue && (
+          <div
+            role="alert"
+            className={cn(
+              "mt-1.5 flex items-start gap-1.5 rounded-md border px-2 py-1 text-[11px]",
+              selectedRestrictionIssue.type === "block"
+                ? "bg-destructive/8 border-destructive/25 text-destructive"
+                : "bg-amber-500/10 border-amber-500/30 text-amber-700",
+            )}
+          >
+            <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+            <span>{formatDriverCountryRestrictionIssue(selectedRestrictionIssue)}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-1.5">
           <p className="text-xs text-muted-foreground shrink-0">{vehicle.plate}</p>
           <Select value={driverId} onValueChange={(v) => onDriverChange(vehicle.id, v)}>
@@ -200,12 +235,25 @@ export function PlanningVehicleCard({
               <SelectValue placeholder="Chauffeur..." />
             </SelectTrigger>
             <SelectContent>
-              {drivers.map((d) => (
-                <SelectItem key={d.id} value={d.id} className="text-xs">
-                  {d.name}
-                  {d.certifications && d.certifications.length > 0 && <span className="text-xs text-muted-foreground ml-1">({d.certifications.join(", ")})</span>}
-                </SelectItem>
-              ))}
+              {drivers.map((d) => {
+                const issue = restrictionIssueByDriver.get(d.id);
+                return (
+                  <SelectItem
+                    key={d.id}
+                    value={d.id}
+                    className="text-xs"
+                    disabled={issue?.type === "block"}
+                  >
+                    {d.name}
+                    {d.certifications && d.certifications.length > 0 && <span className="text-xs text-muted-foreground ml-1">({d.certifications.join(", ")})</span>}
+                    {issue && (
+                      <span className={cn("text-xs ml-1", issue.type === "block" ? "text-destructive" : "text-amber-600")}>
+                        ({issue.type === "block" ? "blokkeert" : "let op"} {issue.countryCode})
+                      </span>
+                    )}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           <div className="flex items-center gap-1 ml-auto">

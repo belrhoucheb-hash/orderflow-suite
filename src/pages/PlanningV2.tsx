@@ -23,6 +23,8 @@ import type { DriverSchedule } from "@/types/rooster";
 import ChauffeursRit from "@/pages/ChauffeursRit";
 import { RoosterTab } from "@/components/planning/rooster/RoosterTab";
 import { cn } from "@/lib/utils";
+import { useAllDriverCountryRestrictions } from "@/hooks/useDriverCountryRestrictions";
+import { getDriverCountryRestrictionIssue } from "@/lib/driverCountryRestrictions";
 
 function isoWeekStart(d: Date): string {
   return format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -38,6 +40,7 @@ function PlanningV2() {
   const [section, setSection] = useState<"planning" | "ritten" | "rooster">("planning");
 
   const { data: drivers = [] } = useDrivers();
+  const { data: countryRestrictions = [] } = useAllDriverCountryRestrictions();
   const { data: driverAvailability = [] } = useDriverAvailability(selectedDate);
   const { data: schedulesForDate = [] } = useDriverSchedulesForDate(selectedDate);
   const { data: vehiclesRaw = [] } = useVehiclesRaw();
@@ -50,7 +53,7 @@ function PlanningV2() {
     queryFn: async () => {
       const { data, error } = await (supabase
         .from("consolidation_groups" as any) as any)
-        .select("*, consolidation_orders(order_id, stop_sequence, order:orders(id, order_number, client_name, delivery_address, weight_kg, quantity, requirements))")
+        .select("*, consolidation_orders(order_id, stop_sequence, order:orders(id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, weight_kg, quantity, requirements))")
         .eq("tenant_id", tenant!.id)
         .eq("planned_date", selectedDate)
         .neq("status", "VERWORPEN")
@@ -68,7 +71,7 @@ function PlanningV2() {
     queryFn: async () => {
       const { data, error } = await (supabase
         .from("orders") as any)
-        .select("id, order_number, client_name, delivery_address, weight_kg, quantity, requirements")
+        .select("id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, weight_kg, quantity, requirements")
         .eq("tenant_id", tenant!.id)
         .eq("delivery_date", selectedDate)
         .eq("status", "PENDING")
@@ -136,6 +139,23 @@ function PlanningV2() {
     }
     return m;
   }, [groups]);
+
+  const countryIssueByDriver = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof getDriverCountryRestrictionIssue>>();
+    for (const driver of drivers) {
+      const driverGroups = groupsByDriver.get(driver.id) ?? [];
+      const driverOrders = driverGroups.flatMap((group) =>
+        (group.consolidation_orders ?? [])
+          .map((co: any) => co.order)
+          .filter(Boolean),
+      );
+      m.set(
+        driver.id,
+        getDriverCountryRestrictionIssue(driver.id, driverOrders, countryRestrictions, selectedDate),
+      );
+    }
+    return m;
+  }, [countryRestrictions, drivers, groupsByDriver, selectedDate]);
 
   // Drivers actief en zichtbaar in swim-lanes: alle actieve drivers, gesorteerd
   // op of ze werken op deze dag eerst.
@@ -241,6 +261,7 @@ function PlanningV2() {
                   plannedHoursThisWeek={plannedHoursByDriver.get(driver.id) ?? 0}
                   schedule={scheduleByDriver.get(driver.id) ?? null}
                   vehicleLabels={vehicleLabels}
+                  countryRestrictionIssue={countryIssueByDriver.get(driver.id) ?? null}
                   onSelectGroup={setSelectedClusterId}
                 />
               ))}

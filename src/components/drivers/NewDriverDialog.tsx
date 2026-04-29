@@ -47,6 +47,7 @@ import { useFleetVehicles } from "@/hooks/useFleet";
 import { useDriverCertifications } from "@/hooks/useDriverCertifications";
 import { useShiftTemplates } from "@/hooks/useShiftTemplates";
 import { DriverCertificateRecordsSection } from "@/components/drivers/DriverCertificateRecordsSection";
+import { DriverCountryRestrictionsSection } from "@/components/drivers/DriverCountryRestrictionsSection";
 import { driverSchema, driverBaseSchema, daysUntil, maskBsn } from "@/lib/validation/driverSchema";
 
 interface NewDriverDialogProps {
@@ -753,6 +754,7 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                   { value: "persoon", label: "Persoon" },
                   { value: "werk", label: "Werk" },
                   { value: "administratie", label: "Administratie" },
+                  { value: "restricties", label: "Restricties", disabled: !driver && !createdDriverId },
                   { value: "certificaten", label: "Certificaten", disabled: !driver && !createdDriverId },
                 ].map((t) => {
                   const count = dirtyByTab[t.value] ?? 0;
@@ -1361,6 +1363,19 @@ export function NewDriverDialog({ open, onOpenChange, driver }: NewDriverDialogP
                     </FieldWithError>
                   </div>
                 </div>
+              </TabsContent>
+
+              {/* ────── Restricties ────── */}
+              <TabsContent value="restricties" className="mt-0 space-y-4">
+                {driver ? (
+                  <DriverCountryRestrictionsSection driverId={driver.id} />
+                ) : createdDriverId ? (
+                  <DriverCountryRestrictionsSection driverId={createdDriverId} />
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    Sla eerst de chauffeur op, daarna kun je landrestricties vastleggen.
+                  </p>
+                )}
               </TabsContent>
 
               {/* ────── Certificaten ────── */}

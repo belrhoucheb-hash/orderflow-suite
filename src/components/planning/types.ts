@@ -7,6 +7,8 @@ export interface PlanOrder {
   client_name: string | null;
   pickup_address: string | null;
   delivery_address: string | null;
+  pickup_country?: string | null;
+  delivery_country?: string | null;
   quantity: number | null;
   weight_kg: number | null;
   requirements: string[] | null;

@@ -48,7 +48,10 @@ export interface ConsolidationOrder {
     id: string;
     order_number: number;
     client_name: string;
+    pickup_address: string | null;
     delivery_address: string;
+    pickup_country: string | null;
+    delivery_country: string | null;
     weight_kg: number;
     quantity: number;
     requirements: string[];

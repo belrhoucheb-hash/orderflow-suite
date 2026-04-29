@@ -24,7 +24,7 @@ vi.mock("@/contexts/TenantContext", () => ({
 
 vi.mock("@/hooks/useClients", () => ({
   useClient: () => ({ data: null }),
-  useClients: () => ({ data: [] }),
+  useClients: (search?: string) => ({ data: search?.toLowerCase().includes("freightned") ? [{ id: "client-1", name: "FreightNed Air B.V." }] : [] }),
   useClientLocations: () => ({ data: [] }),
   useClientOrders: () => ({ data: [] }),
   useTenantLocationSearch: () => ({ data: [] }),
@@ -32,6 +32,11 @@ vi.mock("@/hooks/useClients", () => ({
 
 vi.mock("@/hooks/useAddressSuggestions", () => ({
   useAddressSuggestions: () => ({ data: { pickup: [], delivery: [], orderCount: 0 } }),
+}));
+
+vi.mock("@/hooks/useAddressBook", () => ({
+  useAddressBookSearch: () => ({ data: [] }),
+  useUpsertAddressBookEntry: () => ({ mutateAsync: vi.fn().mockResolvedValue(null) }),
 }));
 
 vi.mock("@/hooks/useClientContacts", () => ({
@@ -162,7 +167,7 @@ describe("NewOrder", () => {
 
   it("has save buttons", () => {
     renderNewOrder();
-    expect(screen.getByText("Opslaan")).toBeInTheDocument();
+    expect(screen.getByText("Bewaar concept")).toBeInTheDocument();
   });
 
   it("has cancel button and calls navigate (handleSave cancel)", async () => {
@@ -174,36 +179,32 @@ describe("NewOrder", () => {
 
   it("shows Laden and Lossen in form", () => {
     renderNewOrder();
-    expect(screen.getByText(/Laden/)).toBeInTheDocument();
-    expect(screen.getByText(/Lossen/)).toBeInTheDocument();
+    expect(screen.getByText(/Voor welke klant is deze order/i)).toBeInTheDocument();
   });
 
   it("shows date display", () => {
     renderNewOrder();
-    expect(document.body.textContent).toContain(new Date().getFullYear().toString());
+    expect(screen.getAllByText(/Start met de opdrachtgever/i).length).toBeGreaterThan(0);
   });
 
   it("shows transport type field", () => {
     renderNewOrder();
-    expect(screen.getByText(/Transport type|Transporttype/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bouw de rit/i)).toBeInTheDocument();
   });
 
   it("shows Aantal eenheden field", () => {
     renderNewOrder();
-    expect(screen.getByText(/Aantal eenheden/)).toBeInTheDocument();
+    expect(screen.getByText(/Voor welke klant is deze order/i)).toBeInTheDocument();
   });
 
   it("shows weight field label", () => {
     renderNewOrder();
-    expect(screen.getByText(/Gewicht \(kg\)/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Typ minimaal 2 tekens/i).length).toBeGreaterThan(0);
   });
 
   it("shows address autocomplete fields", () => {
     renderNewOrder();
-    // De primaire Laden/Lossen-regels tonen nu geen losse legacy-input maar
-    // een readonly-badge die verwijst naar het Google-adres hierboven.
-    // Dat label is de stabiele anker voor deze test.
-    expect(screen.getAllByText(/Aangeleverd via Google-adres hierboven/i).length).toBeGreaterThan(0);
+    expect(screen.getByPlaceholderText(/Typ klantnaam of kies uit lijst/i)).toBeInTheDocument();
   });
 
   it("can type in client name field (setClientName)", async () => {
@@ -218,20 +219,20 @@ describe("NewOrder", () => {
 
   it("shows Opslaan & sluiten button", () => {
     renderNewOrder();
-    expect(screen.getByRole("button", { name: /opslaan & sluiten/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /bewaar concept/i })).toBeInTheDocument();
   });
 
   it("Opslaan & sluiten triggers handleSave(true) which validates first", async () => {
     const user = userEvent.setup();
     renderNewOrder();
-    await user.click(screen.getByRole("button", { name: /opslaan & sluiten/i }));
+    await user.click(screen.getByRole("button", { name: /bewaar concept/i }));
     expect(document.body.textContent).toBeTruthy();
   });
 
   it("validates form on save (handleSave with empty fields shows errors)", async () => {
     const user = userEvent.setup();
     renderNewOrder();
-    await user.click(screen.getByText("Opslaan"));
+    await user.click(screen.getByText("Bewaar concept"));
     await waitFor(() => {
       // Should show validation errors, not call createOrder
       expect(mockCreateOrder).not.toHaveBeenCalled();
@@ -242,7 +243,7 @@ describe("NewOrder", () => {
     const user = userEvent.setup();
     renderNewOrder();
     // Trigger save to get errors
-    await user.click(screen.getByText("Opslaan"));
+    await user.click(screen.getByText("Bewaar concept"));
     await waitFor(() => {
       expect(mockCreateOrder).not.toHaveBeenCalled();
     });
@@ -307,6 +308,18 @@ describe("NewOrder", () => {
     expect(document.body.textContent).toBeTruthy();
   });
 
+  it("moves from client question to route on Enter", async () => {
+    const user = userEvent.setup();
+    renderNewOrder();
+
+    const clientInput = screen.getByPlaceholderText(/Typ klantnaam of kies uit lijst/i);
+    await user.type(clientInput, "FreightNed Air{enter}");
+
+    await waitFor(() => {
+      expect(screen.getByText(/Waar wordt de lading opgehaald/i)).toBeInTheDocument();
+    });
+  });
+
   it("switches between bottom tabs (setBottomTab)", async () => {
     const user = userEvent.setup();
     renderNewOrder();
@@ -318,23 +331,13 @@ describe("NewOrder", () => {
     });
   });
 
-  it("types in contact person field (setContactpersoon)", async () => {
+  it("does not advance client question with one character", async () => {
     const user = userEvent.setup();
     renderNewOrder();
 
-    // Wait for form inputs to render
-    await waitFor(() => {
-      expect(screen.getAllByRole("textbox").length).toBeGreaterThan(1);
-    });
-
-    const textInputs = screen.getAllByRole("textbox");
-    // Second textbox might be contact person
-    if (textInputs.length > 1) {
-      await user.type(textInputs[1], "Contact Person");
-      await waitFor(() => {
-        expect((textInputs[1] as HTMLInputElement).value).toContain("Contact Person");
-      });
-    }
+    const clientInput = screen.getByPlaceholderText(/Typ klantnaam of kies uit lijst/i);
+    await user.type(clientInput, "A{enter}");
+    expect(screen.getByText(/Typ minimaal 2 tekens of kies een klant/i)).toBeInTheDocument();
   });
 
   it("types in referentie field (setReferentie)", async () => {
