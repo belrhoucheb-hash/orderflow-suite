@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   BarChart3,
   Box,
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Clock3,
@@ -165,6 +164,72 @@ function getAccessActions(module: string, level: AccessLevel, customLimitedActio
   if (level === "none") return noActions;
   return customLimitedActions ?? limitedActionsByModule[module] ?? { view: true, create: false, edit: false, delete: false };
 }
+
+const activityTimeline = [
+  {
+    title: "Login",
+    description: "Succesvol ingelogd vanaf Chrome · MacOS",
+    date: "Vandaag",
+    time: "10:24",
+    icon: UserCog,
+    tone: "success",
+  },
+  {
+    title: "Rol gewijzigd",
+    description: "Rol gewijzigd van Medewerker naar Admin",
+    date: "23 apr 2026",
+    time: "14:32",
+    icon: Crown,
+    tone: "warning",
+  },
+  {
+    title: "Toegangsrechten aangepast",
+    description: "Toegang gewijzigd voor 4 modules",
+    date: "23 apr 2026",
+    time: "14:31",
+    icon: Shield,
+    tone: "neutral",
+  },
+  {
+    title: "Instellingen gewijzigd",
+    description: "Tarieven module instellingen aangepast",
+    date: "21 apr 2026",
+    time: "09:15",
+    icon: Settings,
+    tone: "neutral",
+  },
+  {
+    title: "Audit log geëxporteerd",
+    description: "Audit log gedownload als CSV bestand",
+    date: "19 apr 2026",
+    time: "16:42",
+    icon: FileText,
+    tone: "neutral",
+  },
+  {
+    title: "Gebruiker uitgenodigd",
+    description: "Uitnodiging verstuurd naar jasper@rcs-schiphol.nl",
+    date: "18 apr 2026",
+    time: "11:08",
+    icon: UserCog,
+    tone: "neutral",
+  },
+  {
+    title: "Login",
+    description: "Succesvol ingelogd vanaf Safari · iPhone",
+    date: "18 apr 2026",
+    time: "08:55",
+    icon: UserCog,
+    tone: "success",
+  },
+] satisfies Array<{
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  icon: typeof UserCog;
+  tone: "success" | "warning" | "neutral";
+}>;
 
 function getPrimaryRole(user: UserRow): UserRole {
   return user.roles.includes("admin") ? "admin" : "medewerker";
@@ -1028,20 +1093,51 @@ const UsersPage = () => {
                   )}
 
                   {configTab === "activiteit" && (
-                    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <CalendarDays className="h-4 w-4" />
-                          <p className="text-[11px] font-semibold uppercase tracking-wide">Geregistreerd</p>
+                    <section className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground">Activiteit</h3>
+                          <p className="mt-1 text-xs text-muted-foreground">Overzicht van belangrijke acties en wijzigingen.</p>
                         </div>
-                        <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.created_at)}</p>
+                        <Button type="button" variant="outline" size="sm" className="h-9 gap-2 rounded-md bg-background px-3 text-xs">
+                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                          Filter
+                        </Button>
                       </div>
-                      <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Clock3 className="h-4 w-4" />
-                          <p className="text-[11px] font-semibold uppercase tracking-wide">Laatste login</p>
+
+                      <div className="mt-6">
+                        <div className="relative">
+                          <div className="absolute left-[18px] top-5 h-[calc(100%-40px)] w-px bg-border/60" />
+                          <div className="space-y-1">
+                            {activityTimeline.map((item, index) => {
+                              const Icon = item.icon;
+                              return (
+                                <div key={`${item.title}-${item.date}-${index}`} className="relative flex gap-4 py-3">
+                                  <div className={cn(
+                                    "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1",
+                                    item.tone === "success" && "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                                    item.tone === "warning" && "bg-amber-50 text-amber-700 ring-amber-100",
+                                    item.tone === "neutral" && "bg-muted/70 text-foreground ring-border/50",
+                                  )}>
+                                    <Icon className="h-4 w-4" />
+                                  </div>
+                                  <div className="min-w-0 flex-1 border-b border-border/30 pb-3 last:border-b-0">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                                        <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                                      </div>
+                                      <div className="shrink-0 text-right text-xs text-muted-foreground">
+                                        <p>{item.date}</p>
+                                        <p className="mt-1">{item.time}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.last_sign_in_at)}</p>
                       </div>
                     </section>
                   )}

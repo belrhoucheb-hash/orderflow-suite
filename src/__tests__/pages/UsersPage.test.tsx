@@ -149,7 +149,9 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Profiel" }));
     expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
     await userEvent.click(screen.getByRole("button", { name: "Activiteit" }));
-    expect(screen.getByText(/Laatste login:/i)).toBeInTheDocument();
+    expect(screen.getByText("Overzicht van belangrijke acties en wijzigingen.")).toBeInTheDocument();
+    expect(screen.getByText("Rol gewijzigd")).toBeInTheDocument();
+    expect(screen.getByText("Audit log geëxporteerd")).toBeInTheDocument();
   });
 
   it("shows admin impact feedback in the configuration sheet", async () => {
