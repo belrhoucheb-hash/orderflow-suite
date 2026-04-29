@@ -199,13 +199,6 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "Prijzen",
-    items: [
-      { value: "tarieven", label: "Tarieven" },
-      { value: "kosten", label: "Kosten" },
-    ],
-  },
-  {
     title: "Operations",
     items: [
       { value: "operationele-inrichting", label: "Operationele inrichting" },
@@ -218,6 +211,8 @@ const OPERATIONS_NAV_ITEMS: NavItem[] = [
   { value: "rooster-types", label: "Rooster-types" },
   { value: "sla", label: "SLA" },
   { value: "uitzonderingen", label: "Uitzonderingen" },
+  { value: "tarieven", label: "Tarieven" },
+  { value: "kosten", label: "Kosten" },
 ];
 
 const Settings = () => {
@@ -611,14 +606,14 @@ const Settings = () => {
     if (location.pathname.includes("/rooster-types")) return "operationele-inrichting";
     if (location.pathname.includes("/sla")) return "operationele-inrichting";
     if (location.pathname.includes("/uitzonderingen")) return "operationele-inrichting";
+    if (location.pathname.includes("/tarieven")) return "operationele-inrichting";
+    if (location.pathname.includes("/kosten")) return "operationele-inrichting";
     if (location.pathname.includes("/branding")) return "branding";
     if (location.pathname.includes("/notificaties")) return "notificaties";
     if (location.pathname.includes("/sms")) return "sms";
     if (location.pathname.includes("/eta-meldingen")) return "eta-meldingen";
     if (location.pathname.includes("/integraties")) return "integraties";
     if (location.pathname.includes("/inboxen")) return "inboxen";
-    if (location.pathname.includes("/tarieven")) return "tarieven";
-    if (location.pathname.includes("/kosten")) return "kosten";
     if (location.pathname.includes("/webhooks")) return "webhooks";
     if (location.pathname.includes("/api-tokens")) return "api-tokens";
     return "algemeen";
@@ -633,6 +628,8 @@ const Settings = () => {
     if (location.pathname.includes("/rooster-types")) return "rooster-types";
     if (location.pathname.includes("/sla")) return "sla";
     if (location.pathname.includes("/uitzonderingen")) return "uitzonderingen";
+    if (location.pathname.includes("/tarieven")) return "tarieven";
+    if (location.pathname.includes("/kosten")) return "kosten";
     return "stamgegevens";
   };
 
@@ -846,8 +843,9 @@ const Settings = () => {
       target: "operationele-inrichting",
       items: [
         { label: "Stamgegevens", status: "Actief" },
+        { label: "Tarieven en kosten", status: "Beheren" },
         { label: "SLA", status: slaSettings.enabled ? "Actief" : "Uit" },
-        { label: "Uitzonderingen", status: "Regels", subtle: true },
+        { label: "Roosters en uitzonderingen", status: "Regels", subtle: true },
       ],
     },
     {
@@ -1130,7 +1128,7 @@ const Settings = () => {
                   Beheer stamdata, roosters, SLA-bewaking en uitzonderingsregels op een plek.
                 </p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-4 lg:min-w-[560px]">
+              <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[640px]">
                 {OPERATIONS_NAV_ITEMS.map((item) => {
                   const active = activeOperationSection === item.value;
                   return (
@@ -1244,6 +1242,21 @@ const Settings = () => {
           )}
 
           {activeOperationSection === "uitzonderingen" && <ExceptionRulesSettings />}
+
+          {activeOperationSection === "tarieven" && (
+            <div className="space-y-6">
+              <PricingPreview />
+              <RateCardSettings />
+              <SurchargeSettings />
+            </div>
+          )}
+
+          {activeOperationSection === "kosten" && (
+            <div className="space-y-6">
+              <FuelPriceSettings />
+              <CostTypeSettings />
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="branding" className="outline-none">
@@ -1848,17 +1861,6 @@ const Settings = () => {
 
         <TabsContent value="eta-meldingen" className="outline-none">
           <EtaNotificationSettings />
-        </TabsContent>
-
-        <TabsContent value="tarieven" className="space-y-6">
-          <PricingPreview />
-          <RateCardSettings />
-          <SurchargeSettings />
-        </TabsContent>
-
-        <TabsContent value="kosten" className="space-y-6">
-          <FuelPriceSettings />
-          <CostTypeSettings />
         </TabsContent>
 
         <TabsContent value="webhooks" className="space-y-6 outline-none">
