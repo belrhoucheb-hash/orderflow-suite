@@ -140,7 +140,24 @@ describe("UsersPage", () => {
     expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
     expect(screen.getByText("Toegangsprofiel")).toBeInTheDocument();
     expect(screen.getByText("Toegangsoverzicht")).toBeInTheDocument();
-    expect(screen.getByText("Gebruikers uitnodigen of rollen wijzigen")).toBeInTheDocument();
+    expect(screen.getByText("Dagelijkse operaties")).toBeInTheDocument();
+    expect(screen.getByText("Gebruikers beheren")).toBeInTheDocument();
+    expect(screen.getByText(/Laatste login:/i)).toBeInTheDocument();
+  });
+
+  it("shows admin impact feedback in the configuration sheet", async () => {
+    renderUsersPage();
+    await waitFor(() => {
+      expect(screen.getByText("Regular User")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getAllByRole("button", { name: /Configureren/i })[1]);
+    await userEvent.click(screen.getByRole("button", { name: /Admin/i }));
+
+    expect(screen.getByText("Volledige controle")).toBeInTheDocument();
+    expect(screen.getByText("Heeft impact op de hele organisatie")).toBeInTheDocument();
+    expect(screen.getByText("Dit betekent")).toBeInTheDocument();
+    expect(screen.getByText(/invloed hebben op alle orders en tarieven/i)).toBeInTheDocument();
   });
 
   it("shows table headers", async () => {

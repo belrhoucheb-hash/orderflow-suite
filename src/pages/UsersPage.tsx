@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock3,
   Crown,
+  Info,
   Loader2,
   LockKeyhole,
   Mail,
@@ -126,6 +127,7 @@ const UsersPage = () => {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [configName, setConfigName] = useState("");
   const [configRole, setConfigRole] = useState<UserRole>("medewerker");
+  const [configSaved, setConfigSaved] = useState(false);
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
 
@@ -152,7 +154,6 @@ const UsersPage = () => {
     mutationFn: ({ userId, role }: { userId: string; role: UserRole }) =>
       callAdminUsers("update_role", { tenant_id: tenantId, user_id: userId, role }),
     onSuccess: () => {
-      toast.success("Rol bijgewerkt");
       invalidateUsers();
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Rol wijzigen mislukt"),
@@ -162,7 +163,6 @@ const UsersPage = () => {
     mutationFn: ({ userId, displayName }: { userId: string; displayName: string }) =>
       callAdminUsers("update_profile", { tenant_id: tenantId, user_id: userId, display_name: displayName.trim() || null }),
     onSuccess: () => {
-      toast.success("Naam bijgewerkt");
       invalidateUsers();
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Naam wijzigen mislukt"),
@@ -192,6 +192,7 @@ const UsersPage = () => {
     setSelectedUser(row);
     setConfigName(row.display_name ?? "");
     setConfigRole(getPrimaryRole(row));
+    setConfigSaved(false);
   };
 
   const handleSaveConfig = async (event: FormEvent) => {
@@ -210,14 +211,15 @@ const UsersPage = () => {
     }
 
     if (tasks.length === 0) {
-      setSelectedUser(null);
+      setConfigSaved(true);
       return;
     }
 
     try {
       await Promise.all(tasks);
-      toast.success("Gebruiker bijgewerkt");
-      setSelectedUser(null);
+      toast.success("Wijzigingen opgeslagen");
+      setSelectedUser((user) => user ? { ...user, display_name: nextName || null, roles: [configRole] } : user);
+      setConfigSaved(true);
     } catch {
       // Mutation handlers already show a concrete error.
     }
@@ -436,33 +438,42 @@ const UsersPage = () => {
         <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           {selectedUser && (
             <form onSubmit={handleSaveConfig} className="flex min-h-0 flex-1 flex-col">
-              <div className="border-b border-border/40 bg-muted/10 px-6 py-5">
+              <div className="border-b border-border/30 bg-gradient-to-b from-background to-muted/20 px-7 py-6">
                 <SheetHeader className="space-y-1 pr-8">
                   <SheetTitle className="text-xl">Gebruiker configureren</SheetTitle>
-                  <SheetDescription>
-                    Beheer profiel, rol en toegang vanuit een vast rechtenprofiel.
-                  </SheetDescription>
+                  <SheetDescription>Configureer deze gebruiker met duidelijke impact en vaste rechten.</SheetDescription>
                 </SheetHeader>
 
-                <div className="mt-5 flex items-center gap-4 rounded-lg border border-border/50 bg-background p-4 shadow-sm">
+                <div className="mt-5 flex items-center gap-4 rounded-xl bg-background p-5 shadow-sm ring-1 ring-border/30">
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground shadow-sm">
                     {(selectedUser.display_name || selectedUser.email || "?").slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-semibold text-foreground">{selectedUser.display_name || "Onbekend"}</p>
-                      <Badge variant="outline" className={cn("text-xs", roleStyles[getPrimaryRole(selectedUser)])}>
-                        {roleLabels[getPrimaryRole(selectedUser)]}
+                    <p className="truncate text-lg font-semibold text-foreground">{selectedUser.display_name || "Onbekend"}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{roleLabels[getPrimaryRole(selectedUser)]} gebruiker</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="secondary" className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-100">
+                        Actief
                       </Badge>
+                      <span>Laatste login: {formatDate(selectedUser.last_sign_in_at)}</span>
                     </div>
-                    <p className="mt-0.5 truncate text-sm text-muted-foreground">{selectedUser.email ?? selectedUser.user_id}</p>
                   </div>
+                  <Badge variant="outline" className={cn("text-xs", roleStyles[getPrimaryRole(selectedUser)])}>
+                    {roleLabels[getPrimaryRole(selectedUser)]}
+                  </Badge>
                 </div>
+
+                {configSaved && (
+                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 ring-1 ring-emerald-100">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Wijzigingen opgeslagen
+                  </div>
+                )}
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-                <div className="space-y-7">
-                  <section className="space-y-3">
+              <div className="min-h-0 flex-1 overflow-y-auto bg-muted/10 px-7 py-7">
+                <div className="space-y-6">
+                  <section className="space-y-3 rounded-xl bg-background p-5 shadow-sm ring-1 ring-border/30">
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">Profiel</h3>
                       <p className="text-xs text-muted-foreground">Deze naam wordt in overzichten en auditregels getoond.</p>
@@ -472,7 +483,10 @@ const UsersPage = () => {
                       <Input
                         id="config-name"
                         value={configName}
-                        onChange={(event) => setConfigName(event.target.value)}
+                        onChange={(event) => {
+                          setConfigName(event.target.value);
+                          setConfigSaved(false);
+                        }}
                         placeholder="Naam van de gebruiker"
                         className="h-11"
                       />
@@ -482,7 +496,7 @@ const UsersPage = () => {
                   <section className="space-y-3">
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">Toegangsprofiel</h3>
-                      <p className="text-xs text-muted-foreground">{ROLE_ACCESS[configRole].summary}</p>
+                      <p className="text-xs text-muted-foreground">Kies wat deze gebruiker mag doen binnen de organisatie.</p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {(["medewerker", "admin"] as UserRole[]).map((role) => {
@@ -496,28 +510,40 @@ const UsersPage = () => {
                             key={role}
                             type="button"
                             disabled={locked}
-                            onClick={() => setConfigRole(role)}
+                            onClick={() => {
+                              setConfigRole(role);
+                              setConfigSaved(false);
+                            }}
                             className={cn(
-                              "group rounded-lg border p-4 text-left transition-all",
-                              checked
-                                ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20"
-                                : "border-border/50 bg-background hover:border-primary/40 hover:bg-muted/20",
+                              "group rounded-xl p-5 text-left shadow-sm ring-1 transition-all",
+                              role === "admin"
+                                ? "bg-rose-50/60 ring-rose-100 hover:bg-rose-50 hover:ring-rose-200"
+                                : "bg-background ring-border/30 hover:bg-muted/20 hover:ring-primary/25",
+                              checked && (role === "admin" ? "bg-rose-50 ring-2 ring-rose-300" : "ring-2 ring-primary/35"),
                               locked && "cursor-not-allowed opacity-50",
                             )}
                           >
                             <div className="flex items-start gap-3">
                               <div className={cn(
-                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-                                checked ? "border-primary/20 bg-primary/10 text-primary" : "border-border/50 bg-muted/30 text-muted-foreground",
+                                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1",
+                                role === "admin"
+                                  ? "bg-white text-rose-700 ring-rose-200"
+                                  : "bg-primary/10 text-primary ring-primary/15",
                               )}>
-                                <Icon className="h-4 w-4" />
+                                <Icon className="h-5 w-5" />
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-semibold">{access.label}</p>
-                                  {checked && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                                  <p className="text-base font-semibold text-foreground">{access.label}</p>
+                                  {checked && <CheckCircle2 className={cn("h-4 w-4", role === "admin" ? "text-rose-700" : "text-primary")} />}
                                 </div>
+                                <p className="mt-1 text-sm font-medium text-foreground/80">
+                                  {role === "admin" ? "Volledige controle" : "Dagelijkse operaties"}
+                                </p>
                                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{access.routeAccess}</p>
+                                {role === "admin" && (
+                                  <p className="mt-3 text-xs font-medium text-rose-700">Heeft impact op de hele organisatie</p>
+                                )}
                               </div>
                             </div>
                           </button>
@@ -526,54 +552,64 @@ const UsersPage = () => {
                     </div>
                   </section>
 
-                  <section className="space-y-3">
+                  {configRole === "admin" && (
+                    <section className="flex gap-3 rounded-xl bg-amber-50 p-4 text-amber-900 shadow-sm ring-1 ring-amber-100">
+                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <h3 className="text-sm font-semibold">Dit betekent</h3>
+                        <p className="mt-1 text-sm leading-relaxed">
+                          Deze gebruiker kan instellingen wijzigen die invloed hebben op alle orders en tarieven.
+                        </p>
+                      </div>
+                    </section>
+                  )}
+
+                  <section className="space-y-3 rounded-xl bg-background p-5 shadow-sm ring-1 ring-border/30">
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">Toegangsoverzicht</h3>
                       <p className="text-xs text-muted-foreground">Vastgelegd in de centrale rolmatrix van OrderFlow.</p>
                     </div>
-                    <div className="overflow-hidden rounded-lg border border-border/50 bg-background">
-                      <div className="grid gap-0 md:grid-cols-2">
-                        <div className="p-4">
-                          <div className="mb-3 flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Toegestaan</p>
-                          </div>
-                          <div className="space-y-2.5">
-                            {ROLE_ACCESS[configRole].can.map((item) => (
-                              <div key={item} className="flex gap-2.5">
-                                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
-                                <p className="text-sm leading-relaxed text-foreground">{item}</p>
-                              </div>
-                            ))}
-                          </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          <p className="text-sm font-semibold text-foreground">Kan</p>
                         </div>
-                        <div className="border-t border-border/40 bg-muted/10 p-4 md:border-l md:border-t-0">
-                          <div className="mb-3 flex items-center gap-2">
-                            <LockKeyhole className="h-4 w-4 text-muted-foreground" />
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Afgeschermd</p>
-                          </div>
-                          <div className="space-y-2.5">
-                            {ROLE_ACCESS[configRole].cannot.map((item) => (
-                              <div key={item} className="flex gap-2.5">
-                                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
-                                <p className="text-sm leading-relaxed text-muted-foreground">{item}</p>
-                              </div>
-                            ))}
-                          </div>
+                        <div className="space-y-2">
+                          {ROLE_ACCESS[configRole].can.map((item) => (
+                            <div key={item} className="flex gap-2.5 rounded-lg bg-emerald-50/70 px-3 py-2 text-sm text-emerald-950">
+                              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                              <p>{item}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <LockKeyhole className="h-4 w-4 text-slate-500" />
+                          <p className="text-sm font-semibold text-foreground">Kan niet</p>
+                        </div>
+                        <div className="space-y-2">
+                          {ROLE_ACCESS[configRole].cannot.map((item) => (
+                            <div key={item} className="flex gap-2.5 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                              <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                              <p>{item}</p>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
                   </section>
 
                   <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="rounded-lg border border-border/40 bg-background p-4">
+                    <div className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-border/30">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <CalendarDays className="h-4 w-4" />
                         <p className="text-[11px] font-semibold uppercase tracking-wide">Geregistreerd</p>
                       </div>
                       <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.created_at)}</p>
                     </div>
-                    <div className="rounded-lg border border-border/40 bg-background p-4">
+                    <div className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-border/30">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Clock3 className="h-4 w-4" />
                         <p className="text-[11px] font-semibold uppercase tracking-wide">Laatste login</p>
@@ -584,13 +620,13 @@ const UsersPage = () => {
                 </div>
               </div>
 
-              <SheetFooter className="border-t border-border/40 bg-background px-6 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.04)]">
+              <SheetFooter className="border-t border-border/30 bg-background px-7 py-4 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] sm:justify-between">
                 <Button type="button" variant="outline" onClick={() => setSelectedUser(null)}>
                   Annuleren
                 </Button>
                 <Button type="submit" disabled={updateProfile.isPending || updateRole.isPending} className="gap-2">
                   {(updateProfile.isPending || updateRole.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Wijzigingen opslaan
+                  Opslaan
                 </Button>
               </SheetFooter>
             </form>
