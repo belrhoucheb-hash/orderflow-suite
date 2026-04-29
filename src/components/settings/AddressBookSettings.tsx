@@ -29,6 +29,7 @@ type LocationType = "pickup" | "delivery" | "both";
 
 interface AddressBookFormState {
   companyName: string;
+  aliases: string;
   address: AddressValue;
   locationType: LocationType;
   timeWindowStart: string;
@@ -38,6 +39,7 @@ interface AddressBookFormState {
 
 const emptyForm: AddressBookFormState = {
   companyName: "",
+  aliases: "",
   address: { ...EMPTY_ADDRESS, country: "NL" },
   locationType: "both",
   timeWindowStart: "",
@@ -62,6 +64,7 @@ function entryToAddress(entry: AddressBookEntry): AddressValue {
 function formFromEntry(entry: AddressBookEntry): AddressBookFormState {
   return {
     companyName: entry.company_name || entry.label,
+    aliases: (entry.aliases ?? []).join(", "),
     address: entryToAddress(entry),
     locationType: entry.location_type,
     timeWindowStart: entry.time_window_start || "",
@@ -131,6 +134,7 @@ export function AddressBookSettings() {
     const payload = {
       label: companyName,
       company_name: companyName,
+      aliases: form.aliases.split(",").map((alias) => alias.trim()).filter(Boolean),
       address,
       street: form.address.street,
       house_number: form.address.house_number,
@@ -151,10 +155,15 @@ export function AddressBookSettings() {
     try {
       if (editing) {
         await updateEntry.mutateAsync({ id: editing.id, input: payload });
+        toast.success("Adresboek bijgewerkt");
       } else {
-        await createEntry.mutateAsync(payload);
+        const result = await createEntry.mutateAsync(payload);
+        toast.success(result?.message || "Adresboek bijgewerkt", {
+          description: result?.matchedName && result.matchedName !== companyName
+            ? `${companyName} is gekoppeld aan ${result.matchedName}.`
+            : undefined,
+        });
       }
-      toast.success("Adresboek bijgewerkt");
       closeDialog();
     } catch (error) {
       toast.error("Opslaan mislukt", {
@@ -241,6 +250,11 @@ export function AddressBookSettings() {
                   <TableCell>
                     <div className="text-xs font-semibold text-foreground">{entry.company_name || entry.label}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">{entry.city || entry.country}</div>
+                    {entry.aliases && entry.aliases.length > 0 && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        Alias: {entry.aliases.join(", ")}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{entry.address}</TableCell>
                   <TableCell>
@@ -318,6 +332,18 @@ export function AddressBookSettings() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div>
+              <label className="label-luxe">Aliassen / handelsnamen</label>
+              <Input
+                value={form.aliases}
+                onChange={(event) => setForm((current) => ({ ...current, aliases: event.target.value }))}
+                placeholder="RCS, Royalty Cargo"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Komma-gescheiden. Hiermee kun je zoeken op afkortingen of handelsnamen.
+              </p>
             </div>
 
             <AddressAutocomplete

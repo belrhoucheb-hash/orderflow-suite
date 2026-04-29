@@ -16,6 +16,7 @@ export interface AddressBookEntryInput extends AddressBookValue {
   tenant_id: string;
   label?: string | null;
   company_name?: string | null;
+  aliases?: string[] | null;
   address?: string | null;
   location_type?: "pickup" | "delivery" | "both";
   notes?: string | null;
@@ -57,6 +58,19 @@ function companyAcronym(value: string): string {
     .join("");
 }
 
+export function normalizeAliases(values: string[] | null | undefined): string[] {
+  const seen = new Set<string>();
+  return (values ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const key = normalizeCompanyName(value);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 export function buildAddressBookKey(value: AddressBookValue): string {
   return [
     normalizeAddressPart(value.country || "NL").toUpperCase(),
@@ -79,11 +93,18 @@ export function buildAddressBookIdentityKey(value: AddressBookEntryInput): strin
 export function isSameAddressBookCompany(
   existingName: string | null | undefined,
   nextName: string | null | undefined,
+  existingAliases: string[] | null | undefined = [],
+  nextAliases: string[] | null | undefined = [],
 ): boolean {
   const existing = normalizeCompanyName(existingName);
   const next = normalizeCompanyName(nextName);
   if (!existing || !next) return existing === next;
   if (existing === next) return true;
+
+  const existingCandidates = [existing, ...normalizeAliases(existingAliases).map(normalizeCompanyName)];
+  const nextCandidates = [next, ...normalizeAliases(nextAliases).map(normalizeCompanyName)];
+  if (existingCandidates.some((candidate) => nextCandidates.includes(candidate))) return true;
+  if (existingCandidates.includes(companyAcronym(next)) || nextCandidates.includes(companyAcronym(existing))) return true;
 
   const existingParts = existing.split(" ").filter(Boolean);
   const nextParts = next.split(" ").filter(Boolean);
@@ -127,11 +148,14 @@ export function toAddressBookPayload(input: AddressBookEntryInput) {
   const label = input.label?.trim() || input.company_name?.trim() || address;
   const company_name = input.company_name?.trim() || label;
   const normalized_company_key = buildAddressBookCompanyKey({ company_name, label, address });
+  const aliases = normalizeAliases(input.aliases);
 
   return {
     tenant_id: input.tenant_id,
     label,
     company_name,
+    aliases,
+    alias_search: aliases.map(normalizeCompanyName).join(" "),
     address,
     street: input.street.trim(),
     house_number: input.house_number?.trim() || "",

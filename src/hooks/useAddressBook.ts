@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantOptional } from "@/contexts/TenantContext";
 import {
-  isSameAddressBookCompany,
   isAddressBookReady,
   toAddressBookPayload,
   type AddressBookEntryInput,
@@ -13,6 +12,8 @@ export interface AddressBookEntry {
   tenant_id: string;
   label: string;
   company_name: string | null;
+  aliases: string[] | null;
+  alias_search: string | null;
   address: string;
   street: string;
   house_number: string;
@@ -36,14 +37,6 @@ export interface AddressBookEntry {
   updated_at: string;
 }
 
-function mergeLocationType(
-  existing: AddressBookEntry["location_type"] | null | undefined,
-  next: AddressBookEntry["location_type"],
-): AddressBookEntry["location_type"] {
-  if (!existing || existing === next) return next;
-  return "both";
-}
-
 export function useAddressBookSearch(search?: string) {
   const { tenant } = useTenantOptional();
   const term = search?.trim() ?? "";
@@ -53,7 +46,7 @@ export function useAddressBookSearch(search?: string) {
     enabled: !!tenant?.id && term.length >= 2,
     staleTime: 60_000,
     queryFn: async () => {
-      const columns = ["label", "company_name", "address", "street", "zipcode", "city"];
+      const columns = ["label", "company_name", "alias_search", "address", "street", "zipcode", "city"];
       const results = await Promise.all(
         columns.map(async (column) => {
           const { data, error } = await (supabase.from("address_book" as any) as any)
@@ -104,7 +97,7 @@ export function useAddressBookEntries(search?: string) {
         return (data ?? []) as AddressBookEntry[];
       }
 
-      const columns = ["label", "company_name", "address", "street", "zipcode", "city"];
+      const columns = ["label", "company_name", "alias_search", "address", "street", "zipcode", "city"];
       const results = await Promise.all(
         columns.map(async (column) => {
           const { data, error } = await baseSelect().ilike(column, `%${term}%`);
@@ -134,50 +127,17 @@ export function useUpsertAddressBookEntry() {
       if (!isAddressBookReady(input)) return null;
 
       const payload = toAddressBookPayload({ ...input, tenant_id: tenant.id });
-      const { data: exactExisting, error: exactLookupError } = await (supabase.from("address_book" as any) as any)
-        .select("id, usage_count, label, company_name, location_type, normalized_company_key")
-        .eq("tenant_id", tenant.id)
-        .eq("normalized_key", payload.normalized_key)
-        .eq("normalized_company_key", payload.normalized_company_key)
-        .maybeSingle();
-      if (exactLookupError) throw exactLookupError;
-
-      const { data: sameAddressRows, error: lookupError } = exactExisting?.id
-        ? { data: [], error: null }
-        : await (supabase.from("address_book" as any) as any)
-        .select("id, usage_count, label, company_name, location_type, normalized_company_key")
-        .eq("tenant_id", tenant.id)
-        .eq("normalized_key", payload.normalized_key);
-      if (lookupError) throw lookupError;
-
-      const existing = (exactExisting as AddressBookEntry | null) || ((sameAddressRows ?? []) as AddressBookEntry[]).find((entry) =>
-        entry.normalized_company_key === payload.normalized_company_key ||
-        isSameAddressBookCompany(entry.company_name || entry.label, payload.company_name || payload.label),
-      );
-
-      if (existing?.id) {
-        const { data, error } = await (supabase.from("address_book" as any) as any)
-          .update({
-            ...payload,
-            label: existing.label || payload.label,
-            company_name: existing.company_name || payload.company_name,
-            normalized_company_key: existing.normalized_company_key || payload.normalized_company_key,
-            location_type: mergeLocationType(existing.location_type, payload.location_type),
-            usage_count: Number(existing.usage_count ?? 0) + 1,
-          })
-          .eq("id", existing.id)
-          .select()
-          .single();
-        if (error) throw error;
-        return { row: data as AddressBookEntry, duplicate: true };
-      }
-
-      const { data, error } = await (supabase.from("address_book" as any) as any)
-        .insert(payload)
-        .select()
-        .single();
+      const { data, error } = await (supabase as any).rpc("upsert_address_book_entry", {
+        p_entry: payload,
+      });
       if (error) throw error;
-      return { row: data as AddressBookEntry, duplicate: false };
+      return {
+        row: data?.row as AddressBookEntry,
+        duplicate: data?.action === "updated",
+        action: data?.action as "inserted" | "updated",
+        matchedName: data?.matched_name as string | null,
+        message: data?.message as string | null,
+      };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["address_book_search"] });
@@ -197,7 +157,10 @@ export function useUpdateAddressBookEntry() {
 
       const payload = toAddressBookPayload({ ...input, tenant_id: tenant.id });
       const { data, error } = await (supabase.from("address_book" as any) as any)
-        .update(payload)
+        .update({
+          ...payload,
+          alias_search: payload.alias_search,
+        })
         .eq("tenant_id", tenant.id)
         .eq("id", id)
         .select()
