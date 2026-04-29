@@ -244,7 +244,12 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getAllByRole("button", { name: /Configureren/i })[1]);
     await userEvent.click(screen.getByRole("button", { name: "Beveiliging" }));
 
-    await userEvent.click(screen.getByRole("button", { name: "Wachtwoord resetten" }));
+    expect(screen.getByText("Aandacht nodig")).toBeInTheDocument();
+    expect(screen.getByText("Extra beveiliging")).toBeInTheDocument();
+    expect(screen.getByText("Actieve sessies")).toBeInTheDocument();
+    expect(screen.getByText("Inlogbeveiliging")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Reset wachtwoord" }));
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
         body: expect.objectContaining({
@@ -255,7 +260,7 @@ describe("UsersPage", () => {
       }));
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Gebruiker deactiveren" }));
+    await userEvent.click(screen.getByRole("button", { name: "Deactiveer" }));
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
         body: expect.objectContaining({
@@ -267,7 +272,7 @@ describe("UsersPage", () => {
     });
   });
 
-  it("opens login history from the security tab", async () => {
+  it("opens all activity from the security tab", async () => {
     renderUsersPage();
     await waitFor(() => {
       expect(screen.getByText("Regular User")).toBeInTheDocument();
@@ -275,13 +280,11 @@ describe("UsersPage", () => {
 
     await userEvent.click(screen.getAllByRole("button", { name: /Configureren/i })[1]);
     await userEvent.click(screen.getByRole("button", { name: "Beveiliging" }));
-    await userEvent.click(screen.getByRole("button", { name: "Login geschiedenis" }));
+    await userEvent.click(screen.getByRole("button", { name: "Bekijk alles" }));
 
     expect(screen.getByText("Overzicht van belangrijke acties en wijzigingen.")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Logins" }).length).toBeGreaterThan(0);
-    await waitFor(() => {
-      expect(screen.getByText("Geen activiteit voor dit filter")).toBeInTheDocument();
-    });
+    expect(screen.getByText("Rol gewijzigd")).toBeInTheDocument();
+    expect(screen.getByText("Gebruiker uitgenodigd")).toBeInTheDocument();
   });
 
   it("invites a new user", async () => {

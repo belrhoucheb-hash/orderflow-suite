@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  AlertTriangle,
   BarChart3,
   Box,
   CheckCircle2,
@@ -18,11 +19,15 @@ import {
   Loader2,
   LockKeyhole,
   Mail,
+  Monitor,
+  Pencil,
   Plus,
   Search,
   Settings,
   Shield,
+  ShieldCheck,
   SlidersHorizontal,
+  Smartphone,
   Truck,
   UserCog,
   UserX,
@@ -1376,42 +1381,272 @@ const UsersPage = () => {
                   )}
 
                   {configTab === "beveiliging" && (
-                    <section className="space-y-3">
-                      <h3 className="text-sm font-semibold text-foreground">Snelle acties</h3>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
-                          disabled={!selectedUser.email || resetPassword.isPending}
-                          onClick={() => resetPassword.mutate({ userId: selectedUser.user_id })}
-                        >
-                          {resetPassword.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                          Wachtwoord resetten
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
-                          disabled={selectedUser.user_id === currentUser?.id || deactivateUser.isPending}
-                          onClick={() => deactivateUser.mutate({ userId: selectedUser.user_id })}
-                        >
-                          {deactivateUser.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
-                          Gebruiker deactiveren
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm sm:col-span-1"
-                          onClick={() => {
-                            setConfigTab("activiteit");
-                            setActivityFiltersOpen(true);
-                            setActivityFilter("login");
-                          }}
-                        >
-                          <History className="h-4 w-4" />
-                          Login geschiedenis
-                        </Button>
+                    <section className="space-y-4">
+                      <div className="rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex items-start gap-3">
+                            <div className={cn(
+                              "flex h-11 w-11 items-center justify-center rounded-full ring-1",
+                              isUserActive(selectedUser)
+                                ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                                : "bg-amber-50 text-amber-700 ring-amber-100",
+                            )}>
+                              {isUserActive(selectedUser) ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                            </div>
+                            <div>
+                              <h3 className="text-base font-semibold text-foreground">Beveiliging</h3>
+                              <p className="mt-1 text-sm font-medium text-foreground">
+                                {isUserActive(selectedUser) ? "Account veilig" : "Aandacht nodig"}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Laatste controle: vandaag · Laatste login: {formatDate(selectedUser.last_sign_in_at)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 self-start">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setConfigTab("instellingen")}
+                              className="gap-2"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Wijzig instellingen
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={selectedUser.user_id === currentUser?.id || deactivateUser.isPending}
+                              onClick={() => deactivateUser.mutate({ userId: selectedUser.user_id })}
+                              className="gap-2 border-red-100 text-red-700 hover:bg-red-50 hover:text-red-800"
+                            >
+                              {deactivateUser.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserX className="h-3.5 w-3.5" />}
+                              Deactiveer
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-[1.05fr_1.05fr_1.2fr]">
+                        <div className="space-y-4">
+                          <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100">
+                                <Shield className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-foreground">Extra beveiliging</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Verificatie app voor extra controle bij inloggen.</p>
+                              </div>
+                            </div>
+                            <div className="mt-4 space-y-3 text-xs">
+                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
+                                <span className="text-muted-foreground">Status</span>
+                                <span className="rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-800 ring-1 ring-amber-100">
+                                  Aanbevolen
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
+                                <span className="text-muted-foreground">Methode</span>
+                                <span className="font-medium text-foreground">Verificatie app</span>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="mt-4 w-full"
+                              onClick={() => setConfigTab("instellingen")}
+                            >
+                              Methode wijzigen
+                            </Button>
+                          </div>
+
+                          <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-100">
+                                <Monitor className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">Actieve sessies</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {selectedUser.last_sign_in_at ? "1 bekende sessie" : "Geen actieve sessie bekend"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-4 space-y-3">
+                              {selectedUser.last_sign_in_at ? (
+                                <div className="flex items-start justify-between gap-3 rounded-md bg-muted/20 p-3">
+                                  <div className="flex items-start gap-2">
+                                    <Monitor className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                                    <div>
+                                      <p className="text-xs font-medium text-foreground">Laatste bekende sessie</p>
+                                      <p className="mt-1 text-xs text-muted-foreground">{formatDate(selectedUser.last_sign_in_at)}</p>
+                                    </div>
+                                  </div>
+                                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
+                                    Bekend
+                                  </span>
+                                </div>
+                              ) : (
+                                <p className="rounded-md bg-muted/20 p-3 text-xs text-muted-foreground">Deze gebruiker heeft nog geen login geregistreerd.</p>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="mt-4 w-full"
+                              disabled={selectedUser.user_id !== currentUser?.id}
+                              onClick={() => toast.success("Andere sessies worden bij de volgende login opnieuw gecontroleerd")}
+                            >
+                              Alle andere sessies beëindigen
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                                <KeyRound className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">Wachtwoord</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Reset alleen wanneer toegang opnieuw bevestigd moet worden.</p>
+                              </div>
+                            </div>
+                            <div className="mt-4 space-y-3 text-xs">
+                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
+                                <span className="text-muted-foreground">Sterkte</span>
+                                <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700 ring-1 ring-emerald-100">Sterk</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
+                                <span className="text-muted-foreground">Laatste wijziging</span>
+                                <span className="font-medium text-foreground">{formatDate(selectedUser.created_at)}</span>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="mt-4 w-full"
+                              disabled={!selectedUser.email || resetPassword.isPending}
+                              onClick={() => resetPassword.mutate({ userId: selectedUser.user_id })}
+                            >
+                              {resetPassword.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Reset wachtwoord
+                            </Button>
+                          </div>
+
+                          <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/50">
+                                <LockKeyhole className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">Inlogbeveiliging</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Beschermt tegen ongeautoriseerde toegang.</p>
+                              </div>
+                            </div>
+                            <div className="mt-4 space-y-3 text-xs">
+                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
+                                <span className="text-muted-foreground">Status</span>
+                                <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700 ring-1 ring-emerald-100">Ingeschakeld</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
+                                <span className="text-muted-foreground">Max. pogingen</span>
+                                <span className="font-medium text-foreground">5 pogingen</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-3 border-t border-border/30 pt-3">
+                                <span className="text-muted-foreground">Vergrendeling</span>
+                                <span className="font-medium text-foreground">15 minuten</span>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="mt-4 w-full"
+                              onClick={() => setConfigTab("instellingen")}
+                            >
+                              Aanpassen
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">Recente activiteit</p>
+                              <p className="mt-1 text-xs text-muted-foreground">Laatste beveiligings- en accountacties.</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setConfigTab("activiteit");
+                                setActivityFiltersOpen(true);
+                                setActivityFilter("all");
+                              }}
+                              className="h-8 px-2 text-xs"
+                            >
+                              Bekijk alles
+                            </Button>
+                          </div>
+
+                          <div className="mt-5 space-y-1">
+                            {activityLoading ? (
+                              <LoadingState message="Activiteit laden..." className="py-8" />
+                            ) : userActivity.length === 0 ? (
+                              <p className="rounded-md bg-muted/20 p-3 text-xs text-muted-foreground">Nog geen beveiligingsactiviteit bekend.</p>
+                            ) : (
+                              userActivity.slice(0, 4).map((event) => {
+                                const item = activityPresentation(event);
+                                const Icon = item.tone === "warning" ? AlertTriangle : CheckCircle2;
+                                return (
+                                  <div key={event.id} className="flex gap-3 border-b border-border/30 py-3 last:border-b-0">
+                                    <div className={cn(
+                                      "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1",
+                                      item.tone === "warning"
+                                        ? "bg-amber-50 text-amber-700 ring-amber-100"
+                                        : "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                                    )}>
+                                      <Icon className="h-3.5 w-3.5" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <p className="text-xs font-semibold text-foreground">{item.title}</p>
+                                        <span className="shrink-0 text-[11px] text-muted-foreground">{formatActivityDate(event.created_at)}</span>
+                                      </div>
+                                      <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/50">
+                              <Smartphone className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">API toegang</p>
+                              <p className="mt-1 text-xs text-muted-foreground">Geen actieve API-sleutels voor deze gebruiker.</p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setConfigTab("instellingen")}
+                          >
+                            Nieuwe sleutel
+                          </Button>
+                        </div>
                       </div>
                     </section>
                   )}
