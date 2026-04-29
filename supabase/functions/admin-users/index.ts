@@ -14,13 +14,14 @@ const CORS_OPTIONS = {
 type OfficeRole = "admin" | "medewerker";
 
 interface AdminUsersRequest {
-  action: "list" | "invite" | "update_role" | "update_profile";
+  action: "list" | "invite" | "update_role" | "update_profile" | "update_access" | "list_activity";
   tenant_id?: string | null;
   user_id?: string;
   email?: string;
   display_name?: string | null;
   role?: OfficeRole;
   redirect_to?: string;
+  access_overrides?: Record<string, unknown>;
 }
 
 function jsonWith(corsHeaders: Record<string, string>, status: number, body: unknown): Response {
@@ -36,6 +37,28 @@ function isRole(value: unknown): value is OfficeRole {
 
 function normalizeEmail(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+async function logUserActivity(
+  admin: ReturnType<typeof createClient>,
+  params: {
+    tenantId: string | null;
+    actorUserId: string;
+    targetUserId: string;
+    action: string;
+    changes?: Record<string, unknown>;
+  },
+) {
+  if (!params.tenantId) return;
+
+  await admin.from("activity_log").insert({
+    tenant_id: params.tenantId,
+    user_id: params.actorUserId,
+    entity_type: "office_user",
+    entity_id: params.targetUserId,
+    action: params.action,
+    changes: params.changes ?? {},
+  });
 }
 
 serve(async (req) => {
@@ -141,6 +164,40 @@ serve(async (req) => {
       });
     }
 
+    if (body.action === "list_activity") {
+      if (!body.user_id) return json(400, { error: "user_id is verplicht" });
+      if (!tenantId) return json(400, { error: "tenant_id is verplicht" });
+
+      const { data: events, error: activityError } = await admin
+        .from("activity_log")
+        .select("id, user_id, action, changes, created_at")
+        .eq("tenant_id", tenantId)
+        .eq("entity_type", "office_user")
+        .eq("entity_id", body.user_id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (activityError) return json(500, { error: activityError.message });
+
+      const { data: targetUser } = await admin.auth.admin.getUserById(body.user_id);
+      const lastSignInAt = targetUser.user?.last_sign_in_at ?? null;
+
+      return json(200, {
+        activity: [
+          ...(lastSignInAt ? [{
+            id: `login-${body.user_id}-${lastSignInAt}`,
+            user_id: body.user_id,
+            action: "user.login",
+            changes: {
+              description: "Laatste succesvolle login",
+              source: "Supabase Auth",
+            },
+            created_at: lastSignInAt,
+          }] : []),
+          ...(events ?? []),
+        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      });
+    }
+
     if (body.action === "invite") {
       const email = normalizeEmail(body.email);
       if (!email || !isRole(body.role)) {
@@ -188,6 +245,18 @@ serve(async (req) => {
       const { error: roleError } = await admin.from("user_roles").insert({ user_id: invitedUserId, role: body.role });
       if (roleError) return json(500, { error: roleError.message });
 
+      await logUserActivity(admin, {
+        tenantId,
+        actorUserId: user.id,
+        targetUserId: invitedUserId,
+        action: "user.invited",
+        changes: {
+          email,
+          display_name: body.display_name ?? email,
+          role: body.role,
+        },
+      });
+
       return json(200, { ok: true });
     }
 
@@ -227,6 +296,18 @@ serve(async (req) => {
         }, { onConflict: "tenant_id,user_id" });
       }
 
+      const previousRole = targetIsAdmin ? "admin" : "medewerker";
+      await logUserActivity(admin, {
+        tenantId,
+        actorUserId: user.id,
+        targetUserId: body.user_id,
+        action: "user.role_updated",
+        changes: {
+          from: previousRole,
+          to: body.role,
+        },
+      });
+
       return json(200, { ok: true });
     }
 
@@ -241,6 +322,33 @@ serve(async (req) => {
         .update({ display_name: displayName })
         .eq("user_id", body.user_id);
       if (profileError) return json(500, { error: profileError.message });
+
+      await logUserActivity(admin, {
+        tenantId,
+        actorUserId: user.id,
+        targetUserId: body.user_id,
+        action: "user.profile_updated",
+        changes: {
+          display_name: displayName,
+        },
+      });
+
+      return json(200, { ok: true });
+    }
+
+    if (body.action === "update_access") {
+      if (!body.user_id) return json(400, { error: "user_id is verplicht" });
+
+      await logUserActivity(admin, {
+        tenantId,
+        actorUserId: user.id,
+        targetUserId: body.user_id,
+        action: "user.access_updated",
+        changes: {
+          overrides: body.access_overrides ?? {},
+          override_count: Object.keys(body.access_overrides ?? {}).length,
+        },
+      });
 
       return json(200, { ok: true });
     }

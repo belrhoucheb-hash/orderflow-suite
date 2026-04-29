@@ -27,6 +27,23 @@ const users = [
   },
 ];
 
+const activity = [
+  {
+    id: "activity-1",
+    user_id: "user-1",
+    action: "user.role_updated",
+    changes: { from: "medewerker", to: "admin" },
+    created_at: "2026-04-23T14:32:00Z",
+  },
+  {
+    id: "activity-2",
+    user_id: "user-1",
+    action: "user.invited",
+    changes: { email: "regular@test.nl" },
+    created_at: "2026-04-18T11:08:00Z",
+  },
+];
+
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
     session: { user: { id: "user-1" } },
@@ -65,6 +82,9 @@ function setupDefaultMocks() {
   mockInvoke.mockImplementation((_functionName: string, options: { body?: any }) => {
     if (options.body?.action === "list") {
       return Promise.resolve({ data: { users }, error: null });
+    }
+    if (options.body?.action === "list_activity") {
+      return Promise.resolve({ data: { activity }, error: null });
     }
     return Promise.resolve({ data: { ok: true }, error: null });
   });
@@ -151,7 +171,8 @@ describe("UsersPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Activiteit" }));
     expect(screen.getByText("Overzicht van belangrijke acties en wijzigingen.")).toBeInTheDocument();
     expect(screen.getByText("Rol gewijzigd")).toBeInTheDocument();
-    expect(screen.getByText("Audit log geëxporteerd")).toBeInTheDocument();
+    expect(screen.getByText("Rol gewijzigd van medewerker naar admin")).toBeInTheDocument();
+    expect(screen.getByText("Gebruiker uitgenodigd")).toBeInTheDocument();
   });
 
   it("shows admin impact feedback in the configuration sheet", async () => {

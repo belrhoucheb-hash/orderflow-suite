@@ -78,9 +78,18 @@ interface UserRow {
   roles: UserRole[];
 }
 
+interface UserActivityRow {
+  id: string;
+  user_id: string | null;
+  action: string;
+  changes: Record<string, unknown> | null;
+  created_at: string;
+}
+
 interface AdminUsersResponse {
   users?: UserRow[];
   user?: UserRow;
+  activity?: UserActivityRow[];
   error?: string;
 }
 
@@ -165,72 +174,6 @@ function getAccessActions(module: string, level: AccessLevel, customLimitedActio
   return customLimitedActions ?? limitedActionsByModule[module] ?? { view: true, create: false, edit: false, delete: false };
 }
 
-const activityTimeline = [
-  {
-    title: "Login",
-    description: "Succesvol ingelogd vanaf Chrome · MacOS",
-    date: "Vandaag",
-    time: "10:24",
-    icon: UserCog,
-    tone: "success",
-  },
-  {
-    title: "Rol gewijzigd",
-    description: "Rol gewijzigd van Medewerker naar Admin",
-    date: "23 apr 2026",
-    time: "14:32",
-    icon: Crown,
-    tone: "warning",
-  },
-  {
-    title: "Toegangsrechten aangepast",
-    description: "Toegang gewijzigd voor 4 modules",
-    date: "23 apr 2026",
-    time: "14:31",
-    icon: Shield,
-    tone: "neutral",
-  },
-  {
-    title: "Instellingen gewijzigd",
-    description: "Tarieven module instellingen aangepast",
-    date: "21 apr 2026",
-    time: "09:15",
-    icon: Settings,
-    tone: "neutral",
-  },
-  {
-    title: "Audit log geëxporteerd",
-    description: "Audit log gedownload als CSV bestand",
-    date: "19 apr 2026",
-    time: "16:42",
-    icon: FileText,
-    tone: "neutral",
-  },
-  {
-    title: "Gebruiker uitgenodigd",
-    description: "Uitnodiging verstuurd naar jasper@rcs-schiphol.nl",
-    date: "18 apr 2026",
-    time: "11:08",
-    icon: UserCog,
-    tone: "neutral",
-  },
-  {
-    title: "Login",
-    description: "Succesvol ingelogd vanaf Safari · iPhone",
-    date: "18 apr 2026",
-    time: "08:55",
-    icon: UserCog,
-    tone: "success",
-  },
-] satisfies Array<{
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  icon: typeof UserCog;
-  tone: "success" | "warning" | "neutral";
-}>;
-
 function getPrimaryRole(user: UserRow): UserRole {
   return user.roles.includes("admin") ? "admin" : "medewerker";
 }
@@ -281,6 +224,80 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function formatActivityDate(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  return sameDay ? "Vandaag" : date.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function formatActivityTime(value: string) {
+  return new Date(value).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+}
+
+function activityPresentation(event: UserActivityRow): {
+  title: string;
+  description: string;
+  icon: typeof UserCog;
+  tone: "success" | "warning" | "neutral";
+} {
+  const changes = event.changes ?? {};
+  const stringValue = (key: string) => typeof changes[key] === "string" ? changes[key] as string : "";
+
+  if (event.action === "user.login") {
+    return {
+      title: "Login",
+      description: stringValue("description") || "Succesvolle login geregistreerd",
+      icon: UserCog,
+      tone: "success",
+    };
+  }
+
+  if (event.action === "user.invited") {
+    return {
+      title: "Gebruiker uitgenodigd",
+      description: `Uitnodiging verstuurd naar ${stringValue("email") || "gebruiker"}`,
+      icon: UserCog,
+      tone: "neutral",
+    };
+  }
+
+  if (event.action === "user.role_updated") {
+    return {
+      title: "Rol gewijzigd",
+      description: `Rol gewijzigd van ${stringValue("from") || "onbekend"} naar ${stringValue("to") || "onbekend"}`,
+      icon: Crown,
+      tone: "warning",
+    };
+  }
+
+  if (event.action === "user.profile_updated") {
+    return {
+      title: "Profiel gewijzigd",
+      description: "Weergavenaam aangepast",
+      icon: UserCog,
+      tone: "neutral",
+    };
+  }
+
+  if (event.action === "user.access_updated") {
+    const count = typeof changes.override_count === "number" ? changes.override_count : 0;
+    return {
+      title: "Toegangsrechten aangepast",
+      description: count > 0 ? `Toegang gewijzigd voor ${count} module${count === 1 ? "" : "s"}` : "Toegangsrechten teruggezet naar rolstandaard",
+      icon: Shield,
+      tone: "warning",
+    };
+  }
+
+  return {
+    title: "Activiteit",
+    description: stringValue("description") || "Gebruikersactie geregistreerd",
+    icon: History,
+    tone: "neutral",
+  };
+}
+
 async function callAdminUsers(action: string, payload: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke<AdminUsersResponse>("admin-users", {
     body: { action, ...payload },
@@ -297,6 +314,17 @@ function useUsers(tenantId?: string | null) {
     queryFn: async () => {
       const data = await callAdminUsers("list", { tenant_id: tenantId });
       return data.users ?? [];
+    },
+  });
+}
+
+function useUserActivity(tenantId?: string | null, userId?: string | null) {
+  return useQuery({
+    queryKey: ["users-admin-activity", tenantId, userId],
+    enabled: !!tenantId && !!userId,
+    queryFn: async () => {
+      const data = await callAdminUsers("list_activity", { tenant_id: tenantId, user_id: userId });
+      return data.activity ?? [];
     },
   });
 }
@@ -322,6 +350,7 @@ const UsersPage = () => {
   const [accessOverrides, setAccessOverrides] = useState<Record<string, AccessLevel>>({});
   const [advancedLimitedModules, setAdvancedLimitedModules] = useState<Record<string, boolean>>({});
   const [customLimitedActions, setCustomLimitedActions] = useState<Record<string, AccessActions>>({});
+  const { data: userActivity = [], isLoading: activityLoading } = useUserActivity(tenantId, selectedUser?.user_id);
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
 
@@ -360,6 +389,15 @@ const UsersPage = () => {
       invalidateUsers();
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Naam wijzigen mislukt"),
+  });
+
+  const updateAccess = useMutation({
+    mutationFn: ({ userId, overrides }: { userId: string; overrides: Record<string, AccessLevel> }) =>
+      callAdminUsers("update_access", { tenant_id: tenantId, user_id: userId, access_overrides: overrides }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser?.user_id] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Toegang loggen mislukt"),
   });
 
   const filteredUsers = useMemo(() => {
@@ -477,6 +515,9 @@ const UsersPage = () => {
     if (configRole !== currentRole) {
       tasks.push(updateRole.mutateAsync({ userId: selectedUser.user_id, role: configRole }));
     }
+    if (Object.keys(accessOverrides).length > 0) {
+      tasks.push(updateAccess.mutateAsync({ userId: selectedUser.user_id, overrides: accessOverrides }));
+    }
 
     if (tasks.length === 0) {
       setConfigSaved(true);
@@ -487,6 +528,7 @@ const UsersPage = () => {
       await Promise.all(tasks);
       toast.success("Wijzigingen opgeslagen");
       setSelectedUser((user) => user ? { ...user, display_name: nextName || null, roles: [configRole] } : user);
+      queryClient.invalidateQueries({ queryKey: ["users-admin-activity", tenantId, selectedUser.user_id] });
       setConfigSaved(true);
     } catch {
       // Mutation handlers already show a concrete error.
@@ -1106,38 +1148,50 @@ const UsersPage = () => {
                       </div>
 
                       <div className="mt-6">
-                        <div className="relative">
-                          <div className="absolute left-[18px] top-5 h-[calc(100%-40px)] w-px bg-border/60" />
-                          <div className="space-y-1">
-                            {activityTimeline.map((item, index) => {
-                              const Icon = item.icon;
-                              return (
-                                <div key={`${item.title}-${item.date}-${index}`} className="relative flex gap-4 py-3">
-                                  <div className={cn(
-                                    "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1",
-                                    item.tone === "success" && "bg-emerald-50 text-emerald-700 ring-emerald-100",
-                                    item.tone === "warning" && "bg-amber-50 text-amber-700 ring-amber-100",
-                                    item.tone === "neutral" && "bg-muted/70 text-foreground ring-border/50",
-                                  )}>
-                                    <Icon className="h-4 w-4" />
-                                  </div>
-                                  <div className="min-w-0 flex-1 border-b border-border/30 pb-3 last:border-b-0">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <p className="text-sm font-semibold text-foreground">{item.title}</p>
-                                        <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
-                                      </div>
-                                      <div className="shrink-0 text-right text-xs text-muted-foreground">
-                                        <p>{item.date}</p>
-                                        <p className="mt-1">{item.time}</p>
+                        {activityLoading ? (
+                          <LoadingState message="Activiteit laden..." className="py-10" />
+                        ) : userActivity.length === 0 ? (
+                          <EmptyState
+                            icon={History}
+                            title="Nog geen activiteit"
+                            description="Nieuwe rol-, profiel- en toegangsacties worden vanaf nu automatisch vastgelegd."
+                            className="py-10"
+                          />
+                        ) : (
+                          <div className="relative">
+                            <div className="absolute left-[18px] top-5 h-[calc(100%-40px)] w-px bg-border/60" />
+                            <div className="space-y-1">
+                              {userActivity.map((event) => {
+                                const item = activityPresentation(event);
+                                const Icon = item.icon;
+                                return (
+                                  <div key={event.id} className="relative flex gap-4 py-3">
+                                    <div className={cn(
+                                      "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1",
+                                      item.tone === "success" && "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                                      item.tone === "warning" && "bg-amber-50 text-amber-700 ring-amber-100",
+                                      item.tone === "neutral" && "bg-muted/70 text-foreground ring-border/50",
+                                    )}>
+                                      <Icon className="h-4 w-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1 border-b border-border/30 pb-3 last:border-b-0">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                                          <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                                        </div>
+                                        <div className="shrink-0 text-right text-xs text-muted-foreground">
+                                          <p>{formatActivityDate(event.created_at)}</p>
+                                          <p className="mt-1">{formatActivityTime(event.created_at)}</p>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
-                                </div>
-                              );
-                            })}
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </section>
                   )}
@@ -1190,8 +1244,8 @@ const UsersPage = () => {
                 <Button type="button" variant="outline" onClick={() => setSelectedUser(null)}>
                   Annuleren
                 </Button>
-                <Button type="submit" disabled={updateProfile.isPending || updateRole.isPending} className="gap-2 bg-stone-950 text-white hover:bg-stone-800">
-                  {(updateProfile.isPending || updateRole.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+                <Button type="submit" disabled={updateProfile.isPending || updateRole.isPending || updateAccess.isPending} className="gap-2 bg-stone-950 text-white hover:bg-stone-800">
+                  {(updateProfile.isPending || updateRole.isPending || updateAccess.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
                   Wijzigingen opslaan
                 </Button>
               </SheetFooter>
