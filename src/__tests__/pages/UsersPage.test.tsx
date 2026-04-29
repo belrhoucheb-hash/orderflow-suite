@@ -106,19 +106,18 @@ describe("UsersPage", () => {
   it("shows user list after loading", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Admin User")).toBeInTheDocument();
-      expect(screen.getByDisplayValue("Regular User")).toBeInTheDocument();
+      expect(screen.getByText("Admin User")).toBeInTheDocument();
+      expect(screen.getByText("Regular User")).toBeInTheDocument();
       expect(screen.getByText("regular@test.nl")).toBeInTheDocument();
     });
   });
 
-  it("shows user stats", async () => {
+  it("does not render the old KPI strip", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Totaal")).toBeInTheDocument();
-      expect(screen.getByText("Admins")).toBeInTheDocument();
-      expect(screen.getByText("Medewerkers")).toBeInTheDocument();
+      expect(screen.getByText("Gebruikersbeheer")).toBeInTheDocument();
     });
+    expect(screen.queryByText("Totaal")).not.toBeInTheDocument();
   });
 
   it("shows role badges", async () => {
@@ -129,34 +128,37 @@ describe("UsersPage", () => {
     });
   });
 
-  it("shows role change selects for admin users", async () => {
+  it("opens user configuration from the table", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Admin User")).toBeInTheDocument();
+      expect(screen.getByText("Regular User")).toBeInTheDocument();
     });
-    const selects = screen.getAllByRole("combobox");
-    expect(selects.length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getAllByRole("button", { name: /Configureren/i })[1]);
+
+    expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
+    expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
   });
 
   it("shows table headers", async () => {
     renderUsersPage();
     await waitFor(() => {
       expect(screen.getByText("Gebruiker")).toBeInTheDocument();
-      expect(screen.getByText("Rol")).toBeInTheDocument();
-      expect(screen.getByText("Acties")).toBeInTheDocument();
+      expect(screen.getByText("Toegang")).toBeInTheDocument();
+      expect(screen.getByText("Beheer")).toBeInTheDocument();
     });
   });
 
   it("filters users by email", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Regular User")).toBeInTheDocument();
+      expect(screen.getByText("Regular User")).toBeInTheDocument();
     });
 
     await userEvent.type(screen.getByPlaceholderText("Zoek op naam, e-mail of rol"), "regular@test.nl");
 
-    expect(screen.queryByDisplayValue("Admin User")).not.toBeInTheDocument();
-    expect(screen.getByDisplayValue("Regular User")).toBeInTheDocument();
+    expect(screen.queryByText("Admin User")).not.toBeInTheDocument();
+    expect(screen.getByText("Regular User")).toBeInTheDocument();
   });
 
   it("invites a new user", async () => {
