@@ -164,8 +164,9 @@ describe("UsersPage", () => {
     renderUsersPage();
     await waitFor(() => {
       expect(screen.getByText("Gebruiker")).toBeInTheDocument();
-      expect(screen.getByText("Toegang")).toBeInTheDocument();
-      expect(screen.getByText("Beheer")).toBeInTheDocument();
+      expect(screen.getByText("Rol")).toBeInTheDocument();
+      expect(screen.getByText("Status")).toBeInTheDocument();
+      expect(screen.getByText("Acties")).toBeInTheDocument();
     });
   });
 

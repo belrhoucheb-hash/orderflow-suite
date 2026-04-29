@@ -2,19 +2,24 @@ import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
+  ArrowLeft,
   CalendarDays,
   CheckCircle2,
   Clock3,
   Crown,
+  Ellipsis,
+  History,
   Info,
+  KeyRound,
   Loader2,
   LockKeyhole,
   Mail,
   Plus,
   Search,
-  Settings2,
   Shield,
+  SlidersHorizontal,
   UserCog,
+  UserX,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -83,6 +88,14 @@ const roleLabels: Record<UserRole, string> = {
   medewerker: ROLE_ACCESS.medewerker.label,
 };
 
+const configTabs = [
+  { id: "profiel", label: "Profiel" },
+  { id: "toegang", label: "Toegang" },
+  { id: "activiteit", label: "Activiteit" },
+  { id: "beveiliging", label: "Beveiliging" },
+  { id: "instellingen", label: "Instellingen" },
+] as const;
+
 function getPrimaryRole(user: UserRow): UserRole {
   return user.roles.includes("admin") ? "admin" : "medewerker";
 }
@@ -128,6 +141,7 @@ const UsersPage = () => {
   const [configName, setConfigName] = useState("");
   const [configRole, setConfigRole] = useState<UserRole>("medewerker");
   const [configSaved, setConfigSaved] = useState(false);
+  const [configTab, setConfigTab] = useState<"profiel" | "toegang" | "activiteit" | "beveiliging" | "instellingen">("profiel");
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
 
@@ -193,6 +207,7 @@ const UsersPage = () => {
     setConfigName(row.display_name ?? "");
     setConfigRole(getPrimaryRole(row));
     setConfigSaved(false);
+    setConfigTab("profiel");
   };
 
   const handleSaveConfig = async (event: FormEvent) => {
@@ -243,7 +258,7 @@ const UsersPage = () => {
       />
 
       <div className="bg-card rounded-lg shadow-sm border border-border/40 overflow-hidden">
-        <div className="p-4 border-b border-border/30 bg-muted/10">
+        <div className="p-5 border-b border-border/30 bg-gradient-to-b from-background to-muted/10">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">Gebruikersbeheer</p>
@@ -269,6 +284,10 @@ const UsersPage = () => {
                   <SelectItem value="medewerker">Medewerkers</SelectItem>
                 </SelectContent>
               </Select>
+              <Button type="button" variant="outline" className="gap-2">
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+              </Button>
             </div>
           </div>
         </div>
@@ -290,17 +309,17 @@ const UsersPage = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border/40 bg-muted/20">
+                <tr className="border-b border-border/30 bg-muted/10">
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Gebruiker</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Toegang</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Rol</th>
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden md:table-cell">Status</th>
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden lg:table-cell">Laatste login</th>
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 hidden sm:table-cell">Sinds</th>
                   {isAdmin && (
-                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Beheer</th>
+                    <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">Acties</th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/20">
+              <tbody className="divide-y divide-border/25">
                 {filteredUsers.map((row, idx) => {
                   const primaryRole = getPrimaryRole(row);
                   const isCurrentUser = currentUser?.id === row.user_id;
@@ -311,11 +330,11 @@ const UsersPage = () => {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: idx * 0.02 }}
-                      className="hover:bg-muted/20 transition-colors duration-150"
+                      className="hover:bg-amber-50/20 transition-colors duration-150"
                     >
-                      <td className="px-5 py-4 min-w-[300px]">
+                      <td className="px-5 py-5 min-w-[300px]">
                         <div className="flex items-center gap-3.5">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-xs font-semibold text-white shrink-0 shadow-sm">
+                          <div className="h-11 w-11 rounded-full bg-gradient-to-br from-amber-100 to-stone-100 flex items-center justify-center text-xs font-semibold text-stone-800 shrink-0 shadow-sm ring-1 ring-black/5">
                             {(row.display_name || row.email || "?").slice(0, 2).toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -327,41 +346,38 @@ const UsersPage = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-4 min-w-[220px]">
-                        <div className="space-y-1.5">
-                          <Badge
-                            variant="outline"
-                            className={cn("text-xs px-2 py-0.5", roleStyles[primaryRole])}
-                          >
-                            {primaryRole === "admin" ? <Shield className="h-2.5 w-2.5 mr-1" /> : <UserCog className="h-2.5 w-2.5 mr-1" />}
-                            {roleLabels[primaryRole]}
-                          </Badge>
-                          <p className="text-xs text-muted-foreground max-w-[260px]">{ROLE_ACCESS[primaryRole].summary}</p>
+                      <td className="px-5 py-5 min-w-[160px]">
+                        <Badge
+                          variant="outline"
+                          className={cn("text-xs px-2.5 py-1", roleStyles[primaryRole])}
+                        >
+                          {primaryRole === "admin" ? <Shield className="h-2.5 w-2.5 mr-1" /> : <UserCog className="h-2.5 w-2.5 mr-1" />}
+                          {roleLabels[primaryRole]}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-5 hidden md:table-cell">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Actief
                         </div>
                       </td>
-                      <td className="px-5 py-4 hidden lg:table-cell">
+                      <td className="px-5 py-5 hidden lg:table-cell">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock3 className="h-3.5 w-3.5" />
                           <span>{formatDate(row.last_sign_in_at)}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 hidden sm:table-cell">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          <span>{formatDate(row.created_at)}</span>
-                        </div>
-                      </td>
                       {isAdmin && (
-                        <td className="px-5 py-4 text-right">
+                        <td className="px-5 py-5 text-right">
                           <Button
                             type="button"
-                            variant="outline"
-                            size="sm"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => openConfig(row)}
-                            className="gap-2"
+                            aria-label={`Configureren ${row.display_name || row.email || "gebruiker"}`}
+                            className="h-8 w-8"
                           >
-                            <Settings2 className="h-3.5 w-3.5" />
-                            Configureren
+                            <Ellipsis className="h-4 w-4" />
                           </Button>
                         </td>
                       )}
@@ -435,17 +451,30 @@ const UsersPage = () => {
       </Dialog>
 
       <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-        <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]">
           {selectedUser && (
             <form onSubmit={handleSaveConfig} className="flex min-h-0 flex-1 flex-col">
-              <div className="border-b border-border/30 bg-gradient-to-b from-background to-muted/20 px-7 py-6">
-                <SheetHeader className="space-y-1 pr-8">
-                  <SheetTitle className="text-xl">Gebruiker configureren</SheetTitle>
-                  <SheetDescription>Configureer deze gebruiker met duidelijke impact en vaste rechten.</SheetDescription>
-                </SheetHeader>
+              <div className="border-b border-border/30 bg-background px-7 py-6">
+                <div className="flex items-center gap-3 pr-8">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedUser(null)}
+                    className="h-8 w-8 shrink-0"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <SheetHeader className="space-y-0 text-left">
+                    <SheetTitle className="text-base">Gebruiker configureren</SheetTitle>
+                    <SheetDescription className="sr-only">
+                      Configureer profiel, rol, toegang en beheeracties voor deze gebruiker.
+                    </SheetDescription>
+                  </SheetHeader>
+                </div>
 
-                <div className="mt-5 flex items-center gap-4 rounded-xl bg-background p-5 shadow-sm ring-1 ring-border/30">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground shadow-sm">
+                <div className="mt-6 flex items-center gap-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-100 to-stone-100 text-lg font-semibold text-stone-800 shadow-sm ring-1 ring-black/5">
                     {(selectedUser.display_name || selectedUser.email || "?").slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -463,6 +492,24 @@ const UsersPage = () => {
                   </Badge>
                 </div>
 
+                <div className="mt-6 flex gap-6 border-b border-border/40">
+                  {configTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setConfigTab(tab.id)}
+                      className={cn(
+                        "border-b-2 px-0 pb-3 text-sm transition-colors",
+                        configTab === tab.id
+                          ? "border-amber-600 text-amber-700"
+                          : "border-transparent text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
                 {configSaved && (
                   <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 ring-1 ring-emerald-100">
                     <CheckCircle2 className="h-4 w-4" />
@@ -471,9 +518,9 @@ const UsersPage = () => {
                 )}
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto bg-muted/10 px-7 py-7">
+              <div className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-background to-muted/10 px-7 py-7">
                 <div className="space-y-6">
-                  <section className="space-y-3 rounded-xl bg-background p-5 shadow-sm ring-1 ring-border/30">
+                  <section className="space-y-4 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">Profiel</h3>
                       <p className="text-xs text-muted-foreground">Deze naam wordt in overzichten en auditregels getoond.</p>
@@ -489,6 +536,15 @@ const UsersPage = () => {
                         }}
                         placeholder="Naam van de gebruiker"
                         className="h-11"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="config-email">E-mail</Label>
+                      <Input
+                        id="config-email"
+                        value={selectedUser.email ?? selectedUser.user_id}
+                        readOnly
+                        className="h-11 bg-muted/20"
                       />
                     </div>
                   </section>
@@ -515,7 +571,7 @@ const UsersPage = () => {
                               setConfigSaved(false);
                             }}
                             className={cn(
-                              "group rounded-xl p-5 text-left shadow-sm ring-1 transition-all",
+                              "group rounded-lg p-5 text-left shadow-sm ring-1 transition-all",
                               role === "admin"
                                 ? "bg-rose-50/60 ring-rose-100 hover:bg-rose-50 hover:ring-rose-200"
                                 : "bg-background ring-border/30 hover:bg-muted/20 hover:ring-primary/25",
@@ -525,7 +581,7 @@ const UsersPage = () => {
                           >
                             <div className="flex items-start gap-3">
                               <div className={cn(
-                                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1",
+                                "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1",
                                 role === "admin"
                                   ? "bg-white text-rose-700 ring-rose-200"
                                   : "bg-primary/10 text-primary ring-primary/15",
@@ -553,7 +609,7 @@ const UsersPage = () => {
                   </section>
 
                   {configRole === "admin" && (
-                    <section className="flex gap-3 rounded-xl bg-amber-50 p-4 text-amber-900 shadow-sm ring-1 ring-amber-100">
+                    <section className="flex gap-3 rounded-lg bg-amber-50 p-5 text-amber-900 shadow-sm ring-1 ring-amber-100">
                       <Info className="mt-0.5 h-4 w-4 shrink-0" />
                       <div>
                         <h3 className="text-sm font-semibold">Dit betekent</h3>
@@ -564,7 +620,7 @@ const UsersPage = () => {
                     </section>
                   )}
 
-                  <section className="space-y-3 rounded-xl bg-background p-5 shadow-sm ring-1 ring-border/30">
+                  <section className="space-y-3 rounded-lg bg-background p-5 shadow-sm ring-1 ring-border/30">
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">Toegangsoverzicht</h3>
                       <p className="text-xs text-muted-foreground">Vastgelegd in de centrale rolmatrix van OrderFlow.</p>
@@ -602,19 +658,52 @@ const UsersPage = () => {
                   </section>
 
                   <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-border/30">
+                    <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <CalendarDays className="h-4 w-4" />
                         <p className="text-[11px] font-semibold uppercase tracking-wide">Geregistreerd</p>
                       </div>
                       <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.created_at)}</p>
                     </div>
-                    <div className="rounded-xl bg-background p-4 shadow-sm ring-1 ring-border/30">
+                    <div className="rounded-lg bg-background p-4 shadow-sm ring-1 ring-border/30">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Clock3 className="h-4 w-4" />
                         <p className="text-[11px] font-semibold uppercase tracking-wide">Laatste login</p>
                       </div>
                       <p className="mt-2 text-sm font-semibold text-foreground">{formatDate(selectedUser.last_sign_in_at)}</p>
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-foreground">Snelle acties</h3>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
+                        onClick={() => toast.info("Wachtwoord resetten is nog niet gekoppeld")}
+                      >
+                        <KeyRound className="h-4 w-4" />
+                        Wachtwoord resetten
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm"
+                        onClick={() => toast.info("Deactiveren is nog niet gekoppeld")}
+                      >
+                        <UserX className="h-4 w-4" />
+                        Gebruiker deactiveren
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-12 justify-start gap-3 rounded-lg bg-background shadow-sm sm:col-span-1"
+                        onClick={() => toast.info("Login geschiedenis is nog niet gekoppeld")}
+                      >
+                        <History className="h-4 w-4" />
+                        Login geschiedenis
+                      </Button>
                     </div>
                   </section>
                 </div>
@@ -624,9 +713,9 @@ const UsersPage = () => {
                 <Button type="button" variant="outline" onClick={() => setSelectedUser(null)}>
                   Annuleren
                 </Button>
-                <Button type="submit" disabled={updateProfile.isPending || updateRole.isPending} className="gap-2">
+                <Button type="submit" disabled={updateProfile.isPending || updateRole.isPending} className="gap-2 bg-stone-950 text-white hover:bg-stone-800">
                   {(updateProfile.isPending || updateRole.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Opslaan
+                  Wijzigingen opslaan
                 </Button>
               </SheetFooter>
             </form>
