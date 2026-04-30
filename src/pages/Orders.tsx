@@ -21,6 +21,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import SmartLabel from "@/components/orders/SmartLabel";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
@@ -50,8 +51,8 @@ function formatOrderDate(value: string | null | undefined): { label: string; too
 
 const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED"] as const;
 
-function exportOrders(orders: Array<any>, baseName: string) {
-  if (orders.length === 0) return;
+function exportOrders(orders: Array<any>, baseName: string): number {
+  if (orders.length === 0) return 0;
   const headers = [
     "Ordernummer",
     "Status",
@@ -76,7 +77,7 @@ function exportOrders(orders: Array<any>, baseName: string) {
   ]);
   const csv = toCsv(headers, rows);
   const stamp = new Date().toISOString().slice(0, 10);
-  downloadCsv(`${baseName}-${stamp}.csv`, csv);
+  return downloadCsv(`${baseName}-${stamp}.csv`, csv) ? orders.length : 0;
 }
 
 const Orders = () => {
@@ -330,9 +331,18 @@ const Orders = () => {
           <>
             <button
               className="btn-luxe"
-              onClick={() => exportOrders(orders, "orders")}
+              onClick={() => {
+                const exportedCount = exportOrders(orders, "orders");
+                if (exportedCount > 0) {
+                  toast.success("Export gestart", {
+                    description: `${exportedCount} ${exportedCount === 1 ? "order" : "orders"} als CSV.`,
+                  });
+                } else {
+                  toast.info("Geen orders om te exporteren");
+                }
+              }}
               disabled={orders.length === 0}
-              title="Exporteer huidige weergave als CSV"
+              title={`Exporteer de ${orders.length} zichtbare ${orders.length === 1 ? "order" : "orders"} als CSV`}
             >
               <Download className="h-4 w-4" /> Export
             </button>
@@ -636,7 +646,12 @@ const Orders = () => {
           <div className="flex items-center gap-2">
             <button
               className="btn-luxe"
-              onClick={() => exportOrders(orders.filter((o) => selectedIds.has(o.id)), "orders-selectie")}
+              onClick={() => {
+                const exportedCount = exportOrders(orders.filter((o) => selectedIds.has(o.id)), "orders-selectie");
+                toast.success("Selectie-export gestart", {
+                  description: `${exportedCount} ${exportedCount === 1 ? "order" : "orders"} als CSV.`,
+                });
+              }}
             >
               <Download className="h-4 w-4" /> Exporteer selectie
             </button>
@@ -959,19 +974,23 @@ const Orders = () => {
         <div
           className="flex flex-col gap-3 px-4 py-3 border-t border-[hsl(var(--gold)/0.2)] md:flex-row md:items-center md:justify-between md:px-5"
           style={{
-            background: "linear-gradient(180deg, hsl(var(--gold-soft)/0.15), hsl(var(--gold-soft)/0.35))",
+            background: "linear-gradient(180deg, hsl(var(--gold-soft)/0.12), hsl(var(--gold-soft)/0.34))",
             fontFamily: "var(--font-display)",
             fontSize: "var(--text-caption)",
           }}
         >
-          <p className="uppercase tracking-[0.14em] text-muted-foreground/80 tabular-nums">
-            {orders.length > 0
-              ? isCursorMode
-                ? `Circa ${totalCount.toLocaleString("nl-NL")} orders`
-                : `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, totalCount)} van ${totalCount}`
-              : "0 orders"}
-          </p>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.14em] tabular-nums">
+            <span className="rounded-full border border-[hsl(var(--gold)/0.22)] bg-white/60 px-3 py-1 font-semibold text-[hsl(var(--gold-deep))] shadow-[inset_0_1px_0_var(--inset-highlight)]">
+              {totalCount.toLocaleString("nl-NL")} {totalCount === 1 ? "order" : "orders"}
+            </span>
+            <span className="text-muted-foreground/70">
+              {orders.length.toLocaleString("nl-NL")} getoond
+            </span>
+            <span className="text-muted-foreground/70">
+              {pageSize.toLocaleString("nl-NL")} per pagina
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
                 if (isCursorMode) {
@@ -980,16 +999,16 @@ const Orders = () => {
               }}
               disabled={cursorStack.length === 0}
               className={cn(
-                "inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors",
+                "inline-flex h-8 items-center gap-1 rounded-full border px-3 uppercase tracking-[0.14em] transition-colors",
                 cursorStack.length === 0
-                  ? "text-muted-foreground/30 cursor-not-allowed"
-                  : "text-muted-foreground/80 hover:text-[hsl(var(--gold-deep))]",
+                  ? "cursor-not-allowed border-transparent text-muted-foreground/30"
+                  : "border-[hsl(var(--gold)/0.18)] bg-white/55 text-muted-foreground/80 hover:border-[hsl(var(--gold)/0.34)] hover:text-[hsl(var(--gold-deep))]",
               )}
             >
               <ChevronLeft className="h-3 w-3" />
               Vorige
             </button>
-            <span className="tabular-nums text-[hsl(var(--gold-deep))] font-semibold">
+            <span className="rounded-full bg-[hsl(var(--gold-soft)/0.55)] px-3 py-1.5 font-semibold tabular-nums text-[hsl(var(--gold-deep))]">
               {`Pagina ${displayedPage + 1}`}
             </span>
             <button
@@ -999,18 +1018,21 @@ const Orders = () => {
               }}
               disabled={!(data as any)?.nextCursor}
               className={cn(
-                "inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors",
+                "inline-flex h-8 items-center gap-1 rounded-full border px-3 uppercase tracking-[0.14em] transition-colors",
                 !(data as any)?.nextCursor
-                  ? "text-muted-foreground/30 cursor-not-allowed"
-                  : "text-muted-foreground/80 hover:text-[hsl(var(--gold-deep))]",
+                  ? "cursor-not-allowed border-transparent text-muted-foreground/30"
+                  : "border-[hsl(var(--gold)/0.18)] bg-white/55 text-muted-foreground/80 hover:border-[hsl(var(--gold)/0.34)] hover:text-[hsl(var(--gold-deep))]",
               )}
             >
               Volgende
               <ChevronRight className="h-3 w-3" />
             </button>
           </div>
-          <p className="uppercase tracking-[0.14em] text-muted-foreground/80 tabular-nums">
-            {orders.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
+          <p className="flex items-center gap-2 uppercase tracking-[0.14em] text-muted-foreground/70 tabular-nums">
+            <span>Gewicht</span>
+            <span className="font-semibold text-foreground">
+              {orders.reduce((s, o) => s + o.totalWeight, 0).toLocaleString()} kg
+            </span>
           </p>
         </div>
       </motion.div>
