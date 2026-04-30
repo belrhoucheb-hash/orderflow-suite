@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Plus, Trash2, Edit2, ShieldCheck, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,14 +29,14 @@ import {
   useCreateDriverCertification,
   useDeleteDriverCertification,
   useDriverCertifications,
+  useDriverCertificationUsageCounts,
   useUpdateDriverCertification,
   type DriverCertification,
 } from "@/hooks/useDriverCertifications";
-import { useDrivers } from "@/hooks/useDrivers";
 
 export function DriverCertificationsSection() {
   const { data: certifications = [], isLoading } = useDriverCertifications();
-  const { data: drivers = [] } = useDrivers();
+  const { data: counts = {} } = useDriverCertificationUsageCounts();
   const createMut = useCreateDriverCertification();
   const updateMut = useUpdateDriverCertification();
   const deleteMut = useDeleteDriverCertification();
@@ -46,16 +46,6 @@ export function DriverCertificationsSection() {
   const [pendingDelete, setPendingDelete] = useState<DriverCertification | null>(null);
 
   const submitting = createMut.isPending || updateMut.isPending;
-
-  const counts = useMemo(() => {
-    const acc: Record<string, number> = {};
-    for (const d of drivers) {
-      for (const code of d.certifications ?? []) {
-        acc[code] = (acc[code] ?? 0) + 1;
-      }
-    }
-    return acc;
-  }, [drivers]);
 
   const handleSubmit = async (values: DriverCertificationFormValues) => {
     if (editing) {

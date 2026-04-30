@@ -8,11 +8,12 @@ import type { Surcharge, SurchargeAppliesTo, SurchargeType } from "@/types/rateM
 export function useSurcharges(activeOnly = true) {
   return useQuery({
     queryKey: ["surcharges", { activeOnly }],
-    staleTime: 15_000,
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
     queryFn: async () => {
       let query = supabase
         .from("surcharges" as any)
-        .select("*")
+        .select("id, tenant_id, name, surcharge_type, amount, applies_to, is_active, created_at, updated_at")
         .order("name", { ascending: true });
 
       if (activeOnly) {

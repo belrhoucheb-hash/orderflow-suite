@@ -6,11 +6,12 @@ import type { CostType, CostCategory, CalculationMethod } from "@/types/costMode
 export function useCostTypes(activeOnly = true) {
   return useQuery({
     queryKey: ["cost_types", { activeOnly }],
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
     queryFn: async () => {
       let query = supabase
         .from("cost_types" as any)
-        .select("*")
+        .select("id, tenant_id, name, category, calculation_method, default_rate, is_active, created_at, updated_at")
         .order("category", { ascending: true })
         .order("name", { ascending: true });
 

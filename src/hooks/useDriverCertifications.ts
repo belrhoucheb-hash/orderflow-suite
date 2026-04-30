@@ -27,14 +27,37 @@ const QUERY_KEY = ["driver-certifications"] as const;
 export function useDriverCertifications() {
   return useQuery<DriverCertification[]>({
     queryKey: QUERY_KEY,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("driver_certifications" as any)
-        .select("*")
+        .select("id, tenant_id, code, name, description, sort_order, is_active, created_at, updated_at")
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as DriverCertification[];
+    },
+  });
+}
+
+export function useDriverCertificationUsageCounts() {
+  return useQuery<Record<string, number>>({
+    queryKey: ["driver-certification-usage-counts"],
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("drivers" as any)
+        .select("certifications");
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      for (const row of (data ?? []) as Array<{ certifications?: string[] | null }>) {
+        for (const code of row.certifications ?? []) {
+          counts[code] = (counts[code] ?? 0) + 1;
+        }
+      }
+      return counts;
     },
   });
 }

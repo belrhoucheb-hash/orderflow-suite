@@ -6,6 +6,7 @@ import {
   VehicleTypeDialog,
   type VehicleTypeFormValues,
 } from "@/components/settings/VehicleTypeDialog";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -42,16 +43,21 @@ interface VehicleTypeRow {
 
 export function VehicleTypesSection() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogInitial, setDialogInitial] = useState<Partial<VehicleTypeFormValues> | null>(null);
   const [pendingDelete, setPendingDelete] = useState<VehicleTypeRow | null>(null);
 
   const { data: vehicleTypes = [], isLoading, isError, refetch } = useQuery<VehicleTypeRow[]>({
     queryKey: ["settings-vehicle-types"],
+    enabled: !!tenant?.id,
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicle_types")
-        .select("*")
+        .select("id, tenant_id, name, code, sort_order, max_length_cm, max_width_cm, max_height_cm, max_weight_kg, max_volume_m3, max_pallets, has_tailgate, has_cooling, adr_capable, is_active")
+        .eq("tenant_id", tenant!.id)
         .order("sort_order", { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as VehicleTypeRow[];
@@ -60,14 +66,7 @@ export function VehicleTypesSection() {
 
   const upsertVehicleType = useMutation({
     mutationFn: async (values: VehicleTypeFormValues) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("user_id", user?.id)
-        .single();
-      const tenantId = profile?.tenant_id;
-      if (!tenantId) throw new Error("Geen tenant gevonden voor huidige gebruiker");
+      if (!tenant?.id) throw new Error("Geen tenant gevonden voor huidige gebruiker");
 
       const payload = {
         name: values.name.trim(),
@@ -88,7 +87,7 @@ export function VehicleTypesSection() {
 
       const { error } = await supabase
         .from("vehicle_types")
-        .upsert({ ...payload, tenant_id: tenantId }, { onConflict: "tenant_id,code" });
+        .upsert({ ...payload, tenant_id: tenant.id }, { onConflict: "tenant_id,code" });
       if (error) throw error;
     },
     onSuccess: () => {

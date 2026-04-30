@@ -15,11 +15,35 @@ export function useRateCards(options: UseRateCardsOptions = {}) {
 
   return useQuery({
     queryKey: ["rate_cards", { clientId, activeOnly }],
-    staleTime: 15_000,
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
     queryFn: async () => {
       let query = supabase
         .from("rate_cards" as any)
-        .select("*, rate_rules(*), clients(name)")
+        .select(`
+          id,
+          tenant_id,
+          client_id,
+          name,
+          valid_from,
+          valid_until,
+          currency,
+          is_active,
+          created_at,
+          updated_at,
+          rate_rules(
+            id,
+            rate_card_id,
+            rule_type,
+            transport_type,
+            amount,
+            min_amount,
+            conditions,
+            sort_order,
+            created_at
+          ),
+          clients(name)
+        `)
         .order("created_at", { ascending: false });
 
       if (activeOnly) {

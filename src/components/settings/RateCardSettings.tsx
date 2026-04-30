@@ -65,7 +65,7 @@ function conditionsToBadges(conditions: Record<string, unknown>): string[] {
 
 export function RateCardSettings() {
   const { tenant } = useTenant();
-  const { data: rateCards, isLoading } = useRateCards({ activeOnly: false });
+  const { data: rateCards, isLoading } = useRateCards({ activeOnly: false, clientId: null });
   const createRateCard = useCreateRateCard();
   const updateRateCard = useUpdateRateCard();
   const deleteRateCard = useDeleteRateCard();

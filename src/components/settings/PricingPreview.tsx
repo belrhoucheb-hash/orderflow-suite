@@ -16,7 +16,7 @@ import type { PricingOrderInput } from "@/types/rateModels";
  * debug-handvat zodat tarief-wijzigingen niet blind hoeven te zijn.
  */
 export function PricingPreview() {
-  const { data: rateCards = [], isLoading: loadingCards } = useRateCards({ activeOnly: true });
+  const { data: rateCards = [], isLoading: loadingCards } = useRateCards({ activeOnly: true, clientId: null });
   const { data: surcharges = [], isLoading: loadingSurcharges } = useSurcharges(true);
 
   const [open, setOpen] = useState(false);
