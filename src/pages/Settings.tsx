@@ -52,6 +52,7 @@ import { ApiTokenSettings } from "@/components/settings/ApiTokenSettings";
 import { ConnectorCatalog } from "@/components/settings/ConnectorCatalog";
 import { ConnectorDetail } from "@/components/settings/ConnectorDetail";
 import { ExceptionRulesSettings } from "@/components/settings/ExceptionRulesSettings";
+import { DeferredMount } from "@/components/performance/DeferredMount";
 import { useTranslation } from "react-i18next";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DEFAULT_SLA_SETTINGS, normalizeSlaSettings } from "@/lib/slaSettings";
@@ -1434,12 +1435,18 @@ const Settings = () => {
 
           {activeOperationSection === "stamgegevens" && (
             <div className="space-y-8">
-              <MasterDataSection />
-              <VehicleDocumentTypesSection />
+              <DeferredMount label="Stamgegevens laden">
+                <MasterDataSection />
+                <VehicleDocumentTypesSection />
+              </DeferredMount>
             </div>
           )}
 
-          {activeOperationSection === "rooster-types" && <ShiftTemplateSettings />}
+          {activeOperationSection === "rooster-types" && (
+            <DeferredMount label="Rooster-types laden">
+              <ShiftTemplateSettings />
+            </DeferredMount>
+          )}
 
           {activeOperationSection === "sla" && (
             <div className="card--luxe p-6 space-y-6">
@@ -1522,15 +1529,21 @@ const Settings = () => {
             </div>
           )}
 
-          {activeOperationSection === "uitzonderingen" && <ExceptionRulesSettings />}
+          {activeOperationSection === "uitzonderingen" && (
+            <DeferredMount label="Uitzonderingen laden">
+              <ExceptionRulesSettings />
+            </DeferredMount>
+          )}
 
           {activeOperationSection === "prijslogica" && (
             <div className="space-y-6">
-              <PricingPreview />
-              <RateCardSettings />
-              <SurchargeSettings />
-              <FuelPriceSettings />
-              <CostTypeSettings />
+              <DeferredMount label="Prijslogica laden">
+                <PricingPreview />
+                <RateCardSettings />
+                <SurchargeSettings />
+                <FuelPriceSettings />
+                <CostTypeSettings />
+              </DeferredMount>
             </div>
           )}
         </TabsContent>
@@ -2281,7 +2294,9 @@ const Settings = () => {
             activeValue={activeCommunicationSection}
             onChange={handleCommunicationSectionChange}
           />
-          <InboxSettings />
+          <DeferredMount label="Inboxen laden">
+            <InboxSettings />
+          </DeferredMount>
         </TabsContent>
 
         <TabsContent value="eta-meldingen" className="space-y-6 outline-none">
@@ -2293,7 +2308,9 @@ const Settings = () => {
             activeValue={activeCommunicationSection}
             onChange={handleCommunicationSectionChange}
           />
-          <EtaNotificationSettings />
+          <DeferredMount label="ETA-meldingen laden">
+            <EtaNotificationSettings />
+          </DeferredMount>
         </TabsContent>
 
         <TabsContent value="webhooks" className="space-y-6 outline-none">
@@ -2305,7 +2322,9 @@ const Settings = () => {
             activeValue={activeConnectionSection}
             onChange={handleConnectionSectionChange}
           />
-          <WebhookSettings />
+          <DeferredMount label="Webhooks laden">
+            <WebhookSettings />
+          </DeferredMount>
         </TabsContent>
 
         <TabsContent value="api-tokens" className="space-y-6 outline-none">
@@ -2317,7 +2336,9 @@ const Settings = () => {
             activeValue={activeConnectionSection}
             onChange={handleConnectionSectionChange}
           />
-          <ApiTokenSettings clientId={null} />
+          <DeferredMount label="API-tokens laden">
+            <ApiTokenSettings clientId={null} />
+          </DeferredMount>
         </TabsContent>
         </div>
       </Tabs>

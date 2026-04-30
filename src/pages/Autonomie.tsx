@@ -11,6 +11,7 @@ import { DecisionFeed } from "@/components/dashboard/DecisionFeed";
 import { LearningProgress } from "@/components/dashboard/LearningProgress";
 import { CorrectionLog } from "@/components/dashboard/CorrectionLog";
 import { AutonomyTrendChart } from "@/components/dashboard/AutonomyTrendChart";
+import { DeferredMount } from "@/components/performance/DeferredMount";
 import { useDecisionFeed } from "@/hooks/useAutonomyDashboard";
 import { useTenantLearningStats } from "@/hooks/useAIFeedbackLoop";
 import { useTenant } from "@/contexts/TenantContext";
@@ -374,6 +375,8 @@ function DecisionTable() {
 // ── Main Page ────────────────────────────────────────────────────
 
 const Autonomie = () => {
+  const [activeTab, setActiveTab] = useState("overview");
+
   return (
     <div className="page-container">
       <PageHeader
@@ -402,7 +405,7 @@ const Autonomie = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview" className="gap-1.5">
             <Activity className="h-3.5 w-3.5" /> Overzicht
@@ -429,7 +432,9 @@ const Autonomie = () => {
                 <CardTitle className="text-sm font-semibold">Recente Beslissingen</CardTitle>
               </CardHeader>
               <CardContent>
-                <DecisionFeed limit={15} maxHeight="350px" />
+                <DeferredMount label="Recente beslissingen laden">
+                  <DecisionFeed limit={15} maxHeight="350px" />
+                </DeferredMount>
               </CardContent>
             </Card>
             <Card>
@@ -437,7 +442,9 @@ const Autonomie = () => {
                 <CardTitle className="text-sm font-semibold">Correcties (7 dagen)</CardTitle>
               </CardHeader>
               <CardContent>
-                <CorrectionLog days={7} />
+                <DeferredMount label="Correcties laden">
+                  <CorrectionLog days={7} />
+                </DeferredMount>
               </CardContent>
             </Card>
           </div>
@@ -450,7 +457,9 @@ const Autonomie = () => {
               <CardTitle className="text-sm font-semibold">Alle Beslissingen</CardTitle>
             </CardHeader>
             <CardContent>
-              <DecisionTable />
+              <DeferredMount label="Beslissingen laden">
+                <DecisionTable />
+              </DeferredMount>
             </CardContent>
           </Card>
         </TabsContent>
@@ -470,7 +479,9 @@ const Autonomie = () => {
                 </p>
               </CardHeader>
               <CardContent>
-                <TenantLearningOverview />
+                <DeferredMount label="Leervoortgang laden">
+                  <TenantLearningOverview />
+                </DeferredMount>
               </CardContent>
             </Card>
 
@@ -486,7 +497,9 @@ const Autonomie = () => {
                 </p>
               </CardHeader>
               <CardContent>
-                <LearningProgress />
+                <DeferredMount label="Leerproces laden">
+                  <LearningProgress />
+                </DeferredMount>
               </CardContent>
             </Card>
           </div>
@@ -505,7 +518,9 @@ const Autonomie = () => {
               </p>
             </CardHeader>
             <CardContent>
-              <CorrectionLog days={30} />
+              <DeferredMount label="Correcties laden">
+                <CorrectionLog days={30} />
+              </DeferredMount>
             </CardContent>
           </Card>
         </TabsContent>
@@ -513,7 +528,9 @@ const Autonomie = () => {
         {/* Settings Tab */}
         <TabsContent value="settings">
           <div className="max-w-xl">
-            <ThresholdSettings />
+            <DeferredMount label="Instellingen laden">
+              <ThresholdSettings />
+            </DeferredMount>
           </div>
         </TabsContent>
       </Tabs>

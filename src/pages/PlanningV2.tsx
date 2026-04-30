@@ -24,6 +24,7 @@ import { RoosterTab } from "@/components/planning/rooster/RoosterTab";
 import { cn } from "@/lib/utils";
 import { useAllDriverCountryRestrictions } from "@/hooks/useDriverCountryRestrictions";
 import { getDriverCountryRestrictionIssue } from "@/lib/driverCountryRestrictions";
+import { DeferredMount } from "@/components/performance/DeferredMount";
 
 function isoWeekStart(d: Date): string {
   return format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -262,9 +263,17 @@ function PlanningV2() {
         </>
       )}
 
-      {section === "ritten" && <ChauffeursRit />}
+      {section === "ritten" && (
+        <DeferredMount label="Ritten laden">
+          <ChauffeursRit />
+        </DeferredMount>
+      )}
 
-      {section === "rooster" && <RoosterTab />}
+      {section === "rooster" && (
+        <DeferredMount label="Rooster laden">
+          <RoosterTab />
+        </DeferredMount>
+      )}
     </div>
   );
 }

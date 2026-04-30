@@ -35,6 +35,7 @@ import { QueryError } from "@/components/QueryError";
 import { TYPE_LABELS, TYPE_ORDER, STATUS_CONFIG } from "@/lib/constants/vehicleConfig";
 import { cn } from "@/lib/utils";
 import VoertuigcheckHistorie from "@/pages/VoertuigcheckHistorie";
+import { DeferredMount } from "@/components/performance/DeferredMount";
 import { toast } from "sonner";
 
 type FleetStatusSection = "beschikbaar" | "onderweg" | "onderhoud" | "defect";
@@ -315,7 +316,9 @@ export default function Fleet() {
           </div>
 
           <TabsContent value="voertuigcheck" className="mt-0">
-            <VoertuigcheckHistorie embedded />
+            <DeferredMount label="Voertuigcheck laden">
+              <VoertuigcheckHistorie embedded />
+            </DeferredMount>
           </TabsContent>
 
           <TabsContent value="voertuigen" className="mt-0 space-y-4">
@@ -740,7 +743,9 @@ export default function Fleet() {
           </TabsContent>
 
           <TabsContent value="types" className="mt-0">
-            <VehicleTypesSection />
+            <DeferredMount label="Voertuigtypes laden">
+              <VehicleTypesSection />
+            </DeferredMount>
           </TabsContent>
         </div>
       </Tabs>

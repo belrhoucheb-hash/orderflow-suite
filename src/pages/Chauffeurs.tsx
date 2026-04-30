@@ -79,6 +79,7 @@ import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 import { NewDriverDialog } from "@/components/drivers/NewDriverDialog";
 import { DriverCertificationsSection } from "@/components/drivers/DriverCertificationsSection";
 import { DriverCountryRestrictionsSection } from "@/components/drivers/DriverCountryRestrictionsSection";
+import { DeferredMount } from "@/components/performance/DeferredMount";
 import { daysUntil } from "@/lib/validation/driverSchema";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -1302,7 +1303,9 @@ export default function Chauffeurs() {
           value="certificeringen"
           className="flex-1 overflow-auto mt-4 pb-8"
         >
-          <DriverCertificationsSection />
+          <DeferredMount label="Certificeringen laden">
+            <DriverCertificationsSection />
+          </DeferredMount>
         </TabsContent>
 
         <TabsContent
@@ -1338,7 +1341,9 @@ export default function Chauffeurs() {
             </div>
 
             {restrictionDriverId ? (
-              <DriverCountryRestrictionsSection driverId={restrictionDriverId} />
+              <DeferredMount label="Landrestricties laden">
+                <DriverCountryRestrictionsSection driverId={restrictionDriverId} />
+              </DeferredMount>
             ) : (
               <div className="rounded-lg border-2 border-dashed border-border py-8 text-center text-xs text-muted-foreground">
                 Voeg eerst een chauffeur toe om landrestricties vast te leggen.

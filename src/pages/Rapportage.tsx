@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { ProfitabilityReport } from "@/components/rapportage/ProfitabilityReport";
 import Autonomie from "@/pages/Autonomie";
+import { DeferredMount } from "@/components/performance/DeferredMount";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -140,9 +141,10 @@ function parseReportOverview(value: unknown): ReportOverviewPayload {
   };
 }
 
-function useReportOverview(startDate: string, endDate: string, compareEnabled: boolean) {
+function useReportOverview(startDate: string, endDate: string, compareEnabled: boolean, enabled = true) {
   return useQuery({
     queryKey: ["rapportage-overview", startDate, endDate, compareEnabled],
+    enabled,
     queryFn: async () => {
       const { data, error } = await (supabase.rpc as any)("report_orders_overview_v1", {
         p_start_date: startDate,
@@ -155,9 +157,10 @@ function useReportOverview(startDate: string, endDate: string, compareEnabled: b
   });
 }
 
-function useVehicles() {
+function useVehicles(enabled = true) {
   return useQuery({
     queryKey: ["rapportage-vehicles"],
+    enabled,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicles")
@@ -169,9 +172,10 @@ function useVehicles() {
   });
 }
 
-function useAiUsage() {
+function useAiUsage(enabled = true) {
   return useQuery({
     queryKey: ["rapportage-ai-usage"],
+    enabled,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ai_usage_log" as any)
@@ -185,9 +189,10 @@ function useAiUsage() {
   });
 }
 
-function useVehicleAvailability() {
+function useVehicleAvailability(enabled = true) {
   return useQuery({
     queryKey: ["rapportage-vehicle-availability"],
+    enabled,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vehicle_availability")
@@ -344,10 +349,11 @@ const Rapportage = () => {
 
   const datePresets = useMemo(() => getDatePresets(), []);
 
-  const { data: overview, isLoading: overviewLoading, isError: overviewError, refetch: refetchOverview } = useReportOverview(startDate, endDate, compareEnabled);
-  const { data: vehicles = [], isLoading: vehiclesLoading } = useVehicles();
-  const { data: aiUsage = [], isLoading: aiLoading } = useAiUsage();
-  const { data: availability = [], isLoading: availLoading } = useVehicleAvailability();
+  const shouldLoadReportData = section === "rapportage";
+  const { data: overview, isLoading: overviewLoading, isError: overviewError, refetch: refetchOverview } = useReportOverview(startDate, endDate, compareEnabled, shouldLoadReportData);
+  const { data: vehicles = [], isLoading: vehiclesLoading } = useVehicles(shouldLoadReportData);
+  const { data: aiUsage = [], isLoading: aiLoading } = useAiUsage(shouldLoadReportData);
+  const { data: availability = [], isLoading: availLoading } = useVehicleAvailability(shouldLoadReportData);
 
   const isLoading = overviewLoading || vehiclesLoading || aiLoading || availLoading;
   const isError = overviewError;
@@ -608,7 +614,11 @@ const Rapportage = () => {
         )}
       </div>
 
-      {section === "autonomie" && <Autonomie />}
+      {section === "autonomie" && (
+        <DeferredMount label="Autonomie laden">
+          <Autonomie />
+        </DeferredMount>
+      )}
 
       {section === "rapportage" && isLoading && (
         <LoadingState message="Rapportage laden..." />
@@ -912,7 +922,9 @@ const Rapportage = () => {
       </motion.div>
 
       {/* Profitability report */}
-      <ProfitabilityReport />
+      <DeferredMount label="Winstgevendheid laden">
+        <ProfitabilityReport />
+      </DeferredMount>
       </>
       )}
     </div>
