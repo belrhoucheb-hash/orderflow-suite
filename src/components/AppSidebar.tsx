@@ -137,12 +137,12 @@ export function AppSidebar() {
     items: Array<{ title: string; url: string; icon: any }>,
     collapsible: boolean = false,
   ) => (
-    <SidebarGroup className="mt-5 first:mt-2 px-0 py-0">
+    <SidebarGroup className="mt-4 first:mt-2 px-0 py-0">
       <SidebarGroupLabel asChild>
         <button
           type="button"
           className={cn(
-            "mb-2 flex h-6 w-full items-center gap-2 px-2 text-left text-[10px] font-semibold uppercase tracking-[0.16em] outline-none transition-colors",
+            "mb-2 flex h-6 w-full items-center gap-2 px-2 text-left text-[10px] font-semibold uppercase tracking-[0.14em] outline-none transition-colors",
             collapsible ? "cursor-pointer hover:text-[hsl(var(--gold-light))]" : "cursor-default",
             collapsedGroups[label] ? "text-white/38" : "text-white/56",
           )}
@@ -160,7 +160,7 @@ export function AppSidebar() {
         </button>
       </SidebarGroupLabel>
       <SidebarGroupContent className={cn(collapsible && collapsedGroups[label] && "hidden")}>
-        <SidebarMenu className="space-y-1">
+        <SidebarMenu className="space-y-0.5">
           {items.filter((item) => hasRouteAccess(item.url)).map((item) => {
             const active = isActive(item.url);
             return (
@@ -176,7 +176,7 @@ export function AppSidebar() {
                     aria-label={item.title}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "group relative flex h-10 items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-all duration-150",
+                      "group relative flex h-9 items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-all duration-150",
                       active
                         ? "text-white"
                         : "text-white/68 hover:text-white"
@@ -206,7 +206,7 @@ export function AppSidebar() {
                       />
                     )}
                     <span
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] transition-colors"
                       style={active ? {
                         background: "linear-gradient(135deg, hsl(var(--gold) / 0.22), hsl(var(--gold-deep) / 0.18))",
                         color: "white",

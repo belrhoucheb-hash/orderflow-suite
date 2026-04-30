@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PageHeader } from "@/components/ui/PageHeader";
 import {
   Select,
   SelectContent,
@@ -243,35 +244,13 @@ export default function Clients() {
   return (
     <div className="flex h-full">
       <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedClient ? "lg:mr-[420px]" : ""}`}>
-        <div className="w-full space-y-4">
-          <div className="relative overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.46),hsl(var(--card))_46%,hsl(var(--gold-soft)/0.18))] px-5 py-5 shadow-[0_22px_70px_-54px_hsl(32_45%_26%/0.45)]">
-            <div
-              aria-hidden
-              className="absolute -top-6 -left-8 w-64 h-32 pointer-events-none"
-              style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)" }}
-            />
-            <div className="relative flex items-end justify-between gap-5 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-2" style={{ fontFamily: "var(--font-display)" }}>
-                  <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
-                  <span className="text-[10px] uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))] font-semibold">
-                    Relaties
-                  </span>
-                  <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums font-medium">
-                    {totalCount} {totalCount === 1 ? "klant" : "klanten"}
-                  </span>
-                </div>
-                <h1
-                  className="text-[2.25rem] leading-[1.05] font-semibold tracking-tight text-foreground"
-                  style={{ fontFamily: "var(--font-display)" }}
-                >
-                  Klanten
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Beheer klantgegevens, activiteit en commerciele status vanuit een overzicht
-                </p>
-              </div>
+        <div className="page-container">
+          <PageHeader
+            title="Klanten"
+            eyebrow="Relaties"
+            meta={`${totalCount} ${totalCount === 1 ? "klant" : "klanten"}`}
+            subtitle="Beheer klantgegevens, activiteit en commerciele status vanuit een overzicht."
+            actions={
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
@@ -282,8 +261,8 @@ export default function Clients() {
                   Nieuwe klant
                 </button>
               </div>
-            </div>
-          </div>
+            }
+          />
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <StatCard label="Totaal" value={stats?.total ?? null} />
@@ -296,21 +275,21 @@ export default function Clients() {
             />
           </div>
 
-          <div className="card--luxe p-4 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-[220px] max-w-md">
+          <div className="card--luxe p-3 flex flex-wrap items-center gap-2.5">
+            <div className="flex h-10 items-center gap-2 flex-1 min-w-[260px] max-w-lg rounded-xl border border-[hsl(var(--gold)/0.18)] bg-background/60 px-3">
               <Search className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />
               <Input
                 placeholder="Zoek op naam of email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="field-luxe flex-1"
+                className="h-9 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
               />
             </div>
 
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
               <SelectTrigger
                 aria-label="Status"
-                className="h-9 w-[140px] text-sm"
+                className="h-10 w-[150px] rounded-xl border-[hsl(var(--gold)/0.2)] bg-background/60 text-sm"
                 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
               >
                 <SelectValue placeholder="Status" />
@@ -325,7 +304,7 @@ export default function Clients() {
             <Select value={countryFilter} onValueChange={setCountryFilter}>
               <SelectTrigger
                 aria-label="Land"
-                className="h-9 w-[140px] text-sm"
+                className="h-10 w-[150px] rounded-xl border-[hsl(var(--gold)/0.2)] bg-background/60 text-sm"
                 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
               >
                 <SelectValue placeholder="Land" />
@@ -341,7 +320,7 @@ export default function Clients() {
             <Select value={openOrdersFilter} onValueChange={(v) => setOpenOrdersFilter(v as typeof openOrdersFilter)}>
               <SelectTrigger
                 aria-label="Open orders"
-                className="h-9 w-[180px] text-sm"
+                className="h-10 w-[185px] rounded-xl border-[hsl(var(--gold)/0.2)] bg-background/60 text-sm"
                 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
               >
                 <SelectValue placeholder="Open orders" />
@@ -356,7 +335,7 @@ export default function Clients() {
             <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
               <SelectTrigger
                 aria-label="Activiteit"
-                className="h-9 w-[200px] text-sm"
+                className="h-10 w-[205px] rounded-xl border-[hsl(var(--gold)/0.2)] bg-background/60 text-sm"
                 style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
               >
                 <SelectValue placeholder="Activiteit" />
@@ -700,15 +679,16 @@ function StatCard({
 }) {
   return (
     <div
-      className="rounded-2xl border border-[hsl(var(--gold)/0.2)] px-4 py-3"
+      className="relative overflow-hidden rounded-xl border border-[hsl(var(--gold)/0.18)] px-4 py-3 shadow-[0_18px_38px_-32px_hsl(var(--ink)/0.32)]"
       style={{
         background: accent
-          ? "linear-gradient(135deg, hsl(var(--gold-soft)/0.55) 0%, hsl(var(--gold-soft)/0.2) 100%)"
-          : "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.18) 100%)",
+          ? "linear-gradient(135deg, hsl(var(--gold-soft)/0.58) 0%, hsl(var(--card)) 68%)"
+          : "linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--gold-soft)/0.16) 100%)",
       }}
     >
+      <span aria-hidden className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,hsl(var(--gold)/0.5),transparent)]" />
       <div
-        className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]"
+        className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]"
         style={{ fontFamily: "var(--font-display)" }}
       >
         {label}
