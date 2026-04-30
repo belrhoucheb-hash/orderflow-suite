@@ -17,12 +17,14 @@ export interface IntegrationCredentialRow<T = Record<string, unknown>> {
 
 export function useIntegrationCredentials<T = Record<string, unknown>>(
   provider: IntegrationProvider,
+  options?: { enabled?: boolean },
 ) {
   const { tenant } = useTenant();
+  const enabled = options?.enabled ?? true;
 
   return useQuery({
     queryKey: ["integration_credentials", tenant?.id, provider],
-    enabled: !!tenant?.id,
+    enabled: enabled && !!tenant?.id,
     staleTime: 60_000,
     queryFn: async (): Promise<IntegrationCredentialRow<T>> => {
       const { data, error } = await supabase.rpc("get_integration_credentials_ui" as any, {

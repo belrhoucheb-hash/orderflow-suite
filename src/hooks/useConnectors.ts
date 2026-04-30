@@ -15,11 +15,12 @@ export interface ConnectorWithStatus extends ConnectorDefinition {
   hasCredentials: boolean;
 }
 
-export function useConnectorList() {
+export function useConnectorList(options?: { enabled?: boolean }) {
   const { tenant } = useTenant();
+  const enabled = options?.enabled ?? true;
   return useQuery({
     queryKey: ["connectors_list", tenant?.id],
-    enabled: !!tenant?.id,
+    enabled: enabled && !!tenant?.id,
     staleTime: 30_000,
     queryFn: async (): Promise<ConnectorWithStatus[]> => {
       const { data, error } = await supabase

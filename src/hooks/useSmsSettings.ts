@@ -15,12 +15,13 @@ export interface SmsSettings {
   hasMessageBirdApiKey?: boolean;
 }
 
-export function useSmsSettings() {
+export function useSmsSettings(options?: { enabled?: boolean }) {
   const { tenant } = useTenant();
+  const enabled = options?.enabled ?? true;
 
   return useQuery({
     queryKey: ["sms_settings", tenant?.id],
-    enabled: !!tenant?.id,
+    enabled: enabled && !!tenant?.id,
     staleTime: 60_000,
     queryFn: async (): Promise<SmsSettings> => {
       const { data, error } = await supabase.rpc("get_sms_settings_ui" as any);

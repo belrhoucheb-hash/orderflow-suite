@@ -263,7 +263,9 @@ describe("Settings", () => {
 
   it("shows tabs for different settings sections", () => {
     renderSettings();
-    expect(getButton(/^Algemeen$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Branding$/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Operationele inrichting$/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Communicatie$/i).length).toBeGreaterThan(0);
   });
 
   // ── handleTabChange ──
@@ -979,18 +981,12 @@ describe("Settings", () => {
   });
 
   // ── Inboxen tab ──
-  it("switches to Inboxen tab and shows empty state", async () => {
-    const user = userEvent.setup();
-    renderSettings();
-    const inboxTab = queryButton(/^Inboxen$/i);
-    expect(inboxTab).toBeTruthy();
-    if (inboxTab) {
-      await user.click(inboxTab);
-      await waitFor(() => {
-        expect(screen.getByText(/Nog geen inboxen gekoppeld/i)).toBeInTheDocument();
-      });
-      expect(screen.getAllByText(/Nieuwe inbox/i).length).toBeGreaterThan(0);
-    }
+  it("opens Inboxen tab and shows empty state", async () => {
+    renderSettings("/settings/inboxen");
+    await waitFor(() => {
+      expect(screen.getByText(/Nog geen inboxen gekoppeld/i)).toBeInTheDocument();
+    });
+    expect(screen.getAllByText(/Nieuwe inbox/i).length).toBeGreaterThan(0);
   });
 
   it("opens inboxen tab from URL path", () => {

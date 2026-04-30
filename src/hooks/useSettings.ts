@@ -12,12 +12,16 @@ export type SettingsCategory =
   | "exceptions"
   | "eta_notifications";
 
-export function useLoadSettings<T = Record<string, unknown>>(category: SettingsCategory) {
+export function useLoadSettings<T = Record<string, unknown>>(
+  category: SettingsCategory,
+  options?: { enabled?: boolean },
+) {
   const { tenant } = useTenant();
+  const enabled = options?.enabled ?? true;
 
   return useQuery({
     queryKey: ["tenant_settings", tenant?.id, category],
-    enabled: !!tenant?.id,
+    enabled: enabled && !!tenant?.id,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase

@@ -372,6 +372,26 @@ const Settings = () => {
   const navigate = useNavigate();
   const { tenant } = useTenant();
   const { t, i18n } = useTranslation();
+  const activeSettingsTab = useMemo(() => {
+    const path = location.pathname;
+    if (path.includes("/operationele-inrichting")) return "operationele-inrichting";
+    if (path.includes("/stamgegevens")) return "operationele-inrichting";
+    if (path.includes("/rooster-types")) return "operationele-inrichting";
+    if (path.includes("/sla")) return "operationele-inrichting";
+    if (path.includes("/uitzonderingen")) return "operationele-inrichting";
+    if (path.includes("/prijslogica")) return "operationele-inrichting";
+    if (path.includes("/tarieven")) return "operationele-inrichting";
+    if (path.includes("/kosten")) return "operationele-inrichting";
+    if (path.includes("/branding")) return "branding";
+    if (path.includes("/notificaties")) return "notificaties";
+    if (path.includes("/sms")) return "sms";
+    if (path.includes("/eta-meldingen")) return "eta-meldingen";
+    if (path.includes("/integraties")) return "integraties";
+    if (path.includes("/inboxen")) return "inboxen";
+    if (path.includes("/webhooks")) return "webhooks";
+    if (path.includes("/api-tokens")) return "api-tokens";
+    return "algemeen";
+  }, [location.pathname]);
 
   // Local state mirrors i18n.language so React always re-renders on change.
   const [currentLang, setCurrentLang] = useState(i18n.language || "nl");
@@ -566,7 +586,9 @@ const Settings = () => {
   );
   const [snelstartBaseline, setSnelstartBaseline] = useState<string>("");
   const [snelstartTesting, setSnelstartTesting] = useState(false);
-  const { data: snelstartSaved } = useIntegrationCredentials<SnelstartFields>("snelstart");
+  const { data: snelstartSaved } = useIntegrationCredentials<SnelstartFields>("snelstart", {
+    enabled: false,
+  });
   const saveSnelstart = useSaveIntegrationCredentials<SnelstartFields>("snelstart");
   useEffect(() => {
     if (snelstartSaved === undefined) return;
@@ -638,10 +660,32 @@ const Settings = () => {
   };
 
   // -- Settings persistence hooks --
-  const { data: savedIntegrations } = useLoadSettings<typeof integrations>("integrations");
-  const { data: savedNotifications } = useLoadSettings<typeof notifications>("notifications");
-  const { data: savedSms } = useSmsSettings();
-  const { data: savedSla } = useLoadSettings("sla");
+  const activeOperationSectionForLoading = useMemo(() => {
+    const path = location.pathname;
+    if (path.includes("/rooster-types")) return "rooster-types";
+    if (path.includes("/prijslogica")) return "prijslogica";
+    if (path.includes("/tarieven")) return "prijslogica";
+    if (path.includes("/kosten")) return "prijslogica";
+    if (path.includes("/sla")) return "sla";
+    if (path.includes("/uitzonderingen")) return "uitzonderingen";
+    return "stamgegevens";
+  }, [location.pathname]);
+  const shouldLoadNotifications = activeSettingsTab === "algemeen" || activeSettingsTab === "notificaties";
+  const shouldLoadSms = activeSettingsTab === "algemeen" || activeSettingsTab === "sms";
+  const shouldLoadSla =
+    activeSettingsTab === "algemeen" ||
+    (activeSettingsTab === "operationele-inrichting" && activeOperationSectionForLoading === "sla");
+  const shouldLoadConnectors = activeSettingsTab === "algemeen" || activeSettingsTab === "integraties";
+  const shouldLoadSmtp = activeSettingsTab === "notificaties";
+
+  const { data: savedIntegrations } = useLoadSettings<typeof integrations>("integrations", {
+    enabled: false,
+  });
+  const { data: savedNotifications } = useLoadSettings<typeof notifications>("notifications", {
+    enabled: shouldLoadNotifications,
+  });
+  const { data: savedSms } = useSmsSettings({ enabled: shouldLoadSms });
+  const { data: savedSla } = useLoadSettings("sla", { enabled: shouldLoadSla });
 
   const saveIntegrations = useSaveSettings("integrations");
   const saveNotifications = useSaveSettings("notifications");
@@ -654,7 +698,7 @@ const Settings = () => {
   const [smsBaseline, setSmsBaseline] = useState<string>("");
   const [integrationsBaseline, setIntegrationsBaseline] = useState<string>("");
   const [slaBaseline, setSlaBaseline] = useState<string>("");
-  const connectorList = useConnectorList();
+  const connectorList = useConnectorList({ enabled: shouldLoadConnectors });
   const [slaSettings, setSlaSettings] = useState(DEFAULT_SLA_SETTINGS);
 
   // Load saved settings into state when fetched
@@ -916,7 +960,9 @@ const Settings = () => {
   const [smtpSettings, setSmtpSettings] = useState<{ enabled: boolean; fields: SmtpFields }>(
     { enabled: false, fields: { ...EMPTY_SMTP } },
   );
-  const { data: smtpSaved } = useIntegrationCredentials<SmtpFields>("smtp");
+  const { data: smtpSaved } = useIntegrationCredentials<SmtpFields>("smtp", {
+    enabled: shouldLoadSmtp,
+  });
   const saveSmtp = useSaveIntegrationCredentials<SmtpFields>("smtp");
   useEffect(() => {
     if (smtpSaved === undefined) return;
@@ -943,7 +989,7 @@ const Settings = () => {
     }
   };
 
-  const activeTab = getActiveTab();
+  const activeTab = activeSettingsTab;
   const connectorSummary = useMemo(() => {
     const items = connectorList.data ?? [];
     return {
