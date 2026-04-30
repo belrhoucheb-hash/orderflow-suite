@@ -192,7 +192,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "Operations",
+    title: "Operatie",
     items: [
       {
         value: "operationele-inrichting",
@@ -1122,7 +1122,7 @@ const Settings = () => {
       ],
     },
     {
-      title: "Operations",
+      title: "Operatie",
       description: "Masterdata, roosters en prijslogica in balans.",
       icon: Truck,
       target: "operationele-inrichting",

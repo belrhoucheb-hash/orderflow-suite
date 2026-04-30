@@ -376,7 +376,7 @@ const Facturatie = () => {
             <div className="mb-2 flex items-center gap-2" style={{ fontFamily: "var(--font-display)" }}>
               <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
               <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))]">
-                Finance
+                Financieel
               </span>
               <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
               <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums">
@@ -390,7 +390,7 @@ const Facturatie = () => {
               {t("pages.invoicing.title")}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Facturen, openstaand en leveringen die nog door je werktafel moeten.
+              Beheer facturen, openstaande posten en leveringen die klaarstaan voor verwerking.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">

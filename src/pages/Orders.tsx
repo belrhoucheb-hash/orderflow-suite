@@ -323,9 +323,9 @@ const Orders = () => {
     <div className="page-container">
       {/* Luxe page header — editorial 2026 stijl, matcht OrderDetail */}
       <PageHeader
-        eyebrow="Operations"
+        eyebrow="Operatie"
         meta={`${totalCount} ${totalCount === 1 ? "order" : "orders"}`}
-        title="Orderlijst"
+        title="Orders"
         actions={
           <>
             <button

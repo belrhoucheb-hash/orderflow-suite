@@ -255,7 +255,7 @@ export default function Clients() {
                 <div className="flex items-center gap-2 mb-2" style={{ fontFamily: "var(--font-display)" }}>
                   <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
                   <span className="text-[10px] uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))] font-semibold">
-                    Operations
+                    Relaties
                   </span>
                   <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
                   <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums font-medium">
@@ -269,7 +269,7 @@ export default function Clients() {
                   Klanten
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Beheer klantgegevens, activiteit en commerciële status vanuit één overzicht
+                  Beheer klantgegevens, activiteit en commerciele status vanuit een overzicht
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">

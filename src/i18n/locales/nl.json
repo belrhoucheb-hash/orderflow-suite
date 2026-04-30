@@ -6,7 +6,7 @@
     "clients": "Klanten",
     "planning": "Planbord",
     "dispatch": "Dispatch",
-    "tracking": "Live Tracking",
+    "tracking": "Realtime tracking",
     "trips": "Ritoverzicht",
     "drivers": "Chauffeurs",
     "fleet": "Vloot",
@@ -52,10 +52,10 @@
   "pages": {
     "dashboard": {
       "title": "Dashboard",
-      "subtitle": "Overzicht van uw TMS platform"
+      "subtitle": "Overzicht van je TMS-platform"
     },
     "orders": {
-      "title": "Orderlijst",
+      "title": "Orders",
       "search": "Zoek op ordernummer of klant...",
       "newOrder": "Nieuwe order",
       "import": "Import"
@@ -71,8 +71,8 @@
       "title": "Dispatch"
     },
     "tracking": {
-      "title": "Live Tracking",
-      "subtitle": "Real-time overzicht van alle actieve ritten"
+      "title": "Realtime tracking",
+      "subtitle": "Realtime overzicht van alle actieve ritten"
     },
     "fleet": {
       "title": "Vloot",
@@ -93,7 +93,7 @@
     },
     "settings": {
       "title": "Instellingen",
-      "subtitle": "Beheer uw TMS platform configuratie en stamgegevens.",
+      "subtitle": "Beheer je TMS-platform, configuratie en stamgegevens.",
       "tabs": {
         "general": "Algemeen",
         "masterData": "Stamgegevens",

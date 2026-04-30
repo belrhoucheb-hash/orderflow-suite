@@ -451,7 +451,7 @@ const ChauffeursRit = () => {
       {/* Header */}
       <PageHeader
         eyebrow="Planning"
-        title="Chauffeurs Rit"
+        title="Chauffeursrit"
         subtitle="Ritdetails per chauffeur met stops, tijden en ladinginfo"
         actions={
           <div className="flex items-center gap-2">

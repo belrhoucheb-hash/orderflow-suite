@@ -666,7 +666,7 @@ const Dispatch = () => {
             <div className="mb-2 flex items-center gap-2" style={{ fontFamily: "var(--font-display)" }}>
               <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
               <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))]">
-                Operations
+                Operatie
               </span>
               <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums">
                 {filtered.length} {filtered.length === 1 ? "rit" : "ritten"}

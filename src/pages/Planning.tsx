@@ -789,11 +789,11 @@ const Planning = () => {
               <div className="flex items-center gap-2 mb-2" style={{ fontFamily: "var(--font-display)" }}>
                 <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
                 <span className="text-[10px] uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))] font-semibold">
-                  Operations
+                  Operatie
                 </span>
                 <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
                 <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums font-medium">
-                  {totalUnassigned} beschikbaar · {totalAssigned} ingepland
+                  {totalUnassigned} beschikbaar - {totalAssigned} ingepland
                 </span>
               </div>
               <h1

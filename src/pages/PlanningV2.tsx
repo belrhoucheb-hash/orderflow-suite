@@ -167,7 +167,7 @@ function PlanningV2() {
         title="Planbord"
         subtitle={
           section === "planning"
-            ? `Dagsetup, auto-plan en swim-lanes per chauffeur voor ${prettyDate}`
+            ? `Dagvoorbereiding, automatisch plannen en rijstroken per chauffeur voor ${prettyDate}`
             : section === "ritten"
               ? "Ritten per chauffeur, samenstellen en dispatchen"
               : "Chauffeurs inplannen per dag of week, los van orders"
