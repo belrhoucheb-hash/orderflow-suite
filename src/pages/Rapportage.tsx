@@ -542,26 +542,26 @@ const Rapportage = () => {
 
         {/* Date range picker + Export */}
         {section === "rapportage" && (
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex w-full flex-col items-start gap-2 lg:w-auto lg:items-end">
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
             <label className="text-xs text-muted-foreground font-medium">Van</label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-10 min-w-[9.5rem] flex-1 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary sm:h-8 sm:flex-none"
             />
             <label className="text-xs text-muted-foreground font-medium">Tot</label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-10 min-w-[9.5rem] flex-1 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary sm:h-8 sm:flex-none"
             />
             <button
               onClick={handleExport}
               disabled={exportMode !== null}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60 sm:h-8 sm:flex-none"
             >
               {exportMode === "generic" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               Exporteer
@@ -569,7 +569,7 @@ const Rapportage = () => {
             <button
               onClick={handleExportPDF}
               disabled={exportMode !== null}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-foreground text-xs font-medium hover:bg-muted transition-colors"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60 sm:h-8 sm:flex-none"
             >
               {exportMode === "pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
               Exporteer PDF
@@ -577,7 +577,7 @@ const Rapportage = () => {
             <button
               onClick={handleExportCSV}
               disabled={exportMode !== null}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-foreground text-xs font-medium hover:bg-muted transition-colors"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60 sm:h-8 sm:flex-none"
             >
               {exportMode === "csv" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
               Exporteer CSV
@@ -585,7 +585,7 @@ const Rapportage = () => {
           </div>
 
           {/* Quick presets */}
-          <div className="flex items-center gap-1 flex-wrap">
+          <div className="flex w-full flex-wrap items-center gap-1 lg:w-auto lg:justify-end">
             {datePresets.map((preset) => (
               <button
                 key={preset.label}
@@ -737,8 +737,8 @@ const Rapportage = () => {
               {statusDistribution.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">Geen orderdata beschikbaar</div>
               ) : (
-                <div className="flex items-center gap-4">
-                  <ResponsiveContainer width="60%" height={220}>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <ResponsiveContainer width="100%" height={220} className="sm:!w-[60%]">
                     <PieChart>
                       <Pie
                         data={statusDistribution}
@@ -761,7 +761,7 @@ const Rapportage = () => {
                       />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="flex-1 space-y-1.5">
+                  <div className="w-full space-y-1.5 sm:flex-1">
                     {statusDistribution.map((entry) => (
                       <div key={entry.name} className="flex items-center gap-2">
                         <div
@@ -794,8 +794,8 @@ const Rapportage = () => {
               ) : (
                 <div className="space-y-3">
                   {vehicleUtilisation.map((v) => (
-                    <div key={v.name} className="flex items-center gap-3">
-                      <span className="text-sm font-medium w-20 truncate">{v.name}</span>
+                    <div key={v.name} className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
+                      <span className="w-full text-sm font-medium truncate sm:w-20">{v.name}</span>
                       <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
                         <div
                           className={cn(
@@ -852,7 +852,19 @@ const Rapportage = () => {
                     </div>
                   </div>
                   {aiStats.byModel.length > 0 && (
-                    <div className="overflow-x-auto">
+                    <>
+                    <div className="space-y-2 md:hidden">
+                      {aiStats.byModel.map((m) => (
+                        <div key={m.model} className="rounded-lg border border-border/40 bg-muted/20 p-3">
+                          <p className="truncate font-mono text-sm font-medium text-foreground">{m.model}</p>
+                          <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                            <span className="tabular-nums">{m.calls} calls</span>
+                            <span className="font-semibold tabular-nums text-foreground">&euro;{m.cost.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="hidden overflow-x-auto md:block">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-border/30 bg-muted/20">
@@ -872,6 +884,7 @@ const Rapportage = () => {
                         </tbody>
                       </table>
                     </div>
+                    </>
                   )}
                 </div>
               )}
@@ -893,7 +906,26 @@ const Rapportage = () => {
             {topClients.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">Geen klantdata beschikbaar</div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="space-y-2 md:hidden">
+                {topClients.map((c, i) => (
+                  <div key={c.name} className="rounded-lg border border-border/40 bg-muted/20 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">#{i + 1}</p>
+                        <p className="mt-1 truncate text-sm font-medium text-foreground">{c.name}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold tabular-nums text-foreground">{c.count}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(overview?.kpis.totalOrders ?? 0) > 0 ? ((c.count / (overview?.kpis.totalOrders ?? 1)) * 100).toFixed(1) : 0}%
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border/30 bg-muted/20">
@@ -917,6 +949,7 @@ const Rapportage = () => {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </CardContent>
         </Card>
