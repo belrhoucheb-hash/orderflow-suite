@@ -93,6 +93,44 @@ describe("order draft readiness", () => {
     expect(result.blockers.some((issue) => issue.key === "delivery_time_window")).toBe(true);
   });
 
+  it("keeps blocking after cargo is reset back to zero", () => {
+    const result = validateOrderDraft(baseDraft({
+      cargoLines: [{ id: "cargo-1", quantity: 0, unit: "Pallets", weightKg: 0 }],
+    }));
+
+    expect(result.persistedStatus).toBe("DRAFT");
+    expect(result.blockers.map((issue) => issue.key)).toEqual(
+      expect.arrayContaining(["aantal", "gewicht"]),
+    );
+  });
+
+  it("blocks route reuse when pickup and delivery resolve to the same address", () => {
+    const draft = baseDraft();
+    draft.stops[1] = {
+      ...draft.stops[1],
+      address: { ...draft.stops[0].address },
+    };
+
+    const result = validateOrderDraft(draft);
+
+    expect(result.blockers.some((issue) => issue.key === "adrescontrole")).toBe(true);
+  });
+
+  it("requires EDD or X-RAY after switching road transport to unsecured air freight", () => {
+    const result = validateOrderDraft(baseDraft({
+      transport: {
+        type: "Luchtvracht",
+        department: "Export",
+        vehicleType: null,
+        secure: false,
+        pmtMethod: null,
+        manualOverrides: { transportType: true },
+      },
+    }));
+
+    expect(result.blockers.some((issue) => issue.key === "screening")).toBe(true);
+  });
+
   it("only blocks vehicle when a chosen vehicle does not fit", () => {
     const result = validateOrderDraft(baseDraft({
       cargoLines: [{ id: "cargo-1", quantity: 10, unit: "Pallets", weightKg: 2500 }],

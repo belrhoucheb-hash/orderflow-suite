@@ -146,6 +146,7 @@ export interface OrderLeg {
 export interface CreateShipmentResult {
   shipment: Shipment;
   legs: OrderLeg[];
+  idempotent?: boolean;
 }
 
 const VALID_ORDER_SOURCES = new Set(["INTERN", "EMAIL", "PORTAL", "EDI"]);
@@ -545,4 +546,36 @@ export async function createShipmentWithLegs(
   }
 
   return { shipment, legs };
+}
+
+export async function commitOrderDraftWithLegs(input: {
+  draftId: string;
+  tenantId: string;
+  expectedUpdatedAt?: string | null;
+  booking: BookingInput;
+  payload: Record<string, unknown>;
+  validationResult: Record<string, unknown>;
+  manualOverrides: Record<string, unknown>;
+  commitKey?: string | null;
+}): Promise<CreateShipmentResult> {
+  const { data, error } = await (supabase as any).rpc("commit_order_draft_v1", {
+    p_draft_id: input.draftId,
+    p_tenant_id: input.tenantId,
+    p_expected_updated_at: input.expectedUpdatedAt ?? null,
+    p_booking: input.booking,
+    p_payload: input.payload,
+    p_validation_result: input.validationResult,
+    p_manual_overrides: input.manualOverrides,
+    p_commit_key: input.commitKey ?? `draft:${input.draftId}`,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Order draft commit RPC faalde.");
+  }
+
+  return {
+    shipment: data?.shipment as Shipment,
+    legs: (data?.legs ?? []) as OrderLeg[],
+    idempotent: Boolean(data?.idempotent),
+  };
 }

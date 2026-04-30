@@ -43,7 +43,7 @@ import {
   type ClientLocation,
 } from "@/hooks/useClients";
 import { useClientContacts } from "@/hooks/useClientContacts";
-import { createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
+import { commitOrderDraftWithLegs, createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { TRACKABLE_FIELDS, defaultExpectedBy } from "@/hooks/useOrderInfoRequests";
@@ -74,7 +74,8 @@ import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
 type WizardStep = "intake" | "route" | "cargo" | "financial" | "review";
-type ServerDraftLifecycleStatus = "DRAFT" | "PENDING" | "NEEDS_REVIEW" | "PLANNED" | "CANCELLED" | "ON_HOLD";
+type ServerDraftLifecycleStatus = "DRAFT" | "PENDING" | "NEEDS_REVIEW" | "PLANNED" | "CANCELLED" | "ON_HOLD" | "ABANDONED";
+type DraftSaveStatus = "idle" | "creating" | "saving" | "saved" | "error" | "conflict";
 
 interface FreightLine {
   id: string;
@@ -843,6 +844,11 @@ const NewOrder = () => {
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
   const [serverDraftId, setServerDraftId] = useState<string | null>(null);
   const [serverDraftReady, setServerDraftReady] = useState(false);
+  const [serverDraftUpdatedAt, setServerDraftUpdatedAt] = useState<string | null>(null);
+  const [serverDraftUpdatedBy, setServerDraftUpdatedBy] = useState<string | null>(null);
+  const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>("idle");
+  const [draftSaveError, setDraftSaveError] = useState<string | null>(null);
+  const [serverBaselineSignature, setServerBaselineSignature] = useState<string | null>(null);
   const serverDraftCreateStartedRef = useRef(false);
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pickupLookup, setPickupLookup] = useState("");
@@ -2497,18 +2503,35 @@ const NewOrder = () => {
       reviewActiveQuestion,
     },
     pricingPayload,
+    observability: {
+      step: wizardStep,
+      score: orderReadiness.score,
+      blockers: orderReadiness.blockers.length,
+      warnings: orderReadiness.warnings.length,
+      infos: orderReadiness.infos.length,
+    },
     savedAt: new Date().toISOString(),
   }), [
     cargoActiveQuestion,
     draftPayload,
     intakeActiveQuestion,
     orderDraft,
+    orderReadiness.blockers.length,
+    orderReadiness.infos.length,
+    orderReadiness.score,
+    orderReadiness.warnings.length,
     pricingPayload,
     readinessStatus,
     reviewActiveQuestion,
     routeActiveQuestion,
     wizardStep,
   ]);
+
+  const describeDraftEditor = useCallback((updatedBy?: string | null) => {
+    if (!updatedBy) return "een andere sessie";
+    if (updatedBy === user?.id) return "jouw andere sessie";
+    return "een andere gebruiker";
+  }, [user?.id]);
 
   const upsertServerDraft = useCallback(async (nextStatus: ServerDraftLifecycleStatus = "DRAFT", committedShipmentId?: string | null) => {
     if (!tenant?.id || initialClientId || fromOrderId) return null;
@@ -2523,52 +2546,94 @@ const NewOrder = () => {
       validation_engine_version: ORDER_VALIDATION_ENGINE_VERSION,
       pricing_engine_version: ORDER_PRICING_ENGINE_VERSION,
       updated_by: actorId,
-      ...(committedShipmentId ? { committed_shipment_id: committedShipmentId, committed_at: new Date().toISOString() } : {}),
+      last_activity_at: new Date().toISOString(),
+      analytics: (serverDraftPayload as any).observability ?? {},
+      ...(committedShipmentId && draftId
+        ? {
+            committed_shipment_id: committedShipmentId,
+            committed_at: new Date().toISOString(),
+            commit_idempotency_key: `draft:${draftId}`,
+          }
+        : {}),
     };
 
     if (!draftId) {
       const { data, error } = await (supabase as any)
         .from("order_drafts")
         .insert({ ...payload, created_by: actorId })
-        .select("id")
+        .select("id, updated_at, updated_by")
         .single();
       if (error) throw error;
       draftId = data?.id ?? null;
       if (draftId) {
         setServerDraftId(draftId);
+        setServerDraftUpdatedAt(data?.updated_at ?? null);
+        setServerDraftUpdatedBy(data?.updated_by ?? null);
+        setServerBaselineSignature(formSignature);
         if (serverDraftStorageKey) window.localStorage.setItem(serverDraftStorageKey, draftId);
       }
       return draftId;
     }
 
-    const { data: updatedDraft, error } = await (supabase as any)
+    let updateQuery = (supabase as any)
       .from("order_drafts")
       .update(payload)
       .eq("id", draftId)
-      .eq("tenant_id", tenant.id)
-      .select("id")
+      .eq("tenant_id", tenant.id);
+    if (serverDraftUpdatedAt) {
+      updateQuery = updateQuery.eq("updated_at", serverDraftUpdatedAt);
+    }
+    const { data: updatedDraft, error } = await updateQuery
+      .select("id, updated_at, updated_by")
       .maybeSingle();
     if (error) throw error;
     if (!updatedDraft?.id) {
+      const { data: latestDraft, error: latestError } = await (supabase as any)
+        .from("order_drafts")
+        .select("id, updated_at, updated_by")
+        .eq("id", draftId)
+        .eq("tenant_id", tenant.id)
+        .maybeSingle();
+      if (latestError) throw latestError;
+      if (latestDraft?.id) {
+        setServerDraftUpdatedAt(latestDraft.updated_at ?? null);
+        setServerDraftUpdatedBy(latestDraft.updated_by ?? null);
+        setDraftSaveStatus("conflict");
+        const message = `Deze order is zojuist aangepast door ${describeDraftEditor(latestDraft.updated_by)}.`;
+        setDraftSaveError(message);
+        throw new Error(message);
+      }
       if (serverDraftStorageKey) window.localStorage.removeItem(serverDraftStorageKey);
       setServerDraftId(null);
+      setServerDraftUpdatedAt(null);
+      setServerDraftUpdatedBy(null);
       const { data, error: insertError } = await (supabase as any)
         .from("order_drafts")
         .insert({ ...payload, created_by: actorId })
-        .select("id")
+        .select("id, updated_at, updated_by")
         .single();
       if (insertError) throw insertError;
       draftId = data?.id ?? null;
       if (draftId) {
         setServerDraftId(draftId);
+        setServerDraftUpdatedAt(data?.updated_at ?? null);
+        setServerDraftUpdatedBy(data?.updated_by ?? null);
+        setServerBaselineSignature(formSignature);
         if (serverDraftStorageKey) window.localStorage.setItem(serverDraftStorageKey, draftId);
       }
+    } else {
+      setServerDraftUpdatedAt(updatedDraft.updated_at ?? null);
+      setServerDraftUpdatedBy(updatedDraft.updated_by ?? null);
+      setServerBaselineSignature(formSignature);
     }
     return draftId;
   }, [
+    describeDraftEditor,
+    formSignature,
     fromOrderId,
     initialClientId,
     manualOverridesSnapshot,
+    serverDraftUpdatedAt,
     serverDraftId,
     serverDraftPayload,
     serverDraftStorageKey,
@@ -2582,13 +2647,65 @@ const NewOrder = () => {
     serverDraftCreateStartedRef.current = true;
     const existingDraftId = window.localStorage.getItem(serverDraftStorageKey);
     if (existingDraftId) {
-      setServerDraftId(existingDraftId);
-      setServerDraftReady(true);
+      void (async () => {
+        try {
+          setDraftSaveStatus("creating");
+          const { data, error } = await (supabase as any)
+            .from("order_drafts")
+            .select("id, updated_at, updated_by")
+            .eq("id", existingDraftId)
+            .eq("tenant_id", tenant.id)
+            .maybeSingle();
+          if (error) throw error;
+          if (!data?.id) {
+            window.localStorage.removeItem(serverDraftStorageKey);
+            const { data: created, error: createError } = await (supabase as any)
+              .from("order_drafts")
+              .insert({
+                tenant_id: tenant.id,
+                status: "DRAFT",
+                payload: serverDraftPayload,
+                validation_result: validationSnapshot,
+                manual_overrides: manualOverridesSnapshot,
+                validation_engine_version: ORDER_VALIDATION_ENGINE_VERSION,
+                pricing_engine_version: ORDER_PRICING_ENGINE_VERSION,
+                last_activity_at: new Date().toISOString(),
+                analytics: (serverDraftPayload as any).observability ?? {},
+                created_by: user?.id ?? null,
+                updated_by: user?.id ?? null,
+              })
+              .select("id, updated_at, updated_by")
+              .single();
+            if (createError) throw createError;
+            if (created?.id) {
+              setServerDraftId(created.id);
+              setServerDraftUpdatedAt(created.updated_at ?? null);
+              setServerDraftUpdatedBy(created.updated_by ?? null);
+              setServerBaselineSignature(formSignature);
+              window.localStorage.setItem(serverDraftStorageKey, created.id);
+            }
+            setDraftSaveStatus("saved");
+            return;
+          }
+          setServerDraftId(data.id);
+          setServerDraftUpdatedAt(data.updated_at ?? null);
+          setServerDraftUpdatedBy(data.updated_by ?? null);
+          setServerBaselineSignature(formSignature);
+          setDraftSaveStatus("saved");
+        } catch (error) {
+          console.warn("[NewOrder] server draft kon niet worden hervat:", error);
+          setDraftSaveStatus("error");
+          setDraftSaveError("Serverconcept kon niet worden hervat.");
+        } finally {
+          setServerDraftReady(true);
+        }
+      })();
       return;
     }
 
     void (async () => {
       try {
+        setDraftSaveStatus("creating");
         const { data, error } = await (supabase as any)
           .from("order_drafts")
           .insert({
@@ -2599,20 +2716,28 @@ const NewOrder = () => {
             manual_overrides: manualOverridesSnapshot,
             validation_engine_version: ORDER_VALIDATION_ENGINE_VERSION,
             pricing_engine_version: ORDER_PRICING_ENGINE_VERSION,
+            last_activity_at: new Date().toISOString(),
+            analytics: (serverDraftPayload as any).observability ?? {},
             created_by: user?.id ?? null,
             updated_by: user?.id ?? null,
           })
-          .select("id")
+          .select("id, updated_at, updated_by")
           .single();
         if (error) throw error;
         const id = data?.id ?? null;
         if (id) {
           setServerDraftId(id);
+          setServerDraftUpdatedAt(data?.updated_at ?? null);
+          setServerDraftUpdatedBy(data?.updated_by ?? null);
+          setServerBaselineSignature(formSignature);
           window.localStorage.setItem(serverDraftStorageKey, id);
         }
+        setDraftSaveStatus("saved");
         setServerDraftReady(true);
       } catch (error) {
         console.warn("[NewOrder] server draft kon niet worden aangemaakt:", error);
+        setDraftSaveStatus("error");
+        setDraftSaveError("Serverconcept kon niet worden aangemaakt.");
         serverDraftCreateStartedRef.current = false;
         setServerDraftReady(true);
       }
@@ -2624,6 +2749,7 @@ const NewOrder = () => {
     serverDraftReady,
     serverDraftStorageKey,
     serverDraftPayload,
+    formSignature,
     tenant?.id,
     user?.id,
     validationSnapshot,
@@ -2633,9 +2759,23 @@ const NewOrder = () => {
     if (!serverDraftReady || !serverDraftId || !draftRestored || !prefillReady || initialClientId || fromOrderId) return;
     if (draftAutosaveTimerRef.current) window.clearTimeout(draftAutosaveTimerRef.current);
     draftAutosaveTimerRef.current = window.setTimeout(() => {
+      setDraftSaveStatus("saving");
+      setDraftSaveError(null);
       void upsertServerDraft("DRAFT")
-        .then(() => setLastDraftSavedAt(new Date().toISOString()))
-        .catch((error) => console.warn("[NewOrder] server draft autosave faalde:", error));
+        .then(() => {
+          setLastDraftSavedAt(new Date().toISOString());
+          setDraftSaveStatus("saved");
+        })
+        .catch((error) => {
+          console.warn("[NewOrder] server draft autosave faalde:", error);
+          if (error instanceof Error && error.message.startsWith("Deze order is zojuist aangepast")) {
+            setDraftSaveStatus("conflict");
+            setDraftSaveError(error.message);
+          } else {
+            setDraftSaveStatus("error");
+            setDraftSaveError("Opslaan mislukt - probeer opnieuw.");
+          }
+        });
     }, 900);
     return () => {
       if (draftAutosaveTimerRef.current) window.clearTimeout(draftAutosaveTimerRef.current);
@@ -2660,12 +2800,24 @@ const NewOrder = () => {
 
     if (!andClose) {
       if (draftStorageKey) {
-        window.localStorage.setItem(draftStorageKey, formSignature);
+        window.localStorage.setItem(draftStorageKey, JSON.stringify({ ...draftPayload, savedAt: new Date().toISOString() }));
       }
-      await upsertServerDraft("DRAFT").catch((error) => {
+      setDraftSaveStatus("saving");
+      setDraftSaveError(null);
+      try {
+        await upsertServerDraft("DRAFT");
+      } catch (error) {
         console.warn("[NewOrder] server draft opslaan faalde:", error);
-        toast.warning("Lokaal concept opgeslagen, serverconcept nog niet bijgewerkt");
-      });
+        const message = error instanceof Error && error.message.startsWith("Deze order is zojuist aangepast")
+          ? error.message
+          : "Opslaan mislukt - probeer opnieuw.";
+        setDraftSaveStatus(error instanceof Error && error.message.startsWith("Deze order is zojuist aangepast") ? "conflict" : "error");
+        setDraftSaveError(message);
+        toast.error(message);
+        return;
+      }
+      setDraftSaveStatus("saved");
+      setLastDraftSavedAt(new Date().toISOString());
       setDirty(false);
       toast.success("Concept opgeslagen", {
         description: serverDraftId ? `Draft ${serverDraftId.slice(0, 8)} blijft veilig bewaard.` : "De order blijft als draft staan totdat je gereedmeldt.",
@@ -2774,11 +2926,24 @@ const NewOrder = () => {
       if (serverDraftId) {
         const { data: draftRow, error: draftFetchError } = await (supabase as any)
           .from("order_drafts")
-          .select("committed_shipment_id")
+          .select("committed_shipment_id, updated_at, updated_by")
           .eq("id", serverDraftId)
           .eq("tenant_id", tenant.id)
           .maybeSingle();
         if (draftFetchError) throw draftFetchError;
+        if (draftRow?.updated_at && serverDraftUpdatedAt && draftRow.updated_at !== serverDraftUpdatedAt) {
+          const message = `Deze order is zojuist aangepast door ${describeDraftEditor(draftRow.updated_by)}.`;
+          setDraftSaveStatus("conflict");
+          setDraftSaveError(message);
+          toast.error(message, {
+            description: "Gereedmelden is gestopt zodat we geen oudere lokale versie committen.",
+          });
+          return;
+        }
+        if (draftRow?.updated_at) {
+          setServerDraftUpdatedAt(draftRow.updated_at);
+          setServerDraftUpdatedBy(draftRow.updated_by ?? null);
+        }
         if (draftRow?.committed_shipment_id) {
           toast.info("Deze draft was al gereedgemeld", {
             description: "Ik voorkom een dubbele order en open de orderlijst.",
@@ -2906,11 +3071,18 @@ const NewOrder = () => {
         },
       };
 
-      const { shipment, legs } = await createShipmentWithLegs(booking, tenant.id);
-      await upsertServerDraft("PENDING", shipment.id).catch((error) => {
-        console.warn("[NewOrder] server draft commit snapshot faalde:", error);
-        toast.warning("Order is gereedgemeld, maar draft-audit kon niet volledig worden bijgewerkt");
-      });
+      const { shipment, legs, idempotent } = serverDraftId
+        ? await commitOrderDraftWithLegs({
+            draftId: serverDraftId,
+            tenantId: tenant.id,
+            expectedUpdatedAt: serverDraftUpdatedAt,
+            booking,
+            payload: serverDraftPayload as Record<string, unknown>,
+            validationResult: validationSnapshot as Record<string, unknown>,
+            manualOverrides: manualOverridesSnapshot,
+            commitKey: `draft:${serverDraftId}`,
+          })
+        : await createShipmentWithLegs(booking, tenant.id);
       const addressBookWrites: Array<Promise<unknown>> = [];
       const pickupAddressBookLabelValue =
         pickupAddressBookLabel?.key === buildAddressBookKey(pickupAddr)
@@ -3071,7 +3243,9 @@ const NewOrder = () => {
       }
 
       const baseMsg =
-        legs.length > 1
+        idempotent
+          ? "Deze draft was al gereedgemeld"
+          : legs.length > 1
           ? `Order gereedgemeld met ${legs.length} legs (${legs.map((l) => l.leg_role).join(" + ")})`
           : "Order gereedgemeld";
       toast.success(
@@ -3095,7 +3269,16 @@ const NewOrder = () => {
         navigate("/orders");
       }
     } catch (e: any) {
-      toast.error(e.message || "Fout bij opslaan");
+      const message = e?.message || "Fout bij opslaan";
+      if (message.includes("DRAFT_CONFLICT")) {
+        setDraftSaveStatus("conflict");
+        setDraftSaveError("Deze order is zojuist aangepast door een andere sessie.");
+        toast.error("Deze order is zojuist aangepast door een andere sessie.", {
+          description: "Gereedmelden is gestopt zodat we geen oudere lokale versie committen.",
+        });
+      } else {
+        toast.error(message);
+      }
     } finally { setSaving(false); }
   };
 
@@ -3745,6 +3928,26 @@ const NewOrder = () => {
     </div>
   );
 
+  const hasLocalServerDrift = Boolean(serverBaselineSignature && formSignature !== serverBaselineSignature);
+  const draftSaveCopy = (() => {
+    if (draftSaveStatus === "creating") return "Concept starten...";
+    if (draftSaveStatus === "saving") return "Opslaan...";
+    if (draftSaveStatus === "conflict") return draftSaveError || "Deze order is zojuist aangepast door een andere gebruiker.";
+    if (draftSaveStatus === "error") return draftSaveError || "Opslaan mislukt - probeer opnieuw.";
+    if (hasLocalServerDrift) return "Lokale wijzigingen nog niet opgeslagen";
+    if (lastDraftSavedAt) return `Opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}`;
+    if (serverDraftUpdatedAt) return "Serverconcept actief";
+    return "Ctrl/Cmd+S concept";
+  })();
+  const draftSaveClassName = cn(
+    "text-[11px] font-medium",
+    draftSaveStatus === "error" || draftSaveStatus === "conflict"
+      ? "text-red-600"
+      : draftSaveStatus === "saving" || draftSaveStatus === "creating" || hasLocalServerDrift
+        ? "text-[hsl(var(--gold-deep))]"
+        : "text-muted-foreground",
+  );
+
   const renderOrderPreview = () => (
     <aside className="hidden lg:block">
       <div className="sticky top-4 overflow-hidden rounded-2xl border border-[hsl(var(--gold)_/_0.14)] bg-white shadow-[0_22px_60px_-42px_hsl(var(--foreground)_/_0.65),0_0_0_1px_hsl(var(--gold)_/_0.08)]">
@@ -3943,6 +4146,9 @@ const NewOrder = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <div className={cn("hidden max-w-[220px] truncate text-right md:block", draftSaveClassName)} title={draftSaveError || draftSaveCopy}>
+              {draftSaveCopy}
+            </div>
             <button
               type="button"
               onClick={attemptCancel}
@@ -4086,8 +4292,8 @@ const NewOrder = () => {
                     <h3 className="section-title">Plak intake, krijg een ordervoorstel</h3>
                     <p className="text-xs text-muted-foreground mt-1">Geen extra wizard-schermen. Gewoon bovenaan plakken, voorstel laten invullen en daarna direct verder in het formulier.</p>
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {lastDraftSavedAt ? `Concept opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "Ctrl/Cmd+S concept · Shift+Ctrl/Cmd+S gereedmelden"}
+                  <div className={draftSaveClassName} title={serverDraftUpdatedBy ? `Laatste serverwijziging: ${describeDraftEditor(serverDraftUpdatedBy)}` : undefined}>
+                    {draftSaveCopy}
                   </div>
                 </div>
 
@@ -4214,8 +4420,8 @@ const NewOrder = () => {
                     <h3 className="section-title">Snelle orderstart</h3>
                     <p className="text-xs text-muted-foreground mt-1">Kies een template, hervat een concept en laat het systeem route en middelen voorstellen.</p>
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {lastDraftSavedAt ? `Concept opgeslagen om ${new Date(lastDraftSavedAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}` : "Ctrl/Cmd+S concept · Shift+Ctrl/Cmd+S gereedmelden"}
+                  <div className={draftSaveClassName} title={serverDraftUpdatedBy ? `Laatste serverwijziging: ${describeDraftEditor(serverDraftUpdatedBy)}` : undefined}>
+                    {draftSaveCopy}
                   </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
