@@ -12,6 +12,20 @@ export interface Tenant {
   invoiceTemplateUrl: string | null;
   invoiceTemplateFilename: string | null;
   invoiceTemplateUploadedAt: string | null;
+  brandingSettings: TenantBrandingSettings;
+}
+
+export interface TenantBrandingSettings {
+  darkLogoUrl?: string | null;
+  appIconUrl?: string | null;
+  documentAddress?: string;
+  documentKvk?: string;
+  documentVat?: string;
+  documentEmail?: string;
+  documentFooter?: string;
+  portalTitle?: string;
+  portalSubtitle?: string;
+  portalCtaLabel?: string;
 }
 
 interface TenantContextType {
@@ -95,7 +109,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               primaryColor: data.primary_color || '#dc2626',
               invoiceTemplateUrl: data.invoice_template_url || null,
               invoiceTemplateFilename: data.invoice_template_filename || null,
-              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null
+              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null,
+              brandingSettings: data.branding_settings ?? {}
             };
           }
         } 
@@ -121,7 +136,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               primaryColor: data.primary_color || '#dc2626',
               invoiceTemplateUrl: data.invoice_template_url || null,
               invoiceTemplateFilename: data.invoice_template_filename || null,
-              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null
+              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null,
+              brandingSettings: data.branding_settings ?? {}
             };
           }
         }
@@ -142,7 +158,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               primaryColor: data.primary_color || '#dc2626',
               invoiceTemplateUrl: data.invoice_template_url || null,
               invoiceTemplateFilename: data.invoice_template_filename || null,
-              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null
+              invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null,
+              brandingSettings: data.branding_settings ?? {}
             };
           } else {
              tenantData = {
@@ -153,7 +170,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
                primaryColor: "#dc2626",
                invoiceTemplateUrl: null,
                invoiceTemplateFilename: null,
-               invoiceTemplateUploadedAt: null
+               invoiceTemplateUploadedAt: null,
+               brandingSettings: {}
              };
           }
         }

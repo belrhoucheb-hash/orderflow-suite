@@ -15,6 +15,8 @@ interface TenantBranding {
   name: string;
   logo: string | null;
   primaryColor: string;
+  portalTitle?: string;
+  portalSubtitle?: string;
 }
 
 const MODULE_ICONS: Record<PortalModule, typeof Package> = {
@@ -57,6 +59,7 @@ export function PortalLayout({
 
   const primaryColor = branding?.primaryColor || "#dc2626";
   const companyName = branding?.name || "Klantportaal";
+  const portalLabel = branding?.portalTitle || "Klantportaal";
 
   // Determine active module from URL
   const activeModule: PortalModule = (() => {
@@ -96,7 +99,10 @@ export function PortalLayout({
               <span className="text-lg font-bold tracking-tight text-gray-900">
                 {companyName}
               </span>
-              <span className="hidden sm:inline text-sm text-gray-400 ml-2">Klantportaal</span>
+              <span className="hidden sm:inline text-sm text-gray-400 ml-2">{portalLabel}</span>
+              {branding?.portalSubtitle && (
+                <span className="sr-only">{branding.portalSubtitle}</span>
+              )}
             </div>
           </div>
 

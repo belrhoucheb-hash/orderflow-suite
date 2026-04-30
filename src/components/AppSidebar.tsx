@@ -294,7 +294,7 @@ export function AppSidebar() {
         }}
       >
         <img 
-          src={tenant?.logoUrl || defaultLogo} 
+          src={tenant?.brandingSettings?.darkLogoUrl || tenant?.logoUrl || defaultLogo}
           alt={tenant?.name || "TMS"} 
           className="h-8 w-8 rounded-xl object-contain p-1"
           style={{

@@ -27,7 +27,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { MasterDataSection } from "@/components/settings/MasterDataSection";
 import { ShiftTemplateSettings } from "@/components/settings/ShiftTemplateSettings";
 import { VehicleDocumentTypesSection } from "@/components/fleet/VehicleDocumentTypesSection";
-import { useTenant } from "@/contexts/TenantContext";
+import { useTenant, type TenantBrandingSettings } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
 import {
@@ -416,11 +416,18 @@ const Settings = () => {
   const [primaryColor, setPrimaryColor] = useState("#3b82f6");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
+  const [darkLogoPreview, setDarkLogoPreview] = useState<string | null>(null);
+  const [pendingDarkLogoFile, setPendingDarkLogoFile] = useState<File | null>(null);
+  const [appIconPreview, setAppIconPreview] = useState<string | null>(null);
+  const [pendingAppIconFile, setPendingAppIconFile] = useState<File | null>(null);
+  const [brandingSettings, setBrandingSettings] = useState<TenantBrandingSettings>({});
   const [invoiceTemplateName, setInvoiceTemplateName] = useState<string | null>(null);
   const [invoiceTemplateUrl, setInvoiceTemplateUrl] = useState<string | null>(null);
   const [pendingInvoiceTemplateFile, setPendingInvoiceTemplateFile] = useState<File | null>(null);
   const [clearInvoiceTemplate, setClearInvoiceTemplate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const darkLogoInputRef = useRef<HTMLInputElement>(null);
+  const appIconInputRef = useRef<HTMLInputElement>(null);
   const invoiceTemplateInputRef = useRef<HTMLInputElement>(null);
   const updateBranding = useUpdateTenantBranding();
 
@@ -432,6 +439,11 @@ const Settings = () => {
       setPrimaryColor(tenant.primaryColor || "#3b82f6");
       setLogoPreview(tenant.logoUrl || null);
       setPendingLogoFile(null);
+      setBrandingSettings(tenant.brandingSettings ?? {});
+      setDarkLogoPreview(tenant.brandingSettings?.darkLogoUrl || null);
+      setPendingDarkLogoFile(null);
+      setAppIconPreview(tenant.brandingSettings?.appIconUrl || null);
+      setPendingAppIconFile(null);
       setInvoiceTemplateName(tenant.invoiceTemplateFilename || null);
       setInvoiceTemplateUrl(tenant.invoiceTemplateUrl || null);
       setPendingInvoiceTemplateFile(null);
@@ -440,6 +452,9 @@ const Settings = () => {
         name: tenant.name || "",
         color: tenant.primaryColor || "#3b82f6",
         logoUrl: tenant.logoUrl || null,
+        darkLogoUrl: tenant.brandingSettings?.darkLogoUrl || null,
+        appIconUrl: tenant.brandingSettings?.appIconUrl || null,
+        brandingSettings: tenant.brandingSettings ?? {},
         invoiceTemplateName: tenant.invoiceTemplateFilename || null,
         invoiceTemplateUrl: tenant.invoiceTemplateUrl || null,
       }));
@@ -451,6 +466,9 @@ const Settings = () => {
     color: primaryColor,
     // pending-file markeert dirty, ongeacht preview-url
     logoUrl: pendingLogoFile ? "__pending__" : logoPreview,
+    darkLogoUrl: pendingDarkLogoFile ? "__pending__" : darkLogoPreview,
+    appIconUrl: pendingAppIconFile ? "__pending__" : appIconPreview,
+    brandingSettings,
     invoiceTemplateName: pendingInvoiceTemplateFile ? pendingInvoiceTemplateFile.name : invoiceTemplateName,
     invoiceTemplateUrl: pendingInvoiceTemplateFile
       ? "__pending__"
@@ -465,6 +483,11 @@ const Settings = () => {
     setPrimaryColor(tenant.primaryColor || "#3b82f6");
     setLogoPreview(tenant.logoUrl || null);
     setPendingLogoFile(null);
+    setBrandingSettings(tenant.brandingSettings ?? {});
+    setDarkLogoPreview(tenant.brandingSettings?.darkLogoUrl || null);
+    setPendingDarkLogoFile(null);
+    setAppIconPreview(tenant.brandingSettings?.appIconUrl || null);
+    setPendingAppIconFile(null);
     setInvoiceTemplateName(tenant.invoiceTemplateFilename || null);
     setInvoiceTemplateUrl(tenant.invoiceTemplateUrl || null);
     setPendingInvoiceTemplateFile(null);
@@ -483,6 +506,33 @@ const Settings = () => {
       reader.onloadend = () => setLogoPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleBrandAssetChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    options: {
+      setFile: (file: File | null) => void;
+      setPreview: (value: string | null) => void;
+      label: string;
+    },
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error(`${options.label} te groot`, { description: "Maximaal 2 MB." });
+      e.target.value = "";
+      return;
+    }
+
+    options.setFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => options.setPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const updateBrandingSetting = (key: keyof TenantBrandingSettings, value: string) => {
+    setBrandingSettings((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleInvoiceTemplateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -522,8 +572,17 @@ const Settings = () => {
       logo_file: pendingLogoFile,
       invoice_template_file: pendingInvoiceTemplateFile,
       clear_invoice_template: clearInvoiceTemplate,
+      dark_logo_file: pendingDarkLogoFile,
+      app_icon_file: pendingAppIconFile,
+      branding_settings: {
+        ...brandingSettings,
+        darkLogoUrl: pendingDarkLogoFile ? darkLogoPreview : brandingSettings.darkLogoUrl,
+        appIconUrl: pendingAppIconFile ? appIconPreview : brandingSettings.appIconUrl,
+      },
     });
     setPendingLogoFile(null);
+    setPendingDarkLogoFile(null);
+    setPendingAppIconFile(null);
     setPendingInvoiceTemplateFile(null);
     setClearInvoiceTemplate(false);
   };
@@ -1718,6 +1777,172 @@ const Settings = () => {
                   className="hidden"
                   onChange={handleInvoiceTemplateChange}
                 />
+              </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-4 rounded-xl border border-[hsl(var(--gold)/0.14)] bg-card p-4">
+                <div>
+                  <Label>Logo varianten</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Gebruik aparte assets voor donkere navigatie en browser/app-iconen.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-[hsl(var(--gold)/0.12)] bg-[#101010] p-3">
+                    <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-white/55">Donkere navigatie</p>
+                    <button
+                      type="button"
+                      onClick={() => darkLogoInputRef.current?.click()}
+                      className="flex h-20 w-full items-center justify-center rounded-lg border border-dashed border-white/20 bg-white/5"
+                    >
+                      {darkLogoPreview || logoPreview ? (
+                        <img src={darkLogoPreview || logoPreview || ""} alt="Donker logo preview" className="max-h-14 max-w-[160px] object-contain" />
+                      ) : (
+                        <Upload className="h-5 w-5 text-white/70" strokeWidth={1.5} />
+                      )}
+                    </button>
+                    <button type="button" onClick={() => darkLogoInputRef.current?.click()} className="btn-luxe mt-3 !h-8 w-full">
+                      Donker logo kiezen
+                    </button>
+                    <input
+                      ref={darkLogoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/svg+xml"
+                      className="hidden"
+                      onChange={(e) => handleBrandAssetChange(e, {
+                        label: "Donker logo",
+                        setFile: setPendingDarkLogoFile,
+                        setPreview: setDarkLogoPreview,
+                      })}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.14)] p-3">
+                    <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">App-icon</p>
+                    <button
+                      type="button"
+                      onClick={() => appIconInputRef.current?.click()}
+                      className="flex h-20 w-full items-center justify-center rounded-lg border border-dashed border-[hsl(var(--gold)/0.24)] bg-card"
+                    >
+                      {appIconPreview || logoPreview ? (
+                        <img src={appIconPreview || logoPreview || ""} alt="App icon preview" className="h-14 w-14 rounded-xl object-contain" />
+                      ) : (
+                        <Upload className="h-5 w-5 text-[hsl(var(--gold-deep))]" strokeWidth={1.5} />
+                      )}
+                    </button>
+                    <button type="button" onClick={() => appIconInputRef.current?.click()} className="btn-luxe mt-3 !h-8 w-full">
+                      Icon kiezen
+                    </button>
+                    <input
+                      ref={appIconInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/svg+xml"
+                      className="hidden"
+                      onChange={(e) => handleBrandAssetChange(e, {
+                        label: "App-icon",
+                        setFile: setPendingAppIconFile,
+                        setPreview: setAppIconPreview,
+                      })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-xl border border-[hsl(var(--gold)/0.14)] bg-card p-4">
+                <div>
+                  <Label>Portal branding</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Tekst die klanten zien in het klantportaal en op publieke schermen.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="portalTitle">Portaal titel</Label>
+                  <Input
+                    id="portalTitle"
+                    value={brandingSettings.portalTitle ?? ""}
+                    onChange={(e) => updateBrandingSetting("portalTitle", e.target.value)}
+                    placeholder="Welkom bij je transportportaal"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="portalSubtitle">Portaal subtitel</Label>
+                  <Textarea
+                    id="portalSubtitle"
+                    value={brandingSettings.portalSubtitle ?? ""}
+                    onChange={(e) => updateBrandingSetting("portalSubtitle", e.target.value)}
+                    rows={3}
+                    placeholder="Volg orders, documenten en updates op een centrale plek."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="portalCtaLabel">Primaire knoptekst</Label>
+                  <Input
+                    id="portalCtaLabel"
+                    value={brandingSettings.portalCtaLabel ?? ""}
+                    onChange={(e) => updateBrandingSetting("portalCtaLabel", e.target.value)}
+                    placeholder="Open portaal"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[hsl(var(--gold)/0.14)] bg-card p-4">
+              <div className="mb-4">
+                <Label>Document branding</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Bedrijfsgegevens voor facturen, labels, pakbonnen en PDF-exports.
+                </p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="documentEmail">Document e-mail</Label>
+                  <Input
+                    id="documentEmail"
+                    type="email"
+                    value={brandingSettings.documentEmail ?? ""}
+                    onChange={(e) => updateBrandingSetting("documentEmail", e.target.value)}
+                    placeholder="finance@example.nl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="documentKvk">KvK</Label>
+                  <Input
+                    id="documentKvk"
+                    value={brandingSettings.documentKvk ?? ""}
+                    onChange={(e) => updateBrandingSetting("documentKvk", e.target.value)}
+                    placeholder="12345678"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="documentVat">BTW-nummer</Label>
+                  <Input
+                    id="documentVat"
+                    value={brandingSettings.documentVat ?? ""}
+                    onChange={(e) => updateBrandingSetting("documentVat", e.target.value)}
+                    placeholder="NL123456789B01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="documentAddress">Adresregel</Label>
+                  <Input
+                    id="documentAddress"
+                    value={brandingSettings.documentAddress ?? ""}
+                    onChange={(e) => updateBrandingSetting("documentAddress", e.target.value)}
+                    placeholder="Straat 1, 1111 AA Plaats"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="documentFooter">Document footer</Label>
+                  <Textarea
+                    id="documentFooter"
+                    value={brandingSettings.documentFooter ?? ""}
+                    onChange={(e) => updateBrandingSetting("documentFooter", e.target.value)}
+                    rows={2}
+                    placeholder="Bedankt voor uw vertrouwen. Op alle diensten zijn onze voorwaarden van toepassing."
+                  />
+                </div>
               </div>
             </div>
 

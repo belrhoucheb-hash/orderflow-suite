@@ -21,6 +21,8 @@ interface TenantBranding {
   name: string;
   logo: string | null;
   primaryColor: string;
+  portalTitle?: string;
+  portalSubtitle?: string;
 }
 
 // ─── Component ──────────────────────────────────────────────────────
@@ -128,15 +130,21 @@ export default function ClientPortal() {
         if (resolvedTenantId) {
           const { data: tenant } = await supabase
             .from("tenants")
-            .select("name, logo_url, primary_color")
+            .select("name, logo_url, primary_color, branding_settings")
             .eq("id", resolvedTenantId)
             .maybeSingle();
 
           if (tenant) {
+            const settings = (tenant.branding_settings ?? {}) as {
+              portalTitle?: string;
+              portalSubtitle?: string;
+            };
             setTenantBranding({
               name: tenant.name,
               logo: tenant.logo_url ?? null,
               primaryColor: (tenant.primary_color as string) ?? "#dc2626",
+              portalTitle: settings.portalTitle,
+              portalSubtitle: settings.portalSubtitle,
             });
           }
         }

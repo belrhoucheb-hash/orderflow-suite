@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "@/contexts/TenantContext";
+import { useTenant, type TenantBrandingSettings } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 
 const LOGO_BUCKET = "tenant-logos";
@@ -31,6 +31,18 @@ async function uploadInvoiceTemplate(file: File, tenantId: string): Promise<stri
   return `${data.publicUrl}?v=${Date.now()}`;
 }
 
+async function uploadBrandAsset(file: File, tenantId: string, key: string): Promise<string> {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
+  const path = `${tenantId}/${key}.${ext}`;
+  const { error } = await supabase.storage.from(BRANDING_BUCKET).upload(path, file, {
+    contentType: file.type || undefined,
+    upsert: true,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from(BRANDING_BUCKET).getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
+}
+
 interface UpdateBrandingInput {
   name?: string;
   primary_color?: string;
@@ -38,6 +50,9 @@ interface UpdateBrandingInput {
   clear_logo?: boolean;
   invoice_template_file?: File | null;
   clear_invoice_template?: boolean;
+  dark_logo_file?: File | null;
+  app_icon_file?: File | null;
+  branding_settings?: TenantBrandingSettings;
 }
 
 export function useUpdateTenantBranding() {
@@ -67,6 +82,29 @@ export function useUpdateTenantBranding() {
         patch.invoice_template_url = null;
         patch.invoice_template_filename = null;
         patch.invoice_template_uploaded_at = null;
+      }
+
+      let brandingSettings = {
+        ...(tenant.brandingSettings ?? {}),
+        ...(input.branding_settings ?? {}),
+      };
+
+      if (input.dark_logo_file) {
+        brandingSettings = {
+          ...brandingSettings,
+          darkLogoUrl: await uploadBrandAsset(input.dark_logo_file, tenant.id, "logo-dark"),
+        };
+      }
+
+      if (input.app_icon_file) {
+        brandingSettings = {
+          ...brandingSettings,
+          appIconUrl: await uploadBrandAsset(input.app_icon_file, tenant.id, "app-icon"),
+        };
+      }
+
+      if (input.branding_settings || input.dark_logo_file || input.app_icon_file) {
+        patch.branding_settings = brandingSettings;
       }
 
       if (Object.keys(patch).length === 0) return;
