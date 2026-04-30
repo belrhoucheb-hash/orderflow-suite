@@ -397,6 +397,9 @@ async function callAdminUsers(action: string, payload: Record<string, unknown> =
 function useUsers(tenantId?: string | null) {
   return useQuery({
     queryKey: ["users-admin", tenantId],
+    enabled: !!tenantId,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const data = await callAdminUsers("list", { tenant_id: tenantId });
       return data.users ?? [];
@@ -728,7 +731,7 @@ const UsersPage = () => {
     }
   };
 
-  if (isLoading) {
+  if (!tenantId || isLoading) {
     return <LoadingState message="Gebruikers laden..." />;
   }
 

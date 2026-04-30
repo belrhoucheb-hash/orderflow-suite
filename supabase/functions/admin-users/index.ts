@@ -286,16 +286,14 @@ serve(async (req) => {
     }
 
     if (body.action === "list") {
+      if (!tenantId) return json(400, { error: "tenant_id is verplicht" });
+
       let profilesQuery = admin
         .from("profiles")
         .select("user_id, display_name, avatar_url, created_at, tenant_id")
         .order("created_at", { ascending: false });
 
-      if (tenantId) {
-        profilesQuery = appAdminRole
-          ? profilesQuery.or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
-          : profilesQuery.eq("tenant_id", tenantId);
-      }
+      profilesQuery = profilesQuery.eq("tenant_id", tenantId);
 
       const { data: profiles, error: profilesError } = await profilesQuery;
       if (profilesError) return json(500, { error: profilesError.message });
@@ -307,21 +305,25 @@ serve(async (req) => {
       if (rolesError) return json(500, { error: rolesError.message });
 
       const emailMap = new Map<string, { email: string | null; last_sign_in_at: string | null; banned_until: string | null }>();
-      let page = 1;
-      while (true) {
-        const { data: authUsers, error: usersError } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-        if (usersError) return json(500, { error: usersError.message });
-        for (const authUser of authUsers.users) {
-          if (userIds.includes(authUser.id)) {
-            emailMap.set(authUser.id, {
-              email: authUser.email ?? null,
-              last_sign_in_at: authUser.last_sign_in_at ?? null,
-              banned_until: authUser.banned_until ?? null,
-            });
-          }
+      const authChunks: string[][] = [];
+      for (let index = 0; index < userIds.length; index += 10) {
+        authChunks.push(userIds.slice(index, index + 10));
+      }
+
+      for (const chunk of authChunks) {
+        const authResults = await Promise.all(
+          chunk.map((userId) => admin.auth.admin.getUserById(userId)),
+        );
+
+        for (const result of authResults) {
+          if (result.error || !result.data.user) continue;
+          const authUser = result.data.user;
+          emailMap.set(authUser.id, {
+            email: authUser.email ?? null,
+            last_sign_in_at: authUser.last_sign_in_at ?? null,
+            banned_until: authUser.banned_until ?? null,
+          });
         }
-        if (authUsers.users.length < 1000 || emailMap.size >= userIds.length) break;
-        page += 1;
       }
 
       const rolesMap = new Map<string, OfficeRole[]>();
