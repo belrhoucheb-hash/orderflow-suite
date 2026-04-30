@@ -51,7 +51,7 @@ export interface UseOrdersOptions {
    * een seq scan triggert. Zet op "exact" alleen voor plekken waar het
    * precieze aantal functioneel nodig is (bv. export-bevestiging).
    */
-  countMode?: "estimated" | "exact" | "planned";
+  countMode?: "none" | "estimated" | "exact" | "planned";
   /**
    * Keyset-cursor voor de huidige sortering. Gebruik in combinatie met
    * `nextCursor` uit de vorige pagina voor stabiele O(log N) paginatie,
@@ -66,6 +66,17 @@ export interface OrderListCursor {
   sortValue: string | number;
   createdAt: string;
   id: string;
+}
+
+export interface OrdersListMeta {
+  totalCount: number;
+  staleDraftCount: number;
+  staleDraftCutoffIso: string;
+  byStatus: Record<string, number>;
+  awaitingInfoCount: number;
+  overdueInfoCount: number;
+  priorityCount: number;
+  totalWeightKg: number;
 }
 
 // UI-veldnaam → DB-kolom. Beperkt tot wat de orderlijst kan tonen en
@@ -146,7 +157,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
   return useQuery({
     queryKey: ["orders", { page, pageSize, statusFilter, orderTypeFilter, search, departmentFilter, sortField, sortDirection, createdBefore, countMode, cursor, tenantId: tenant?.id }],
-    staleTime: 5_000,
+    staleTime: 30_000,
     queryFn: async () => {
       // Expliciete kolom-set: alleen wat Orders-lijst UI rendert. Scheelt payload
       // (geen pod_signature_url, pod_photos, cmr_*, attachments, anomalies, enz.)
@@ -180,13 +191,15 @@ export function useOrders(options: UseOrdersOptions = {}) {
       const sortColumn = sortField ? SORT_FIELD_TO_DB[sortField] : "created_at";
       const sortAscending = sortDirection === "asc";
       const useNativeKeyset = sortColumn === "created_at" && !sortAscending;
-
-      const countQuery = applyOrderListFilters(
-        (supabase as any)
-          .from("orders")
-          .select("id", { count: countMode, head: true }),
-        { statusFilter, orderTypeFilter, departmentFilter, createdBefore, search },
-      );
+      const countPromise =
+        countMode === "none"
+          ? Promise.resolve({ count: 0, error: null })
+          : applyOrderListFilters(
+              (supabase as any)
+                .from("orders")
+                .select("id", { count: countMode, head: true }),
+              { statusFilter, orderTypeFilter, departmentFilter, createdBefore, search },
+            );
 
       let ordersPromise: Promise<{ data: any[]; error: any; nextCursor: OrderListCursor | null }>;
 
@@ -270,7 +283,7 @@ export function useOrders(options: UseOrdersOptions = {}) {
 
       const [ordersResult, countResult, departments] = await Promise.all([
         ordersPromise,
-        countQuery,
+        countPromise,
         tenant?.id
           ? fetchDepartmentsCached(queryClient, tenant.id).catch((e) => {
               console.warn("[useOrders] departments fetch failed, continuing without codes:", e);
@@ -335,6 +348,91 @@ export function useOrders(options: UseOrdersOptions = {}) {
       });
 
       return { orders, totalCount: count ?? 0, nextCursor };
+    },
+  });
+}
+
+export function useOrdersListMeta(options: {
+  statusFilter?: string;
+  orderTypeFilter?: string;
+  departmentFilter?: string;
+  search?: string;
+  createdBefore?: string;
+  staleThresholdHours?: number;
+} = {}) {
+  const { statusFilter, orderTypeFilter, departmentFilter, search, createdBefore, staleThresholdHours = 2 } = options;
+  const { tenant } = useTenantOptional();
+
+  return useQuery({
+    queryKey: ["orders", "list-meta", {
+      statusFilter,
+      orderTypeFilter,
+      departmentFilter,
+      search,
+      createdBefore,
+      staleThresholdHours,
+      tenantId: tenant?.id,
+    }],
+    staleTime: 60_000,
+    queryFn: async (): Promise<OrdersListMeta> => {
+      const numericFromFormatted = search
+        ? search.replace(/^rcs-/i, "").replace(/^\d{4}-/, "").replace(/^0+/, "")
+        : "";
+      const searchOrderNumber =
+        /^\d+$/.test(numericFromFormatted) && numericFromFormatted.length > 0
+          ? Number(numericFromFormatted)
+          : null;
+      const fallbackCutoff = new Date(Date.now() - staleThresholdHours * 60 * 60 * 1000).toISOString();
+
+      const { data, error } = await (supabase.rpc as any)("orders_list_meta_v1", {
+        p_status_filter: statusFilter && statusFilter !== "alle" ? statusFilter : null,
+        p_order_type_filter: orderTypeFilter ?? null,
+        p_department_filter: departmentFilter && UUID_RE.test(departmentFilter) ? departmentFilter : null,
+        p_search: search ?? null,
+        p_search_order_number: Number.isSafeInteger(searchOrderNumber) ? searchOrderNumber : null,
+        p_created_before: createdBefore ?? null,
+        p_stale_threshold_hours: staleThresholdHours,
+      });
+
+      if (!error) {
+        const raw = data ?? {};
+        return {
+          totalCount: Number(raw.total_count ?? 0),
+          staleDraftCount: Number(raw.stale_draft_count ?? 0),
+          staleDraftCutoffIso: String(raw.stale_draft_cutoff_iso ?? fallbackCutoff),
+          byStatus: (raw.by_status ?? {}) as Record<string, number>,
+          awaitingInfoCount: Number(raw.awaiting_info_count ?? 0),
+          overdueInfoCount: Number(raw.overdue_info_count ?? 0),
+          priorityCount: Number(raw.priority_count ?? 0),
+          totalWeightKg: Number(raw.total_weight_kg ?? 0),
+        };
+      }
+
+      console.warn("[useOrdersListMeta] orders_list_meta_v1 unavailable, falling back to legacy counts:", error);
+      const totalQuery = applyOrderListFilters(
+        (supabase as any).from("orders").select("id", { count: "planned", head: true }),
+        { statusFilter, orderTypeFilter, departmentFilter, createdBefore, search },
+      );
+      const staleQuery = (supabase as any)
+        .from("orders")
+        .select("id", { count: "planned", head: true })
+        .eq("status", "DRAFT")
+        .lt("created_at", fallbackCutoff);
+      const [{ count: totalCount, error: totalError }, { count: staleDraftCount, error: staleError }] =
+        await Promise.all([totalQuery, staleQuery]);
+      if (totalError) throw totalError;
+      if (staleError) throw staleError;
+
+      return {
+        totalCount: totalCount ?? 0,
+        staleDraftCount: staleDraftCount ?? 0,
+        staleDraftCutoffIso: fallbackCutoff,
+        byStatus: {},
+        awaitingInfoCount: 0,
+        overdueInfoCount: 0,
+        priorityCount: 0,
+        totalWeightKg: 0,
+      };
     },
   });
 }

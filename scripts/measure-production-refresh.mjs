@@ -18,6 +18,7 @@ function hasFlag(name) {
 const baseUrl = argValue("url", "https://orderflow-suite.vercel.app").replace(/\/$/, "");
 const routes = argValue("routes", "/login").split(",").map((route) => route.trim()).filter(Boolean);
 const runs = Number(argValue("runs", "5"));
+const waitMode = argValue("wait", "visible");
 const shouldLogin = hasFlag("login");
 const email = process.env.E2E_USER_EMAIL;
 const password = process.env.E2E_USER_PASSWORD;
@@ -38,8 +39,23 @@ function fmt(ms) {
 
 async function waitForAppSettled(page) {
   await page.waitForLoadState("domcontentloaded");
-  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
   await page.locator("#root").waitFor({ state: "attached", timeout: 15_000 }).catch(() => {});
+
+  if (waitMode === "networkidle") {
+    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+    return;
+  }
+
+  await page.waitForFunction(() => {
+    const root = document.querySelector("#root");
+    if (!root || !root.textContent?.trim()) return false;
+    const busy = document.querySelector('[aria-busy="true"]');
+    if (busy) return false;
+    const table = document.querySelector("table.data-table, table");
+    const main = document.querySelector("main, [role='main'], .page-container");
+    const loginForm = document.querySelector("form input[type='email'], #login-email");
+    return Boolean(table || main || loginForm);
+  }, { timeout: 15_000 }).catch(() => {});
 }
 
 async function login(page) {

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
 import { INFO_STATUS_LABEL, priorityDotColors } from "@/lib/orderDisplay";
-import { useOrders, useStaleDraftCount, type OrderListCursor } from "@/hooks/useOrders";
+import { useOrders, useOrdersListMeta, type OrderListCursor } from "@/hooks/useOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUnreadNoteOrderIds } from "@/hooks/useOrderNotesRead";
 import { supabase } from "@/integrations/supabase/client";
@@ -151,10 +151,10 @@ const Orders = () => {
     return departments?.find((d) => d.code === departmentFilter)?.id;
   }, [departmentFilter, departments]);
 
-  // Tenant-gescoped count voor DRAFT > 2u, losstaande query zodat de teller
-  // niet beperkt is tot de huidige pagina. De cutoff-iso wordt hergebruikt
-  // als createdBefore-filter zodra de stale-toggle actief is.
-  const { data: staleDraft } = useStaleDraftCount(2);
+  const staleDraftCutoffIso = useMemo(
+    () => new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    [],
+  );
 
   // De orderlijst gebruikt keyset-paginatie voor alle ondersteunde sorts.
   // Daardoor vermijden we offset-skips op grote tenants, ook bij klant/status/gewicht.
@@ -171,14 +171,21 @@ const Orders = () => {
     search: search || undefined,
     sortField: sortConfig?.field as ("customer" | "totalWeight" | "status" | "createdAt") | undefined,
     sortDirection: sortConfig?.direction,
-    createdBefore: staleDraftOnly ? staleDraft?.cutoffIso : undefined,
-    // Keyset-paginatie gebruikt een planner-estimate voor de globale teller.
-    countMode: "estimated",
+    createdBefore: staleDraftOnly ? staleDraftCutoffIso : undefined,
+    countMode: "none",
     cursor: currentCursor,
   } as any);
+  const { data: meta } = useOrdersListMeta({
+    statusFilter: (statusFilter !== "alle") ? statusFilter : undefined,
+    orderTypeFilter: (orderTypeFilter !== "alle") ? orderTypeFilter : undefined,
+    departmentFilter: selectedDepartmentId,
+    search: search || undefined,
+    createdBefore: staleDraftOnly ? staleDraftCutoffIso : undefined,
+    staleThresholdHours: 2,
+  });
   const { unreadOrderIds } = useUnreadNoteOrderIds();
   const rawOrders = data?.orders ?? [];
-  const totalCount = data?.totalCount ?? 0;
+  const totalCount = meta?.totalCount ?? 0;
 
   const filteredByInfo = useMemo(() => {
     let list = rawOrders;
@@ -218,22 +225,23 @@ const Orders = () => {
   };
 
   const stats = useMemo(() => {
-    const byStatus = orders.reduce((acc, o) => {
+    const pageByStatus = orders.reduce((acc, o) => {
       acc[o.status] = (acc[o.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    const totalWeight = orders.reduce((s, o) => s + o.totalWeight, 0);
-    const spoedCount = orders.filter((o) => o.priority === "spoed" || o.priority === "hoog").length;
+    const byStatus = Object.keys(meta?.byStatus ?? {}).length ? meta!.byStatus : pageByStatus;
+    const totalWeight = meta?.totalWeightKg ?? orders.reduce((s, o) => s + o.totalWeight, 0);
+    const spoedCount = meta?.priorityCount ?? orders.filter((o) => o.priority === "spoed" || o.priority === "hoog").length;
     // Info-teller blijft absoluut (vanuit rawOrders), zodat het cijfer
     // niet leegvalt zodra de gebruiker het eigen filter activeert. De
     // stale-draft-teller komt uit de tenant-gescoped count-query en gaat
     // dus over de hele tabel, niet alleen de huidige pagina.
-    const awaitingInfoCount = rawOrders.filter(
+    const awaitingInfoCount = meta?.awaitingInfoCount ?? rawOrders.filter(
       (o) => o.infoStatus === "AWAITING_INFO" || o.infoStatus === "OVERDUE",
     ).length;
-    const staleDraftCount = staleDraft?.count ?? 0;
+    const staleDraftCount = meta?.staleDraftCount ?? 0;
     return { byStatus, totalWeight, spoedCount, awaitingInfoCount, staleDraftCount };
-  }, [orders, rawOrders, staleDraft?.count]);
+  }, [orders, rawOrders, meta]);
 
   if (isLoading) {
     return (
