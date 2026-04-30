@@ -10,17 +10,17 @@ import { useNotificationCenter } from "@/hooks/useNotificationCenter";
 import { motion, AnimatePresence } from "framer-motion";
 
 const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
-  sla_warning: { icon: Clock, color: "text-amber-600", bg: "bg-amber-500/10" },
-  sla_critical: { icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" },
-  client_reply: { icon: Reply, color: "text-blue-600", bg: "bg-blue-500/10" },
-  order_approved: { icon: Package, color: "text-emerald-600", bg: "bg-emerald-500/10" },
-  order_cancelled: { icon: X, color: "text-destructive", bg: "bg-destructive/10" },
-  planning_conflict: { icon: CalendarClock, color: "text-violet-600", bg: "bg-violet-500/10" },
-  driver_update: { icon: Truck, color: "text-primary", bg: "bg-primary/10" },
-  DISPATCH: { icon: Truck, color: "text-green-600", bg: "bg-green-500/10" },
-  trip_dispatched: { icon: Truck, color: "text-green-600", bg: "bg-green-500/10" },
-  info_escalation: { icon: AlertTriangle, color: "text-red-600", bg: "bg-red-500/10" },
-  info: { icon: Bell, color: "text-muted-foreground", bg: "bg-muted" },
+  sla_warning: { icon: Clock, color: "text-amber-700", bg: "bg-amber-50 ring-amber-200" },
+  sla_critical: { icon: AlertTriangle, color: "text-red-700", bg: "bg-red-50 ring-red-200" },
+  client_reply: { icon: Reply, color: "text-[hsl(var(--gold-deep))]", bg: "bg-[hsl(var(--gold-soft)/0.48)] ring-[hsl(var(--gold)/0.18)]" },
+  order_approved: { icon: Package, color: "text-emerald-700", bg: "bg-emerald-50 ring-emerald-200" },
+  order_cancelled: { icon: X, color: "text-red-700", bg: "bg-red-50 ring-red-200" },
+  planning_conflict: { icon: CalendarClock, color: "text-[hsl(var(--gold-deep))]", bg: "bg-[hsl(var(--gold-soft)/0.48)] ring-[hsl(var(--gold)/0.18)]" },
+  driver_update: { icon: Truck, color: "text-[hsl(var(--gold-deep))]", bg: "bg-[hsl(var(--gold-soft)/0.48)] ring-[hsl(var(--gold)/0.18)]" },
+  DISPATCH: { icon: Truck, color: "text-emerald-700", bg: "bg-emerald-50 ring-emerald-200" },
+  trip_dispatched: { icon: Truck, color: "text-emerald-700", bg: "bg-emerald-50 ring-emerald-200" },
+  info_escalation: { icon: AlertTriangle, color: "text-red-700", bg: "bg-red-50 ring-red-200" },
+  info: { icon: Bell, color: "text-[hsl(var(--gold-deep))]", bg: "bg-[hsl(var(--gold-soft)/0.4)] ring-[hsl(var(--gold)/0.16)]" },
 };
 
 function formatTimeAgo(dateStr: string): string {
@@ -56,15 +56,15 @@ function NotificationItem({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 8, height: 0 }}
       className={cn(
-        "group flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-muted/50",
-        !notification.is_read && "bg-accent/40"
+        "group mx-2 flex cursor-pointer items-start gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-[hsl(var(--gold-soft)/0.16)]",
+        !notification.is_read && "bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.34),hsl(var(--card)))] ring-1 ring-[hsl(var(--gold)/0.14)]"
       )}
       onClick={() => {
         if (!notification.is_read) onRead(notification.id);
         if (notification.order_id) onNavigate(notification.order_id);
       }}
     >
-      <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5", config.bg)}>
+      <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ring-1", config.bg)}>
         <Icon className={cn("h-4 w-4", config.color)} />
       </div>
       <div className="flex-1 min-w-0">
@@ -73,7 +73,7 @@ function NotificationItem({
             {notification.title}
           </p>
           {!notification.is_read && (
-            <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[hsl(var(--gold-deep))]" />
           )}
         </div>
         <p className="text-xs text-muted-foreground leading-snug mt-0.5 line-clamp-2">
@@ -82,14 +82,14 @@ function NotificationItem({
         <div className="flex items-center gap-2 mt-1.5">
           <span className="text-xs text-muted-foreground/70">{formatTimeAgo(notification.created_at)}</span>
           {notification.order_id && (
-            <span className="text-xs text-primary font-medium">
-              Bekijk order →
+            <span className="text-xs font-medium text-[hsl(var(--gold-deep))]">
+              Bekijk order
             </span>
           )}
         </div>
       </div>
       <button
-        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1 p-1 rounded hover:bg-muted"
+        className="mt-1 shrink-0 rounded-lg p-1 opacity-0 transition-opacity hover:bg-[hsl(var(--gold-soft)/0.28)] group-hover:opacity-100"
         onClick={(e) => { e.stopPropagation(); onDelete(notification.id); }}
       >
         <Trash2 className="h-3 w-3 text-muted-foreground" />
@@ -119,6 +119,7 @@ export function NotificationCenter() {
   // displayed is still the DB-persisted list to avoid duplicates).
   const notifications = dbNotifications;
   const unreadCount = dbUnreadCount;
+  void realtimeCenter;
 
   const handleNavigate = (orderId: string) => {
     navigate(`/orders/${orderId}`);
@@ -133,16 +134,20 @@ export function NotificationCenter() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className={cn(
+            "relative h-10 w-10 rounded-2xl border bg-[linear-gradient(180deg,hsl(var(--card)),hsl(var(--gold-soft)/0.18))] text-foreground shadow-sm transition-all",
+            "border-[hsl(var(--gold)/0.14)] hover:border-[hsl(var(--gold)/0.28)] hover:bg-[hsl(var(--gold-soft)/0.3)]",
+          )}
+          aria-label={unreadCount > 0 ? `${unreadCount} ongelezen meldingen` : "Meldingen"}
         >
-          <Bell className="h-4 w-4" />
+          <Bell className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
           <AnimatePresence>
             {unreadCount > 0 && (
               <motion.span
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
-                className="absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 rounded-full bg-primary text-xs text-primary-foreground flex items-center justify-center font-semibold"
+                className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full border border-[hsl(var(--card))] bg-[linear-gradient(135deg,hsl(var(--gold)),hsl(var(--gold-deep)))] px-1 text-[10px] font-semibold text-white shadow-[0_8px_18px_-10px_hsl(var(--gold-deep))]"
               >
                 {unreadCount > 99 ? "99+" : unreadCount}
               </motion.span>
@@ -154,21 +159,23 @@ export function NotificationCenter() {
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-[380px] p-0 rounded-xl border border-border shadow-2xl overflow-hidden"
+        className="w-[380px] overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--card))] p-0 shadow-[0_30px_80px_-48px_hsl(var(--gold-deep)/0.42)]"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+        <div className="flex items-center justify-between border-b border-[hsl(var(--gold)/0.12)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.34),hsl(var(--card)))] px-4 py-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-foreground">Notificaties</h3>
+            <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: "var(--font-display)" }}>
+              Meldingen
+            </h3>
             {unreadCount > 0 && (
-              <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5 bg-primary/10 text-primary border-primary/20">
+              <Badge variant="secondary" className="h-5 border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.55)] px-1.5 py-0 text-xs text-[hsl(var(--gold-deep))]">
                 {unreadCount} nieuw
               </Badge>
             )}
           </div>
           <div className="flex items-center gap-1">
             {unreadCount > 0 && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={markAllAsRead}>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-lg text-xs text-muted-foreground hover:bg-[hsl(var(--gold-soft)/0.28)] hover:text-foreground" onClick={markAllAsRead}>
                 <CheckCheck className="h-3 w-3" />
                 Alles gelezen
               </Button>
@@ -179,19 +186,19 @@ export function NotificationCenter() {
         {/* Notification list */}
         <div className="h-[420px] overflow-y-auto overscroll-contain">
           {notifications.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="h-12 w-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                <Inbox className="h-5 w-5 text-muted-foreground/30" />
+            <div className="py-12 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.32)]">
+                <Inbox className="h-5 w-5 text-[hsl(var(--gold-deep))]/50" />
               </div>
-              <p className="text-sm font-medium text-muted-foreground">Geen notificaties</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Alles is up-to-date</p>
+              <p className="text-sm font-medium text-muted-foreground">Geen meldingen</p>
+              <p className="mt-1 text-xs text-muted-foreground/60">Alles is up-to-date</p>
             </div>
           ) : (
             <>
               {unread.length > 0 && (
                 <div>
                   <div className="px-4 pt-2 pb-1">
-                    <span className="text-xs font-bold text-muted-foreground/50 uppercase tracking-[0.12em]">Nieuw</span>
+                    <span className="text-xs font-bold uppercase tracking-[0.12em] text-[hsl(var(--gold-deep))]/70">Nieuw</span>
                   </div>
                   <AnimatePresence>
                     {unread.map((n) => (
@@ -208,11 +215,11 @@ export function NotificationCenter() {
               )}
               {read.length > 0 && (
                 <div>
-                  {unread.length > 0 && <Separator className="bg-border/30" />}
+                  {unread.length > 0 && <Separator className="bg-[hsl(var(--gold)/0.12)]" />}
                   <div className="px-4 pt-2 pb-1 flex items-center justify-between">
-                    <span className="text-xs font-bold text-muted-foreground/50 uppercase tracking-[0.12em]">Eerder</span>
+                    <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground/55">Eerder</span>
                     {read.length > 0 && (
-                      <Button variant="ghost" size="sm" className="h-5 text-xs text-muted-foreground/40 px-1.5" onClick={clearAll}>
+                      <Button variant="ghost" size="sm" className="h-6 rounded-md px-1.5 text-xs text-muted-foreground/55 hover:bg-[hsl(var(--gold-soft)/0.24)] hover:text-foreground" onClick={clearAll}>
                         Wis gelezen
                       </Button>
                     )}
