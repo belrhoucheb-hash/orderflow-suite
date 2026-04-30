@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -52,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionRevoked, setSessionRevoked] = useState(false);
   const [isLinkedDriver, setIsLinkedDriver] = useState(false);
   const [loading, setLoading] = useState(true);
+  const profileFetchRef = useRef<{ userId: string; promise: Promise<void>; completedAt: number } | null>(null);
 
   const ensureSessionKey = (userId: string) => {
     const key = `office_session_key:${userId}`;
@@ -80,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return platform || "Onbekend apparaat";
   };
 
-  const fetchProfileAndRoles = async (userId: string) => {
+  const loadProfileAndRoles = async (userId: string) => {
     if (userId === DEV_BYPASS_USER_ID) {
       setProfile({ display_name: "Local Admin", avatar_url: null });
       setRoles(["admin"]);
@@ -162,6 +163,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLinkedDriver(!!driverRes.data);
   };
 
+  const fetchProfileAndRoles = async (userId: string) => {
+    const cached = profileFetchRef.current;
+    if (cached?.userId === userId) {
+      if (cached.completedAt === 0 || Date.now() - cached.completedAt < 30_000) {
+        return cached.promise;
+      }
+    }
+
+    const promise = loadProfileAndRoles(userId);
+    profileFetchRef.current = { userId, promise, completedAt: 0 };
+    try {
+      await promise;
+    } finally {
+      if (profileFetchRef.current?.promise === promise) {
+        profileFetchRef.current.completedAt = Date.now();
+      }
+    }
+  };
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
@@ -173,20 +193,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(effectiveUser);
 
         if (effectiveUser) {
-          // Use setTimeout to avoid potential deadlocks with Supabase auth
-          setTimeout(() => fetchProfileAndRoles(effectiveUser.id), 0);
+          // Run outside the Supabase auth callback tick while keeping
+          // route guards loading until roles/access are known.
+          setTimeout(() => {
+            void fetchProfileAndRoles(effectiveUser.id)
+              .catch((error) => {
+                console.error("Failed to load user access", error);
+              })
+              .finally(() => setLoading(false));
+          }, 0);
         } else {
           setProfile(null);
           setRoles([]);
           setOfficeAccess({});
           setSessionRevoked(false);
           setIsLinkedDriver(false);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       const bypassUser = !session ? readDevBypassUser() : null;
       const effectiveSession = session ?? (bypassUser ? createDevBypassSession(bypassUser) : null);
       const effectiveUser = effectiveSession?.user ?? null;
@@ -194,7 +221,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(effectiveSession);
       setUser(effectiveUser);
       if (effectiveUser) {
-        fetchProfileAndRoles(effectiveUser.id);
+        try {
+          await fetchProfileAndRoles(effectiveUser.id);
+        } catch (error) {
+          console.error("Failed to load user access", error);
+        }
       }
       setLoading(false);
     });
