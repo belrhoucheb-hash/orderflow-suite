@@ -51,7 +51,7 @@ AS $$
   WHERE part <> '';
 $$;
 
-CREATE OR REPLACE FUNCTION public.normalize_address_book_aliases(values text[])
+CREATE OR REPLACE FUNCTION public.normalize_address_book_aliases(p_values text[])
 RETURNS text[]
 LANGUAGE sql
 IMMUTABLE
@@ -59,7 +59,7 @@ AS $$
   SELECT coalesce(array_agg(alias ORDER BY alias), ARRAY[]::text[])
   FROM (
     SELECT DISTINCT trim(alias) AS alias
-    FROM unnest(coalesce(values, ARRAY[]::text[])) raw(alias)
+    FROM unnest(coalesce(p_values, ARRAY[]::text[])) raw(alias)
     WHERE trim(alias) <> ''
   ) aliases;
 $$;
