@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -532,10 +532,17 @@ const Dispatch = () => {
     const isSelected = selectedTrip?.id === trip.id;
 
     return (
-      <button
+      <div
         key={trip.id}
-        type="button"
+        role="button"
+        tabIndex={0}
         onClick={() => setSelectedTripId(trip.id)}
+        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setSelectedTripId(trip.id);
+          }
+        }}
         className={cn(
           "w-full cursor-pointer rounded-[1.15rem] border text-left transition-all active:cursor-grabbing",
           isSelected
@@ -632,7 +639,7 @@ const Dispatch = () => {
             )}
           </div>
         </div>
-      </button>
+      </div>
     );
   };
 
@@ -687,7 +694,7 @@ const Dispatch = () => {
 
       <div className={cn(detailCardClass, "sticky top-4 z-10 p-4")}>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button className="btn-luxe" onClick={goToPrevDay} aria-label="Vorige dag">
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -710,7 +717,7 @@ const Dispatch = () => {
             />
           </div>
 
-          <div className="flex flex-wrap rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1 gap-1">
+          <div className="flex max-w-full flex-wrap gap-1 rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1">
             {FILTER_TABS.map((tab) => (
               <button
                 key={tab.key}

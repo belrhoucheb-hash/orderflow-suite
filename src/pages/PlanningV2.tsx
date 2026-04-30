@@ -174,7 +174,7 @@ function PlanningV2() {
         }
       />
 
-      <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
+      <div className="flex w-full max-w-full overflow-x-auto sm:inline-flex sm:w-auto items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
         {[
           { value: "planning" as const, label: "Planning" },
           { value: "ritten" as const, label: "Ritten" },
@@ -186,7 +186,7 @@ function PlanningV2() {
             onClick={() => setSection(t.value)}
             aria-pressed={section === t.value}
             className={cn(
-              "px-4 h-7 rounded-full text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
+              "h-7 shrink-0 rounded-full px-4 text-[10px] uppercase tracking-[0.18em] font-semibold transition-colors",
               section === t.value
                 ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
                 : "text-muted-foreground/70 hover:text-foreground",
@@ -215,7 +215,7 @@ function PlanningV2() {
             </button>
             <AutoPlanButton date={selectedDate} onUnplacedChange={setUnplacedHints} />
             <DocksheetExportButton date={selectedDate} />
-            <div className="ml-auto flex items-center gap-3 text-sm">
+            <div className="flex w-full flex-wrap items-center gap-3 text-sm sm:ml-auto sm:w-auto">
               <span className="chiplet">{groups.length} clusters</span>
               <span className="chiplet chiplet--warn">{openOrders.length} open orders</span>
             </div>

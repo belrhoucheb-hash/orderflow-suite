@@ -270,13 +270,13 @@ export default function Fleet() {
                 </div>
 
                 <h1
-                  className="mt-2 text-[2.35rem] font-semibold leading-[1.05] tracking-tight text-foreground"
+                  className="mt-2 text-[2rem] font-semibold leading-[1.05] tracking-tight text-foreground md:text-[2.35rem]"
                   style={{ fontFamily: "var(--font-display)" }}
                 >
                   Vloot
                 </h1>
 
-                <div className="mt-4 inline-flex items-center gap-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))] p-0.5">
+                <div className="mt-4 flex max-w-full overflow-x-auto rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))] p-0.5 sm:inline-flex">
                   {[
                     { value: "voertuigen", label: "Voertuigen" },
                     { value: "types", label: "Types" },
@@ -288,7 +288,7 @@ export default function Fleet() {
                       onClick={() => setActiveTab(tab.value)}
                       aria-pressed={activeTab === tab.value}
                       className={cn(
-                        "h-8 rounded-full px-4 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors",
+                        "h-8 shrink-0 rounded-full px-4 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors",
                         activeTab === tab.value
                           ? "bg-[hsl(var(--gold-soft)/0.65)] text-[hsl(var(--gold-deep))]"
                           : "text-muted-foreground/70 hover:text-foreground",

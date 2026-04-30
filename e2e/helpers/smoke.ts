@@ -161,6 +161,24 @@ export async function visitAndProbe(
   }
   const loadMs = Date.now() - start;
 
+  try {
+    const overflow = await page.evaluate(() => {
+      const root = document.documentElement;
+      const body = document.body;
+      const scrollWidth = Math.max(root.scrollWidth, body?.scrollWidth ?? 0);
+      return {
+        scrollWidth,
+        clientWidth: root.clientWidth,
+        overflowing: scrollWidth > root.clientWidth + 2,
+      };
+    });
+    if (overflow.overflowing) {
+      notes.push(`horizontale overflow: ${overflow.scrollWidth}px op ${overflow.clientWidth}px viewport`);
+    }
+  } catch (e) {
+    notes.push(`overflow-check: ${(e as Error).message.slice(0, 150)}`);
+  }
+
   // Klik elke zichtbare safe-button maximaal één keer.
   try {
     const buttons = await page.locator("button:visible, [role='button']:visible").all();

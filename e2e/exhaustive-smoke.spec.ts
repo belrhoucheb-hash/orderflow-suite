@@ -125,6 +125,10 @@ test.describe("Protected routes (vereist E2E_USER_*)", () => {
       const serverErrors = p.networkErrors.filter((n) => n.status >= 500);
       expect.soft(serverErrors, `5xx op ${p.path}`).toEqual([]);
       expect.soft(p.loadMs, `${p.path} laadt te traag`).toBeLessThan(20_000);
+      expect.soft(
+        p.notes.filter((note) => note.startsWith("horizontale overflow")),
+        `horizontale overflow op ${p.path}`,
+      ).toEqual([]);
     }
   });
 });

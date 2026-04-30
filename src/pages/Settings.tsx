@@ -1170,7 +1170,7 @@ const Settings = () => {
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
-        className="flex-1 flex gap-6 min-h-0"
+        className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6"
       >
         {/* Verborgen TabsList is nodig zodat Radix de controlled value + TabsContent correct orchestreert. */}
         <TabsList className="sr-only" aria-hidden="true">
@@ -1180,7 +1180,7 @@ const Settings = () => {
         </TabsList>
 
         {/* Sidebar-navigatie */}
-        <aside className="w-[270px] shrink-0 overflow-y-auto">
+        <aside className="w-full shrink-0 lg:w-[270px] lg:overflow-y-auto">
           <nav className="overflow-hidden rounded-xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(180deg,hsl(var(--card)),hsl(var(--gold-soft)/0.16))] shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
             {NAV_GROUPS.map((group) => (
               <div key={group.title} className="border-b border-[hsl(var(--gold)/0.10)] p-3.5 last:border-b-0">
