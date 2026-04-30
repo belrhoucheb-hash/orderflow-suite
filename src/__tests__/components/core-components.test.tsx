@@ -7,6 +7,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 // ─── Global Mocks ────────────────────────────────────────────
 const mockSignOut = vi.fn();
 const mockNavigate = vi.fn();
+const { mockReloadForFreshBuild } = vi.hoisted(() => ({
+  mockReloadForFreshBuild: vi.fn(),
+}));
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
@@ -55,7 +58,25 @@ vi.mock("@/contexts/TenantContext", () => ({
     tenant: { id: "t1", name: "TestBedrijf", slug: "test", logoUrl: null, primaryColor: "#dc2626" },
     loading: false,
   }),
+  useTenantOptional: () => ({
+    tenant: { id: "t1", name: "TestBedrijf", slug: "test", logoUrl: null, primaryColor: "#dc2626" },
+    loading: false,
+  }),
   TenantProvider: ({ children }: any) => children,
+}));
+
+vi.mock("@/lib/chunkReload", () => ({
+  isChunkLoadError: (error: unknown) => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "";
+
+    return /failed to fetch dynamically imported module/i.test(message);
+  },
+  reloadForFreshBuild: mockReloadForFreshBuild,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -144,6 +165,7 @@ describe("ErrorBoundary", () => {
   // Must import dynamically after mocks
   let ErrorBoundary: any;
   beforeEach(async () => {
+    mockReloadForFreshBuild.mockClear();
     const mod = await import("@/components/ErrorBoundary");
     ErrorBoundary = mod.ErrorBoundary;
   });
@@ -196,6 +218,27 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>,
     );
     expect(screen.getByText("Een onverwachte fout is opgetreden.")).toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  it("starts a refresh flow for stale lazy chunks", () => {
+    const Bomb = () => {
+      throw new Error("Failed to fetch dynamically imported module: /assets/Clients-abc123.js");
+    };
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(
+      <ErrorBoundary>
+        <Bomb />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText("Nieuwe versie laden")).toBeInTheDocument();
+    expect(screen.getByText("De app is net bijgewerkt. We laden de nieuwste versie automatisch.")).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to fetch dynamically imported module/)).not.toBeInTheDocument();
+    expect(mockReloadForFreshBuild).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByText("Nu herladen"));
+    expect(mockReloadForFreshBuild).toHaveBeenCalledTimes(2);
     spy.mockRestore();
   });
 });
