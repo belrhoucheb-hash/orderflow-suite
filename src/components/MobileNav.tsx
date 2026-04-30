@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { preloadAppRoute } from "@/lib/routePreload";
 import { useExceptionCount } from "@/hooks/useExceptionCount";
 import {
   Sheet,
@@ -107,6 +108,9 @@ export function MobileNav() {
                 )}
                 style={active ? { background: "hsl(219 22% 17%)", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
                 aria-label={item.label}
+                onPointerEnter={() => preloadAppRoute(item.path)}
+                onFocus={() => preloadAppRoute(item.path)}
+                onTouchStart={() => preloadAppRoute(item.path)}
               >
                 <item.icon
                   className="h-5 w-5"
@@ -175,6 +179,9 @@ export function MobileNav() {
                         return (
                           <button
                             key={item.path}
+                            onPointerEnter={() => preloadAppRoute(item.path)}
+                            onFocus={() => preloadAppRoute(item.path)}
+                            onTouchStart={() => preloadAppRoute(item.path)}
                             onClick={() => {
                               setMoreOpen(false);
                               navigate(item.path);

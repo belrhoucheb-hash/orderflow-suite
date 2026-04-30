@@ -8,6 +8,7 @@ import { TenantProvider } from "@/contexts/TenantContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RouteIntentPreloader } from "@/components/RouteIntentPreloader";
 import { Loader2 } from "lucide-react";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/NotFound";
@@ -99,6 +100,7 @@ const App = () => (
         <TooltipProvider>
         <Sonner />
         <BrowserRouter>
+          <RouteIntentPreloader />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route
