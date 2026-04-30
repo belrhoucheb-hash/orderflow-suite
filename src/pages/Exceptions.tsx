@@ -876,50 +876,50 @@ const Exceptions = () => {
     focusOptions.find((option) => option.key === focus)?.label ?? "Alles";
 
   return (
-    <div className="-m-4 min-h-[calc(100vh-3.5rem)] bg-[linear-gradient(180deg,hsl(218_22%_14%)_0%,hsl(222_18%_11%)_15.5rem,hsl(38_30%_95%)_15.5rem,hsl(40_26%_96%)_100%)] px-4 pb-8 pt-6 md:-m-6 md:px-6">
+    <div className="-m-4 min-h-[calc(100vh-3.5rem)] bg-[linear-gradient(180deg,hsl(42_38%_98%)_0%,hsl(40_30%_96%)_18rem,hsl(40_26%_96%)_100%)] px-4 pb-8 pt-6 md:-m-6 md:px-6">
       <div className="mx-auto max-w-[1560px] space-y-5">
-      <div className="relative pb-2 pt-2 text-white">
+      <div className="relative overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.46),hsl(var(--card))_46%,hsl(var(--gold-soft)/0.18))] px-5 py-5 shadow-[0_22px_70px_-54px_hsl(32_45%_26%/0.45)]">
         <div
           aria-hidden
-          className="pointer-events-none absolute -left-8 -top-8 h-36 w-72"
-          style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold) / 0.22), transparent 70%)" }}
+          className="pointer-events-none absolute inset-x-0 top-0 h-px"
+          style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold) / 0.62), transparent)" }}
         />
         <div className="relative flex items-end justify-between gap-5 flex-wrap">
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex items-center gap-2" style={{ fontFamily: "var(--font-display)" }}>
-              <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold-light) / 0.75)" }} />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-light))]">
+              <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.7)" }} />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))]">
                 Triage
               </span>
-              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/45 tabular-nums">
+              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground tabular-nums">
                 {totalCount} {totalCount === 1 ? "uitzondering" : "uitzonderingen"}
               </span>
             </div>
             <h1
-              className="text-[2.15rem] font-semibold leading-[1.05] tracking-tight text-white"
+              className="text-[2.15rem] font-semibold leading-[1.05] tracking-tight text-foreground"
               style={{ fontFamily: "var(--font-display)" }}
             >
               Uitzonderingen
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/62">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               Beoordeel operationele risico's op prioriteit, context en voorgestelde vervolgstap.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-[hsl(222_18%_16%/0.92)] p-3 shadow-[0_24px_70px_-48px_hsl(0_0%_0%/0.8)] backdrop-blur">
+      <div className="rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--card)/0.96)] p-3 shadow-[0_22px_60px_-48px_hsl(32_45%_26%/0.42)] backdrop-blur">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-white/48">
-            <span className="rounded-full border border-white/10 bg-white/[0.08] px-2.5 py-1 font-medium !text-white/86">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.28)] px-2.5 py-1 font-medium text-foreground">
               Actieve selectie: {activeFocusLabel}
             </span>
-            <span className="!text-white/52">{filteredExceptions.length} zichtbaar</span>
+            <span>{filteredExceptions.length} zichtbaar</span>
             <span aria-hidden className="text-[hsl(var(--gold-deep)/0.55)]">•</span>
-            <span className="!text-white/52">{exceptions.length} totaal</span>
+            <span>{exceptions.length} totaal</span>
           </div>
 
-          <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-black/16 p-1">
+          <div className="flex flex-wrap gap-1 rounded-xl border border-[hsl(var(--gold)/0.14)] bg-[hsl(var(--gold-soft)/0.18)] p-1">
             {focusOptions.map((option) => {
               const countLabel = formatFocusCount(focusCounts[option.key]);
 
@@ -928,23 +928,21 @@ const Exceptions = () => {
                   key={option.key}
                   type="button"
                   onClick={() => setFocus(option.key)}
-                  style={{ color: focus === option.key ? "white" : "hsl(0 0% 100% / 0.68)" }}
                   className={cn(
                     "inline-flex min-h-9 items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-medium transition-all whitespace-nowrap",
                     focus === option.key
-                      ? "bg-[linear-gradient(180deg,hsl(var(--gold))_0%,hsl(var(--gold-deep))_100%)] !text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18)]"
-                      : "!text-white/62 hover:bg-white/[0.06] hover:!text-white",
+                      ? "bg-[linear-gradient(180deg,hsl(var(--gold))_0%,hsl(var(--gold-deep))_100%)] text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18)]"
+                      : "text-muted-foreground hover:bg-white/70 hover:text-foreground",
                   )}
                 >
                   <span>{option.label}</span>
                   {countLabel && (
                     <span
-                      style={{ color: focus === option.key ? "white" : "hsl(0 0% 100% / 0.78)" }}
                       className={cn(
                         "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
                         focus === option.key
-                          ? "bg-white/18 !text-white"
-                          : "bg-white/[0.08] !text-white/78 shadow-[inset_0_0_0_1px_hsl(0_0%_100%/0.08)]",
+                          ? "bg-white/18 text-white"
+                          : "bg-white/78 text-foreground shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]",
                       )}
                     >
                       {countLabel}
