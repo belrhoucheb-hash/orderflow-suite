@@ -247,6 +247,7 @@ export default function FacturatieDetail() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
+        eyebrow="Facturatie"
         title={`Factuur ${invoice.invoice_number}`}
         subtitle={`${invoice.client_name} — ${formatDate(invoice.invoice_date)}`}
         actions={

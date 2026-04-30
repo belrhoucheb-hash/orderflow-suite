@@ -322,32 +322,12 @@ const Orders = () => {
   return (
     <div className="page-container">
       {/* Luxe page header — editorial 2026 stijl, matcht OrderDetail */}
-      <div className="relative pb-3 pt-2">
-        <div
-          aria-hidden
-          className="absolute -top-6 -left-8 w-64 h-32 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)" }}
-        />
-        <div className="relative flex items-end justify-between gap-5 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2" style={{ fontFamily: "var(--font-display)" }}>
-              <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
-              <span className="text-[10px] uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))] font-semibold">
-                Operations
-              </span>
-              <span aria-hidden className="inline-block h-[3px] w-[3px] rounded-full" style={{ background: "hsl(var(--gold) / 0.5)" }} />
-              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums font-medium">
-                {totalCount} {totalCount === 1 ? "order" : "orders"}
-              </span>
-            </div>
-            <h1
-              className="text-[2.25rem] leading-[1.05] font-semibold tracking-tight text-foreground"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              Orderlijst
-            </h1>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+      <PageHeader
+        eyebrow="Operations"
+        meta={`${totalCount} ${totalCount === 1 ? "order" : "orders"}`}
+        title="Orderlijst"
+        actions={
+          <>
             <button
               className="btn-luxe"
               onClick={() => exportOrders(orders, "orders")}
@@ -362,9 +342,9 @@ const Orders = () => {
             <button className="btn-luxe btn-luxe--primary" onClick={() => navigate("/orders/nieuw")}>
               <Plus className="h-4 w-4" /> Nieuwe order
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Luxe KPI — asymmetrische hero + ticker strip */}
       <div

@@ -93,6 +93,10 @@ function getStopCounts(trip: Trip): { total: number; done: number; failed: numbe
   };
 }
 
+function sameStringArray(left: string[] = [], right: string[] = []) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 const FILTER_TABS = [
   { key: "alle", label: "Alle", statuses: [] as string[] },
   { key: "concept", label: "Concept", statuses: ["CONCEPT", "VERZENDKLAAR"] },
@@ -323,7 +327,13 @@ const Dispatch = () => {
         }
       }
 
-      return next;
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      const unchanged =
+        prevKeys.length === nextKeys.length &&
+        nextKeys.every((laneId) => sameStringArray(prev[laneId], next[laneId]));
+
+      return unchanged ? prev : next;
     });
   }, [baseBoardLanes, baseLaneByTrip, boardTrips, dragLaneMap]);
 
@@ -645,7 +655,7 @@ const Dispatch = () => {
 
   return (
     <div className="page-container space-y-5">
-      <div className="relative pb-2 pt-2">
+      <div className="relative overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.46),hsl(var(--card))_46%,hsl(var(--gold-soft)/0.18))] px-5 py-5 shadow-[0_22px_70px_-54px_hsl(32_45%_26%/0.45)]">
         <div
           aria-hidden
           className="pointer-events-none absolute -left-6 -top-5 h-24 w-56"

@@ -512,6 +512,7 @@ const Rapportage = () => {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="flex-1 min-w-0">
           <PageHeader
+            eyebrow="Financieel"
             title="Rapportage"
             subtitle="Overzicht van prestaties, kosten en klantactiviteit"
           />

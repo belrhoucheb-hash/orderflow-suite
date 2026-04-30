@@ -40,6 +40,7 @@ export default function ClientDetail() {
   return (
     <div className="p-6 max-w-5xl mx-auto w-full space-y-4">
       <PageHeader
+        eyebrow="Klant"
         title={client.name}
         subtitle={client.contact_person || client.email || "Klantdetail"}
         actions={

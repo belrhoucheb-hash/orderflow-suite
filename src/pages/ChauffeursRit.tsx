@@ -450,6 +450,7 @@ const ChauffeursRit = () => {
     <div className="space-y-4">
       {/* Header */}
       <PageHeader
+        eyebrow="Planning"
         title="Chauffeurs Rit"
         subtitle="Ritdetails per chauffeur met stops, tijden en ladinginfo"
         actions={

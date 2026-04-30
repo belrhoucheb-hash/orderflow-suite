@@ -71,6 +71,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QueryError } from "@/components/QueryError";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { useDrivers, type Driver } from "@/hooks/useDrivers";
 import { useDriverCertifications } from "@/hooks/useDriverCertifications";
@@ -633,63 +634,53 @@ export default function Chauffeurs() {
 
   return (
     <div className="page-container">
-      {/* Luxe page header */}
-      <div className="relative pb-3 pt-2">
-        <div
-          aria-hidden
-          className="absolute -top-6 -left-8 w-64 h-32 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.6), transparent 70%)" }}
-        />
-        <div className="relative flex items-end justify-between gap-5 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <div
-              className="flex items-center gap-2.5 mb-3 flex-wrap"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              <span
-                aria-hidden
-                className="inline-block h-[1px] w-8"
-                style={{
-                  background: "linear-gradient(90deg, transparent, hsl(var(--gold)/0.7))",
-                }}
-              />
-              <span className="text-[10px] uppercase tracking-[0.3em] text-[hsl(var(--gold-deep))] font-semibold">
-                {greeting}
-              </span>
-              <span
-                aria-hidden
-                className="inline-block h-[3px] w-[3px] rounded-full"
-                style={{ background: "hsl(var(--gold) / 0.5)" }}
-              />
-              <span className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground/80 tabular-nums font-medium">
-                {stats.actief} actief, {stats.beschikbaar} beschikbaar
-                {stats.gearchiveerd > 0 ? `, ${stats.gearchiveerd} archief` : ""}
-              </span>
-              {stats.verlopend > 0 && (
-                <>
-                  <span
-                    aria-hidden
-                    className="inline-block h-[3px] w-[3px] rounded-full"
-                    style={{ background: "hsl(var(--gold) / 0.5)" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSortConfig({ field: "expiry", direction: "asc" })}
-                    className="text-[10px] uppercase tracking-[0.22em] text-amber-700 font-semibold tabular-nums hover:text-amber-800 transition-colors"
-                    title="Sorteer op eerst vervallende documenten"
-                  >
-                    {stats.verlopend} verlopend
-                  </button>
-                </>
-              )}
-            </div>
-            <h1
-              className="text-[2.25rem] leading-[1.05] font-semibold tracking-tight text-foreground"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              Chauffeurs
-            </h1>
-            <div className="mt-3 inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
+      <PageHeader
+        eyebrow={greeting}
+        meta={
+          <>
+            {stats.actief} actief, {stats.beschikbaar} beschikbaar
+            {stats.gearchiveerd > 0 ? `, ${stats.gearchiveerd} archief` : ""}
+            {stats.verlopend > 0 && (
+              <button
+                type="button"
+                onClick={() => setSortConfig({ field: "expiry", direction: "asc" })}
+                className="ml-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-amber-700 transition-colors hover:text-amber-800"
+                title="Sorteer op eerst vervallende documenten"
+              >
+                {stats.verlopend} verlopend
+              </button>
+            )}
+          </>
+        }
+        title="Chauffeurs"
+        actions={activeTab === "chauffeurs" ? (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="btn-luxe">
+                  <Download className="h-4 w-4" /> Export
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl border-border/50">
+                <DropdownMenuItem className="cursor-pointer" onClick={() => exportCsv("current")}>
+                  Huidige weergave ({filtered.length})
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" onClick={() => exportCsv("all")}>
+                  Volledige chauffeurlijst ({drivers.length})
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer" onClick={() => exportCsv("code95")}>
+                  Code 95 compliance-rapport
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button className="btn-luxe btn-luxe--primary" onClick={handleAdd}>
+              <Plus className="h-4 w-4" /> Chauffeur Toevoegen
+            </button>
+          </>
+        ) : undefined}
+      >
+            <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--card))]">
               {[
                 { value: "chauffeurs", label: "Lijst" },
                 { value: "certificeringen", label: "Certificeringen" },
@@ -712,35 +703,7 @@ export default function Chauffeurs() {
                 </button>
               ))}
             </div>
-          </div>
-          {activeTab === "chauffeurs" ? (
-            <div className="flex items-center gap-2 shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="btn-luxe">
-                    <Download className="h-4 w-4" /> Export
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="rounded-xl border-border/50">
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => exportCsv("current")}>
-                    Huidige weergave ({filtered.length})
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => exportCsv("all")}>
-                    Volledige chauffeurlijst ({drivers.length})
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => exportCsv("code95")}>
-                    Code 95 compliance-rapport
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <button className="btn-luxe btn-luxe--primary" onClick={handleAdd}>
-                <Plus className="h-4 w-4" /> Chauffeur Toevoegen
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
+      </PageHeader>
 
       <Tabs
         value={activeTab}

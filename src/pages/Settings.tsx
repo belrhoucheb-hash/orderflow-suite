@@ -1160,6 +1160,7 @@ const Settings = () => {
   return (
     <div className="flex flex-col gap-6 h-full pb-12">
       <PageHeader
+        eyebrow="Beheer"
         title={t('pages.settings.title')}
         subtitle={t('pages.settings.subtitle')}
       />

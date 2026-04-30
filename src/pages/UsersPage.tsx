@@ -738,6 +738,7 @@ const UsersPage = () => {
   return (
     <div className="space-y-5">
       <PageHeader
+        eyebrow="Beheer"
         title="Gebruikers"
         subtitle="Beheer toegang, rollen en profielgegevens voor kantooraccounts."
         actions={isAdmin ? (

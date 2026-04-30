@@ -77,7 +77,7 @@ const Dashboard = () => {
   return (
     <div className="-m-6 min-h-[calc(100vh-3rem)] flex flex-col bg-muted/30">
       {/* Luxe hero header */}
-      <div className="relative bg-card border-b border-border/50 shrink-0">
+      <div className="relative mx-6 mt-5 shrink-0 overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.46),hsl(var(--card))_46%,hsl(var(--gold-soft)/0.18))] shadow-[0_22px_70px_-54px_hsl(32_45%_26%/0.45)]">
         <span className="absolute top-0 left-0 right-0 h-px pointer-events-none" style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold) / 0.4), transparent)" }} />
         <div className="px-6 py-5">
           <div className="inline-flex items-center gap-2 mb-2">

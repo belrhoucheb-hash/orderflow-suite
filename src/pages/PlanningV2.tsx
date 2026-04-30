@@ -163,6 +163,7 @@ function PlanningV2() {
   return (
     <div className="p-6 space-y-4 max-w-[1800px] mx-auto">
       <PageHeader
+        eyebrow="Operatie"
         title="Planbord"
         subtitle={
           section === "planning"

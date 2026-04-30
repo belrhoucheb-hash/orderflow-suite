@@ -380,6 +380,7 @@ const Autonomie = () => {
   return (
     <div className="page-container">
       <PageHeader
+        eyebrow="AI"
         title="AI Autonomie"
         subtitle="Inzicht in hoe het systeem leert en zelfstandig beslissingen neemt"
       />
