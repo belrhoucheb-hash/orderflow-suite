@@ -572,7 +572,107 @@ const Facturatie = () => {
           boxShadow: "0 28px 60px -38px hsl(var(--gold-deep) / 0.28)",
         }}
       >
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-[hsl(var(--gold)/0.1)] md:hidden">
+          {filtered.map((invoice) => {
+            const overdue = isOverdue(invoice.due_date, invoice.status);
+            const effectiveStatus = overdue ? "vervallen" : invoice.status;
+
+            return (
+              <div key={invoice.id} className="px-4 py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/facturatie/${invoice.id}`)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={cn("h-2 w-2 shrink-0 rounded-full", statusDotColors[effectiveStatus])} />
+                      <span className="truncate font-mono text-sm font-semibold text-foreground">
+                        {invoice.invoice_number}
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-sm text-foreground/82">{invoice.client_name}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="rounded-md border border-[hsl(var(--gold)/0.16)] px-2 py-0.5 font-medium tabular-nums text-foreground">
+                        {formatCurrency(invoice.total)}
+                      </span>
+                      <span>{formatDate(invoice.invoice_date)}</span>
+                      {invoice.due_date && (
+                        <span className={overdue ? "font-medium text-red-600 dark:text-red-400" : undefined}>
+                          Vervalt {formatDate(invoice.due_date)}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium", statusStyles[effectiveStatus])}>
+                    <span className={cn("h-1 w-1 rounded-full", statusDotColors[effectiveStatus])} />
+                    {statusLabels[effectiveStatus]}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    {effectiveStatus === "concept" && (
+                      <button
+                        onClick={() => void handleInvoiceStatusAction(invoice.id, "verzonden")}
+                        disabled={updateInvoiceStatusMutation.isPending}
+                        className="rounded-md border border-blue-200/60 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-500/8 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-800/60 dark:text-blue-300"
+                      >
+                        Verzend
+                      </button>
+                    )}
+                    {(effectiveStatus === "verzonden" || effectiveStatus === "vervallen") && (
+                      <button
+                        onClick={() => void handleInvoiceStatusAction(invoice.id, "betaald")}
+                        disabled={updateInvoiceStatusMutation.isPending}
+                        className="rounded-md border border-emerald-200/60 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-500/8 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-800/60 dark:text-emerald-300"
+                      >
+                        Betaald
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => navigate(`/facturatie/${invoice.id}`)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground"
+                      aria-label={`Bekijk factuur ${invoice.invoice_number}`}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    {invoice.pdf_url && (
+                      <a
+                        href={invoice.pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground"
+                        aria-label={`Download factuur ${invoice.invoice_number}`}
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="px-5 py-16 text-center">
+              <div
+                className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border"
+                style={{
+                  borderColor: "hsl(var(--gold) / 0.14)",
+                  background: "linear-gradient(135deg, hsl(var(--gold-soft) / 0.35) 0%, hsl(var(--gold) / 0.18) 100%)",
+                }}
+              >
+                <Receipt className="h-6 w-6 text-[hsl(var(--gold-deep))]" />
+              </div>
+              <p className="mt-4 text-sm font-medium text-foreground">Geen facturen gevonden</p>
+              <p className="mt-1 text-xs text-muted-foreground">Zodra facturen binnenkomen, verschijnt je werkvoorraad hier.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full">
             <thead>
               <tr
@@ -747,7 +847,7 @@ const Facturatie = () => {
         </div>
 
         <div
-          className="flex items-center justify-between border-t px-4 py-3"
+          className="flex flex-col gap-3 border-t px-4 py-3 md:flex-row md:items-center md:justify-between"
           style={{
             borderColor: "hsl(var(--gold) / 0.12)",
             background: "linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--gold-soft) / 0.18) 100%)",

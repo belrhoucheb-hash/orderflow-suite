@@ -847,7 +847,69 @@ const UsersPage = () => {
             ) : undefined}
           />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y divide-[hsl(var(--gold)/0.1)] md:hidden">
+            {filteredUsers.map((row, idx) => {
+              const primaryRole = getPrimaryRole(row);
+              const isCurrentUser = currentUser?.id === row.user_id;
+              const active = isUserActive(row);
+
+              return (
+                <motion.div
+                  key={row.user_id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: idx * 0.02 }}
+                  className="px-4 py-3.5"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,hsl(var(--gold-soft)),hsl(var(--card)))] text-xs font-semibold text-[hsl(var(--gold-deep))] shadow-sm ring-1 ring-[hsl(var(--gold)/0.18)]">
+                      {(row.display_name || row.email || "?").slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-foreground">{row.display_name || "Onbekend"}</p>
+                            {isCurrentUser && <Badge variant="secondary" className="text-[10px] px-1.5">Jij</Badge>}
+                          </div>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{row.email ?? `${row.user_id.slice(0, 8)}...`}</p>
+                        </div>
+                        <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", active ? "bg-[hsl(var(--gold-deep))]" : "bg-muted-foreground/45")} />
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className={cn("text-xs px-2.5 py-1", roleStyles[primaryRole])}>
+                          {primaryRole === "admin" ? <Shield className="h-2.5 w-2.5 mr-1" /> : <UserCog className="h-2.5 w-2.5 mr-1" />}
+                          {roleLabels[primaryRole]}
+                        </Badge>
+                        <span className="rounded-md border border-[hsl(var(--gold)/0.16)] px-2 py-0.5 text-xs text-muted-foreground">
+                          {active ? "Actief" : "Inactief"}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(row.last_sign_in_at)}
+                        </span>
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => openConfig(row)}
+                        aria-label={`Bewerken ${row.display_name || row.email || "gebruiker"}`}
+                        className="h-9 w-9 shrink-0 border-[hsl(var(--gold)/0.20)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.55)]"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full table-fixed">
               <colgroup>
                 <col className="w-[38%]" />
@@ -937,6 +999,7 @@ const UsersPage = () => {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         <div className="flex items-center justify-between border-t border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.18)] px-5 py-3">
