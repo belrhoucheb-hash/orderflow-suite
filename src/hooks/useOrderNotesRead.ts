@@ -125,20 +125,27 @@ interface UnreadNoteOrderIdsResult {
   isLoading: boolean;
 }
 
-export function useUnreadNoteOrderIds(): UnreadNoteOrderIdsResult {
+export function useUnreadNoteOrderIds(orderIds?: string[]): UnreadNoteOrderIdsResult {
   const { tenant } = useTenantOptional();
   const userId = useCurrentUserId();
+  const scopedOrderIds = orderIds?.filter(Boolean) ?? null;
 
   const query = useQuery({
-    queryKey: ["unreadNoteOrderIds", tenant?.id, userId],
-    enabled: !!tenant?.id && !!userId,
+    queryKey: ["unreadNoteOrderIds", tenant?.id, userId, scopedOrderIds?.join(",") ?? "all"],
+    enabled: !!tenant?.id && !!userId && (scopedOrderIds === null || scopedOrderIds.length > 0),
     staleTime: 30_000,
     queryFn: async (): Promise<Set<string>> => {
-      const { data: orders, error: ordersErr } = await (supabase as any)
+      let ordersQuery = (supabase as any)
         .from("orders")
         .select("id, notes, reference, notes_updated_at")
         .eq("tenant_id", tenant!.id)
         .or("notes.not.is.null,reference.not.is.null");
+
+      if (scopedOrderIds) {
+        ordersQuery = ordersQuery.in("id", scopedOrderIds);
+      }
+
+      const { data: orders, error: ordersErr } = await ordersQuery;
       if (ordersErr) throw ordersErr;
 
       const candidateOrders = (orders ?? []).filter((o: any) => {

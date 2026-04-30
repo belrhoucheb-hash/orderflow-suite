@@ -182,6 +182,76 @@ export interface UseClientsListResult {
   totalCount: number;
 }
 
+export interface ClientStats {
+  total: number;
+  active: number;
+  inactive: number;
+  dormant: number;
+}
+
+export interface ClientsPageData extends UseClientsListResult {
+  stats: ClientStats;
+  countries: string[];
+}
+
+const EMPTY_CLIENT_STATS: ClientStats = {
+  total: 0,
+  active: 0,
+  inactive: 0,
+  dormant: 0,
+};
+
+export function useClientsPageData(opts: UseClientsListOptions = {}) {
+  const {
+    search,
+    page = 0,
+    pageSize = 50,
+    isActive = null,
+    country = null,
+    sortKey = "name",
+    sortDir = "asc",
+    dormantOnly = false,
+  } = opts;
+  const { tenant } = useTenant();
+
+  return useQuery<ClientsPageData>({
+    queryKey: [
+      "clients_page",
+      { search, page, pageSize, isActive, country, sortKey, sortDir, dormantOnly, tenantId: tenant?.id },
+    ],
+    staleTime: 60_000,
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const { data, error } = await (supabase.rpc as any)("clients_page_v1", {
+        p_tenant_id: tenant!.id,
+        p_search: search ?? null,
+        p_page: page,
+        p_page_size: pageSize,
+        p_is_active: isActive,
+        p_country: country,
+        p_sort_key: sortKey,
+        p_sort_dir: sortDir,
+        p_dormant_only: dormantOnly,
+        p_dormant_threshold_days: DORMANT_THRESHOLD_DAYS,
+      });
+      if (error) throw error;
+
+      const raw = data ?? {};
+      return {
+        clients: ((raw.clients ?? []) as unknown) as Client[],
+        totalCount: Number(raw.total_count ?? 0),
+        stats: {
+          total: Number(raw.stats?.total ?? 0),
+          active: Number(raw.stats?.active ?? 0),
+          inactive: Number(raw.stats?.inactive ?? 0),
+          dormant: Number(raw.stats?.dormant ?? 0),
+        },
+        countries: Array.isArray(raw.countries) ? raw.countries.map(String) : [],
+      };
+    },
+  });
+}
+
 export function useClientsList(opts: UseClientsListOptions = {}) {
   const {
     search,
@@ -321,13 +391,6 @@ export function useClientsList(opts: UseClientsListOptions = {}) {
   });
 }
 
-export interface ClientStats {
-  total: number;
-  active: number;
-  inactive: number;
-  dormant: number;
-}
-
 /**
  * KPI-strip voor de klantenlijst: totale klant-aantallen en slapende-
  * klant-telling voor de hele tenant, los van de huidige paginering of
@@ -382,6 +445,7 @@ export function useClientStats() {
       }
       return { total: rows.length, active, inactive, dormant };
     },
+    placeholderData: EMPTY_CLIENT_STATS,
   });
 }
 
@@ -572,6 +636,7 @@ export function useCreateClient() {
       }
       qc.invalidateQueries({ queryKey: ["clients"] });
       qc.invalidateQueries({ queryKey: ["clients_list"] });
+      qc.invalidateQueries({ queryKey: ["clients_page"] });
       qc.invalidateQueries({ queryKey: ["client_stats"] });
       qc.invalidateQueries({ queryKey: ["client_countries"] });
     },
@@ -689,6 +754,7 @@ export function useUpdateClient() {
       if (touchesList) {
         qc.invalidateQueries({ queryKey: ["clients"] });
         qc.invalidateQueries({ queryKey: ["clients_list"] });
+        qc.invalidateQueries({ queryKey: ["clients_page"] });
         qc.invalidateQueries({ queryKey: ["client_stats"] });
       }
     },
@@ -717,6 +783,7 @@ export function useBulkUpdateClientsActive() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["clients"] });
       qc.invalidateQueries({ queryKey: ["clients_list"] });
+      qc.invalidateQueries({ queryKey: ["clients_page"] });
       qc.invalidateQueries({ queryKey: ["client_stats"] });
     },
   });

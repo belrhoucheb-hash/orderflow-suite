@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantInsert } from "@/hooks/useTenantInsert";
+import { useTenantOptional } from "@/contexts/TenantContext";
 
 export type EmploymentType = "vast" | "flex" | "ingehuurd" | "zzp" | "uitzendkracht";
 export type LegitimationType = "rijbewijs" | "paspoort" | "id-kaart";
@@ -59,6 +60,28 @@ export interface DriverCertificationExpiry {
   document_url: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type PlanningDriver = Pick<Driver, "id" | "name" | "is_active" | "contract_hours_per_week">;
+
+export function usePlanningDrivers() {
+  const { tenant } = useTenantOptional();
+
+  return useQuery({
+    queryKey: ["drivers", "planning", tenant?.id],
+    enabled: !!tenant?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("drivers" as any)
+        .select("id, name, is_active, contract_hours_per_week")
+        .eq("tenant_id", tenant!.id)
+        .order("name");
+
+      if (error) throw error;
+      return data as any as PlanningDriver[];
+    },
+  });
 }
 
 export function useDrivers() {

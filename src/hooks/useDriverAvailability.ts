@@ -73,6 +73,7 @@ export function useUpsertDriverAvailability() {
     onSuccess: (row) => {
       qc.invalidateQueries({ queryKey: ["driver_availability", row.date] });
       qc.invalidateQueries({ queryKey: ["driver_availability_range"] });
+      qc.invalidateQueries({ queryKey: ["planning_day_support"] });
     },
   });
 }
@@ -93,6 +94,7 @@ export function useBulkUpsertDriverAvailability() {
       const dates = new Set(variables.map((r) => r.date));
       dates.forEach((d) => qc.invalidateQueries({ queryKey: ["driver_availability", d] }));
       qc.invalidateQueries({ queryKey: ["driver_availability_range"] });
+      qc.invalidateQueries({ queryKey: ["planning_day_support"] });
     },
   });
 }

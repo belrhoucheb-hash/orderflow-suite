@@ -11,6 +11,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useInvoiceById, useUpdateInvoiceStatus, useUpdateInvoiceLines, type InvoiceLine } from "@/hooks/useInvoices";
 import { downloadInvoicePDF } from "@/lib/invoiceUtils";
+import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -56,6 +57,7 @@ export default function FacturatieDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: invoice, isLoading, isError } = useInvoiceById(id ?? null);
+  const { tenant } = useTenant();
   const updateStatus = useUpdateInvoiceStatus();
   const updateLines = useUpdateInvoiceLines();
   const [confirmAction, setConfirmAction] = useState<{ status: string; label: string } | null>(null);
@@ -203,8 +205,12 @@ export default function FacturatieDetail() {
   const handleDownloadPDF = async () => {
     if (!invoice) return;
     try {
-      await downloadInvoicePDF(invoice);
-      toast.success("PDF wordt gedownload");
+      await downloadInvoicePDF(invoice, { templateUrl: tenant?.invoiceTemplateUrl });
+      toast.success(
+        tenant?.invoiceTemplateUrl
+          ? "PDF wordt gedownload met tenant-sjabloon"
+          : "PDF wordt gedownload"
+      );
     } catch (e: any) {
       toast.error("PDF generatie mislukt", { description: e.message });
     }

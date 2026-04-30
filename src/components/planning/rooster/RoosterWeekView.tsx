@@ -755,6 +755,7 @@ function useDriverSchedulesDeleteOnly() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["driver-schedules"] });
       qc.invalidateQueries({ queryKey: ["driver-schedule-for-date"] });
+      qc.invalidateQueries({ queryKey: ["planning_day_support"] });
     },
   });
   return { deleteSchedule: mutation.mutateAsync };

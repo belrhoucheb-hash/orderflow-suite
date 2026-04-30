@@ -94,6 +94,21 @@ interface FreightLine {
   coords_manual?: boolean;
 }
 
+type RouteStopKind = "pickup" | "stop" | "delivery";
+
+interface RouteStopModel {
+  id: string;
+  sequence: number;
+  kind: RouteStopKind;
+  line: FreightLine;
+  title: string;
+  shortTitle: string;
+  fallback: string;
+  missingAddress: boolean;
+  missingDate: boolean;
+  isFinal: boolean;
+}
+
 interface FreightSummaryItem {
   id: string;
   aankomstdatum: string;
@@ -1644,6 +1659,52 @@ const NewOrder = () => {
   const deliveryLine = freightLines.find(f => f.activiteit === "Lossen");
   const extraDeliveryLines = freightLines.filter(f => f.activiteit === "Lossen").slice(1);
   const deliveryStops = [deliveryLine, ...extraDeliveryLines].filter(Boolean) as FreightLine[];
+  const routeStops = useMemo<RouteStopModel[]>(() => {
+    const pickup = freightLines.find(line => line.activiteit === "Laden");
+    const deliveries = freightLines.filter(line => line.activiteit === "Lossen");
+    const stops: RouteStopModel[] = [];
+
+    if (pickup) {
+      stops.push({
+        id: pickup.id,
+        sequence: 1,
+        kind: "pickup",
+        line: pickup,
+        title: "Ophalen",
+        shortTitle: "L",
+        fallback: "Ophaaladres kiezen",
+        missingAddress: !pickup.locatie,
+        missingDate: !pickup.datum,
+        isFinal: false,
+      });
+    }
+
+    deliveries.forEach((line, index) => {
+      const hasMultipleDeliveries = deliveries.length > 1;
+      const isFinal = index === deliveries.length - 1;
+      const kind: RouteStopKind = isFinal ? "delivery" : "stop";
+      const title = !hasMultipleDeliveries
+        ? "Afleveren"
+        : isFinal
+          ? "Eindbestemming"
+          : `Stop ${index + 1}`;
+
+      stops.push({
+        id: line.id,
+        sequence: stops.length + 1,
+        kind,
+        line,
+        title,
+        shortTitle: kind === "delivery" ? "B" : String(index + 1),
+        fallback: kind === "delivery" ? "Afleveradres kiezen" : "Stop invullen",
+        missingAddress: !line.locatie,
+        missingDate: !line.datum,
+        isFinal,
+      });
+    });
+
+    return stops;
+  }, [freightLines]);
   const pickupRouteIssue = routeRuleIssues.find((issue) => issue.lineId === pickupLine?.id);
   const primaryDeliveryRouteIssue = routeRuleIssues.find((issue) => issue.lineId === deliveryLine?.id && issue.key !== "route_duplicate");
   const isMultiLegRoute = deliveryStops.length > 1;
@@ -1653,8 +1714,7 @@ const NewOrder = () => {
     return `Stop ${index + 1}`;
   };
   const routeLocationSummary = [
-    pickupLine?.locatie,
-    ...deliveryStops.map(line => line.locatie),
+    ...routeStops.map(stop => stop.line.locatie),
   ].filter(Boolean).join(" -> ");
   const clientInputReady = clientName.trim().length >= 2;
   const clientAnswered = Boolean(clientId || (clientQuestionConfirmed && clientInputReady));
@@ -1680,36 +1740,29 @@ const NewOrder = () => {
     !missingTimeWindow &&
     routeRuleIssues.length === 0,
   );
-  const routePreviewStops = [
-    {
-      id: pickupLine?.id || "pickup",
-      label: "Ophalen",
-      line: pickupLine,
-      missingAddress: missingPickupAddress,
-      missingDate: missingPickupTimeWindow,
-      issue: routeRuleIssues.find((issue) => issue.lineId === pickupLine?.id),
-      onClick: () => focusWizardTarget("pickup"),
-      fallback: "Ophaaladres kiezen",
+  const routePreviewStops = routeStops.map((stop) => ({
+    id: stop.id,
+    label: stop.title,
+    shortLabel: stop.shortTitle,
+    line: stop.line,
+    missingAddress: stop.missingAddress,
+    missingDate: stop.missingDate,
+    issue: routeRuleIssues.find((issue) => issue.lineId === stop.line.id),
+    onClick: () => {
+      if (stop.kind === "pickup") {
+        focusWizardTarget("pickup");
+        return;
+      }
+      if (stop.line.id === deliveryLine?.id) {
+        focusWizardTarget("delivery");
+        return;
+      }
+      setWizardStep("route");
+      setRouteManualBack(true);
+      setRouteActiveQuestion(4);
     },
-    ...deliveryStops.map((line, index) => ({
-      id: line.id,
-      label: getDeliveryStopLabel(index, deliveryStops.length),
-      line,
-      missingAddress: index === 0 ? missingDeliveryAddress : !line.locatie,
-      missingDate: index === 0 ? missingDeliveryTimeWindow : !line.datum,
-      issue: routeRuleIssues.find((issue) => issue.lineId === line.id),
-      onClick: () => {
-        if (index === 0) {
-          focusWizardTarget("delivery");
-          return;
-        }
-        setWizardStep("route");
-        setRouteManualBack(true);
-        setRouteActiveQuestion(4);
-      },
-      fallback: index === 0 ? "Afleveradres kiezen" : "Stop invullen",
-    })),
-  ];
+    fallback: stop.fallback,
+  }));
   const routeMapStops = routePreviewStops.filter(stop => stop.line?.locatie);
   const routeMapPlottedCount = routeMapStops.filter(stop => stop.line?.lat != null && stop.line?.lng != null).length;
   const routeMapMissingGpsCount = Math.max(routeMapStops.length - routeMapPlottedCount, 0);
@@ -2757,6 +2810,7 @@ const NewOrder = () => {
 
   useEffect(() => {
     if (!serverDraftReady || !serverDraftId || !draftRestored || !prefillReady || initialClientId || fromOrderId) return;
+    if (serverBaselineSignature === formSignature) return;
     if (draftAutosaveTimerRef.current) window.clearTimeout(draftAutosaveTimerRef.current);
     draftAutosaveTimerRef.current = window.setTimeout(() => {
       setDraftSaveStatus("saving");
@@ -2788,6 +2842,7 @@ const NewOrder = () => {
     prefillReady,
     serverDraftId,
     serverDraftReady,
+    serverBaselineSignature,
     upsertServerDraft,
   ]);
 
@@ -3984,11 +4039,11 @@ const NewOrder = () => {
                 </div>
               )}
               {routeLegInsights.length > 0 && (
-                <div className="mt-3 space-y-2">
+                <div className="mt-2 overflow-hidden rounded-xl border border-[hsl(var(--gold)_/_0.12)] bg-white/55">
                   {routeLegInsights.map((leg) => (
                     <div
                       key={leg.id}
-                      className="rounded-xl border border-white/80 bg-white/75 px-3 py-2 shadow-sm"
+                      className="border-b border-[hsl(var(--gold)_/_0.10)] px-3 py-2 last:border-b-0"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-[11px] font-semibold text-foreground">
@@ -4720,6 +4775,110 @@ const NewOrder = () => {
                     setIntakeActiveQuestion(1);
                   },
                 )}
+
+                <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white/80 px-4 py-3 shadow-[0_14px_32px_rgba(15,23,42,0.045)]">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-semibold tracking-[0.14em] text-[hsl(var(--gold-deep))]">Stops-first route</div>
+                      <div className="text-xs text-muted-foreground">Elke locatie is een stop in dezelfde rit.</div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <div className="rounded-full border border-[hsl(var(--gold)_/_0.18)] bg-[hsl(var(--gold-soft)_/_0.30)] px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--gold-deep))]">
+                        {routeStops.filter(stop => !stop.missingAddress).length}/{routeStops.length} locaties
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (missingDeliveryAddress) {
+                            setRouteManualBack(true);
+                            setRouteActiveQuestion(2);
+                            return;
+                          }
+                          addFreightLine();
+                          setRouteManualBack(true);
+                          setRouteActiveQuestion(4);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--gold))] px-3 py-1.5 text-[11px] font-semibold text-white shadow-[0_8px_20px_hsl(var(--gold)_/_0.25)] transition hover:bg-[hsl(var(--gold-deep))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)_/_0.35)]"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Tussenstop toevoegen
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {routeStops.map((stop) => {
+                      const hasIssue = routeRuleIssues.some((issue) => issue.lineId === stop.line.id);
+                      const isCurrent =
+                        (routeActiveQuestion === 1 && stop.kind === "pickup") ||
+                        (routeActiveQuestion === 2 && stop.line.id === deliveryLine?.id) ||
+                        (routeActiveQuestion === 4 && stop.kind !== "pickup");
+                      const canClearStop = stop.kind === "delivery";
+
+                      return (
+                        <div
+                          key={stop.id}
+                          className={cn(
+                            "group inline-flex min-w-0 items-center gap-1 rounded-full border py-1.5 pl-2 pr-2 text-left text-xs transition",
+                            isCurrent
+                              ? "border-[hsl(var(--gold)_/_0.42)] bg-[hsl(var(--gold-soft)_/_0.42)] text-foreground shadow-sm"
+                              : "border-border/70 bg-white text-muted-foreground hover:border-[hsl(var(--gold)_/_0.25)] hover:bg-[hsl(var(--gold-soft)_/_0.22)]",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (stop.kind === "pickup") {
+                                setRouteManualBack(true);
+                                setRouteActiveQuestion(1);
+                                return;
+                              }
+                              if (stop.line.id === deliveryLine?.id) {
+                                setRouteManualBack(true);
+                                setRouteActiveQuestion(2);
+                                return;
+                              }
+                              setRouteManualBack(true);
+                              setRouteActiveQuestion(4);
+                            }}
+                            className="inline-flex min-w-0 items-center gap-2 rounded-full px-1.5 py-0.5 text-left focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)_/_0.35)]"
+                          >
+                            <span className={cn(
+                              "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                              stop.missingAddress || hasIssue ? "bg-red-50 text-red-600" : "bg-[hsl(var(--gold))] text-white",
+                            )}>
+                              {stop.shortTitle}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block font-semibold">{stop.title}</span>
+                              <span className={cn("block max-w-[15rem] truncate", stop.missingAddress ? "text-red-600" : "text-muted-foreground")}>
+                                {stop.line.locatie || stop.fallback}
+                              </span>
+                            </span>
+                          </button>
+                          {canClearStop && (
+                            <button
+                              type="button"
+                              aria-label="Eindbestemming wissen"
+                              onClick={() => {
+                                if (extraDeliveryLines.some(line => line.id === stop.line.id)) {
+                                  removeFreightLine(stop.line.id);
+                                } else {
+                                  handleDeliveryAddrChange(EMPTY_ADDRESS);
+                                  setDeliveryLookup("");
+                                }
+                                setRouteManualBack(true);
+                                setRouteActiveQuestion(2);
+                              }}
+                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-80 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 {routeActiveQuestion > 1 && renderCollapsedAnswer(
                   "Ophalen",

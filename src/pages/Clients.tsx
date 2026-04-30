@@ -35,9 +35,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  useClientsList,
-  useClientCountries,
-  useClientStats,
+  useClientsPageData,
   useBulkUpdateClientsActive,
   type Client,
   type ClientSortKey,
@@ -73,7 +71,7 @@ export default function Clients() {
     statusFilter === "actief" ? true : statusFilter === "inactief" ? false : null;
   const country = countryFilter === "alle" ? null : countryFilter;
 
-  const { data, isLoading, isError, refetch } = useClientsList({
+  const { data, isLoading, isError, refetch } = useClientsPageData({
     search,
     page,
     pageSize: PAGE_SIZE,
@@ -83,8 +81,8 @@ export default function Clients() {
     sortDir,
     dormantOnly: activityFilter === "slapend",
   });
-  const { data: countries = [] } = useClientCountries();
-  const { data: stats } = useClientStats();
+  const countries = data?.countries ?? [];
+  const stats = data?.stats;
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

@@ -26,6 +26,7 @@ export function useDriverSchedulesRealtime(): void {
       queryClient.invalidateQueries({ queryKey: ["driver-schedules"] });
       queryClient.invalidateQueries({ queryKey: ["driver-schedule-for-date"] });
       queryClient.invalidateQueries({ queryKey: ["driver-schedules-for-date"] });
+      queryClient.invalidateQueries({ queryKey: ["planning_day_support"] });
     },
   );
 }

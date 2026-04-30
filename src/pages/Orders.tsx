@@ -183,8 +183,9 @@ const Orders = () => {
     createdBefore: staleDraftOnly ? staleDraftCutoffIso : undefined,
     staleThresholdHours: 2,
   });
-  const { unreadOrderIds } = useUnreadNoteOrderIds();
   const rawOrders = data?.orders ?? [];
+  const visibleOrderIds = useMemo(() => rawOrders.map((order) => order.id), [rawOrders]);
+  const { unreadOrderIds } = useUnreadNoteOrderIds(visibleOrderIds);
   const totalCount = meta?.totalCount ?? 0;
 
   const filteredByInfo = useMemo(() => {

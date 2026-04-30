@@ -58,8 +58,7 @@ UPDATE public.address_book
 SET normalized_company_key = COALESCE(
   NULLIF(public.normalize_address_book_company_key(COALESCE(company_name, label, address)), ''),
   normalized_key
-)
-WHERE normalized_company_key IS NULL OR normalized_company_key = '';
+);
 
 ALTER TABLE public.address_book
   ALTER COLUMN normalized_company_key SET DEFAULT '',

@@ -11,17 +11,51 @@ interface InvoiceWithLines extends Invoice {
   invoice_lines?: InvoiceLine[];
 }
 
+interface InvoicePdfOptions {
+  templateUrl?: string | null;
+}
+
+async function applyInvoiceTemplate(contentPdfBytes: ArrayBuffer, templateUrl: string): Promise<Blob> {
+  const { PDFDocument } = await import("pdf-lib");
+
+  const templateResponse = await fetch(templateUrl);
+  if (!templateResponse.ok) {
+    throw new Error("Factuursjabloon kon niet worden geladen");
+  }
+
+  const [templatePdf, contentPdf] = await Promise.all([
+    PDFDocument.load(await templateResponse.arrayBuffer()),
+    PDFDocument.load(contentPdfBytes),
+  ]);
+
+  const outputPdf = await PDFDocument.create();
+  const templatePageCount = templatePdf.getPageCount();
+
+  for (let index = 0; index < contentPdf.getPageCount(); index += 1) {
+    const templateIndex = Math.min(index, Math.max(templatePageCount - 1, 0));
+    const [basePage] = await outputPdf.copyPages(templatePdf, [templateIndex]);
+    const page = outputPdf.addPage(basePage);
+    const overlayPage = await outputPdf.embedPage(contentPdf.getPage(index));
+    const { width, height } = page.getSize();
+    page.drawPage(overlayPage, { x: 0, y: 0, width, height });
+  }
+
+  const bytes = await outputPdf.save();
+  return new Blob([bytes], { type: "application/pdf" });
+}
+
 /**
  * Generate a professional PDF invoice and return it as a Blob.
  */
-export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blob> {
+export async function generateInvoicePDF(invoice: InvoiceWithLines, options: InvoicePdfOptions = {}): Promise<Blob> {
   const { default: jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const usesTemplate = Boolean(options.templateUrl);
   const pageWidth = 210;
   const marginLeft = 20;
   const marginRight = 20;
   const contentWidth = pageWidth - marginLeft - marginRight;
-  let y = 20;
+  let y = usesTemplate ? 58 : 20;
 
   // ─── Colors ───
   const primaryColor: [number, number, number] = [15, 23, 42]; // slate-900
@@ -30,29 +64,31 @@ export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blo
   const lightBg: [number, number, number] = [248, 250, 252]; // slate-50
 
   // ─── Header: Company info ───
-  doc.setFillColor(...accentColor);
-  doc.rect(0, 0, pageWidth, 40, "F");
+  if (!usesTemplate) {
+    doc.setFillColor(...accentColor);
+    doc.rect(0, 0, pageWidth, 40, "F");
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  doc.text(DEFAULT_COMPANY.name, marginLeft, y + 8);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text(DEFAULT_COMPANY.name, marginLeft, y + 8);
 
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text("Transport & Logistiek", marginLeft, y + 14);
-  doc.text(DEFAULT_COMPANY.address, marginLeft, y + 19);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("Transport & Logistiek", marginLeft, y + 14);
+    doc.text(DEFAULT_COMPANY.address, marginLeft, y + 19);
 
-  // Invoice label on the right
-  doc.setFontSize(28);
-  doc.setFont("helvetica", "bold");
-  doc.text("FACTUUR", pageWidth - marginRight, y + 10, { align: "right" });
+    // Invoice label on the right
+    doc.setFontSize(28);
+    doc.setFont("helvetica", "bold");
+    doc.text("FACTUUR", pageWidth - marginRight, y + 10, { align: "right" });
 
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(invoice.invoice_number, pageWidth - marginRight, y + 17, { align: "right" });
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(invoice.invoice_number, pageWidth - marginRight, y + 17, { align: "right" });
 
-  y = 50;
+    y = 50;
+  }
 
   // ─── Invoice meta + Client info side by side ───
   // Left: client
@@ -89,7 +125,7 @@ export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blo
 
   // Right: invoice details
   const rightCol = pageWidth - marginRight;
-  let metaY = 55;
+  let metaY = usesTemplate ? 58 : 55;
 
   const metaItems = [
     { label: "Factuurnummer", value: invoice.invoice_number },
@@ -146,7 +182,7 @@ export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blo
     // Check if we need a new page
     if (y > 260) {
       doc.addPage();
-      y = 20;
+      y = usesTemplate ? 45 : 20;
     }
 
     doc.setFontSize(9);
@@ -207,7 +243,7 @@ export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blo
 
   // ─── Notes ───
   if (invoice.notes) {
-    if (y > 250) { doc.addPage(); y = 20; }
+    if (y > 250) { doc.addPage(); y = usesTemplate ? 45 : 20; }
 
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
@@ -224,10 +260,12 @@ export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blo
   }
 
   // ─── Payment details ───
-  if (y > 250) { doc.addPage(); y = 20; }
+  if (y > 250) { doc.addPage(); y = usesTemplate ? 45 : 20; }
 
-  doc.setFillColor(...lightBg);
-  doc.roundedRect(marginLeft, y, contentWidth, 30, 3, 3, "F");
+  if (!usesTemplate) {
+    doc.setFillColor(...lightBg);
+    doc.roundedRect(marginLeft, y, contentWidth, 30, 3, 3, "F");
+  }
 
   y += 7;
   doc.setFontSize(8);
@@ -246,20 +284,26 @@ export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blo
   doc.text(`Referentie: ${invoice.invoice_number}`, marginLeft + 5, y);
 
   // ─── Footer ───
-  const footerY = 285;
-  doc.setDrawColor(230, 230, 230);
-  doc.setLineWidth(0.3);
-  doc.line(marginLeft, footerY - 5, pageWidth - marginRight, footerY - 5);
+  if (!usesTemplate) {
+    const footerY = 285;
+    doc.setDrawColor(230, 230, 230);
+    doc.setLineWidth(0.3);
+    doc.line(marginLeft, footerY - 5, pageWidth - marginRight, footerY - 5);
 
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...mutedColor);
-  doc.text(
-    `${DEFAULT_COMPANY.legalName} | KVK ${DEFAULT_COMPANY.kvk} | BTW ${DEFAULT_COMPANY.btw} | ${DEFAULT_COMPANY.email}`,
-    pageWidth / 2,
-    footerY,
-    { align: "center" }
-  );
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...mutedColor);
+    doc.text(
+      `${DEFAULT_COMPANY.legalName} | KVK ${DEFAULT_COMPANY.kvk} | BTW ${DEFAULT_COMPANY.btw} | ${DEFAULT_COMPANY.email}`,
+      pageWidth / 2,
+      footerY,
+      { align: "center" }
+    );
+  }
+
+  if (options.templateUrl) {
+    return applyInvoiceTemplate(doc.output("arraybuffer"), options.templateUrl);
+  }
 
   return doc.output("blob");
 }
@@ -267,8 +311,8 @@ export async function generateInvoicePDF(invoice: InvoiceWithLines): Promise<Blo
 /**
  * Generate and trigger a browser download for an invoice PDF.
  */
-export async function downloadInvoicePDF(invoice: InvoiceWithLines): Promise<void> {
-  const blob = await generateInvoicePDF(invoice);
+export async function downloadInvoicePDF(invoice: InvoiceWithLines, options: InvoicePdfOptions = {}): Promise<void> {
+  const blob = await generateInvoicePDF(invoice, options);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

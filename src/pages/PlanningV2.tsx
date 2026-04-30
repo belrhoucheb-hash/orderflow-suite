@@ -6,10 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Calendar as CalendarIcon, Settings2 } from "lucide-react";
 import { useTenantOptional } from "@/contexts/TenantContext";
-import { useDrivers } from "@/hooks/useDrivers";
-import { useDriverAvailability } from "@/hooks/useDriverAvailability";
-import { useDriverSchedulesForDate } from "@/hooks/useDriverScheduleForDate";
+import { usePlanningDrivers } from "@/hooks/useDrivers";
 import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
+import { usePlanningDaySupport } from "@/hooks/usePlanningDaySupport";
 import { DaySetupDialog } from "@/components/planning/v2/DaySetupDialog";
 import { PlanningDriverLane } from "@/components/planning/v2/PlanningDriverLane";
 import { UnplacedOrdersLane, type UnplacedOrderHint } from "@/components/planning/v2/UnplacedOrdersLane";
@@ -39,11 +38,14 @@ function PlanningV2() {
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [section, setSection] = useState<"planning" | "ritten" | "rooster">("planning");
 
-  const { data: drivers = [] } = useDrivers();
+  const { data: drivers = [] } = usePlanningDrivers();
   const { data: countryRestrictions = [] } = useAllDriverCountryRestrictions();
-  const { data: driverAvailability = [] } = useDriverAvailability(selectedDate);
-  const { data: schedulesForDate = [] } = useDriverSchedulesForDate(selectedDate);
   const { data: vehiclesRaw = [] } = useVehiclesRaw();
+  const weekStart = useMemo(() => isoWeekStart(new Date(selectedDate + "T00:00:00")), [selectedDate]);
+  const {
+    data: planningSupport = { driverAvailability: [], schedulesForDate: [], hoursRows: [] },
+  } = usePlanningDaySupport(selectedDate, weekStart);
+  const { driverAvailability, schedulesForDate, hoursRows } = planningSupport;
 
   // Consolidation groups voor de datum
   const { data: groups = [] } = useQuery<ConsolidationGroup[]>({
@@ -80,23 +82,6 @@ function PlanningV2() {
       const lockedIds = new Set<string>();
       groups.forEach((g) => (g.consolidation_orders ?? []).forEach((co) => lockedIds.add(co.order_id)));
       return (data ?? []).filter((o: any) => !lockedIds.has(o.id)) as any[];
-    },
-  });
-
-  // Planned hours per driver this week uit view
-  const weekStart = useMemo(() => isoWeekStart(new Date(selectedDate + "T00:00:00")), [selectedDate]);
-  const { data: hoursRows = [] } = useQuery({
-    queryKey: ["driver_hours_per_week", weekStart, tenant?.id],
-    enabled: !!tenant?.id,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await (supabase
-        .from("driver_hours_per_week" as any) as any)
-        .select("driver_id, week_start, planned_hours")
-        .eq("tenant_id", tenant!.id)
-        .eq("week_start", weekStart);
-      if (error) throw error;
-      return (data ?? []) as Array<{ driver_id: string; week_start: string; planned_hours: number }>;
     },
   });
 

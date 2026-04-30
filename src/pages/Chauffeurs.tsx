@@ -75,9 +75,10 @@ import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader"
 import { useDrivers, type Driver } from "@/hooks/useDrivers";
 import { useDriverCertifications } from "@/hooks/useDriverCertifications";
 import { useDriverExternalHoursThisWeek } from "@/hooks/useDriverExternalHours";
-import { useFleetVehicles } from "@/hooks/useFleet";
+import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 import { NewDriverDialog } from "@/components/drivers/NewDriverDialog";
 import { DriverCertificationsSection } from "@/components/drivers/DriverCertificationsSection";
+import { DriverCountryRestrictionsSection } from "@/components/drivers/DriverCountryRestrictionsSection";
 import { daysUntil } from "@/lib/validation/driverSchema";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -181,7 +182,7 @@ export default function Chauffeurs() {
     updateDriverStatus,
   } = useDrivers();
   const { data: certifications = [] } = useDriverCertifications();
-  const { data: vehicles = [] } = useFleetVehicles();
+  const { data: vehicles = [] } = useVehiclesRaw({ includeInactive: true });
   const { hoursByDriver: actualHoursByDriver } = useDriverExternalHoursThisWeek();
 
   const [search, setSearch] = useState("");
@@ -202,6 +203,7 @@ export default function Chauffeurs() {
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const [showDialog, setShowDialog] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<Driver | undefined>(undefined);
+  const [restrictionDriverId, setRestrictionDriverId] = useState<string>("");
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews());
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -326,6 +328,17 @@ export default function Chauffeurs() {
       code95Soon,
     };
   }, [drivers]);
+
+  const activeDrivers = useMemo(
+    () => drivers.filter((driver) => !isArchived(driver)),
+    [drivers],
+  );
+
+  useEffect(() => {
+    if (activeTab !== "landrestricties") return;
+    if (restrictionDriverId && drivers.some((driver) => driver.id === restrictionDriverId)) return;
+    setRestrictionDriverId(activeDrivers[0]?.id ?? drivers[0]?.id ?? "");
+  }, [activeTab, activeDrivers, drivers, restrictionDriverId]);
 
   const heroAlert = stats.actief > 0 && stats.verlopend / stats.actief > 0.15;
   const hasActiveFilter =
@@ -679,6 +692,7 @@ export default function Chauffeurs() {
               {[
                 { value: "chauffeurs", label: "Lijst" },
                 { value: "certificeringen", label: "Certificeringen" },
+                { value: "landrestricties", label: "Landrestricties" },
               ].map((t) => (
                 <button
                   key={t.value}
@@ -1289,6 +1303,48 @@ export default function Chauffeurs() {
           className="flex-1 overflow-auto mt-4 pb-8"
         >
           <DriverCertificationsSection />
+        </TabsContent>
+
+        <TabsContent
+          value="landrestricties"
+          className="flex-1 overflow-auto mt-4 pb-8"
+        >
+          <div className="card--luxe p-5 md:p-6 space-y-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-[11px] font-display font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                  Chauffeur landrestricties
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-foreground">Landen blokkeren of waarschuwen per chauffeur</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  Leg per chauffeur vast naar welke landen hij niet mag rijden of waar planning eerst een waarschuwing moet tonen.
+                </p>
+              </div>
+              <div className="w-full lg:w-[360px] space-y-2">
+                <Label>Chauffeur</Label>
+                <Select value={restrictionDriverId} onValueChange={setRestrictionDriverId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Kies chauffeur" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(activeDrivers.length > 0 ? activeDrivers : drivers).map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {restrictionDriverId ? (
+              <DriverCountryRestrictionsSection driverId={restrictionDriverId} />
+            ) : (
+              <div className="rounded-lg border-2 border-dashed border-border py-8 text-center text-xs text-muted-foreground">
+                Voeg eerst een chauffeur toe om landrestricties vast te leggen.
+              </div>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 
