@@ -1202,21 +1202,35 @@ export default function Chauffeurs() {
                 </p>
               </div>
             ) : viewMode === "table" ? (
-              <DriversTable
-                drivers={filtered}
-                vehicleMap={vehicleMap}
-                certLabels={certLabels}
-                actualHoursByDriver={actualHoursByDriver}
-                sortConfig={sortConfig}
-                onSort={handleSort}
-                onEdit={handleEdit}
-                onArchive={(d) => setPendingAction({ driver: d, action: "archive" })}
-                onReactivate={handleReactivate}
-                onDelete={(d) => setPendingAction({ driver: d, action: "delete" })}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelection}
-                onToggleAll={toggleAllVisible}
-              />
+              <>
+                <div className="md:hidden">
+                  <CompactList
+                    drivers={filtered}
+                    vehicleMap={vehicleMap}
+                    actualHoursByDriver={actualHoursByDriver}
+                    onEdit={handleEdit}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelection}
+                  />
+                </div>
+                <div className="hidden md:block">
+                  <DriversTable
+                    drivers={filtered}
+                    vehicleMap={vehicleMap}
+                    certLabels={certLabels}
+                    actualHoursByDriver={actualHoursByDriver}
+                    sortConfig={sortConfig}
+                    onSort={handleSort}
+                    onEdit={handleEdit}
+                    onArchive={(d) => setPendingAction({ driver: d, action: "archive" })}
+                    onReactivate={handleReactivate}
+                    onDelete={(d) => setPendingAction({ driver: d, action: "delete" })}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelection}
+                    onToggleAll={toggleAllVisible}
+                  />
+                </div>
+              </>
             ) : viewMode === "compact" ? (
               <CompactList
                 drivers={filtered}
@@ -1808,7 +1822,7 @@ function CompactList({
             <li
               key={d.id}
               className={cn(
-                "group relative flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--gold-soft)/0.25)] hover:shadow-[inset_2px_0_0_0_hsl(var(--gold)/0.55)] transition-all duration-150 cursor-pointer",
+                "group relative flex flex-col gap-3 px-4 py-3.5 hover:bg-[hsl(var(--gold-soft)/0.25)] hover:shadow-[inset_2px_0_0_0_hsl(var(--gold)/0.55)] transition-all duration-150 cursor-pointer sm:flex-row sm:items-center sm:py-2.5",
                 archived && "opacity-60",
               )}
               onClick={() => onEdit(d)}
@@ -1822,7 +1836,7 @@ function CompactList({
                 onChange={() => onToggleSelect(d.id)}
               />
               <Avatar name={d.name} status={d.status} size="sm" />
-              <div className="flex-1 min-w-0 flex items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3 self-stretch sm:self-auto">
                 <span
                   className="font-semibold text-[13px] truncate"
                   style={{ fontFamily: "var(--font-display)" }}
@@ -1841,12 +1855,12 @@ function CompactList({
                   {actualHours == null ? "geen import" : `${actualHours.toFixed(1)}u`}
                 </span>
               </div>
-              <span className="text-xs text-muted-foreground font-mono tabular-nums w-[90px] text-right">
+              <span className="text-xs text-muted-foreground font-mono tabular-nums sm:w-[90px] sm:text-right">
                 {vehicle ? vehicle.plate : "—"}
               </span>
               <span
                 className={cn(
-                  "text-xs tabular-nums w-[80px] text-right",
+                  "text-xs tabular-nums sm:w-[80px] sm:text-right",
                   expiry && expiry.days < 0
                     ? "text-destructive"
                     : expiry && expiry.days < 60

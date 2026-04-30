@@ -658,7 +658,103 @@ const Orders = () => {
         transition={{ delay: 0.1 }}
         className="card--luxe overflow-hidden"
       >
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-[hsl(var(--gold)/0.1)] md:hidden">
+          <AnimatePresence mode="popLayout">
+            {orders.map((order) => {
+              const { label, tooltip } = formatOrderDate(order.createdAt);
+              return (
+                <motion.div
+                  key={order.id}
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className={cn(
+                    "px-4 py-3.5",
+                    unreadOrderIds.has(order.id) && "shadow-[inset_2px_0_0_0_#3b82f6]",
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Selecteer ${order.orderNumber}`}
+                      className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-[hsl(var(--gold-deep))]"
+                      checked={selectedIds.has(order.id)}
+                      onChange={(e) => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(order.id);
+                          else next.delete(order.id);
+                          return next;
+                        });
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/orders/${order.id}`)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <IncompleteBadge order={order} size="dot" />
+                            <span className="truncate text-sm font-semibold tabular-nums text-foreground">
+                              {order.orderNumber}
+                            </span>
+                          </div>
+                          <p className="mt-1 truncate text-xs font-medium text-foreground/82">{order.customer}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{order.deliveryAddress}</p>
+                        </div>
+                        <StatusBadge status={order.status as OrderStatus} variant="luxe" />
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span className="rounded-md border border-[hsl(var(--gold)/0.16)] px-2 py-0.5 tabular-nums text-foreground">
+                          {order.totalWeight.toLocaleString()} kg
+                        </span>
+                        <span title={tooltip}>{label}</span>
+                        <span className="inline-flex items-center gap-1 uppercase tracking-[0.12em]">
+                          <Circle className={cn("h-1.5 w-1.5 fill-current", priorityDotColors[order.priority])} strokeWidth={0} />
+                          {order.priority}
+                        </span>
+                        <InfoStatusBadge status={order.infoStatus} size="sm" iconOnly />
+                      </div>
+                    </button>
+                    <div className="flex shrink-0 flex-col gap-1">
+                      <button
+                        onClick={() => navigate(`/orders/nieuw?from_order_id=${order.id}`)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground"
+                        title="Dupliceer order"
+                        aria-label={`Dupliceer order ${order.orderNumber}`}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleQuickPrint(order.id)}
+                        disabled={printLoading === order.id}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground disabled:opacity-50"
+                        title="Print label"
+                        aria-label={`Print label voor order ${order.orderNumber}`}
+                      >
+                        {printLoading === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+          {orders.length === 0 && (
+            <EmptyState
+              icon={Package}
+              title="Geen orders gevonden"
+              description="Pas je filters aan of maak een nieuwe order aan."
+            />
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="data-table">
             <thead className="th-resize">
               <tr
@@ -861,7 +957,7 @@ const Orders = () => {
 
         {/* Footer Pagination — luxe */}
         <div
-          className="flex items-center justify-between px-5 py-3 border-t border-[hsl(var(--gold)/0.2)]"
+          className="flex flex-col gap-3 px-4 py-3 border-t border-[hsl(var(--gold)/0.2)] md:flex-row md:items-center md:justify-between md:px-5"
           style={{
             background: "linear-gradient(180deg, hsl(var(--gold-soft)/0.15), hsl(var(--gold-soft)/0.35))",
             fontFamily: "var(--font-display)",

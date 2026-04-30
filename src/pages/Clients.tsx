@@ -389,7 +389,68 @@ export default function Clients() {
           )}
 
           <div className="card--luxe overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="divide-y divide-[hsl(var(--gold)/0.1)] md:hidden">
+              {isLoading ? (
+                <LoadingState message="Klanten laden..." />
+              ) : isError ? (
+                <div className="p-3">
+                  <QueryError message="Kan klantgegevens niet laden." onRetry={() => refetch()} />
+                </div>
+              ) : pageRows.length === 0 ? (
+                <div className="px-4 py-10 text-center text-sm text-muted-foreground">Geen klanten gevonden</div>
+              ) : (
+                pageRows.map((client) => {
+                  const isChecked = selectedIds.has(client.id);
+                  return (
+                    <button
+                      key={client.id}
+                      type="button"
+                      onClick={() => setSelectedClient(client)}
+                      className="w-full px-4 py-3.5 text-left transition-colors hover:bg-[hsl(var(--gold-soft)/0.24)]"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.45)]"
+                          aria-hidden="true"
+                        >
+                          <Building2 className="h-4 w-4 text-[hsl(var(--gold-deep))]" strokeWidth={1.6} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">{client.name}</p>
+                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                {client.contact_person || client.email || client.city || "Geen contactgegevens"}
+                              </p>
+                            </div>
+                            <span className={`badge-status badge-status--luxe shrink-0 ${client.is_active ? "badge-status--delivered" : "badge-status--cancelled"}`}>
+                              <span className="badge-status__dot" />
+                              {client.is_active ? "Actief" : "Inactief"}
+                            </span>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            {client.email && <span className="max-w-full truncate">{client.email}</span>}
+                            {client.phone && <span>{client.phone}</span>}
+                            <span className="rounded-md border border-[hsl(var(--gold)/0.16)] px-2 py-0.5 tabular-nums text-foreground">
+                              {client.active_order_count ?? 0} open
+                            </span>
+                          </div>
+                        </div>
+                        <span onClick={(event) => event.stopPropagation()} className="shrink-0">
+                          <Checkbox
+                            aria-label={`Selecteer ${client.name}`}
+                            checked={isChecked}
+                            onCheckedChange={() => toggleRow(client.id)}
+                          />
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full data-table">
                 <thead>
                   <tr
