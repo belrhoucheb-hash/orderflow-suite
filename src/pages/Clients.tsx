@@ -243,7 +243,7 @@ export default function Clients() {
   return (
     <div className="flex h-full">
       <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedClient ? "lg:mr-[420px]" : ""}`}>
-        <div className="p-6 space-y-4 max-w-[1800px] mx-auto w-full">
+        <div className="w-full space-y-4">
           <div className="relative overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.46),hsl(var(--card))_46%,hsl(var(--gold-soft)/0.18))] px-5 py-5 shadow-[0_22px_70px_-54px_hsl(32_45%_26%/0.45)]">
             <div
               aria-hidden

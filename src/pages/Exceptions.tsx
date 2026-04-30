@@ -877,7 +877,7 @@ const Exceptions = () => {
 
   return (
     <div className="-m-4 min-h-[calc(100vh-3.5rem)] bg-[linear-gradient(180deg,hsl(42_38%_98%)_0%,hsl(40_30%_96%)_18rem,hsl(40_26%_96%)_100%)] px-4 pb-8 pt-6 md:-m-6 md:px-6">
-      <div className="mx-auto max-w-[1560px] space-y-5">
+      <div className="w-full space-y-5">
       <div className="relative overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.46),hsl(var(--card))_46%,hsl(var(--gold-soft)/0.18))] px-5 py-5 shadow-[0_22px_70px_-54px_hsl(32_45%_26%/0.45)]">
         <div
           aria-hidden

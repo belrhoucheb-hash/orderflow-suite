@@ -161,7 +161,7 @@ function PlanningV2() {
   const prettyDate = format(new Date(selectedDate + "T00:00:00"), "EEEE d MMMM yyyy", { locale: nl });
 
   return (
-    <div className="p-6 space-y-4 max-w-[1800px] mx-auto">
+    <div className="page-container">
       <PageHeader
         eyebrow="Operatie"
         title="Planbord"
