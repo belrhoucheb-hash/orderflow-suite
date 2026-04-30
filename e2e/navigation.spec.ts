@@ -3,13 +3,15 @@ import { login } from "./helpers/auth";
 
 /** Sidebar navigation items visible to a planner */
 const SIDEBAR_LINKS = [
-  { label: "Dashboard", path: "/" },
+  { label: "Overzicht", path: "/" },
   { label: "Inbox", path: "/inbox" },
   { label: "Orders", path: "/orders" },
   { label: "Klanten", path: "/klanten" },
   { label: "Planbord", path: "/planning" },
   { label: "Dispatch", path: "/dispatch" },
-  { label: "Ritoverzicht", path: "/ritten" },
+  { label: "Tracking", path: "/tracking" },
+  { label: "Uitzonderingen", path: "/exceptions" },
+  { label: "Autonomie", path: "/autonomie" },
   { label: "Chauffeurs", path: "/chauffeurs" },
   { label: "Vloot", path: "/vloot" },
   { label: "Rapportage", path: "/rapportage" },

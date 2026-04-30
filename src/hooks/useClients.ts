@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantInsert } from "@/hooks/useTenantInsert";
@@ -213,6 +213,7 @@ export function useClientsPageData(opts: UseClientsListOptions = {}) {
       { search, page, pageSize, isActive, country, sortKey, sortDir, dormantOnly, tenantId: tenant?.id },
     ],
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
     enabled: !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await (supabase.rpc as any)("clients_page_v1", {

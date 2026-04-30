@@ -13,7 +13,7 @@ import { resolve } from "node:path";
 import { login } from "./helpers/auth";
 import { visitAndProbe, summarize, type SmokeReport } from "./helpers/smoke";
 
-const HAS_CREDENTIALS = Boolean(process.env.E2E_USER_EMAIL && process.env.E2E_USER_PASSWORD);
+const HAS_CREDENTIALS = Boolean(process.env.E2E_USER_EMAIL && process.env.E2E_USER_PASSWORD) || !process.env.CI;
 
 const PROTECTED_ROUTES = [
   "/",

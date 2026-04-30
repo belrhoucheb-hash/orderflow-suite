@@ -1,9 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route, ChevronDown, Sparkles, ArrowRight, CircleAlert, CheckCircle2, ClipboardPaste, Truck, Search, Pencil } from "lucide-react";
-import L from "leaflet";
-import type { LatLngExpression } from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { AddressAutocomplete as LegacyAddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   AddressAutocomplete,
@@ -68,8 +65,27 @@ import { buildAddressBookKey } from "@/lib/addressBook";
 // Orders-audit is server-side via trigger `audit_orders`.
 import { LuxeDatePicker } from "@/components/LuxeDatePicker";
 import { LuxeTimePicker } from "@/components/LuxeTimePicker";
-import { FinancialTab, type FinancialTabPayload, type FinancialTabCargo } from "@/components/orders/FinancialTab";
+import type { FinancialTabPayload, FinancialTabCargo } from "@/components/orders/FinancialTab";
 import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
+import type { RoutePreviewMapStop } from "@/components/orders/RoutePreviewMap";
+
+const FinancialTab = lazy(() =>
+  import("@/components/orders/FinancialTab").then((module) => ({ default: module.FinancialTab })),
+);
+const RoutePreviewMap = lazy(() =>
+  import("@/components/orders/RoutePreviewMap").then((module) => ({ default: module.RoutePreviewMap })),
+);
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
 
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
@@ -445,119 +461,6 @@ function routeQuestionForIssue(issue: OrderRouteRuleIssue | undefined): 1 | 2 | 
   if (issue.key === "route_duplicate") return issue.label === "Levermoment" ? 2 : 4;
   if (issue.key === "pickup_time_window") return 3;
   return 4;
-}
-
-function routeMarkerMeta(label: string, index: number, total: number) {
-  if (index === 0 || label === "Ophalen") {
-    return { code: "L", title: "Laden", tone: "pickup" };
-  }
-  if (index === total - 1) {
-    return { code: "B", title: "Bestemming", tone: "destination" };
-  }
-  return { code: "W", title: "Tussenstop", tone: "warehouse" };
-}
-
-interface RoutePreviewMapStop {
-  id: string;
-  label: string;
-  line?: FreightLine | null;
-  onClick: () => void;
-}
-
-function RoutePreviewMap({ stops }: { stops: RoutePreviewMapStop[] }) {
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const mappedStops = stops
-    .map((stop, index) => {
-      const lat = stop.line?.lat;
-      const lng = stop.line?.lng;
-      if (lat == null || lng == null) return null;
-      return {
-        ...stop,
-        index,
-        position: [lat, lng] as LatLngExpression,
-      };
-    })
-    .filter(Boolean) as Array<RoutePreviewMapStop & { index: number; position: LatLngExpression }>;
-  const positions = mappedStops.map((stop) => stop.position);
-
-  useEffect(() => {
-    const node = mapRef.current;
-    if (!node || positions.length === 0) return;
-
-    const map = L.map(node, {
-      center: positions[0],
-      zoom: positions.length === 1 ? 14 : 9,
-      zoomControl: true,
-      attributionControl: false,
-      dragging: true,
-      scrollWheelZoom: true,
-      doubleClickZoom: true,
-      boxZoom: false,
-      keyboard: true,
-      tap: true,
-    });
-    mapInstanceRef.current = map;
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-
-    if (positions.length > 1) {
-      L.polyline(positions, {
-        color: "hsl(var(--gold))",
-        weight: 4,
-        opacity: 0.78,
-      }).addTo(map);
-      map.fitBounds(L.latLngBounds(positions), { padding: [18, 18], maxZoom: 13, animate: false });
-    } else {
-      map.setView(positions[0], 14, { animate: false });
-    }
-
-    mappedStops.forEach((stop) => {
-      const meta = routeMarkerMeta(stop.label, stop.index, stops.length);
-      const marker = L.divIcon({
-        className: "",
-        html: `
-          <div class="route-preview-marker route-preview-marker--${meta.tone}" title="${meta.title}">
-            <span class="route-preview-marker__code">${meta.code}</span>
-            <span class="route-preview-marker__number">${stop.index + 1}</span>
-          </div>
-        `,
-        iconSize: [34, 38],
-        iconAnchor: [17, 32],
-      });
-
-      L.marker(stop.position, { icon: marker })
-        .addTo(map)
-        .bindTooltip(String(stop.index + 1), {
-          direction: "top",
-          offset: [0, -28],
-          opacity: 0.95,
-          className: "route-preview-marker-tooltip",
-        })
-        .on("click", stop.onClick);
-    });
-
-    window.setTimeout(() => map.invalidateSize(), 0);
-
-    return () => {
-      map.remove();
-      mapInstanceRef.current = null;
-    };
-  }, [mappedStops, positions]);
-
-  if (positions.length === 0) {
-    return (
-      <div className="relative h-32 rounded-xl bg-[linear-gradient(90deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px)] bg-[length:22px_22px]">
-        <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">
-          Kaart verschijnt zodra GPS-punten bekend zijn
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div ref={mapRef} className="h-32 w-full rounded-xl" aria-label="Routekaart" />
-  );
 }
 
 interface RouteLegInsight {
@@ -1603,7 +1506,8 @@ const NewOrder = () => {
     voertuigtype,
     voertuigtypeManual,
   ]);
-  const orderReadiness = useMemo(() => validateOrderDraft(orderDraft), [orderDraft]);
+  const debouncedOrderDraft = useDebouncedValue(orderDraft, 300);
+  const orderReadiness = useMemo(() => validateOrderDraft(debouncedOrderDraft), [debouncedOrderDraft]);
   const routeRuleIssues = useMemo(() => getOrderRouteRuleIssues(freightLines), [freightLines]);
   const cargoRuleIssues = useMemo(
     () => cargoRows.map(cargoRowIssue).filter(Boolean) as string[],
@@ -2386,7 +2290,7 @@ const NewOrder = () => {
       const savedAt = new Date().toISOString();
       window.localStorage.setItem(draftStorageKey, JSON.stringify({ ...draftPayload, savedAt }));
       setLastDraftSavedAt(savedAt);
-    }, 600);
+    }, 1000);
     return () => window.clearTimeout(timer);
   }, [draftPayload, draftRestored, draftStorageKey, prefillReady]);
 
@@ -2830,7 +2734,7 @@ const NewOrder = () => {
             setDraftSaveError("Opslaan mislukt - probeer opnieuw.");
           }
         });
-    }, 900);
+    }, 1400);
     return () => {
       if (draftAutosaveTimerRef.current) window.clearTimeout(draftAutosaveTimerRef.current);
     };
@@ -3740,16 +3644,26 @@ const NewOrder = () => {
   };
 
   const renderProductionFinancialTab = () => (
-    <FinancialTab
-      tenantId={tenant?.id}
-      clientId={clientId}
-      cargo={financialCargo}
-      pickupDate={financialPickupDate}
-      pickupTime={financialPickupTime}
-      transportType={transportType}
-      initialPricing={pricingPayload}
-      onPricingChange={setPricingPayload}
-    />
+    <Suspense
+      fallback={
+        <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.14)] bg-white/80 p-6 shadow-sm">
+          <div className="text-[11px] font-semibold tracking-[0.18em] text-[hsl(var(--gold-deep))]">TARIEF</div>
+          <div className="mt-2 text-lg font-semibold">Tariefmodule laden...</div>
+          <div className="mt-1 text-sm text-muted-foreground">De intake blijft alvast bruikbaar terwijl pricing wordt opgehaald.</div>
+        </div>
+      }
+    >
+      <FinancialTab
+        tenantId={tenant?.id}
+        clientId={clientId}
+        cargo={financialCargo}
+        pickupDate={financialPickupDate}
+        pickupTime={financialPickupTime}
+        transportType={transportType}
+        initialPricing={pricingPayload}
+        onPricingChange={setPricingPayload}
+      />
+    </Suspense>
   );
 
   const focusWizardTarget = useCallback((target: "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing") => {
@@ -4028,7 +3942,25 @@ const NewOrder = () => {
             <div className="mb-3 text-xs font-medium text-muted-foreground">Route</div>
             <div className="mb-4 overflow-hidden rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-[linear-gradient(135deg,#f8f6f1_0%,#ece7dc_52%,#f9f7f2_100%)] p-3 shadow-inner">
               <div className="relative overflow-hidden rounded-xl">
-                <RoutePreviewMap stops={routeMapStops} />
+                {routeMapPlottedCount > 0 ? (
+                  <Suspense
+                    fallback={
+                      <div className="relative h-32 rounded-xl bg-[linear-gradient(90deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px)] bg-[length:22px_22px]">
+                        <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">
+                          Kaart laden...
+                        </div>
+                      </div>
+                    }
+                  >
+                    <RoutePreviewMap stops={routeMapStops} />
+                  </Suspense>
+                ) : (
+                  <div className="relative h-32 rounded-xl bg-[linear-gradient(90deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px)] bg-[length:22px_22px]">
+                    <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">
+                      Kaart verschijnt zodra GPS-punten bekend zijn
+                    </div>
+                  </div>
+                )}
                 <div className="absolute bottom-2 left-3 rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-[hsl(var(--gold-deep))] shadow-sm">
                   {routeMapStatusLabel}
                 </div>

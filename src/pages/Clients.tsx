@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { lazy, Suspense, useMemo, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -40,8 +40,6 @@ import {
   type Client,
   type ClientSortKey,
 } from "@/hooks/useClients";
-import { ClientDetailPanel } from "@/components/clients/ClientDetailPanel";
-import { NewClientDialog } from "@/components/clients/NewClientDialog";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { QueryError } from "@/components/QueryError";
 import { toCsv, downloadCsv } from "@/lib/csv";
@@ -49,6 +47,23 @@ import { toCsv, downloadCsv } from "@/lib/csv";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZE = 50;
+const ClientDetailPanel = lazy(() =>
+  import("@/components/clients/ClientDetailPanel").then((module) => ({ default: module.ClientDetailPanel })),
+);
+const NewClientDialog = lazy(() =>
+  import("@/components/clients/NewClientDialog").then((module) => ({ default: module.NewClientDialog })),
+);
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
 
 export default function Clients() {
   const navigate = useNavigate();
@@ -66,13 +81,14 @@ export default function Clients() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingBulkDeactivate, setPendingBulkDeactivate] = useState(false);
   const bulkUpdateActive = useBulkUpdateClientsActive();
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
 
   const isActive =
     statusFilter === "actief" ? true : statusFilter === "inactief" ? false : null;
   const country = countryFilter === "alle" ? null : countryFilter;
 
   const { data, isLoading, isError, refetch } = useClientsPageData({
-    search,
+    search: debouncedSearch,
     page,
     pageSize: PAGE_SIZE,
     isActive,
@@ -98,13 +114,13 @@ export default function Clients() {
   // lege pagina 3 blijven staan wanneer de dataset krimpt.
   useEffect(() => {
     setPage(0);
-  }, [search, statusFilter, countryFilter, openOrdersFilter, activityFilter, sortKey, sortDir]);
+  }, [debouncedSearch, statusFilter, countryFilter, openOrdersFilter, activityFilter, sortKey, sortDir]);
 
   // Selectie resetten bij filter- of paginawissel, anders blijft een id
   // geselecteerd van een rij die niet meer zichtbaar is.
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [search, statusFilter, countryFilter, openOrdersFilter, activityFilter, page]);
+  }, [debouncedSearch, statusFilter, countryFilter, openOrdersFilter, activityFilter, page]);
 
   const serverRows = data?.clients ?? [];
   const totalCount = data?.totalCount ?? 0;
@@ -612,16 +628,28 @@ export default function Clients() {
               </Button>
             </div>
           </div>
-          <ClientDetailPanel client={selectedClient} />
+          <Suspense
+            fallback={
+              <div className="p-5">
+                <LoadingState label="Klantdetail laden..." />
+              </div>
+            }
+          >
+            <ClientDetailPanel client={selectedClient} />
+          </Suspense>
         </div>
       )}
 
-      <NewClientDialog open={showNewDialog} onOpenChange={setShowNewDialog} />
-      <NewClientDialog
-        open={editingClient !== null}
-        onOpenChange={(v) => { if (!v) setEditingClient(null); }}
-        client={editingClient ?? undefined}
-      />
+      {(showNewDialog || editingClient !== null) && (
+        <Suspense fallback={null}>
+          <NewClientDialog open={showNewDialog} onOpenChange={setShowNewDialog} />
+          <NewClientDialog
+            open={editingClient !== null}
+            onOpenChange={(v) => { if (!v) setEditingClient(null); }}
+            client={editingClient ?? undefined}
+          />
+        </Suspense>
+      )}
 
       <AlertDialog
         open={pendingBulkDeactivate}

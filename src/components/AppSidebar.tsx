@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown, MapPinned } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -29,6 +29,7 @@ const operationsItemsDef = [
   { titleKey: "nav.orders", url: "/orders", icon: Package },
   { titleKey: "nav.planning", url: "/planning", icon: Truck },
   { titleKey: "nav.dispatch", url: "/dispatch", icon: Send },
+  { title: "Tracking", url: "/tracking", icon: MapPinned },
   { title: "Uitzonderingen", url: "/exceptions", icon: AlertTriangle },
 ];
 
@@ -64,9 +65,9 @@ export function AppSidebar() {
   const { tenant } = useTenant();
   const { data: exceptionCount } = useExceptionCount();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    Controle: true,
-    Netwerk: true,
-    Beheer: true,
+    "Financieel & Controle": false,
+    "Relaties & Middelen": false,
+    Beheer: false,
   });
 
   const toItems = (defs: Array<{ titleKey?: string; title?: string; titleFallback?: string; url: string; icon: any }>) =>
@@ -136,29 +137,30 @@ export function AppSidebar() {
     items: Array<{ title: string; url: string; icon: any }>,
     collapsible: boolean = false,
   ) => (
-    <SidebarGroup className="mt-3 first:mt-0 px-1.5 py-0">
+    <SidebarGroup className="mt-5 first:mt-2 px-0 py-0">
       <SidebarGroupLabel asChild>
         <button
           type="button"
           className={cn(
-            "mb-1.5 flex h-auto w-full items-center px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] outline-none transition-colors",
-            collapsible ? "hover:text-white/58" : "cursor-default",
-            collapsedGroups[label] ? "text-white/32" : "text-white/44",
+            "mb-2 flex h-6 w-full items-center gap-2 px-2 text-left text-[9px] font-semibold uppercase tracking-[0.2em] outline-none transition-colors",
+            collapsible ? "cursor-pointer hover:text-[hsl(var(--gold-light))]" : "cursor-default",
+            collapsedGroups[label] ? "text-white/38" : "text-white/56",
           )}
           style={{ fontFamily: "var(--font-display)" }}
           onClick={collapsible ? () => toggleGroup(label) : undefined}
         >
-          <span>{label}</span>
+          <span className="h-px w-3 shrink-0 bg-[hsl(var(--gold)/0.38)]" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-left">{label}</span>
           {collapsible && (
             <ChevronDown
-              className={cn("ml-auto h-3.5 w-3.5 transition-transform", !collapsedGroups[label] && "rotate-180")}
+              className={cn("h-3.5 w-3.5 shrink-0 text-white/36 transition-transform", !collapsedGroups[label] && "rotate-180")}
               strokeWidth={1.7}
             />
           )}
         </button>
       </SidebarGroupLabel>
       <SidebarGroupContent className={cn(collapsible && collapsedGroups[label] && "hidden")}>
-        <SidebarMenu className="space-y-0.5">
+        <SidebarMenu className="space-y-1">
           {items.filter((item) => hasRouteAccess(item.url)).map((item) => {
             const active = isActive(item.url);
             return (
@@ -174,14 +176,14 @@ export function AppSidebar() {
                     aria-label={item.title}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "relative flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] font-medium transition-all duration-150",
+                      "group relative flex h-10 items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-all duration-150",
                       active
                         ? "text-white"
                         : "text-white/68 hover:text-white"
                     )}
                     style={active ? {
-                      background: "hsl(219 22% 17%)",
-                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.22)",
+                      background: "linear-gradient(90deg, hsl(220 22% 18%) 0%, hsl(220 22% 15%) 100%)",
+                      boxShadow: "inset 0 0 0 1px hsl(0 0% 100% / 0.07), 0 12px 28px -24px hsl(var(--gold) / 0.55)",
                     } : {
                       background: "transparent",
                     }}
@@ -196,10 +198,17 @@ export function AppSidebar() {
                       }
                     }}
                   >
+                    {active && (
+                      <span
+                        className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full"
+                        style={{ background: "linear-gradient(180deg, hsl(var(--gold-light)), hsl(var(--gold-deep)))" }}
+                        aria-hidden="true"
+                      />
+                    )}
                     <span
-                      className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors"
                       style={active ? {
-                        background: "hsl(var(--gold) / 0.18)",
+                        background: "hsl(var(--gold) / 0.16)",
                         color: "white",
                       } : {
                         background: "transparent",
@@ -208,7 +217,7 @@ export function AppSidebar() {
                     >
                       <item.icon className="h-[15px] w-[15px]" strokeWidth={active ? 2 : 1.85} />
                     </span>
-                    <span className="truncate">{item.title}</span>
+                    <span className="min-w-0 flex-1 truncate text-left">{item.title}</span>
                     {item.url === "/exceptions" && showExceptionCount && (
                       <span
                         className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
@@ -241,8 +250,8 @@ export function AppSidebar() {
     ? [{ label: t("nav.navigation"), items: chauffeurItems }]
     : [
         { label: "Operatie", items: operationsItems, collapsible: false },
-        { label: "Controle", items: controlItems, collapsible: true },
-        { label: "Netwerk", items: masterDataItems, collapsible: true },
+        { label: "Financieel & Controle", items: controlItems, collapsible: true },
+        { label: "Relaties & Middelen", items: masterDataItems, collapsible: true },
       ];
 
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -360,33 +369,36 @@ export function AppSidebar() {
             <div className="grid grid-cols-3 gap-1.5">
               <button
                 onClick={() => navigate("/settings")}
-                className="group inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[10.5px] font-medium text-white/68 transition-all hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-white"
+                className="group inline-flex h-10 min-w-0 items-center justify-center rounded-xl border text-white/64 transition-all hover:border-[hsl(var(--gold)/0.2)] hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-white"
+                style={{ borderColor: "hsl(0 0% 100% / 0.06)" }}
                 aria-label="Instellingen"
+                title="Instellingen"
               >
                 <Settings className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Instellingen</span>
               </button>
 
               <button
                 onClick={toggleTheme}
-                className="group inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[10.5px] font-medium transition-all hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-white"
+                className="group inline-flex h-10 min-w-0 items-center justify-center rounded-xl border transition-all hover:border-[hsl(var(--gold)/0.2)] hover:bg-[hsl(var(--gold-soft)/0.12)] hover:text-white"
                 style={{
                   color: isDark ? "hsl(var(--gold-light))" : "hsl(0 0% 100% / 0.7)",
                   background: isDark ? "hsl(var(--gold-soft) / 0.14)" : "transparent",
+                  borderColor: isDark ? "hsl(var(--gold) / 0.18)" : "hsl(0 0% 100% / 0.06)",
                 }}
                 aria-label={isDark ? "Licht thema" : "Donker thema"}
+                title={isDark ? "Licht thema" : "Donker thema"}
               >
                 {isDark ? <Sun className="h-3.5 w-3.5 shrink-0" /> : <Moon className="h-3.5 w-3.5 shrink-0" />}
-                <span className="truncate">{isDark ? "Licht" : "Dark mode"}</span>
               </button>
 
               <button
                 onClick={async () => { await signOut(); navigate("/login"); }}
-                className="group inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-[10.5px] font-medium text-white/56 transition-all hover:bg-[hsl(0_84%_65%/0.1)] hover:text-white"
+                className="group inline-flex h-10 min-w-0 items-center justify-center rounded-xl border text-white/56 transition-all hover:border-[hsl(0_84%_65%/0.18)] hover:bg-[hsl(0_84%_65%/0.1)] hover:text-white"
+                style={{ borderColor: "hsl(0 0% 100% / 0.06)" }}
                 aria-label="Uitloggen"
+                title="Uitloggen"
               >
                 <LogOut className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Uitloggen</span>
               </button>
             </div>
           )}

@@ -9,6 +9,9 @@ export async function login(
   email = process.env.E2E_USER_EMAIL ?? "test@orderflow.nl",
   password = process.env.E2E_USER_PASSWORD ?? "Test1234!",
 ) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("onboarding_dismissed", "true");
+  });
   await page.goto("/login");
 
   // Fill the login form

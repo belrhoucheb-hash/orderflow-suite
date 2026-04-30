@@ -143,18 +143,30 @@ function timeAgo(date: Date): string {
 }
 
 const urgencyConfig: Record<Urgency, { color: string; bg: string; ring: string }> = {
-  critical: { color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/40", ring: "ring-red-200 dark:ring-red-800" },
-  warning: { color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/40", ring: "ring-amber-200 dark:ring-amber-800" },
-  info: { color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/40", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  critical: {
+    color: "text-[hsl(4_64%_46%)]",
+    bg: "bg-[hsl(4_78%_96%)]",
+    ring: "ring-[hsl(4_62%_78%)]",
+  },
+  warning: {
+    color: "text-[hsl(34_72%_38%)]",
+    bg: "bg-[hsl(38_70%_94%)]",
+    ring: "ring-[hsl(38_58%_72%)]",
+  },
+  info: {
+    color: "text-[hsl(158_48%_32%)]",
+    bg: "bg-[hsl(150_48%_94%)]",
+    ring: "ring-[hsl(150_36%_72%)]",
+  },
 };
 
 const typeBadgeColor: Record<ExceptionType, string> = {
-  Vertraging: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800",
-  "Data mist": "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800",
-  Capaciteit: "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800",
-  SLA: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800",
+  Vertraging: "bg-[hsl(4_78%_96%)] text-[hsl(4_62%_38%)] border-[hsl(4_58%_82%)]",
+  "Data mist": "bg-[hsl(38_70%_94%)] text-[hsl(34_68%_35%)] border-[hsl(38_54%_76%)]",
+  Capaciteit: "bg-[hsl(222_18%_95%)] text-[hsl(222_24%_28%)] border-[hsl(222_12%_78%)]",
+  SLA: "bg-[hsl(4_78%_96%)] text-[hsl(4_62%_38%)] border-[hsl(4_58%_82%)]",
   "Voorspelde vertraging":
-    "bg-[hsl(var(--gold-soft)/0.4)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.3)]",
+    "bg-[hsl(var(--gold-soft)/0.7)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.32)]",
 };
 
 const copilotIconByAction: Record<string, typeof Send> = {
@@ -864,49 +876,50 @@ const Exceptions = () => {
     focusOptions.find((option) => option.key === focus)?.label ?? "Alles";
 
   return (
-    <div className="page-container space-y-5">
-      <div className="relative pb-2 pt-2">
+    <div className="-m-4 min-h-[calc(100vh-3.5rem)] bg-[linear-gradient(180deg,hsl(218_22%_14%)_0%,hsl(222_18%_11%)_15.5rem,hsl(38_30%_95%)_15.5rem,hsl(40_26%_96%)_100%)] px-4 pb-8 pt-6 md:-m-6 md:px-6">
+      <div className="mx-auto max-w-[1560px] space-y-5">
+      <div className="relative pb-2 pt-2 text-white">
         <div
           aria-hidden
-          className="pointer-events-none absolute -left-6 -top-5 h-24 w-56"
-          style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold-soft) / 0.5), transparent 72%)" }}
+          className="pointer-events-none absolute -left-8 -top-8 h-36 w-72"
+          style={{ background: "radial-gradient(ellipse at top left, hsl(var(--gold) / 0.22), transparent 70%)" }}
         />
         <div className="relative flex items-end justify-between gap-5 flex-wrap">
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex items-center gap-2" style={{ fontFamily: "var(--font-display)" }}>
-              <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.5)" }} />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-deep))]">
+              <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold-light) / 0.75)" }} />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[hsl(var(--gold-light))]">
                 Triage
               </span>
-              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/70 tabular-nums">
+              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/45 tabular-nums">
                 {totalCount} {totalCount === 1 ? "uitzondering" : "uitzonderingen"}
               </span>
             </div>
             <h1
-              className="text-[2rem] font-semibold leading-[1.05] tracking-tight text-foreground"
+              className="text-[2.15rem] font-semibold leading-[1.05] tracking-tight text-white"
               style={{ fontFamily: "var(--font-display)" }}
             >
               Uitzonderingen
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Beoordeel uitzonderingen op basis van prioriteit, context en aanbevolen vervolgstappen.
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/62">
+              Beoordeel operationele risico's op prioriteit, context en voorgestelde vervolgstap.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_34%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)]">
+      <div className="rounded-2xl border border-white/10 bg-[hsl(222_18%_16%/0.92)] p-3 shadow-[0_24px_70px_-48px_hsl(0_0%_0%/0.8)] backdrop-blur">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded-full border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background)/0.78)] px-2.5 py-1 font-medium text-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-white/48">
+            <span className="rounded-full border border-white/10 bg-white/[0.08] px-2.5 py-1 font-medium !text-white/86">
               Actieve selectie: {activeFocusLabel}
             </span>
-            <span>{filteredExceptions.length} zichtbaar</span>
+            <span className="!text-white/52">{filteredExceptions.length} zichtbaar</span>
             <span aria-hidden className="text-[hsl(var(--gold-deep)/0.55)]">•</span>
-            <span>{exceptions.length} totaal</span>
+            <span className="!text-white/52">{exceptions.length} totaal</span>
           </div>
 
-          <div className="flex flex-wrap gap-2 rounded-[1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-1">
+          <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-black/16 p-1">
             {focusOptions.map((option) => {
               const countLabel = formatFocusCount(focusCounts[option.key]);
 
@@ -915,21 +928,23 @@ const Exceptions = () => {
                   key={option.key}
                   type="button"
                   onClick={() => setFocus(option.key)}
+                  style={{ color: focus === option.key ? "white" : "hsl(0 0% 100% / 0.68)" }}
                   className={cn(
-                    "inline-flex min-h-10 items-center gap-2 rounded-[0.85rem] px-3.5 py-2 text-xs font-medium transition-all whitespace-nowrap",
+                    "inline-flex min-h-9 items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-medium transition-all whitespace-nowrap",
                     focus === option.key
-                      ? "bg-[linear-gradient(90deg,hsl(var(--gold-soft)/0.7),hsl(var(--gold-soft)/0.3))] text-[hsl(var(--gold-deep))] shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]"
-                      : "text-muted-foreground hover:text-foreground",
+                      ? "bg-[linear-gradient(180deg,hsl(var(--gold))_0%,hsl(var(--gold-deep))_100%)] !text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18)]"
+                      : "!text-white/62 hover:bg-white/[0.06] hover:!text-white",
                   )}
                 >
                   <span>{option.label}</span>
                   {countLabel && (
                     <span
+                      style={{ color: focus === option.key ? "white" : "hsl(0 0% 100% / 0.78)" }}
                       className={cn(
                         "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
                         focus === option.key
-                          ? "bg-[hsl(var(--gold)/0.18)] text-[hsl(var(--gold-deep))]"
-                          : "bg-[hsl(var(--background)/0.85)] text-foreground/80 shadow-[inset_0_0_0_1px_hsl(var(--gold)/0.12)]",
+                          ? "bg-white/18 !text-white"
+                          : "bg-white/[0.08] !text-white/78 shadow-[inset_0_0_0_1px_hsl(0_0%_100%/0.08)]",
                       )}
                     >
                       {countLabel}
@@ -943,7 +958,7 @@ const Exceptions = () => {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
-        <section className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)] xl:sticky xl:top-4 xl:self-start">
+        <section className="rounded-2xl border border-[hsl(38_24%_82%)] bg-[hsl(42_38%_98%/0.96)] p-4 shadow-[0_22px_60px_-48px_hsl(32_45%_26%/0.45)] xl:sticky xl:top-4 xl:self-start">
           <div className="mb-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
               Prioriteiten
@@ -951,17 +966,15 @@ const Exceptions = () => {
             <h2 className="mt-1 text-sm font-semibold text-foreground">Aandachtspunten</h2>
           </div>
 
-          <div className="grid gap-3">
+          <div className="grid gap-2.5">
             {summaryCards.map((card) => (
               <button
                 key={card.label}
                 type="button"
                 onClick={() => setFocus(card.target)}
                 className={cn(
-                  "w-full rounded-[1.15rem] border p-3 text-left transition-all hover:shadow-[0_18px_36px_-32px_hsl(var(--gold-deep)/0.28)]",
-                  card.ring,
-                  card.surface,
-                  focus === card.target && "shadow-[0_18px_36px_-30px_hsl(var(--gold-deep)/0.3)] ring-1 ring-[hsl(var(--gold)/0.16)]",
+                  "w-full rounded-xl border bg-white/68 p-3 text-left transition-all hover:border-[hsl(var(--gold)/0.34)] hover:bg-white",
+                  focus === card.target && "border-[hsl(var(--gold)/0.44)] bg-white shadow-[inset_3px_0_0_hsl(var(--gold))]",
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -970,7 +983,7 @@ const Exceptions = () => {
                     <p className="mt-1 text-[1.7rem] font-semibold tracking-tight text-foreground">{card.value}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>
                   </div>
-                  <div className={cn("rounded-[0.9rem] p-2.5", card.surface)}>
+                  <div className="rounded-lg border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.38)] p-2.5">
                     <card.icon className={cn("h-4 w-4", card.tone)} />
                   </div>
                 </div>
@@ -978,7 +991,7 @@ const Exceptions = () => {
             ))}
           </div>
 
-          <div className="mt-4 rounded-[1.15rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3.5">
+          <div className="mt-4 rounded-xl border border-[hsl(var(--gold)/0.14)] bg-white/58 p-3.5">
             <p className="text-xs font-medium text-foreground">Bronoverzicht</p>
             <div className="mt-3 space-y-2.5 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-3">
@@ -1001,7 +1014,7 @@ const Exceptions = () => {
           </div>
         </section>
 
-        <section className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)]">
+        <section className="overflow-hidden rounded-2xl border border-[hsl(38_24%_82%)] bg-[hsl(42_38%_98%/0.98)] shadow-[0_22px_60px_-48px_hsl(32_45%_26%/0.45)]">
           <div className="border-b border-[hsl(var(--gold)/0.12)] px-5 py-4">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -1024,7 +1037,7 @@ const Exceptions = () => {
               description={exceptions.length === 0 ? "Er zijn momenteel geen uitzonderingen die opvolging vereisen." : "Kies een andere focus om aanvullende uitzonderingen te tonen."}
             />
           ) : (
-            <div className="divide-y divide-[hsl(var(--gold)/0.08)]">
+            <div className="divide-y divide-[hsl(38_24%_86%)]">
               {filteredExceptions.map((exc, i) => {
                 const uc = urgencyConfig[exc.urgency];
                 const sourceType = mapExceptionToSourceType(exc);
@@ -1044,11 +1057,11 @@ const Exceptions = () => {
                     onClick={() => setSelectedExceptionId(exc.id)}
                     className={cn(
                       "w-full px-5 py-4 text-left transition-colors",
-                      isSelected ? "bg-[hsl(var(--gold-soft)/0.12)] shadow-[inset_3px_0_0_hsl(var(--gold))]" : "hover:bg-muted/30",
+                      isSelected ? "bg-white shadow-[inset_3px_0_0_hsl(var(--gold))]" : "hover:bg-white/56",
                     )}
                   >
                     <div className="flex items-start gap-4">
-                      <div className={cn("rounded-full p-1.5 ring-1", uc.bg, uc.ring)}>
+                      <div className={cn("rounded-lg p-1.5 ring-1", uc.bg, uc.ring)}>
                         <AlertTriangle className={cn("h-4 w-4", uc.color)} strokeWidth={2} />
                       </div>
 
@@ -1064,7 +1077,7 @@ const Exceptions = () => {
                           {exc.clientName && (
                             <span className="text-xs text-muted-foreground">{exc.clientName}</span>
                           )}
-                          <span className="rounded-full border border-[hsl(var(--gold)/0.12)] px-2 py-0.5 text-[10px] text-muted-foreground">
+                          <span className="rounded-md border border-[hsl(var(--gold)/0.16)] bg-white/60 px-2 py-0.5 text-[10px] text-muted-foreground">
                             {getUrgencyLabel(exc.urgency)}
                           </span>
                         </div>
@@ -1096,7 +1109,7 @@ const Exceptions = () => {
           )}
         </section>
 
-        <section className="rounded-[1.5rem] border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.12),hsl(var(--background))_30%)] p-4 shadow-[0_24px_60px_-40px_hsl(var(--gold-deep)/0.28)] xl:sticky xl:top-4 xl:self-start">
+        <section className="rounded-2xl border border-[hsl(38_24%_82%)] bg-[hsl(42_38%_98%/0.96)] p-4 shadow-[0_22px_60px_-48px_hsl(32_45%_26%/0.45)] xl:sticky xl:top-4 xl:self-start">
           <div className="mb-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
               Detail
@@ -1114,7 +1127,7 @@ const Exceptions = () => {
           ) : (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3">
+                <div className="rounded-xl border border-[hsl(var(--gold)/0.14)] bg-white/62 p-3">
                   <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Type</p>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <Badge variant="outline" className={cn("text-xs font-medium", typeBadgeColor[selectedException.type])}>
@@ -1124,14 +1137,14 @@ const Exceptions = () => {
                   </div>
                 </div>
 
-                <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.08)] p-3">
+                <div className="rounded-xl border border-[hsl(var(--gold)/0.14)] bg-white/62 p-3">
                   <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Urgentie</p>
                   <p className="mt-2 text-sm font-medium text-foreground">{getUrgencyLabel(selectedException.urgency)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{selectedException.clientName || "Zonder klantlabel"}</p>
                 </div>
               </div>
 
-              <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--background))] p-4">
+              <div className="rounded-xl border border-[hsl(var(--gold)/0.14)] bg-white/70 p-4">
                 <h3 className="text-sm font-semibold text-foreground">Context</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{selectedException.description}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1140,9 +1153,9 @@ const Exceptions = () => {
                 </div>
               </div>
 
-              <div className="rounded-[1.1rem] border border-[hsl(var(--gold)/0.12)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.18),hsl(var(--background)))] p-4">
+              <div className="rounded-xl border border-[hsl(var(--gold)/0.18)] bg-[linear-gradient(180deg,hsl(var(--gold-soft)/0.48),white_42%)] p-4">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-[1rem] bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))]">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.72)] text-[hsl(var(--gold-deep))]">
                     <SelectedActionIcon className="h-4 w-4" />
                   </div>
                   <div>
@@ -1171,7 +1184,7 @@ const Exceptions = () => {
                   </span>
                 </div>
 
-                <div className="mt-4 rounded-[1rem] border border-white/40 bg-white/60 p-3 dark:bg-white/5">
+                <div className="mt-4 rounded-xl border border-[hsl(var(--gold)/0.12)] bg-white/78 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Verwachte impact
                   </p>
@@ -1186,7 +1199,7 @@ const Exceptions = () => {
                           <>
                             <Button
                               size="sm"
-                              className="w-full gap-1.5"
+                              className="btn-luxe btn-luxe--primary w-full gap-1.5"
                               onClick={() => updateExceptionActionStatus.mutate({
                                 id: selectedRecommendedAction.id,
                                 status: "APPROVED",
@@ -1213,7 +1226,7 @@ const Exceptions = () => {
                         <Button
                           size="sm"
                           variant={selectedRecommendedAction.status === "PENDING" ? "outline" : "default"}
-                          className="w-full gap-1.5"
+                          className="btn-luxe w-full gap-1.5"
                           onClick={() => executeExceptionAction.mutate({
                             actionId: selectedRecommendedAction.id,
                             actionType: selectedRecommendedAction.actionType,
@@ -1236,7 +1249,7 @@ const Exceptions = () => {
                     ) : (
                       <Button
                         size="sm"
-                        className="w-full gap-1.5"
+                        className="btn-luxe btn-luxe--primary w-full gap-1.5"
                         onClick={() => handleSaveSuggestion(selectedException, selectedSuggestion)}
                         disabled={createExceptionAction.isPending}
                       >
@@ -1276,6 +1289,7 @@ const Exceptions = () => {
             </div>
           )}
         </section>
+      </div>
       </div>
     </div>
   );
