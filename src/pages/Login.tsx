@@ -4,10 +4,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "@/contexts/TenantContext";
-import { Truck, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Mail, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DEFAULT_COMPANY } from "@/lib/companyConfig";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Check,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Globe2,
+  LockKeyhole,
+  Mail,
+  MapPinned,
+  Package,
+  ShieldCheck,
+  Truck,
+} from "lucide-react";
 
 const DEV_BYPASS_STORAGE_KEY = "debug_bypass";
 const DEV_BYPASS_EMAIL = "test@orderflow.nl";
@@ -28,25 +42,28 @@ function isLocalDevHost() {
   return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 }
 
-function isGoogleAuthEnabled() {
-  return import.meta.env.VITE_GOOGLE_AUTH_ENABLED === "true";
-}
+const BrandCube = ({ className = "h-16 w-16", iconClassName = "h-9 w-9" }: { className?: string; iconClassName?: string }) => (
+  <div className={cn("relative grid place-items-center rounded-2xl border border-amber-400/35 bg-gradient-to-br from-amber-300/25 via-amber-500/10 to-black/20 shadow-[0_0_60px_rgba(215,163,79,0.25)]", className)}>
+    <div className={cn("relative", iconClassName)}>
+      <span className="absolute left-[20%] top-[10%] h-[40%] w-[42%] skew-y-[-28deg] rounded-sm bg-gradient-to-br from-amber-200 to-amber-500 shadow-[0_0_18px_rgba(251,191,36,0.35)]" />
+      <span className="absolute right-[13%] top-[22%] h-[45%] w-[42%] skew-y-[28deg] rounded-sm bg-gradient-to-br from-amber-500 to-amber-800" />
+      <span className="absolute bottom-[8%] left-[28%] h-[42%] w-[44%] skew-y-[28deg] rounded-sm bg-gradient-to-br from-amber-600 to-amber-950" />
+      <span className="absolute inset-[18%] rounded-sm border border-black/30" />
+    </div>
+  </div>
+);
 
 const Login = () => {
   const navigate = useNavigate();
-  const { tenant } = useTenant();
-  const [tab, setTab] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
 
-  // Forgot password
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
 
-  // Login fields
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [mfaMode, setMfaMode] = useState<"setup" | "verify" | null>(null);
@@ -57,10 +74,29 @@ const Login = () => {
   const [mfaCode, setMfaCode] = useState("");
   const [mfaLoading, setMfaLoading] = useState(false);
 
-  // Register fields
-  const [regName, setRegName] = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regPassword, setRegPassword] = useState("");
+  const platformName = "OrderFlow Suite";
+  const featureItems = [
+    {
+      icon: Package,
+      title: "Slimme order intake",
+      description: "Conversationele wizard en validatie voor foutloze orders.",
+    },
+    {
+      icon: MapPinned,
+      title: "Realtime planning & dispatch",
+      description: "Routes, middelen en tijdvensters centraal aangestuurd.",
+    },
+    {
+      icon: Truck,
+      title: "Volledige cargo controle",
+      description: "Van tarief tot documenten en compliance in een flow.",
+    },
+    {
+      icon: BarChart3,
+      title: "Data & performance",
+      description: "Operationele inzichten voor maximale grip op transport.",
+    },
+  ];
 
   const resetMfaState = () => {
     setMfaMode(null);
@@ -73,9 +109,7 @@ const Login = () => {
 
   const startMfaFlow = async () => {
     const mfa = supabase.auth.mfa;
-    if (!mfa) {
-      throw new Error("MFA is niet beschikbaar in deze Supabase client.");
-    }
+    if (!mfa) throw new Error("MFA is niet beschikbaar in deze Supabase client.");
 
     const assurance = await mfa.getAuthenticatorAssuranceLevel();
     if (assurance.error) throw assurance.error;
@@ -134,10 +168,7 @@ const Login = () => {
     ) {
       localStorage.setItem(
         DEV_BYPASS_STORAGE_KEY,
-        JSON.stringify({
-          email: DEV_BYPASS_EMAIL,
-          display_name: "Local Admin",
-        }),
+        JSON.stringify({ email: DEV_BYPASS_EMAIL, display_name: "Local Admin" }),
       );
       setLoading(false);
       window.location.assign("/");
@@ -149,6 +180,7 @@ const Login = () => {
       ? await supabase.rpc("office_login_policy" as any, { p_email: normalizedEmail })
       : { data: null };
     const loginPolicy = (Array.isArray(policyRows) ? policyRows[0] : null) as LoginPolicy | null;
+
     if (loginPolicy?.locked_until && new Date(loginPolicy.locked_until).getTime() > Date.now()) {
       setLoading(false);
       setErrorText(`Te veel mislukte pogingen. Probeer opnieuw na ${new Date(loginPolicy.locked_until).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.`);
@@ -171,30 +203,32 @@ const Login = () => {
         });
       }
       setErrorText("Ongeldig e-mailadres of wachtwoord");
-    } else {
-      await supabase.rpc?.("record_office_login_attempt" as any, {
-        p_email: normalizedEmail,
-        p_success: true,
-        p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
-        p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
-      });
-      if (loginPolicy?.requires_2fa && loginPolicy.verification_method !== "email") {
-        try {
-          const mfaSatisfied = await startMfaFlow();
-          setLoading(false);
-          if (mfaSatisfied) finishLogin();
-        } catch (mfaError) {
-          await supabase.auth.signOut();
-          resetMfaState();
-          setLoading(false);
-          setErrorText(mfaError instanceof Error ? mfaError.message : "2FA kon niet worden gestart");
-        }
-        return;
-      }
-
-      setLoading(false);
-      finishLogin();
+      return;
     }
+
+    await supabase.rpc?.("record_office_login_attempt" as any, {
+      p_email: normalizedEmail,
+      p_success: true,
+      p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
+      p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
+    });
+
+    if (loginPolicy?.requires_2fa && loginPolicy.verification_method !== "email") {
+      try {
+        const mfaSatisfied = await startMfaFlow();
+        setLoading(false);
+        if (mfaSatisfied) finishLogin();
+      } catch (mfaError) {
+        await supabase.auth.signOut();
+        resetMfaState();
+        setLoading(false);
+        setErrorText(mfaError instanceof Error ? mfaError.message : "2FA kon niet worden gestart");
+      }
+      return;
+    }
+
+    setLoading(false);
+    finishLogin();
   };
 
   const handleMfaSubmit = async (e: React.FormEvent) => {
@@ -211,7 +245,6 @@ const Login = () => {
     });
 
     setMfaLoading(false);
-
     if (error) {
       setErrorText("Ongeldige 2FA-code. Controleer je verificatie app en probeer opnieuw.");
       return;
@@ -225,47 +258,6 @@ const Login = () => {
     resetMfaState();
     setErrorText("");
     setSuccessText("");
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorText("");
-    setSuccessText("");
-
-    if (regPassword.length < 6) {
-      setErrorText("Wachtwoord moet minimaal 6 tekens zijn");
-      setLoading(false);
-      return;
-    }
-
-    const { error } = await supabase.auth.signUp({
-      email: regEmail,
-      password: regPassword,
-      options: {
-        data: {
-          display_name: regName,
-        },
-      },
-    });
-    setLoading(false);
-
-    if (error) {
-      setErrorText(error.message === "User already registered"
-        ? "Dit e-mailadres is al geregistreerd"
-        : error.message);
-    } else {
-      setSuccessText("Account aangemaakt! Controleer je e-mail om je account te bevestigen, of log direct in.");
-      setTab("login");
-      setLoginEmail(regEmail);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    });
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -293,333 +285,304 @@ const Login = () => {
     }
   };
 
-  // Demo login removed for security — use a real test account instead
+  const errorMessage = errorText ? (
+    <div className="flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200">
+      <AlertCircle className="h-4 w-4 shrink-0" />
+      <span>{errorText}</span>
+    </div>
+  ) : null;
 
   return (
-    <div className="min-h-screen flex text-slate-900 font-sans">
-      {/* Left Split - Local visual, avoids a blocking third-party image on refresh */}
-      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden bg-[#0f172a]">
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(220,38,38,0.3),transparent_35%),radial-gradient(circle_at_25%_20%,rgba(248,250,252,0.14),transparent_24%),linear-gradient(120deg,#0f172a_0%,#1e293b_52%,#111827_100%)]" />
-        <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(255,255,255,0.9)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.9)_1px,transparent_1px)] [background-size:72px_72px]" />
-        <div className="absolute left-[12%] right-[10%] bottom-[14%] space-y-4">
-          {["#dc2626", "#334155", "#f8fafc", "#475569"].map((color, index) => (
-            <div
-              key={color}
-              className="h-16 rounded-sm shadow-2xl border border-white/10"
-              style={{
-                background: color,
-                transform: `translateX(${index % 2 === 0 ? 0 : 42}px)`,
-                opacity: index === 2 ? 0.86 : 0.96,
-              }}
-            />
-          ))}
-        </div>
-        <div className="absolute left-[16%] bottom-[8%] h-1 w-[58%] rounded-full bg-white/25" />
-        <div className="absolute inset-0 bg-[#0f172a]/20" />
-      </div>
+    <div className="min-h-screen overflow-hidden bg-slate-950 text-white">
+      <div className="grid min-h-screen lg:grid-cols-2">
+        <section className="relative hidden overflow-hidden border-r border-white/10 bg-slate-950 px-12 py-12 lg:flex lg:flex-col">
+          <img
+            src="/login-hero.png"
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover opacity-80"
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_16%,rgba(196,141,55,0.20),transparent_28%),radial-gradient(circle_at_78%_46%,rgba(220,163,68,0.18),transparent_26%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,8,13,0.98)_0%,rgba(5,8,13,0.83)_38%,rgba(5,8,13,0.22)_100%)]" />
+          <div className="absolute inset-0 opacity-[0.09] [background-image:linear-gradient(rgba(255,255,255,0.7)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:86px_86px]" />
+          <div className="absolute inset-x-0 bottom-0 h-[52%] bg-[linear-gradient(0deg,rgba(5,8,13,0.98)_0%,rgba(5,8,13,0.42)_74%,transparent_100%)]" />
 
-      {/* Right Split - Form */}
-      <div className="w-full lg:w-1/2 bg-[#111827] relative flex items-center justify-center p-6 sm:p-12">
-
-        {/* Top left icon */}
-        <div className="absolute top-8 left-8">
-          <div className="bg-[#dc2626] p-2.5 rounded text-white shadow-sm">
-            <Truck className="h-5 w-5" strokeWidth={2.5} />
-          </div>
-        </div>
-
-        {/* Version */}
-        <div className="absolute bottom-8 right-8 text-slate-500/60 text-xs tracking-wider font-mono">
-          v2.4.0
-        </div>
-
-        {/* Card */}
-        <div className="bg-white w-full max-w-[420px] rounded shadow-2xl p-8 sm:p-10">
-
-          <div className="text-center space-y-1 mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">{tenant?.name || DEFAULT_COMPANY.name}</h1>
-            <p className="text-xs font-bold text-[#dc2626] tracking-[0.2em] uppercase">
-              TMS Platform
-            </p>
-          </div>
-
-          {/* Tabs */}
-          <div className={cn("flex border-b border-slate-200 mb-6", (showForgotPassword || mfaMode) && "hidden")}>
-            <button
-              onClick={() => { setTab("login"); setErrorText(""); setSuccessText(""); setShowForgotPassword(false); }}
-              className={cn(
-                "flex-1 pb-3 text-sm font-semibold transition-colors border-b-2",
-                tab === "login" ? "text-slate-900 border-[#dc2626]" : "text-slate-400 border-transparent hover:text-slate-600"
-              )}
-            >
-              Inloggen
-            </button>
-            <button
-              onClick={() => { setTab("register"); setErrorText(""); setSuccessText(""); }}
-              className={cn(
-                "flex-1 pb-3 text-sm font-semibold transition-colors border-b-2",
-                tab === "register" ? "text-slate-900 border-[#dc2626]" : "text-slate-400 border-transparent hover:text-slate-600"
-              )}
-            >
-              Registreren
-            </button>
-          </div>
-
-          {/* Success message */}
-          {successText && (
-            <div className="flex items-start gap-2 text-emerald-700 text-sm font-medium mb-4 bg-emerald-50 border border-emerald-200 rounded p-3">
-              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>{successText}</span>
+          <div className="relative z-10 flex animate-in fade-in slide-in-from-top-3 duration-700 items-center gap-4">
+            <BrandCube />
+            <div>
+              <div className="text-3xl font-semibold tracking-[0.08em]">
+                ORDERFLOW <span className="text-amber-400">SUITE</span>
+              </div>
+              <div className="mt-1 text-sm font-medium uppercase tracking-[0.32em] text-amber-400">
+                TMS PLATFORM
+              </div>
             </div>
-          )}
+          </div>
 
-          {/* ─── Login Form ─── */}
-          {mfaMode && (
-            <form onSubmit={handleMfaSubmit} className="space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-[#dc2626]/10 text-[#dc2626]">
-                  <ShieldCheck className="h-5 w-5" />
+          <div className="relative z-10 mt-auto max-w-3xl animate-in fade-in slide-in-from-bottom-4 pb-8 duration-700">
+            <div className="mb-10 max-w-[690px]">
+              <h1 className="text-5xl font-semibold leading-[1.08] tracking-tight">
+                Van order tot levering.
+                <span className="mt-2 block text-amber-400">Volledig in controle.</span>
+              </h1>
+              <p className="mt-7 max-w-xl text-lg leading-8 text-white/74">
+                De slimme transport management suite voor orderintake, planning en realtime inzicht in al uw zendingen.
+              </p>
+            </div>
+
+            <div className="grid max-w-xl gap-4">
+              {featureItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.title} className="flex gap-4">
+                    <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-white/14 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur">
+                      <Icon className="h-6 w-6 text-amber-400" strokeWidth={1.75} />
+                    </div>
+                    <div className="pt-1">
+                      <div className="font-semibold text-white">{item.title}</div>
+                      <p className="mt-1 text-sm leading-6 text-white/62">{item.description}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-9 grid max-w-xl grid-cols-[1fr_1px_1fr] items-center gap-7 rounded-2xl border border-white/16 bg-black/24 px-6 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur">
+              <div className="flex items-center gap-4">
+                <div className="grid h-12 w-12 place-items-center rounded-xl bg-amber-400/12 text-amber-400">
+                  <ShieldCheck className="h-6 w-6" />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">
-                    {mfaMode === "setup" ? "Authenticator app koppelen" : "2FA-code invoeren"}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {mfaMode === "setup"
-                      ? "Scan de QR-code en bevestig met de 6-cijferige code uit je verificatie app."
-                      : "Deze gebruiker heeft 2FA verplicht. Voer de 6-cijferige code uit de verificatie app in."}
-                  </p>
+                  <div className="text-sm font-semibold">Veilig & betrouwbaar</div>
+                  <div className="mt-1 text-xs text-white/55">Uw data is beschermd.</div>
                 </div>
               </div>
+              <div className="h-12 bg-white/10" />
+              <div className="flex items-center gap-4">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.75)]" />
+                <div>
+                  <div className="text-sm font-semibold">Systeem status</div>
+                  <div className="mt-1 text-xs text-white/55">Alle systemen operationeel</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-              {mfaMode === "setup" && mfaQrCode && (
-                <div className="rounded-sm border border-slate-200 bg-slate-50 p-4 text-center">
-                  <img src={mfaQrCode} alt="QR-code voor authenticator app" className="mx-auto h-44 w-44 rounded bg-white p-2" />
-                  {mfaSecret && (
-                    <p className="mt-3 break-all rounded-sm bg-white px-3 py-2 font-mono text-xs text-slate-600">
-                      {mfaSecret}
+          <div className="relative z-10 mt-4 text-xs text-white/46">
+            &copy; 2026 OrderFlow Suite. Alle rechten voorbehouden.
+          </div>
+
+        </section>
+
+        <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-5 py-8 sm:px-8">
+          <div className="absolute inset-x-0 top-0 h-72 overflow-hidden lg:hidden">
+            <img src="/login-hero.png" alt="" aria-hidden="true" className="h-full w-full object-cover opacity-45" />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.18)_0%,rgba(15,23,42,0.86)_70%,#020617_100%)]" />
+          </div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_12%,rgba(215,163,79,0.12),transparent_24%),linear-gradient(180deg,#111827_0%,#0a1019_100%)]" />
+          <div className="absolute right-8 top-8 hidden rounded-xl border border-white/12 bg-white/[0.04] px-4 py-2 text-sm text-white/85 shadow-lg backdrop-blur sm:flex sm:items-center sm:gap-2">
+            <Globe2 className="h-4 w-4 text-amber-400" />
+            Nederlands
+          </div>
+
+          <div
+            className="relative z-10 w-full max-w-[520px] animate-in fade-in slide-in-from-bottom-4 rounded-[28px] border border-white/14 bg-slate-900/72 p-7 shadow-[0_35px_110px_rgba(0,0,0,0.45)] backdrop-blur-xl duration-700 sm:p-10"
+            style={{ boxShadow: "0 34px 110px rgba(0,0,0,0.46), 0 0 0 1px rgba(251,191,36,0.12)" }}
+          >
+            <div className="mb-9">
+              <div className="mb-7 flex items-center gap-3 lg:hidden">
+                <BrandCube className="h-12 w-12 rounded-xl" iconClassName="h-7 w-7" />
+                <div>
+                  <div className="text-lg font-semibold tracking-[0.1em]">ORDERFLOW <span className="text-amber-400">SUITE</span></div>
+                  <div className="text-[10px] uppercase tracking-[0.28em] text-amber-400">TMS PLATFORM</div>
+                </div>
+              </div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white">Welkom terug</h1>
+              <p className="mt-3 text-sm leading-6 text-white/62">
+                Log in om verder te gaan met {platformName}.
+              </p>
+            </div>
+
+            {successText && !showForgotPassword && (
+              <div className="mb-5 flex items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm font-medium text-emerald-100">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{successText}</span>
+              </div>
+            )}
+
+            {mfaMode && (
+              <form onSubmit={handleMfaSubmit} className="space-y-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-400/12 text-amber-400">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white">
+                      {mfaMode === "setup" ? "Authenticator app koppelen" : "2FA-code invoeren"}
+                    </h2>
+                    <p className="mt-1 text-sm text-white/62">
+                      {mfaMode === "setup"
+                        ? "Scan de QR-code en bevestig met de 6-cijferige code uit je verificatie app."
+                        : "Deze gebruiker heeft 2FA verplicht. Voer de 6-cijferige code uit de verificatie app in."}
                     </p>
-                  )}
+                  </div>
                 </div>
-              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="mfa-code" className="text-sm font-semibold text-slate-900">6-cijferige code</Label>
-                <Input
-                  id="mfa-code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="123456"
-                  value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value)}
-                  required
-                  className="h-11 rounded-sm border-slate-200 text-sm tracking-[0.2em] focus-visible:ring-1 focus-visible:ring-slate-300"
-                />
-              </div>
+                {mfaMode === "setup" && mfaQrCode && (
+                  <div className="rounded-2xl border border-white/12 bg-white/[0.04] p-4 text-center">
+                    <img src={mfaQrCode} alt="QR-code voor authenticator app" className="mx-auto h-44 w-44 rounded-xl bg-white p-2" />
+                    {mfaSecret && (
+                      <p className="mt-3 break-all rounded-xl bg-white/8 px-3 py-2 font-mono text-xs text-white/70">
+                        {mfaSecret}
+                      </p>
+                    )}
+                  </div>
+                )}
 
-              {errorText && (
-                <div className="flex items-center gap-2 text-[#dc2626] text-sm font-medium pt-1">
-                  <AlertCircle className="h-4 w-4 fill-[#dc2626] text-white" />
-                  <span>{errorText}</span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-[1fr_1.4fr] gap-3 pt-2">
-                <Button type="button" variant="outline" className="h-11 rounded-sm" onClick={handleCancelMfa} disabled={mfaLoading}>
-                  Annuleren
-                </Button>
-                <Button type="submit" className="h-11 rounded-sm bg-[#dc2626] text-sm font-semibold text-white hover:bg-[#b91c1c]" disabled={mfaLoading}>
-                  {mfaLoading ? "Controleren..." : "Bevestigen"}
-                </Button>
-              </div>
-            </form>
-          )}
-
-          {tab === "login" && !showForgotPassword && !mfaMode && (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="login-email" className="text-sm font-semibold text-slate-900">E-mailadres</Label>
-                <Input
-                  id="login-email" type="email" placeholder="naam@bedrijf.nl"
-                  value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required
-                  className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="login-password" className="text-sm font-semibold text-slate-900">Wachtwoord</Label>
-                <div className="relative">
+                <div className="space-y-2">
+                  <Label htmlFor="mfa-code" className="text-sm font-semibold text-white">6-cijferige code</Label>
                   <Input
-                    id="login-password" type={showPassword ? "text" : "password"} placeholder="••••••••"
-                    value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required
-                    className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300 pr-10"
+                    id="mfa-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    required
+                    className="h-14 rounded-xl border-white/10 bg-slate-950/70 text-white placeholder:text-white/28 focus-visible:ring-1 focus-visible:ring-amber-400"
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </div>
+                {errorMessage}
+                <div className="grid grid-cols-[1fr_1.4fr] gap-3 pt-2">
+                  <Button type="button" variant="outline" className="h-12 rounded-xl border-white/12 bg-white/[0.04] text-white hover:bg-white/10" onClick={handleCancelMfa} disabled={mfaLoading}>
+                    Annuleren
+                  </Button>
+                  <Button type="submit" className="h-12 rounded-xl bg-amber-400 text-sm font-semibold text-slate-950 hover:bg-amber-300" disabled={mfaLoading}>
+                    {mfaLoading ? "Controleren..." : "Bevestigen"}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {!showForgotPassword && !mfaMode && (
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="login-email" className="text-sm font-semibold text-white">E-mailadres</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/36" />
+                    <Input
+                      id="login-email"
+                      type="email"
+                      placeholder="naam@bedrijf.nl"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                      className="h-14 rounded-xl border-white/10 bg-slate-950/70 pl-12 text-white placeholder:text-white/28 focus-visible:ring-1 focus-visible:ring-amber-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="login-password" className="text-sm font-semibold text-white">Wachtwoord</Label>
+                  <div className="relative">
+                    <LockKeyhole className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/36" />
+                    <Input
+                      id="login-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                      className="h-14 rounded-xl border-white/10 bg-slate-950/70 pl-12 pr-12 text-white placeholder:text-white/28 focus-visible:ring-1 focus-visible:ring-amber-400"
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/36 hover:text-white/70 focus:outline-none" aria-label="Toon wachtwoord">
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <label className="inline-flex items-center gap-2 text-sm text-white/76">
+                    <span className="grid h-5 w-5 place-items-center rounded bg-amber-400 text-slate-950">
+                      <Check className="h-3.5 w-3.5" />
+                    </span>
+                    Ingelogd blijven
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setShowForgotPassword(true); setErrorText(""); setSuccessText(""); setResetEmail(loginEmail); }}
+                    className="text-sm font-medium text-amber-400 hover:text-amber-300"
+                  >
+                    Wachtwoord vergeten?
                   </button>
                 </div>
-              </div>
 
-              {errorText && (
-                <div className="flex items-center gap-2 text-[#dc2626] text-sm font-medium pt-1">
-                  <AlertCircle className="h-4 w-4 fill-[#dc2626] text-white" />
-                  <span>{errorText}</span>
-                </div>
-              )}
+                {errorMessage}
 
-              <div className="pt-2">
-                <Button type="submit" className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white rounded-sm h-11 text-sm font-semibold" disabled={loading}>
-                  {loading ? "Bezig..." : "Inloggen"}
+                <Button type="submit" className="h-14 w-full rounded-xl bg-[linear-gradient(135deg,#e8b65a,#b77a2d)] text-base font-semibold text-white shadow-[0_18px_46px_rgba(215,163,79,0.22)] hover:brightness-110" disabled={loading}>
+                  <span>{loading ? "Bezig..." : "Inloggen"}</span>
+                  {!loading && <ArrowRight className="ml-2 h-5 w-5" />}
                 </Button>
-              </div>
 
-              <div className="relative py-3">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100" /></div>
-                <div className="relative flex justify-center text-xs font-bold tracking-widest uppercase">
-                  <span className="bg-white px-3 text-slate-400">Of</span>
+                <div className="flex items-center justify-center gap-3 pt-3 text-sm text-white/68">
+                  <LockKeyhole className="h-4 w-4 text-white/44" />
+                  <div>
+                    <div className="font-semibold text-white/86">Beveiligde verbinding</div>
+                    <div className="text-xs text-white/45">Gebruik het account dat door uw organisatie is verstrekt.</div>
+                  </div>
                 </div>
-              </div>
+              </form>
+            )}
 
-              {isGoogleAuthEnabled() && (
-                <Button type="button" variant="outline" onClick={handleGoogleLogin}
-                  className="w-full rounded-sm h-11 border-slate-200 text-slate-600 font-medium hover:bg-slate-50">
-                  <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-4 w-4 mr-2" />
-                  Inloggen met Google
-                </Button>
-              )}
-
-              <div className="pt-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => { setShowForgotPassword(true); setErrorText(""); setSuccessText(""); setResetEmail(loginEmail); }}
-                  className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors"
-                >
-                  Wachtwoord vergeten?
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ─── Forgot Password Form ─── */}
-          {showForgotPassword && !mfaMode && (
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Mail className="h-4 w-4 text-slate-400" />
-                <h3 className="text-sm font-bold text-slate-900">Wachtwoord resetten</h3>
-              </div>
-              <p className="text-xs text-slate-500">
-                Vul je e-mailadres in en we sturen je een link om je wachtwoord te resetten.
-              </p>
-
-              <div className="space-y-2">
-                <Label htmlFor="reset-email" className="text-sm font-semibold text-slate-900">E-mailadres</Label>
-                <Input
-                  id="reset-email" type="email" placeholder="naam@bedrijf.nl"
-                  value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} required
-                  className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300"
-                  autoFocus
-                />
-              </div>
-
-              {errorText && (
-                <div className="flex items-center gap-2 text-[#dc2626] text-sm font-medium pt-1">
-                  <AlertCircle className="h-4 w-4 fill-[#dc2626] text-white" />
-                  <span>{errorText}</span>
+            {showForgotPassword && !mfaMode && (
+              <form onSubmit={handleForgotPassword} className="space-y-5">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-amber-400" />
+                  <h2 className="text-sm font-bold text-white">Wachtwoord resetten</h2>
                 </div>
-              )}
-
-              {successText && (
-                <div className="flex items-start gap-2 text-emerald-700 text-sm font-medium bg-emerald-50 border border-emerald-200 rounded p-3">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{successText}</span>
+                <p className="text-sm text-white/62">
+                  Vul je e-mailadres in en we sturen je een link om je wachtwoord te resetten.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="reset-email" className="text-sm font-semibold text-white">E-mailadres</Label>
+                  <Input
+                    id="reset-email"
+                    type="email"
+                    placeholder="naam@bedrijf.nl"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    required
+                    className="h-14 rounded-xl border-white/10 bg-slate-950/70 text-white placeholder:text-white/28 focus-visible:ring-1 focus-visible:ring-amber-400"
+                    autoFocus
+                  />
                 </div>
-              )}
-
-              <div className="pt-2">
-                <Button type="submit" className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white rounded-sm h-11 text-sm font-semibold" disabled={resetLoading}>
+                {errorMessage}
+                {successText && (
+                  <div className="flex items-start gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm font-medium text-emerald-100">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{successText}</span>
+                  </div>
+                )}
+                <Button type="submit" className="h-12 w-full rounded-xl bg-amber-400 text-sm font-semibold text-slate-950 hover:bg-amber-300" disabled={resetLoading}>
                   {resetLoading ? "Bezig..." : "Verstuur reset link"}
                 </Button>
-              </div>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => { setShowForgotPassword(false); setErrorText(""); setSuccessText(""); }}
-                  className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center gap-1.5"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Terug naar inloggen
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ─── Register Form ─── */}
-          {tab === "register" && !mfaMode && (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="reg-name" className="text-sm font-semibold text-slate-900">Volledige naam</Label>
-                <Input
-                  id="reg-name" type="text" placeholder="Jan de Vries"
-                  value={regName} onChange={(e) => setRegName(e.target.value)} required
-                  className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="reg-email" className="text-sm font-semibold text-slate-900">E-mailadres</Label>
-                <Input
-                  id="reg-email" type="email" placeholder="naam@bedrijf.nl"
-                  value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required
-                  className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="reg-password" className="text-sm font-semibold text-slate-900">Wachtwoord</Label>
-                <div className="relative">
-                  <Input
-                    id="reg-password" type={showPassword ? "text" : "password"} placeholder="Minimaal 6 tekens"
-                    value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required
-                    className="h-11 rounded-sm border-slate-200 text-sm focus-visible:ring-1 focus-visible:ring-slate-300 pr-10"
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => { setShowForgotPassword(false); setErrorText(""); setSuccessText(""); }}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-white/54 transition-colors hover:text-white"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    Terug naar inloggen
                   </button>
                 </div>
-              </div>
+              </form>
+            )}
 
-              {errorText && (
-                <div className="flex items-center gap-2 text-[#dc2626] text-sm font-medium pt-1">
-                  <AlertCircle className="h-4 w-4 fill-[#dc2626] text-white" />
-                  <span>{errorText}</span>
-                </div>
-              )}
+          </div>
 
-              <div className="pt-2">
-                <Button type="submit" className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white rounded-sm h-11 text-sm font-semibold" disabled={loading}>
-                  {loading ? "Bezig..." : "Account aanmaken"}
-                </Button>
-              </div>
-
-              <div className="relative py-3">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100" /></div>
-                <div className="relative flex justify-center text-xs font-bold tracking-widest uppercase">
-                  <span className="bg-white px-3 text-slate-400">Of</span>
-                </div>
-              </div>
-
-              {isGoogleAuthEnabled() && (
-                <Button type="button" variant="outline" onClick={handleGoogleLogin}
-                  className="w-full rounded-sm h-11 border-slate-200 text-slate-600 font-medium hover:bg-slate-50">
-                  <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-4 w-4 mr-2" />
-                  Registreren met Google
-                </Button>
-              )}
-            </form>
-          )}
-
-        </div>
+          <div className="absolute bottom-5 right-6 text-xs font-mono text-white/28">v2.4.0</div>
+        </section>
       </div>
     </div>
   );

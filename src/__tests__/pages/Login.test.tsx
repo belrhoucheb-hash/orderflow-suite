@@ -84,25 +84,17 @@ describe("Login", () => {
 
   it("renders without crashing", () => {
     renderLogin();
-    expect(screen.getByText("Test BV")).toBeInTheDocument();
-    expect(screen.getByText("TMS Platform")).toBeInTheDocument();
+    expect(screen.getByText("Welkom terug")).toBeInTheDocument();
+    expect(screen.getByText(/Log in om verder te gaan met OrderFlow Suite/)).toBeInTheDocument();
   });
 
-  it("shows login tab by default with email and password fields", () => {
+  it("shows private login with email and password fields", () => {
     renderLogin();
     expect(screen.getByLabelText("E-mailadres")).toBeInTheDocument();
     expect(screen.getByLabelText("Wachtwoord")).toBeInTheDocument();
-    // Both the tab button and submit button say "Inloggen"
-    const loginButtons = screen.getAllByText("Inloggen");
-    expect(loginButtons.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("switches to register tab", async () => {
-    const user = userEvent.setup();
-    renderLogin();
-    await user.click(screen.getByText("Registreren"));
-    expect(screen.getByLabelText("Volledige naam")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Account aanmaken" })).toBeInTheDocument();
+    expect(screen.queryByText("Registreren")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Google" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Microsoft" })).not.toBeInTheDocument();
   });
 
   it("toggles password visibility", async () => {
@@ -201,45 +193,6 @@ describe("Login", () => {
     });
   });
 
-  it("handles successful registration", async () => {
-    mockSupabase.auth.signUp.mockResolvedValueOnce({ error: null });
-    const user = userEvent.setup();
-    renderLogin();
-
-    await user.click(screen.getByText("Registreren"));
-    await user.type(screen.getByLabelText("Volledige naam"), "Jan de Vries");
-    await user.type(screen.getByLabelText("E-mailadres"), "jan@test.nl");
-    await user.type(screen.getByLabelText("Wachtwoord"), "geheim123");
-    await user.click(screen.getByRole("button", { name: "Account aanmaken" }));
-
-    await waitFor(() => {
-      expect(mockSupabase.auth.signUp).toHaveBeenCalledWith({
-        email: "jan@test.nl",
-        password: "geheim123",
-        options: { data: { display_name: "Jan de Vries" } },
-      });
-    });
-    await waitFor(() => {
-      expect(screen.getByText(/Account aangemaakt/)).toBeInTheDocument();
-    });
-  });
-
-  it("validates short password on register", async () => {
-    const user = userEvent.setup();
-    renderLogin();
-
-    await user.click(screen.getByText("Registreren"));
-    await user.type(screen.getByLabelText("Volledige naam"), "Test");
-    await user.type(screen.getByLabelText("E-mailadres"), "test@test.nl");
-    await user.type(screen.getByLabelText("Wachtwoord"), "abc");
-    await user.click(screen.getByRole("button", { name: "Account aanmaken" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Wachtwoord moet minimaal 6 tekens zijn")).toBeInTheDocument();
-    });
-    expect(mockSupabase.auth.signUp).not.toHaveBeenCalled();
-  });
-
   it("shows forgot password form and sends reset email", async () => {
     mockSupabase.auth.resetPasswordForEmail.mockResolvedValueOnce({ error: null });
     const user = userEvent.setup();
@@ -267,37 +220,6 @@ describe("Login", () => {
     await user.click(screen.getByText("Wachtwoord vergeten?"));
     await user.click(screen.getByText("Terug naar inloggen"));
 
-    // Both tab button and submit button say "Inloggen"
-    const loginBtns = screen.getAllByText("Inloggen");
-    expect(loginBtns.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("calls Google OAuth on Google button click", async () => {
-    vi.stubEnv("VITE_GOOGLE_AUTH_ENABLED", "true");
-    mockSupabase.auth.signInWithOAuth.mockResolvedValueOnce({ error: null });
-    const user = userEvent.setup();
-    renderLogin();
-
-    await user.click(screen.getByText("Inloggen met Google"));
-    expect(mockSupabase.auth.signInWithOAuth).toHaveBeenCalledWith({
-      provider: "google",
-      options: { redirectTo: expect.any(String) },
-    });
-  });
-
-  it("handles duplicate email on registration", async () => {
-    mockSupabase.auth.signUp.mockResolvedValueOnce({ error: { message: "User already registered" } });
-    const user = userEvent.setup();
-    renderLogin();
-
-    await user.click(screen.getByText("Registreren"));
-    await user.type(screen.getByLabelText("Volledige naam"), "Test");
-    await user.type(screen.getByLabelText("E-mailadres"), "existing@test.nl");
-    await user.type(screen.getByLabelText("Wachtwoord"), "geheim123");
-    await user.click(screen.getByRole("button", { name: "Account aanmaken" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Dit e-mailadres is al geregistreerd")).toBeInTheDocument();
-    });
+    expect(screen.getByRole("button", { name: "Inloggen" })).toBeInTheDocument();
   });
 });
