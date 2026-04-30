@@ -13,6 +13,10 @@ export default defineConfig(() => ({
   },
   plugins: [react()],
   build: {
+    modulePreload: {
+      resolveDependencies: (_url, deps) =>
+        deps.filter((dep) => !/vendor-(charts|motion)-/.test(dep)),
+    },
     rollupOptions: {
       output: {
         manualChunks: {

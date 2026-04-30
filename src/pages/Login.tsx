@@ -177,14 +177,25 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex text-slate-900 font-sans">
-      {/* Left Split - Image */}
-      <div className="hidden lg:block lg:w-1/2 relative bg-slate-900">
-        <div className="absolute inset-0 bg-[#0f172a]/40 mix-blend-multiply z-10" />
-        <img
-          src="https://images.unsplash.com/photo-1586528116311-ad8ed7c83a7a?q=80&w=2670&auto=format&fit=crop"
-          alt="Cargo Containers"
-          className="w-full h-full object-cover filter grayscale opacity-90"
-        />
+      {/* Left Split - Local visual, avoids a blocking third-party image on refresh */}
+      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden bg-[#0f172a]">
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(220,38,38,0.3),transparent_35%),radial-gradient(circle_at_25%_20%,rgba(248,250,252,0.14),transparent_24%),linear-gradient(120deg,#0f172a_0%,#1e293b_52%,#111827_100%)]" />
+        <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(255,255,255,0.9)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.9)_1px,transparent_1px)] [background-size:72px_72px]" />
+        <div className="absolute left-[12%] right-[10%] bottom-[14%] space-y-4">
+          {["#dc2626", "#334155", "#f8fafc", "#475569"].map((color, index) => (
+            <div
+              key={color}
+              className="h-16 rounded-sm shadow-2xl border border-white/10"
+              style={{
+                background: color,
+                transform: `translateX(${index % 2 === 0 ? 0 : 42}px)`,
+                opacity: index === 2 ? 0.86 : 0.96,
+              }}
+            />
+          ))}
+        </div>
+        <div className="absolute left-[16%] bottom-[8%] h-1 w-[58%] rounded-full bg-white/25" />
+        <div className="absolute inset-0 bg-[#0f172a]/20" />
       </div>
 
       {/* Right Split - Form */}
