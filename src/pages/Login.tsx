@@ -5,13 +5,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { Truck, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Mail } from "lucide-react";
+import { Truck, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowLeft, Mail, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
 
 const DEV_BYPASS_STORAGE_KEY = "debug_bypass";
 const DEV_BYPASS_EMAIL = "test@orderflow.nl";
 const DEV_BYPASS_PASSWORD = "Test1234!";
+
+type LoginPolicy = {
+  locked_until?: string | null;
+  failed_count?: number | null;
+  login_protection_enabled?: boolean | null;
+  max_login_attempts?: number | null;
+  lockout_minutes?: number | null;
+  requires_2fa?: boolean | null;
+  verification_method?: "authenticator_app" | "email" | string | null;
+};
 
 function isLocalDevHost() {
   if (typeof window === "undefined") return false;
@@ -39,11 +49,77 @@ const Login = () => {
   // Login fields
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [mfaMode, setMfaMode] = useState<"setup" | "verify" | null>(null);
+  const [mfaFactorId, setMfaFactorId] = useState("");
+  const [mfaChallengeId, setMfaChallengeId] = useState("");
+  const [mfaQrCode, setMfaQrCode] = useState("");
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaLoading, setMfaLoading] = useState(false);
 
   // Register fields
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
+
+  const resetMfaState = () => {
+    setMfaMode(null);
+    setMfaFactorId("");
+    setMfaChallengeId("");
+    setMfaQrCode("");
+    setMfaSecret("");
+    setMfaCode("");
+  };
+
+  const startMfaFlow = async () => {
+    const mfa = supabase.auth.mfa;
+    if (!mfa) {
+      throw new Error("MFA is niet beschikbaar in deze Supabase client.");
+    }
+
+    const assurance = await mfa.getAuthenticatorAssuranceLevel();
+    if (assurance.error) throw assurance.error;
+    if (assurance.data?.currentLevel === "aal2") return true;
+
+    const factors = await mfa.listFactors();
+    if (factors.error) throw factors.error;
+    const verifiedTotp = factors.data?.totp?.find((factor) => factor.status === "verified");
+
+    if (verifiedTotp) {
+      const challenge = await mfa.challenge({ factorId: verifiedTotp.id });
+      if (challenge.error) throw challenge.error;
+      setMfaFactorId(verifiedTotp.id);
+      setMfaChallengeId(challenge.data.id);
+      setMfaQrCode("");
+      setMfaSecret("");
+      setMfaCode("");
+      setMfaMode("verify");
+      return false;
+    }
+
+    const enrollment = await mfa.enroll({
+      factorType: "totp",
+      friendlyName: "OrderFlow TMS",
+    });
+    if (enrollment.error) throw enrollment.error;
+
+    const challenge = await mfa.challenge({ factorId: enrollment.data.id });
+    if (challenge.error) throw challenge.error;
+
+    setMfaFactorId(enrollment.data.id);
+    setMfaChallengeId(challenge.data.id);
+    setMfaQrCode(enrollment.data.totp.qr_code);
+    setMfaSecret(enrollment.data.totp.secret);
+    setMfaCode("");
+    setMfaMode("setup");
+    return false;
+  };
+
+  const finishLogin = () => {
+    localStorage.removeItem(DEV_BYPASS_STORAGE_KEY);
+    resetMfaState();
+    navigate("/");
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +148,7 @@ const Login = () => {
     const { data: policyRows } = typeof supabase.rpc === "function"
       ? await supabase.rpc("office_login_policy" as any, { p_email: normalizedEmail })
       : { data: null };
-    const loginPolicy = Array.isArray(policyRows) ? policyRows[0] : null;
+    const loginPolicy = (Array.isArray(policyRows) ? policyRows[0] : null) as LoginPolicy | null;
     if (loginPolicy?.locked_until && new Date(loginPolicy.locked_until).getTime() > Date.now()) {
       setLoading(false);
       setErrorText(`Te veel mislukte pogingen. Probeer opnieuw na ${new Date(loginPolicy.locked_until).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.`);
@@ -83,9 +159,9 @@ const Login = () => {
       email: normalizedEmail,
       password: loginPassword,
     });
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       if (loginPolicy?.login_protection_enabled !== false) {
         await supabase.rpc?.("record_office_login_attempt" as any, {
           p_email: normalizedEmail,
@@ -102,9 +178,53 @@ const Login = () => {
         p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
         p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
       });
-      localStorage.removeItem(DEV_BYPASS_STORAGE_KEY);
-      navigate("/");
+      if (loginPolicy?.requires_2fa && loginPolicy.verification_method !== "email") {
+        try {
+          const mfaSatisfied = await startMfaFlow();
+          setLoading(false);
+          if (mfaSatisfied) finishLogin();
+        } catch (mfaError) {
+          await supabase.auth.signOut();
+          resetMfaState();
+          setLoading(false);
+          setErrorText(mfaError instanceof Error ? mfaError.message : "2FA kon niet worden gestart");
+        }
+        return;
+      }
+
+      setLoading(false);
+      finishLogin();
     }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaFactorId || !mfaChallengeId || !mfaCode.trim()) return;
+
+    setMfaLoading(true);
+    setErrorText("");
+
+    const { error } = await supabase.auth.mfa.verify({
+      factorId: mfaFactorId,
+      challengeId: mfaChallengeId,
+      code: mfaCode.trim(),
+    });
+
+    setMfaLoading(false);
+
+    if (error) {
+      setErrorText("Ongeldige 2FA-code. Controleer je verificatie app en probeer opnieuw.");
+      return;
+    }
+
+    finishLogin();
+  };
+
+  const handleCancelMfa = async () => {
+    await supabase.auth.signOut();
+    resetMfaState();
+    setErrorText("");
+    setSuccessText("");
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -224,7 +344,7 @@ const Login = () => {
           </div>
 
           {/* Tabs */}
-          <div className={cn("flex border-b border-slate-200 mb-6", showForgotPassword && "hidden")}>
+          <div className={cn("flex border-b border-slate-200 mb-6", (showForgotPassword || mfaMode) && "hidden")}>
             <button
               onClick={() => { setTab("login"); setErrorText(""); setSuccessText(""); setShowForgotPassword(false); }}
               className={cn(
@@ -254,7 +374,68 @@ const Login = () => {
           )}
 
           {/* ─── Login Form ─── */}
-          {tab === "login" && !showForgotPassword && (
+          {mfaMode && (
+            <form onSubmit={handleMfaSubmit} className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-[#dc2626]/10 text-[#dc2626]">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    {mfaMode === "setup" ? "Authenticator app koppelen" : "2FA-code invoeren"}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {mfaMode === "setup"
+                      ? "Scan de QR-code en bevestig met de 6-cijferige code uit je verificatie app."
+                      : "Deze gebruiker heeft 2FA verplicht. Voer de 6-cijferige code uit de verificatie app in."}
+                  </p>
+                </div>
+              </div>
+
+              {mfaMode === "setup" && mfaQrCode && (
+                <div className="rounded-sm border border-slate-200 bg-slate-50 p-4 text-center">
+                  <img src={mfaQrCode} alt="QR-code voor authenticator app" className="mx-auto h-44 w-44 rounded bg-white p-2" />
+                  {mfaSecret && (
+                    <p className="mt-3 break-all rounded-sm bg-white px-3 py-2 font-mono text-xs text-slate-600">
+                      {mfaSecret}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="mfa-code" className="text-sm font-semibold text-slate-900">6-cijferige code</Label>
+                <Input
+                  id="mfa-code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value)}
+                  required
+                  className="h-11 rounded-sm border-slate-200 text-sm tracking-[0.2em] focus-visible:ring-1 focus-visible:ring-slate-300"
+                />
+              </div>
+
+              {errorText && (
+                <div className="flex items-center gap-2 text-[#dc2626] text-sm font-medium pt-1">
+                  <AlertCircle className="h-4 w-4 fill-[#dc2626] text-white" />
+                  <span>{errorText}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-[1fr_1.4fr] gap-3 pt-2">
+                <Button type="button" variant="outline" className="h-11 rounded-sm" onClick={handleCancelMfa} disabled={mfaLoading}>
+                  Annuleren
+                </Button>
+                <Button type="submit" className="h-11 rounded-sm bg-[#dc2626] text-sm font-semibold text-white hover:bg-[#b91c1c]" disabled={mfaLoading}>
+                  {mfaLoading ? "Controleren..." : "Bevestigen"}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {tab === "login" && !showForgotPassword && !mfaMode && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="login-email" className="text-sm font-semibold text-slate-900">E-mailadres</Label>
@@ -320,7 +501,7 @@ const Login = () => {
           )}
 
           {/* ─── Forgot Password Form ─── */}
-          {showForgotPassword && (
+          {showForgotPassword && !mfaMode && (
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <div className="flex items-center gap-2 mb-2">
                 <Mail className="h-4 w-4 text-slate-400" />
@@ -374,7 +555,7 @@ const Login = () => {
           )}
 
           {/* ─── Register Form ─── */}
-          {tab === "register" && (
+          {tab === "register" && !mfaMode && (
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="reg-name" className="text-sm font-semibold text-slate-900">Volledige naam</Label>

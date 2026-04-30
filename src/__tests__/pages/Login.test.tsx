@@ -15,7 +15,15 @@ const { mockNavigate, mockSupabase } = vi.hoisted(() => {
       signInWithOAuth: vi.fn(),
       signOut: vi.fn(),
       resetPasswordForEmail: vi.fn(),
+      mfa: {
+        getAuthenticatorAssuranceLevel: vi.fn(),
+        listFactors: vi.fn(),
+        challenge: vi.fn(),
+        enroll: vi.fn(),
+        verify: vi.fn(),
+      },
     },
+    rpc: vi.fn(),
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -56,6 +64,18 @@ describe("Login", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    mockSupabase.rpc.mockResolvedValue({ data: null, error: null });
+    mockSupabase.auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: "aal1", nextLevel: "aal1" },
+      error: null,
+    });
+    mockSupabase.auth.mfa.listFactors.mockResolvedValue({ data: { totp: [] }, error: null });
+    mockSupabase.auth.mfa.challenge.mockResolvedValue({ data: { id: "challenge-1" }, error: null });
+    mockSupabase.auth.mfa.enroll.mockResolvedValue({
+      data: { id: "factor-new", totp: { qr_code: "data:image/svg+xml;base64,abc", secret: "SECRET" } },
+      error: null,
+    });
+    mockSupabase.auth.mfa.verify.mockResolvedValue({ data: {}, error: null });
   });
 
   afterEach(() => {
@@ -110,6 +130,55 @@ describe("Login", () => {
       expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
         email: "test@test.nl",
         password: "password123",
+      });
+    });
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith("/");
+    });
+  });
+
+  it("requires authenticator verification when 2FA is enabled", async () => {
+    mockSupabase.rpc.mockImplementation(async (name: string) => {
+      if (name === "office_login_policy") {
+        return {
+          data: [{
+            login_protection_enabled: true,
+            max_login_attempts: 5,
+            lockout_minutes: 15,
+            requires_2fa: true,
+            verification_method: "authenticator_app",
+          }],
+          error: null,
+        };
+      }
+      return { data: null, error: null };
+    });
+    mockSupabase.auth.signInWithPassword.mockResolvedValueOnce({ error: null });
+    mockSupabase.auth.mfa.listFactors.mockResolvedValueOnce({
+      data: { totp: [{ id: "factor-1", status: "verified" }] },
+      error: null,
+    });
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(screen.getByLabelText("E-mailadres"), "secure@test.nl");
+    await user.type(screen.getByLabelText("Wachtwoord"), "password123");
+    const submitBtn = document.querySelector("form button[type='submit']") as HTMLElement;
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("2FA-code invoeren")).toBeInTheDocument();
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText("6-cijferige code"), "123456");
+    await user.click(screen.getByRole("button", { name: "Bevestigen" }));
+
+    await waitFor(() => {
+      expect(mockSupabase.auth.mfa.verify).toHaveBeenCalledWith({
+        factorId: "factor-1",
+        challengeId: "challenge-1",
+        code: "123456",
       });
     });
     await waitFor(() => {

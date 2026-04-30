@@ -1723,7 +1723,7 @@ const UsersPage = () => {
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-semibold text-foreground">Two-factor authenticatie (2FA)</p>
-                                <p className="mt-1 text-xs text-muted-foreground">Verificatie app voor extra controle bij inloggen.</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Verplicht een authenticator-code na wachtwoordlogin.</p>
                               </div>
                             </div>
                             <div className="mt-4 space-y-3 text-xs">
@@ -1755,7 +1755,7 @@ const UsersPage = () => {
                                   patch: { extra_security_enabled: !securitySettings.extra_security_enabled },
                                 })}
                               >
-                                {securitySettings.extra_security_enabled ? "Uitschakelen" : "Inschakelen"}
+                                {securitySettings.extra_security_enabled ? "Niet meer verplichten" : "2FA verplichten"}
                               </Button>
                               <Select
                                 value={securitySettings.verification_method}

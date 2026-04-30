@@ -255,7 +255,7 @@ describe("UsersPage", () => {
     expect(screen.getByText("Actieve sessies")).toBeInTheDocument();
     expect(screen.getByText("Inlogbeveiliging")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Inschakelen" }));
+    await userEvent.click(screen.getByRole("button", { name: "2FA verplichten" }));
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("admin-users", expect.objectContaining({
         body: expect.objectContaining({
