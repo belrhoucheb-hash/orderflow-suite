@@ -65,8 +65,8 @@ export function AppSidebar() {
   const { tenant } = useTenant();
   const { data: exceptionCount } = useExceptionCount();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    "Financieel & Controle": false,
-    "Relaties & Middelen": false,
+    Financieel: false,
+    Relaties: false,
     Beheer: false,
   });
 
@@ -142,14 +142,14 @@ export function AppSidebar() {
         <button
           type="button"
           className={cn(
-            "mb-2 flex h-6 w-full items-center gap-2 px-2 text-left text-[9px] font-semibold uppercase tracking-[0.2em] outline-none transition-colors",
+            "mb-2 flex h-6 w-full items-center gap-2 px-2 text-left text-[10px] font-semibold uppercase tracking-[0.16em] outline-none transition-colors",
             collapsible ? "cursor-pointer hover:text-[hsl(var(--gold-light))]" : "cursor-default",
             collapsedGroups[label] ? "text-white/38" : "text-white/56",
           )}
           style={{ fontFamily: "var(--font-display)" }}
           onClick={collapsible ? () => toggleGroup(label) : undefined}
         >
-          <span className="h-px w-3 shrink-0 bg-[hsl(var(--gold)/0.38)]" aria-hidden="true" />
+          <span className="h-px w-4 shrink-0 bg-[linear-gradient(90deg,hsl(var(--gold)/0.72),transparent)]" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
           {collapsible && (
             <ChevronDown
@@ -182,14 +182,14 @@ export function AppSidebar() {
                         : "text-white/68 hover:text-white"
                     )}
                     style={active ? {
-                      background: "linear-gradient(90deg, hsl(220 22% 18%) 0%, hsl(220 22% 15%) 100%)",
-                      boxShadow: "inset 0 0 0 1px hsl(0 0% 100% / 0.07), 0 12px 28px -24px hsl(var(--gold) / 0.55)",
+                      background: "linear-gradient(90deg, hsl(220 23% 18%) 0%, hsl(222 24% 13%) 100%)",
+                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18), 0 16px 32px -26px hsl(var(--gold) / 0.72)",
                     } : {
                       background: "transparent",
                     }}
                     onMouseEnter={(event) => {
                       if (!active) {
-                        event.currentTarget.style.background = "hsl(220 20% 14%)";
+                        event.currentTarget.style.background = "linear-gradient(90deg, hsl(220 21% 14%), hsl(220 20% 12%))";
                       }
                     }}
                     onMouseLeave={(event) => {
@@ -208,10 +208,10 @@ export function AppSidebar() {
                     <span
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors"
                       style={active ? {
-                        background: "hsl(var(--gold) / 0.16)",
+                        background: "linear-gradient(135deg, hsl(var(--gold) / 0.22), hsl(var(--gold-deep) / 0.18))",
                         color: "white",
                       } : {
-                        background: "transparent",
+                        background: "hsl(0 0% 100% / 0.025)",
                         color: "hsl(0 0% 100% / 0.72)",
                       }}
                     >
@@ -250,8 +250,8 @@ export function AppSidebar() {
     ? [{ label: t("nav.navigation"), items: chauffeurItems }]
     : [
         { label: "Operatie", items: operationsItems, collapsible: false },
-        { label: "Financieel & Controle", items: controlItems, collapsible: true },
-        { label: "Relaties & Middelen", items: masterDataItems, collapsible: true },
+        { label: "Financieel", items: controlItems, collapsible: true },
+        { label: "Relaties", items: masterDataItems, collapsible: true },
       ];
 
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -281,15 +281,16 @@ export function AppSidebar() {
       collapsible="icon"
       className="border-r-0"
       style={{
-        background: "linear-gradient(180deg, hsl(224 29% 11%) 0%, hsl(220 25% 9%) 100%)",
+        background: "linear-gradient(180deg, hsl(224 31% 11%) 0%, hsl(220 27% 8%) 100%)",
         color: "hsl(45 44% 96%)",
       }}
     >
       <div
         className="mx-3 mt-2.5 flex items-center gap-2.5 rounded-2xl border px-3 py-2.5"
         style={{
-          borderColor: "hsl(218 24% 18%)",
-          background: "hsl(222 24% 12%)",
+          borderColor: "hsl(var(--gold) / 0.16)",
+          background: "linear-gradient(135deg, hsl(222 24% 13%), hsl(220 26% 10%))",
+          boxShadow: "inset 0 1px 0 hsl(0 0% 100% / 0.04), 0 18px 42px -34px hsl(var(--gold) / 0.65)",
         }}
       >
         <img 
