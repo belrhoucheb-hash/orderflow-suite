@@ -116,6 +116,12 @@
     "reference": "Referenz",
     "weight": "Gewicht",
     "quantity": "Menge",
+    "department": "Abteilung",
+    "departmentAutoHint": "Automatisch anhand der Route bestimmt",
+    "departmentOverrideHint": "Vom Planer ueberschrieben",
+    "departmentRequired": "Waehlen Sie eine Abteilung, normalerweise automatisch aus der Route bestimmt",
+    "incomplete": "Unvollstaendig",
+    "incompleteTooltipTitle": "Fehlende Informationen",
     "status": {
       "draft": "Entwurf",
       "pending": "In Bearbeitung",
@@ -123,6 +129,26 @@
       "in_transit": "Unterwegs",
       "delivered": "Zugestellt"
     }
+  },
+  "clients": {
+    "billing": "Fakturierung",
+    "billingEmail": "Rechnungs-E-Mail",
+    "billingAddress": "Rechnungsadresse",
+    "billingSameAsMain": "Rechnungsadresse = Hauptadresse",
+    "mainAddress": "Hauptadresse",
+    "shippingAddress": "Postadresse",
+    "shippingSameAsMain": "Postadresse = Hauptadresse",
+    "sameAsMain": "Gleich wie Hauptadresse",
+    "contacts": "Kontaktpersonen",
+    "contactsTabTitle": "Kontakte",
+    "contactRolePrimary": "Primaer",
+    "contactRoleBackup": "Backup",
+    "contactRoleOther": "Sonstige",
+    "contactEmpty": "Fuegen Sie eine primaere und eine Backup-Kontaktperson hinzu.",
+    "contactAdd": "Hinzufuegen",
+    "contactMakePrimary": "Primaer machen",
+    "contactMakeBackup": "Backup machen",
+    "contactDeleteConfirm": "Kontaktperson loeschen?"
   },
   "invoicing": {
     "title": "Fakturierung",

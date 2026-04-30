@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -94,6 +94,7 @@ vi.mock("@/components/dashboard/AutonomyScoreCard", () => ({
 vi.mock("framer-motion", async () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
     tr: ({ children, ...props }: any) => <tr {...props}>{children}</tr>,
   },
   AnimatePresence: ({ children }: any) => children,
@@ -114,6 +115,7 @@ function renderDashboard() {
 
 describe("Dashboard", () => {
   beforeEach(() => {
+    cleanup();
     vi.clearAllMocks();
     // Reset persistente mockReturnValue's tussen tests, anders bleed-through.
     mockUseOrders.mockReset();
@@ -132,9 +134,11 @@ describe("Dashboard", () => {
     }));
   });
 
+  afterEach(() => cleanup());
+
   it("renders without crashing", () => {
     renderDashboard();
-    expect(screen.getByText("Operationeel Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Operationeel overzicht")).toBeInTheDocument();
   });
 
   it("displays KPI values (stats useMemo)", () => {
@@ -145,7 +149,7 @@ describe("Dashboard", () => {
 
   it("shows recent orders table (recentOrders useMemo)", () => {
     renderDashboard();
-    expect(screen.getByText("Recente orders")).toBeInTheDocument();
+    expect(screen.getAllByText("Recente orders")[0]).toBeInTheDocument();
     expect(screen.getByText("ORD-001")).toBeInTheDocument();
     expect(screen.getByText("Acme BV")).toBeInTheDocument();
   });
@@ -156,14 +160,14 @@ describe("Dashboard", () => {
     expect(screen.getByTestId("forecast-widget")).toBeInTheDocument();
   });
 
-  it("shows Samenvatting section", () => {
+  it("shows AI insights section", () => {
     renderDashboard();
-    expect(screen.getByText("Samenvatting")).toBeInTheDocument();
+    expect(screen.getByText("AI Inzichten")).toBeInTheDocument();
   });
 
-  it("shows aandachtspunten section", () => {
+  it("shows vehicle check attention card", () => {
     renderDashboard();
-    expect(screen.getByText("Aandachtspunten")).toBeInTheDocument();
+    expect(screen.getByText("Te vrijgeven voertuigchecks")).toBeInTheDocument();
   });
 
   it("shows loading state", () => {

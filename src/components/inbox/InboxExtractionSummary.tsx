@@ -4,6 +4,13 @@ import { useCapacityMatch } from "@/hooks/useCapacityMatch";
 import { type OrderDraft, type FormState, requirementOptions } from "./types";
 
 export function ExtractionSummary({ order, form }: { order: OrderDraft; form: FormState }) {
+  const capacityInput = {
+    requirements: form.requirements,
+    weightKg: form.weight ? Number(form.weight) * (form.perUnit ? form.quantity : 1) : 0,
+    quantity: form.quantity,
+    unit: form.unit,
+  };
+  const capacityMatches = useCapacityMatch(capacityInput);
   const items = [
     { label: "Klant", value: order.client_name },
     { label: "Ophaaladres", value: form.pickupAddress },
@@ -19,14 +26,6 @@ export function ExtractionSummary({ order, form }: { order: OrderDraft; form: Fo
   ].filter(i => i.value);
 
   if (items.length === 0) return null;
-
-  const capacityInput = {
-    requirements: form.requirements,
-    weightKg: form.weight ? Number(form.weight) * (form.perUnit ? form.quantity : 1) : 0,
-    quantity: form.quantity,
-    unit: form.unit,
-  };
-  const capacityMatches = useCapacityMatch(capacityInput);
 
   return (
     <div className="p-4 space-y-1" style={{ minWidth: 0, overflow: "hidden" }}>

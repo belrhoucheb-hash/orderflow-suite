@@ -1,6 +1,6 @@
 // src/__tests__/components/ConsolidationBoard.test.tsx
-import { render, screen } from "@testing-library/react";
-import { vi, describe, it, expect } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { vi, describe, it, expect, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -25,6 +25,10 @@ function createWrapper() {
 }
 
 describe("ConsolidationBoard", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders all consolidation groups as columns", () => {
     render(<ConsolidationBoard plannedDate="2026-04-04" />, { wrapper: createWrapper() });
     expect(screen.getByText("Regio Amsterdam")).toBeDefined();

@@ -85,7 +85,7 @@ function getSortedMissingFields(fields: string[]) {
 }
 
 function isLikelyCompanyName(name: string) {
-  return /\b(b\.?v\.?|nv|logistics|transport|cargo|group|holding|trading|b\.?v|ltd|llc|gmbh)\b/i.test(name)
+  return /\b(b\.?v\.?|nv|logistics|transport|cargo|group|holding|trading|corp|corporation|b\.?v|ltd|llc|gmbh)\b/i.test(name)
     || /^[A-Z0-9 .&-]{4,}$/.test(name.trim());
 }
 

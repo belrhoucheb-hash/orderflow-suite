@@ -1,5 +1,5 @@
-import { renderHook, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import type { ReactNode } from "react";
@@ -30,10 +30,30 @@ function createWrapper() {
     );
 }
 
+function createOrdersQuery(data: unknown[] | null, error: unknown = null) {
+  const result = { data, error };
+  const chain = {
+    select: vi.fn(() => chain),
+    ilike: vi.fn(() => chain),
+    eq: vi.fn(() => chain),
+    neq: vi.fn(() => chain),
+    order: vi.fn(() => chain),
+    limit: vi.fn(() => chain),
+    then: (resolve: (value: typeof result) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve(result).then(resolve, reject),
+  };
+  return chain;
+}
+
 import { useAddressSuggestions, recordAddressCorrection } from "@/hooks/useAddressSuggestions";
 
 describe("useAddressSuggestions", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => cleanup());
 
   it("is disabled when clientName is null", () => {
     const { result } = renderHook(() => useAddressSuggestions(null), { wrapper: createWrapper() });
@@ -53,13 +73,7 @@ describe("useAddressSuggestions", () => {
       { pickup_address: "Amsterdam, NL", delivery_address: "Eindhoven, NL", created_at: "2026-01-04" },
     ];
 
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: orders, error: null }),
-    }));
+    mockFrom.mockImplementation(() => createOrdersQuery(orders));
 
     const { result } = renderHook(
       () => useAddressSuggestions("Acme Corp"),
@@ -79,13 +93,7 @@ describe("useAddressSuggestions", () => {
   });
 
   it("returns empty arrays when no orders found", async () => {
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-    }));
+    mockFrom.mockImplementation(() => createOrdersQuery([]));
 
     const { result } = renderHook(
       () => useAddressSuggestions("Nobody"),
@@ -103,13 +111,7 @@ describe("useAddressSuggestions", () => {
       { pickup_address: "Amsterdam, NL", delivery_address: null, created_at: "2026-01-02" },
     ];
 
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: orders, error: null }),
-    }));
+    mockFrom.mockImplementation(() => createOrdersQuery(orders));
 
     const { result } = renderHook(
       () => useAddressSuggestions("Test Client"),
@@ -128,13 +130,7 @@ describe("useAddressSuggestions", () => {
       created_at: `2026-01-${String(i + 1).padStart(2, "0")}`,
     }));
 
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: orders, error: null }),
-    }));
+    mockFrom.mockImplementation(() => createOrdersQuery(orders));
 
     const { result } = renderHook(
       () => useAddressSuggestions("Acme Corp"),
@@ -151,13 +147,7 @@ describe("useAddressSuggestions", () => {
       { pickup_address: "Amsterdam", delivery_address: "Rotterdam", created_at: "2026-01-01" },
     ];
 
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: orders, error: null }),
-    }));
+    mockFrom.mockImplementation(() => createOrdersQuery(orders));
 
     const { result } = renderHook(
       () => useAddressSuggestions("Test"),
@@ -169,13 +159,7 @@ describe("useAddressSuggestions", () => {
   });
 
   it("handles error", async () => {
-    mockFrom.mockImplementation(() => ({
-      select: vi.fn().mockReturnThis(),
-      ilike: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue({ data: null, error: { message: "fail" } }),
-    }));
+    mockFrom.mockImplementation(() => createOrdersQuery(null, { message: "fail" }));
 
     const { result } = renderHook(
       () => useAddressSuggestions("Acme"),

@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -35,10 +35,6 @@ vi.mock("framer-motion", () => ({
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(" "),
-}));
-
-vi.mock("@/components/inbox/InboxFollowUpPanel", () => ({
-  FollowUpPanel: ({ selected }: any) => <div data-testid="follow-up-panel">Follow-up {selected.id}</div>,
 }));
 
 // Mock inbox utils
@@ -81,6 +77,10 @@ vi.mock("@/components/AddressAutocomplete", () => ({
   ),
 }));
 
+afterEach(() => {
+  cleanup();
+});
+
 // Mock sonner toast
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
@@ -95,6 +95,18 @@ function QWrapper({ children }: { children: React.ReactNode }) {
     </QueryClientProvider>
   );
 }
+
+const readyCaseSummary = {
+  status: {
+    key: "draft_reply",
+    label: "Concept klaar",
+    description: "Een follow-upconcept staat klaar voor ontbrekende informatie.",
+    tone: "bg-blue-50 text-blue-700 border-blue-200",
+    recommendedLabel: "Controleer concept",
+  },
+  blockers: [],
+  nextStep: "Controleer concept",
+};
 
 // ─── Fixtures ────────────────────────────────────────────────
 const baseDraft = {
@@ -374,7 +386,14 @@ describe("AnomalyWarnings", () => {
 describe("Follow-up status helpers", () => {
   it("shows concept status on inbox row", async () => {
     const { InboxListItem } = await import("@/components/inbox/InboxListItem");
-    render(<InboxListItem draft={{ ...baseDraft, follow_up_draft: "Concept mail" } as any} isSelected={false} onClick={vi.fn()} />);
+    render(
+      <InboxListItem
+        draft={{ ...baseDraft, follow_up_draft: "Concept mail" } as any}
+        caseSummary={readyCaseSummary as any}
+        isSelected={false}
+        onClick={vi.fn()}
+      />,
+    );
     expect(screen.getByText("Concept klaar")).toBeInTheDocument();
   });
 });
@@ -539,8 +558,8 @@ describe("FollowUpPanel", () => {
       </QWrapper>,
     );
     expect(screen.getByText("Ontbrekende Gegevens")).toBeInTheDocument();
-    expect(screen.getByText("gewicht")).toBeInTheDocument();
-    expect(screen.getByText("afmetingen")).toBeInTheDocument();
+    expect(screen.getAllByText("gewicht").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("afmetingen").length).toBeGreaterThan(0);
   });
 
   it("shows recommended follow-up items from missing fields", async () => {
@@ -671,12 +690,13 @@ describe("FollowUpPanel", () => {
       </QWrapper>,
     );
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
-    expect(textarea).toHaveValue(expect.stringContaining("Beste team van ACME Corp,"));
-    expect(textarea).toHaveValue(expect.stringContaining("Dank voor uw transportaanvraag van Amsterdam naar Rotterdam."));
-    expect(textarea).toHaveValue(expect.stringContaining("Voor we de order kunnen bevestigen hebben we nog graag eerst het gewicht nodig."));
-    expect(textarea).toHaveValue(expect.stringContaining("het gewicht"));
-    expect(textarea).toHaveValue(expect.stringContaining("Planning Royalty Cargo"));
-    expect(textarea).toHaveValue(expect.stringContaining("planning@royaltycargo.nl"));
+    const draft = (textarea as HTMLTextAreaElement).value;
+    expect(draft).toContain("Beste team van ACME Corp,");
+    expect(draft).toContain("Dank voor uw transportaanvraag van Amsterdam naar Rotterdam.");
+    expect(draft).toContain("Voor we de order kunnen bevestigen hebben we nog graag eerst het gewicht nodig.");
+    expect(draft).toContain("het gewicht");
+    expect(draft).toContain("Planning Royalty Cargo");
+    expect(draft).toContain("planning@royaltycargo.nl");
   });
 
   it("shows a smart subject preview", async () => {
@@ -718,8 +738,8 @@ describe("FollowUpPanel", () => {
       </QWrapper>,
     );
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
-    expect(textarea).toHaveValue(expect.stringContaining("Dank voor uw aanvraag via het klantportaal."));
-    expect(textarea).toHaveValue(expect.stringContaining("Aanvullend op uw transportaanvraag van Amsterdam naar Rotterdam."));
+    expect((textarea as HTMLTextAreaElement).value).toContain("Dank voor uw aanvraag via het klantportaal.");
+    expect((textarea as HTMLTextAreaElement).value).toContain("Aanvullend op uw transportaanvraag van Amsterdam naar Rotterdam.");
   });
 
   it("uses a more integration-oriented draft for api intake", async () => {
@@ -730,7 +750,7 @@ describe("FollowUpPanel", () => {
       </QWrapper>,
     );
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
-    expect(textarea).toHaveValue(expect.stringContaining("Dank voor de doorgestuurde transportaanvraag via de koppeling."));
+    expect((textarea as HTMLTextAreaElement).value).toContain("Dank voor de doorgestuurde transportaanvraag via de koppeling.");
   });
 
   it("uses a formal generic salutation when no client name is known", async () => {
@@ -741,7 +761,7 @@ describe("FollowUpPanel", () => {
       </QWrapper>,
     );
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
-    expect(textarea).toHaveValue(expect.stringContaining("Geachte heer/mevrouw,"));
+    expect((textarea as HTMLTextAreaElement).value).toContain("Geachte heer/mevrouw,");
   });
 
   it("prioritizes blocking fields before secondary information in the generated draft", async () => {
@@ -758,7 +778,7 @@ describe("FollowUpPanel", () => {
       </QWrapper>,
     );
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
-    expect(textarea).toHaveValue(expect.stringContaining("Voor we de order kunnen bevestigen hebben we nog graag eerst het volledige afleveradres en het gewicht nodig."));
+    expect((textarea as HTMLTextAreaElement).value).toContain("Voor we de order kunnen bevestigen hebben we nog graag eerst het volledige afleveradres en het gewicht nodig.");
   });
 
   it("adapts the draft tone for update threads", async () => {
@@ -776,9 +796,10 @@ describe("FollowUpPanel", () => {
       </QWrapper>,
     );
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
-    expect(textarea).toHaveValue(expect.stringContaining("Dank voor uw wijziging op de transportaanvraag van Amsterdam naar Rotterdam."));
-    expect(textarea).toHaveValue(expect.stringContaining("Om de wijziging goed te verwerken hebben we nog graag eerst het gewicht nodig."));
-    expect(textarea).toHaveValue(expect.stringContaining("verwerken we de wijziging direct verder"));
+    const draft = (textarea as HTMLTextAreaElement).value;
+    expect(draft).toContain("Dank voor uw wijziging op de transportaanvraag van Amsterdam naar Rotterdam.");
+    expect(draft).toContain("Om de wijziging goed te verwerken hebben we nog graag eerst het gewicht nodig.");
+    expect(draft).toContain("verwerken we de wijziging direct verder");
   });
 
   it("adapts the draft tone for question threads", async () => {
@@ -796,9 +817,10 @@ describe("FollowUpPanel", () => {
       </QWrapper>,
     );
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
-    expect(textarea).toHaveValue(expect.stringContaining("Dank voor uw bericht over de transportaanvraag van Amsterdam naar Rotterdam."));
-    expect(textarea).toHaveValue(expect.stringContaining("Om uw vraag goed te beantwoorden hebben we nog graag eerst het gewicht nodig."));
-    expect(textarea).toHaveValue(expect.stringContaining("komen we direct bij u terug met een volledig antwoord"));
+    const draft = (textarea as HTMLTextAreaElement).value;
+    expect(draft).toContain("Dank voor uw bericht over de transportaanvraag van Amsterdam naar Rotterdam.");
+    expect(draft).toContain("Om uw vraag goed te beantwoorden hebben we nog graag eerst het gewicht nodig.");
+    expect(draft).toContain("komen we direct bij u terug met een volledig antwoord");
   });
 
   it("turns anomalies into concrete confirmation questions", async () => {
@@ -817,10 +839,11 @@ describe("FollowUpPanel", () => {
         />
       </QWrapper>,
     );
-    expect(screen.getByText(/kunt u bevestigen of het gewicht inderdaad 50.000 kg is/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/kunt u bevestigen of het gewicht inderdaad 50.000 kg is/i).length).toBeGreaterThan(0);
     const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
-    expect(textarea).toHaveValue(expect.stringContaining("kunt u bevestigen of het gewicht inderdaad 50.000 kg is?"));
-    expect(textarea).toHaveValue(expect.stringContaining("ongeveer 5.000 kg"));
+    const draft = (textarea as HTMLTextAreaElement).value;
+    expect(draft).toContain("kunt u bevestigen of het gewicht inderdaad 50.000 kg is?");
+    expect(draft).toContain("ongeveer 5.000 kg");
   });
 
   it("shows email recipient from source_email_from", async () => {
@@ -892,7 +915,7 @@ describe("FollowUpPanel", () => {
     const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
     render(
       <QWrapper>
-        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["gewicht"], follow_up_draft: "mail body" } as any} />
+        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["weight_kg"], follow_up_draft: "mail body" } as any} />
       </QWrapper>,
     );
     fireEvent.click(screen.getByText("Verstuur Follow-up"));
@@ -979,16 +1002,17 @@ describe("FollowUpPanel", () => {
     });
   });
 
-  it("disables send button when no draft text", async () => {
+  it("uses generated draft when saved draft text is empty", async () => {
     const { FollowUpPanel } = await import("@/components/inbox/InboxFollowUpPanel");
     render(
       <QWrapper>
-        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["gewicht"], follow_up_draft: "" } as any} />
+        <FollowUpPanel selected={{ ...baseDraft, missing_fields: ["weight_kg"], follow_up_draft: "" } as any} />
       </QWrapper>,
     );
-    // With empty draft, the button should be disabled
+    const textarea = screen.getByPlaceholderText("Concept follow-up mail...");
+    expect((textarea as HTMLTextAreaElement).value).toContain("het gewicht");
     const sendBtn = screen.getByText("Verstuur Follow-up").closest("button");
-    expect(sendBtn).toBeDisabled();
+    expect(sendBtn).not.toBeDisabled();
   });
 });
 

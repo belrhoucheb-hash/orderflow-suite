@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -187,6 +187,7 @@ const originalOnLineDescriptor = Object.getOwnPropertyDescriptor(navigator, "onL
 
 describe("ChauffeurApp", () => {
   beforeEach(() => {
+    cleanup();
     vi.clearAllMocks();
     localStorage.clear();
     mockIsTracking.value = false;
@@ -199,6 +200,8 @@ describe("ChauffeurApp", () => {
   });
 
   afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
     // Restore navigator.onLine
     if (originalOnLineDescriptor) {
       Object.defineProperty(navigator, "onLine", originalOnLineDescriptor);
@@ -832,7 +835,7 @@ describe("ChauffeurApp", () => {
     mockSyncPendingPODs.mockResolvedValue({ synced: 1, failed: 1 });
     renderWithActiveDriver("d1");
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith("1 POD(s) konden niet worden gesynchroniseerd");
+      expect(mockToastError).toHaveBeenCalledWith("1 POD(s) niet gesynchroniseerd. Volgende poging bij herladen.");
     });
   });
 
@@ -944,8 +947,8 @@ describe("ChauffeurApp", () => {
         fireEvent.click(logoutBtn);
       });
       await waitFor(() => {
-        // Logout toont de driver-selectie weer (geen actieve driver-naam meer).
-        expect(screen.queryByText(/Jan Jansen/)).not.toBeInTheDocument();
+        expect(screen.getByText("Driver Portal - Selecteer je profiel")).toBeInTheDocument();
+        expect(screen.queryByText("0 / 0 Voltooid")).not.toBeInTheDocument();
       });
     }
     expect(document.body.textContent).toBeTruthy();
@@ -962,10 +965,10 @@ describe("ChauffeurApp", () => {
     });
   });
 
-  it("fetchDriverOrders - shows 'Geen actieve ritten' when no orders", async () => {
+  it("fetchDriverOrders - shows trip flow when no legacy orders", async () => {
     renderWithActiveDriver("d1");
     await waitFor(() => {
-      expect(screen.getByText("Geen actieve ritten")).toBeInTheDocument();
+      expect(screen.getByTestId("trip-flow")).toBeInTheDocument();
     });
   });
 

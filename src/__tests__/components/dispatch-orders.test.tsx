@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -51,6 +51,10 @@ function Wrapper({ children }: { children: React.ReactNode }) {
     </QueryClientProvider>
   );
 }
+
+afterEach(() => {
+  cleanup();
+});
 
 // ═══════════════════════════════════════════════════════════════
 // TripStatusBadge
@@ -392,8 +396,9 @@ describe("LabelWorkshop", () => {
   });
 
   it("copies ZPL code when ZPL option clicked", async () => {
-    Object.assign(navigator, {
-      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
     const { toast } = await import("sonner");
     const LabelWorkshop = (await import("@/components/orders/LabelWorkshop")).default;

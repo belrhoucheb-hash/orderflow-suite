@@ -1,9 +1,17 @@
 // src/__tests__/components/TimeWindowBar.test.tsx
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { TimeWindowBar } from "@/components/planning/TimeWindowBar";
 
 describe("TimeWindowBar", () => {
+  beforeEach(() => {
+    cleanup();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
   it("shows green bar when ETA is within window", () => {
     const { container } = render(
       <TimeWindowBar windowStart="09:00" windowEnd="11:00" eta="10:00" />

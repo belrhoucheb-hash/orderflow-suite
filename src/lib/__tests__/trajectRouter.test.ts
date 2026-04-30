@@ -374,7 +374,7 @@ describe("createShipmentWithLegs", () => {
     expect(result.shipment).toBeTruthy();
     expect(result.shipment.tenant_id).toBe(TENANT);
     expect(result.shipment.traject_rule_id).toBe("rule-split");
-    expect(result.shipment.status).toBe("DRAFT");
+    expect(result.shipment.status).toBe("PENDING");
     expect(result.shipment.origin_address).toBe("Klantlocatie 1, Utrecht");
     expect(result.shipment.destination_address).toBe("RCS Export Schiphol");
 
@@ -387,7 +387,7 @@ describe("createShipmentWithLegs", () => {
     expect(leg1.department_id).toBe("dept-ops-id");
     expect(leg1.pickup_address).toBe("Klantlocatie 1, Utrecht");
     expect(leg1.delivery_address).toBe("HUB-ADDR");
-    expect(leg1.status).toBe("DRAFT");
+    expect(leg1.status).toBe("PENDING");
     expect(leg1.shipment_id).toBe(result.shipment.id);
 
     const leg2 = result.legs[1];

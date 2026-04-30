@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -66,7 +66,12 @@ function renderClients() {
 }
 
 describe("Clients", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => cleanup());
 
   it("renders without crashing", () => {
     renderClients();
@@ -75,13 +80,13 @@ describe("Clients", () => {
 
   it("shows client count", () => {
     renderClients();
-    expect(screen.getByText(/2 klanten/)).toBeInTheDocument();
+    expect(screen.getAllByText(/2 klanten/)[0]).toBeInTheDocument();
   });
 
   it("displays client names in table", () => {
     renderClients();
-    expect(screen.getByText("Acme BV")).toBeInTheDocument();
-    expect(screen.getByText("Widget NL")).toBeInTheDocument();
+    expect(screen.getAllByText("Acme BV")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Widget NL")[0]).toBeInTheDocument();
   });
 
   it("has new client button", () => {
@@ -111,7 +116,7 @@ describe("Clients", () => {
   it("shows client detail panel when a client row is clicked (setSelectedClient)", async () => {
     const user = userEvent.setup();
     renderClients();
-    await user.click(screen.getByText("Acme BV"));
+    await user.click(screen.getAllByText("Acme BV")[0]);
     await waitFor(() => {
       expect(screen.getByTestId("client-detail")).toBeInTheDocument();
     });
@@ -123,7 +128,7 @@ describe("Clients", () => {
     const searchInput = screen.getByPlaceholderText(/Zoek op naam/);
     await user.type(searchInput, "Widget");
     await waitFor(() => {
-      expect(screen.getByText("Widget NL")).toBeInTheDocument();
+      expect(screen.getAllByText("Widget NL")[0]).toBeInTheDocument();
       // Acme may still be in DOM since filtering happens server-side via useClients
       // But the search value should have changed
       expect((searchInput as HTMLInputElement).value).toBe("Widget");
@@ -133,7 +138,7 @@ describe("Clients", () => {
   it("closes detail panel with Escape", async () => {
     const user = userEvent.setup();
     renderClients();
-    await user.click(screen.getByText("Acme BV"));
+    await user.click(screen.getAllByText("Acme BV")[0]);
     await waitFor(() => {
       expect(screen.getByTestId("client-detail")).toBeInTheDocument();
     });
@@ -160,11 +165,11 @@ describe("Clients", () => {
   it("selects different client", async () => {
     const user = userEvent.setup();
     renderClients();
-    await user.click(screen.getByText("Acme BV"));
+    await user.click(screen.getAllByText("Acme BV")[0]);
     await waitFor(() => {
       expect(screen.getByTestId("client-detail")).toHaveTextContent("Acme BV");
     });
-    await user.click(screen.getByText("Widget NL"));
+    await user.click(screen.getAllByText("Widget NL")[0]);
     await waitFor(() => {
       expect(screen.getByTestId("client-detail")).toHaveTextContent("Widget NL");
     });

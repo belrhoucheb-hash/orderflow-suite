@@ -223,7 +223,10 @@ vi.mock("@/components/settings/StickySaveBar", () => ({
 
 // Mock clipboard API and toast
 const mockClipboard = vi.fn().mockResolvedValue(undefined);
-Object.assign(navigator, { clipboard: { writeText: mockClipboard } });
+Object.defineProperty(navigator, "clipboard", {
+  configurable: true,
+  value: { writeText: mockClipboard },
+});
 
 import Settings from "@/pages/Settings";
 

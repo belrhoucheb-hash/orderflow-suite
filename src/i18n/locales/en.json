@@ -116,6 +116,12 @@
     "reference": "Reference",
     "weight": "Weight",
     "quantity": "Quantity",
+    "department": "Department",
+    "departmentAutoHint": "Automatically determined based on route",
+    "departmentOverrideHint": "Overridden by planner",
+    "departmentRequired": "Choose a department, normally determined automatically from the route",
+    "incomplete": "Incomplete",
+    "incompleteTooltipTitle": "Missing information",
     "status": {
       "draft": "Draft",
       "pending": "Pending",
@@ -123,6 +129,26 @@
       "in_transit": "In transit",
       "delivered": "Delivered"
     }
+  },
+  "clients": {
+    "billing": "Billing",
+    "billingEmail": "Billing email",
+    "billingAddress": "Billing address",
+    "billingSameAsMain": "Billing address = main address",
+    "mainAddress": "Main address",
+    "shippingAddress": "Mailing address",
+    "shippingSameAsMain": "Mailing address = main address",
+    "sameAsMain": "Same as main address",
+    "contacts": "Contacts",
+    "contactsTabTitle": "Contacts",
+    "contactRolePrimary": "Primary",
+    "contactRoleBackup": "Backup",
+    "contactRoleOther": "Other",
+    "contactEmpty": "Add a primary and backup contact.",
+    "contactAdd": "Add",
+    "contactMakePrimary": "Make primary",
+    "contactMakeBackup": "Make backup",
+    "contactDeleteConfirm": "Delete contact?"
   },
   "invoicing": {
     "title": "Invoicing",

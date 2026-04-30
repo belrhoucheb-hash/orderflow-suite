@@ -116,6 +116,12 @@
     "reference": "R\u00e9f\u00e9rence",
     "weight": "Poids",
     "quantity": "Quantit\u00e9",
+    "department": "Service",
+    "departmentAutoHint": "D\u00e9termin\u00e9 automatiquement selon l'itin\u00e9raire",
+    "departmentOverrideHint": "Remplac\u00e9 par le planificateur",
+    "departmentRequired": "Choisissez un service, normalement d\u00e9termin\u00e9 automatiquement depuis l'itin\u00e9raire",
+    "incomplete": "Incomplet",
+    "incompleteTooltipTitle": "Informations manquantes",
     "status": {
       "draft": "Brouillon",
       "pending": "En attente",
@@ -123,6 +129,26 @@
       "in_transit": "En transit",
       "delivered": "Livr\u00e9"
     }
+  },
+  "clients": {
+    "billing": "Facturation",
+    "billingEmail": "E-mail de facturation",
+    "billingAddress": "Adresse de facturation",
+    "billingSameAsMain": "Adresse de facturation = adresse principale",
+    "mainAddress": "Adresse principale",
+    "shippingAddress": "Adresse postale",
+    "shippingSameAsMain": "Adresse postale = adresse principale",
+    "sameAsMain": "Identique \u00e0 l'adresse principale",
+    "contacts": "Contacts",
+    "contactsTabTitle": "Contacts",
+    "contactRolePrimary": "Principal",
+    "contactRoleBackup": "Secours",
+    "contactRoleOther": "Autre",
+    "contactEmpty": "Ajoutez un contact principal et un contact de secours.",
+    "contactAdd": "Ajouter",
+    "contactMakePrimary": "D\u00e9finir comme principal",
+    "contactMakeBackup": "D\u00e9finir comme secours",
+    "contactDeleteConfirm": "Supprimer le contact ?"
   },
   "invoicing": {
     "title": "Facturation",

@@ -191,9 +191,9 @@ describe("syncPendingPODs", () => {
     mockFrom.mockReturnValue({ insert: mockInsert });
   });
 
-  it("returns { synced: 0, failed: 0 } when there are no pending PODs", async () => {
+  it("returns zero counts when there are no pending PODs", async () => {
     const result = await syncPendingPODs();
-    expect(result).toEqual({ synced: 0, failed: 0 });
+    expect(result).toEqual({ synced: 0, failed: 0, abandoned: 0 });
   });
 
   it("syncs a pending POD and removes it from IndexedDB", async () => {
@@ -272,6 +272,17 @@ describe("syncPendingPODs", () => {
 
     expect(result.synced).toBe(2);
     expect(result.failed).toBe(0);
+    expect(result.abandoned).toBe(0);
+  });
+
+  it("abandons and removes PODs that exceeded the retry limit", async () => {
+    idbData.set("pod-1", { ...samplePOD, retryCount: 5 });
+
+    const result = await syncPendingPODs();
+
+    expect(result).toEqual({ synced: 0, failed: 0, abandoned: 1 });
+    expect(idbData.has("pod-1")).toBe(false);
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it("handles POD with multiple photos", async () => {

@@ -59,6 +59,12 @@ const fakeTenantRow = {
   primary_color: "#3b82f6",
 };
 
+const defaultInvoiceTemplateFields = {
+  invoiceTemplateUrl: null,
+  invoiceTemplateFilename: null,
+  invoiceTemplateUploadedAt: null,
+};
+
 function wrapper({ children }: { children: ReactNode }) {
   return <TenantProvider>{children}</TenantProvider>;
 }
@@ -155,6 +161,7 @@ describe("TenantContext", () => {
       slug: "acme",
       logoUrl: "https://logo.png",
       primaryColor: "#3b82f6",
+      ...defaultInvoiceTemplateFields,
     });
   });
 
@@ -177,6 +184,7 @@ describe("TenantContext", () => {
       slug: "acme",
       logoUrl: "https://logo.png",
       primaryColor: "#3b82f6",
+      ...defaultInvoiceTemplateFields,
     });
   });
 
@@ -247,6 +255,7 @@ describe("TenantContext", () => {
       slug: "localhost-dev",
       logoUrl: null,
       primaryColor: "#dc2626",
+      ...defaultInvoiceTemplateFields,
     });
 
     expect(errorSpy).not.toHaveBeenCalled();

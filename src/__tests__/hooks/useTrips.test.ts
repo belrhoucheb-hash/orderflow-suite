@@ -195,6 +195,25 @@ describe("useCreateTrip", () => {
           single: vi.fn().mockResolvedValue({ data: { id: "new-trip" }, error: null }),
         };
       }
+      if (table === "driver_country_restrictions") {
+        const restrictionsQuery = {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn(),
+        };
+        restrictionsQuery.eq
+          .mockReturnValueOnce(restrictionsQuery)
+          .mockResolvedValueOnce({ data: [], error: null });
+        return {
+          select: restrictionsQuery.select,
+          eq: restrictionsQuery.eq,
+        };
+      }
+      if (table === "orders") {
+        return {
+          select: vi.fn().mockReturnThis(),
+          in: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+      }
       return {
         insert: vi.fn().mockResolvedValue({ error: null }),
       };
@@ -203,7 +222,7 @@ describe("useCreateTrip", () => {
     const { result } = renderHook(() => useCreateTrip(), { wrapper: createWrapper() });
 
     await act(async () => {
-      result.current.mutate({
+      await result.current.mutateAsync({
         tenant_id: "t1",
         vehicle_id: "v1",
         driver_id: "d1",

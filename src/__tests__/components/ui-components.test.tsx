@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import { vi, describe, it, expect } from "vitest";
+import { cleanup, render, screen, fireEvent, act } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Package, Truck, Search as SearchIcon } from "lucide-react";
 
 // ─── Mocks ───────────────────────────────────────────────────
@@ -17,6 +17,15 @@ vi.mock("framer-motion", () => ({
 // ═══════════════════════════════════════════════════════════════
 // EmptyState
 // ═══════════════════════════════════════════════════════════════
+beforeEach(() => {
+  cleanup();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
 describe("EmptyState", () => {
   it("renders title and default icon", async () => {
     const { EmptyState } = await import("@/components/ui/EmptyState");

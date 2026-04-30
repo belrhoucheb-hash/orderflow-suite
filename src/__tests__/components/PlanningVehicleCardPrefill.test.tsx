@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -137,8 +137,13 @@ function baseProps(overrides: Record<string, unknown> = {}) {
 // ═══════════════════════════════════════════════════════════════
 describe("PlanningVehicleCard rooster-prefill", () => {
   beforeEach(() => {
+    cleanup();
     mockSchedulesState.schedules = [];
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("prefilt driverId en startTime als velden nog leeg / default zijn", async () => {

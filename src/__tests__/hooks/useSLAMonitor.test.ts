@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
@@ -38,6 +38,12 @@ vi.mock("@/hooks/useNotifications", () => ({
   createNotification: (...args: any[]) => mockCreateNotification(...args),
 }));
 
+vi.mock("@/hooks/useSettings", () => ({
+  useLoadSettings: () => ({
+    data: { enabled: true, deadlineHours: 4, warningMinutes: 60 },
+  }),
+}));
+
 function createWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return ({ children }: { children: ReactNode }) =>
@@ -55,6 +61,7 @@ describe("useSLAMonitor", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
   });
 

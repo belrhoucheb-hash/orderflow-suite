@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -14,6 +14,7 @@ vi.mock("@/hooks/useClients", () => ({
   useClientLocations: () => ({ data: [] }),
   useClientRates: () => ({ data: [] }),
   useClientOrders: () => ({ data: [] }),
+  useRevenueYtd: () => ({ data: 0, isLoading: false }),
   useClientDuplicateCheck: () => ({ duplicate: null }),
   useClients: () => ({ data: [] }),
   useClient: () => ({ data: null }),
@@ -41,6 +42,15 @@ const mockUpdateDriver = { mutateAsync: vi.fn().mockResolvedValue({}), isPending
 const mockDeleteDriver = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 const mockUpsertDriverCertExpiry = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 const mockDeleteDriverCertExpiry = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
+const mockDriverCertExpiries: any[] = [];
+const mockDriverCertifications = [
+  { code: "ADR", name: "ADR", is_active: true },
+  { code: "COOLING", name: "Koeling", is_active: true },
+  { code: "TAIL_LIFT", name: "Laadklep", is_active: true },
+  { code: "INTERNATIONAL", name: "Internationaal", is_active: true },
+  { code: "CUSTOMS", name: "Douane", is_active: true },
+];
+const mockFleetVehicles = [{ id: "v1", name: "Truck A", plate: "AB-123-CD", isActive: true }];
 vi.mock("@/hooks/useDrivers", () => ({
   useDrivers: () => ({
     createDriver: mockCreateDriver,
@@ -48,7 +58,7 @@ vi.mock("@/hooks/useDrivers", () => ({
     deleteDriver: mockDeleteDriver,
   }),
   useDriverCertificationExpiry: () => ({
-    data: [],
+    data: mockDriverCertExpiries,
     upsertExpiry: mockUpsertDriverCertExpiry,
     deleteExpiry: mockDeleteDriverCertExpiry,
   }),
@@ -56,17 +66,34 @@ vi.mock("@/hooks/useDrivers", () => ({
 }));
 
 vi.mock("@/hooks/useDriverCertifications", () => ({
-  useDriverCertifications: () => ({ data: [] }),
+  useDriverCertifications: () => ({ data: mockDriverCertifications }),
 }));
 
 const mockAddVehicle = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 const mockCreateDocument = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 const mockCreateMaintenance = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false };
 vi.mock("@/hooks/useFleet", () => ({
-  useFleetVehicles: () => ({ data: [{ id: "v1", name: "Truck A", plate: "AB-123-CD" }] }),
+  useFleetVehicles: () => ({ data: mockFleetVehicles }),
   useAddVehicle: () => mockAddVehicle,
   useCreateDocument: () => mockCreateDocument,
   useCreateMaintenance: () => mockCreateMaintenance,
+}));
+
+vi.mock("@/hooks/useShiftTemplates", () => ({
+  useShiftTemplates: () => ({
+    templates: [],
+    createTemplate: { mutateAsync: vi.fn(), isPending: false },
+    updateTemplate: { mutateAsync: vi.fn(), isPending: false },
+    deleteTemplate: { mutateAsync: vi.fn(), isPending: false },
+  }),
+}));
+
+vi.mock("@/components/drivers/DriverCertificateRecordsSection", () => ({
+  DriverCertificateRecordsSection: () => <div>Certificaatrecords</div>,
+}));
+
+vi.mock("@/components/drivers/DriverCountryRestrictionsSection", () => ({
+  DriverCountryRestrictionsSection: () => <div>Landrestricties</div>,
 }));
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
@@ -74,13 +101,17 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.f
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }) },
-    from: vi.fn().mockReturnValue({
+    from: vi.fn().mockImplementation((table: string) => ({
       select: vi.fn().mockReturnThis(), insert: vi.fn().mockReturnThis(),
       update: vi.fn().mockReturnThis(), delete: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(), single: vi.fn().mockResolvedValue({ data: null, error: null }),
       ilike: vi.fn().mockReturnThis(), maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
+      then: vi.fn().mockImplementation((cb: any) => cb({
+        data: table === "vehicle_types" ? [{ code: "van", name: "Bestelwagen" }] : [],
+        error: null,
+      })),
+    })),
     channel: vi.fn().mockReturnValue({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnValue({ unsubscribe: vi.fn() }) }),
     removeChannel: vi.fn(),
   },
@@ -102,6 +133,13 @@ function Wrapper({ children }: { children: React.ReactNode }) {
     </QueryClientProvider>
   );
 }
+
+beforeEach(() => {
+  mockAddVehicle.mutateAsync.mockReset();
+  mockAddVehicle.mutateAsync.mockResolvedValue({});
+});
+
+afterEach(() => cleanup());
 
 // ═══════════════════════════════════════════════════════════════
 // NewClientDialog
@@ -127,9 +165,9 @@ describe("NewClientDialog", () => {
     expect(screen.getByText("Bedrijfsgegevens")).toBeInTheDocument();
     expect(screen.getByText("Hoofdadres")).toBeInTheDocument();
     expect(screen.getByText("Primair contact")).toBeInTheDocument();
-    expect(screen.getByText("Algemeen e-mail en telefoon")).toBeInTheDocument();
     expect(screen.getByText("Facturatie")).toBeInTheDocument();
-    expect(screen.getByText("Postadres")).toBeInTheDocument();
+    expect(screen.getByText("Factuur e-mail")).toBeInTheDocument();
+    expect(screen.getByText("Factuuradres = hoofdadres")).toBeInTheDocument();
     expect(screen.getByText("KvK-nummer")).toBeInTheDocument();
     expect(screen.getByText("BTW-nummer")).toBeInTheDocument();
   });
@@ -199,8 +237,8 @@ describe("NewDriverDialog", () => {
   it("renders create mode when no driver prop", async () => {
     const { NewDriverDialog } = await import("@/components/drivers/NewDriverDialog");
     render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Nieuwe chauffeur")).toBeInTheDocument();
-    expect(screen.getByText("Toevoegen")).toBeInTheDocument();
+    expect(screen.getAllByText("Nieuwe chauffeur").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Snel toevoegen").length).toBeGreaterThan(0);
   });
 
   it("renders edit mode when driver prop provided", async () => {
@@ -211,25 +249,30 @@ describe("NewDriverDialog", () => {
       current_vehicle_id: null, certifications: ["ADR"],
     };
     render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} driver={driver as any} /></Wrapper>);
-    expect(screen.getByText("Chauffeur Bewerken")).toBeInTheDocument();
+    expect(screen.getAllByText("Chauffeur bewerken").length).toBeGreaterThan(0);
     expect(screen.getByText("Opslaan")).toBeInTheDocument();
   });
 
-  it("shows certification checkboxes", async () => {
+  it("shows full intake tabs after opening full intake", async () => {
     const { NewDriverDialog } = await import("@/components/drivers/NewDriverDialog");
     render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Certificeringen")).toBeInTheDocument();
-    expect(screen.getByText("ADR")).toBeInTheDocument();
-    expect(screen.getByText("Koeling")).toBeInTheDocument();
-    expect(screen.getByText("Laadklep")).toBeInTheDocument();
-    expect(screen.getByText("Internationaal")).toBeInTheDocument();
-    expect(screen.getByText("Douane")).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Volledige intake openen/));
+    expect(screen.getByRole("tab", { name: /Persoon/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Werk/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Administratie/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Certificaten/ })).toBeInTheDocument();
   });
 
-  it("shows vehicle select with loaded vehicles", async () => {
+  it("shows edit mode work tab", async () => {
     const { NewDriverDialog } = await import("@/components/drivers/NewDriverDialog");
-    render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Toegewezen Voertuig")).toBeInTheDocument();
+    const driver = {
+      id: "d1", name: "Piet", email: "piet@test.nl", phone: "06123",
+      license_number: "NL-123", status: "beschikbaar",
+      current_vehicle_id: null, certifications: [],
+    };
+    render(<Wrapper><NewDriverDialog open={true} onOpenChange={vi.fn()} driver={driver as any} /></Wrapper>);
+    expect(screen.getByRole("tab", { name: /Werk/ })).toBeInTheDocument();
+    expect(screen.getByText("Beschikbaar")).toBeInTheDocument();
   });
 });
 
@@ -237,6 +280,12 @@ describe("NewDriverDialog", () => {
 // NewVehicleDialog
 // ═══════════════════════════════════════════════════════════════
 describe("NewVehicleDialog", () => {
+  async function waitForVehicleType() {
+    await waitFor(() => {
+      expect(screen.getByText("Bestelwagen")).toBeInTheDocument();
+    });
+  }
+
   it("renders dialog title", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
@@ -246,9 +295,9 @@ describe("NewVehicleDialog", () => {
   it("shows required form fields", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByPlaceholderText("VH-04")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("XX-123-YY")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Mercedes Sprinter")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("XX-123-YY")).toBeInTheDocument();
+    expect(screen.getByText("Type")).toBeInTheDocument();
   });
 
   it("shows Annuleren and Toevoegen buttons", async () => {
@@ -271,7 +320,6 @@ describe("NewVehicleDialog", () => {
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     fireEvent.click(screen.getByText("Toevoegen"));
     await waitFor(() => {
-      expect(screen.getByText("Code is verplicht")).toBeInTheDocument();
       expect(screen.getByText("Naam is verplicht")).toBeInTheDocument();
       expect(screen.getByText("Kenteken is verplicht")).toBeInTheDocument();
     });
@@ -280,7 +328,7 @@ describe("NewVehicleDialog", () => {
   it("calls addVehicle.mutateAsync on valid submit", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-05" } });
+    await waitForVehicleType();
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "Scania R450" } });
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "AB-123-CD" } });
     fireEvent.click(screen.getByText("Toevoegen"));
@@ -293,14 +341,14 @@ describe("NewVehicleDialog", () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     expect(screen.getByText("Max gewicht (kg)")).toBeInTheDocument();
-    expect(screen.getByText("Palletplaatsen")).toBeInTheDocument();
+    expect(screen.getByText("Laadruimte")).toBeInTheDocument();
   });
 
   it("shows Merk field", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Merk")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Mercedes")).toBeInTheDocument();
+    expect(screen.getByText("Naam")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Mercedes Sprinter")).toBeInTheDocument();
   });
 
   it("shows type select with options", async () => {
@@ -312,42 +360,37 @@ describe("NewVehicleDialog", () => {
   it("fills all input fields including brand and capacities", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-10" } });
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "ZZ-999-AA" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "DAF XF" } });
-    fireEvent.change(screen.getByPlaceholderText("Mercedes"), { target: { value: "DAF" } });
-    // Get number inputs by their container labels
+    // Get number inputs by their container labels.
     const kgInput = screen.getByText("Max gewicht (kg)").parentElement!.querySelector("input")!;
-    const palletInput = screen.getByText("Palletplaatsen").parentElement!.querySelector("input")!;
+    const lengthInput = screen.getByText("Lengte (cm)").parentElement!.querySelector("input")!;
     fireEvent.change(kgInput, { target: { value: "15000" } });
-    fireEvent.change(palletInput, { target: { value: "33" } });
-    expect(screen.getByPlaceholderText("VH-04")).toHaveValue("VH-10");
-    expect(screen.getByPlaceholderText("Mercedes")).toHaveValue("DAF");
+    fireEvent.change(lengthInput, { target: { value: "420" } });
+    expect(screen.getByPlaceholderText("Mercedes Sprinter")).toHaveValue("DAF XF");
     expect(kgInput).toHaveValue(15000);
-    expect(palletInput).toHaveValue(33);
+    expect(lengthInput).toHaveValue(420);
   });
 
   it("submits with all fields including optional brand and capacities", async () => {
     const onOpenChange = vi.fn();
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={onOpenChange} /></Wrapper>);
-    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-99" } });
+    await waitForVehicleType();
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "AB-999-CD" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "Scania" } });
-    fireEvent.change(screen.getByPlaceholderText("Mercedes"), { target: { value: "Scania" } });
     const kgInput = screen.getByText("Max gewicht (kg)").parentElement!.querySelector("input")!;
-    const palletInput = screen.getByText("Palletplaatsen").parentElement!.querySelector("input")!;
+    const lengthInput = screen.getByText("Lengte (cm)").parentElement!.querySelector("input")!;
     fireEvent.change(kgInput, { target: { value: "20000" } });
-    fireEvent.change(palletInput, { target: { value: "40" } });
+    fireEvent.change(lengthInput, { target: { value: "430" } });
     fireEvent.click(screen.getByText("Toevoegen"));
     await waitFor(() => {
       expect(mockAddVehicle.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-        code: "VH-99",
         name: "Scania",
         plate: "AB-999-CD",
-        brand: "Scania",
+        type: "van",
         capacity_kg: 20000,
-        capacity_pallets: 40,
+        load_length_cm: 430,
       }));
     });
   });
@@ -356,7 +399,7 @@ describe("NewVehicleDialog", () => {
     const onOpenChange = vi.fn();
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={onOpenChange} /></Wrapper>);
-    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-55" } });
+    await waitForVehicleType();
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "XX-555-YY" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "Volvo" } });
     fireEvent.click(screen.getByText("Toevoegen"));
@@ -370,12 +413,12 @@ describe("NewVehicleDialog", () => {
     const { toast } = await import("sonner");
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-ERR" } });
+    await waitForVehicleType();
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "ER-ROR-11" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "Error" } });
     fireEvent.click(screen.getByText("Toevoegen"));
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Fout bij toevoegen");
+      expect(toast.error).toHaveBeenCalledWith("DB error");
     });
   });
 });
@@ -384,56 +427,80 @@ describe("NewVehicleDialog", () => {
 // DocumentDialog
 // ═══════════════════════════════════════════════════════════════
 describe("DocumentDialog", () => {
+  const documentTypes = [
+    { code: "APK", name: "APK", is_active: true },
+    { code: "INSURANCE", name: "Verzekering", is_active: true },
+  ];
+  const documentSubmit = vi.fn().mockResolvedValue(undefined);
+  const documentProps = {
+    vehicleId: "v1",
+    types: documentTypes as any,
+    onSubmit: documentSubmit,
+  };
+
+  beforeEach(() => {
+    documentSubmit.mockClear();
+  });
+
   it("renders dialog title", async () => {
     const { DocumentDialog } = await import("@/components/fleet/DocumentDialog");
-    render(<Wrapper><DocumentDialog vehicleId="v1" open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Document Toevoegen")).toBeInTheDocument();
+    render(<Wrapper><DocumentDialog {...documentProps} open={true} onOpenChange={vi.fn()} /></Wrapper>);
+    expect(screen.getByText("Document toevoegen")).toBeInTheDocument();
   });
 
   it("shows document type, expiry date and notes fields", async () => {
     const { DocumentDialog } = await import("@/components/fleet/DocumentDialog");
-    render(<Wrapper><DocumentDialog vehicleId="v1" open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.getByText("Type document")).toBeInTheDocument();
+    render(<Wrapper><DocumentDialog {...documentProps} open={true} onOpenChange={vi.fn()} /></Wrapper>);
+    expect(screen.getByText("Type *")).toBeInTheDocument();
     expect(screen.getByText("Vervaldatum")).toBeInTheDocument();
-    expect(screen.getByText("Notities")).toBeInTheDocument();
+    expect(screen.getByText("Notitie")).toBeInTheDocument();
   });
 
   it("shows Annuleren and Toevoegen buttons", async () => {
     const { DocumentDialog } = await import("@/components/fleet/DocumentDialog");
-    render(<Wrapper><DocumentDialog vehicleId="v1" open={true} onOpenChange={vi.fn()} /></Wrapper>);
+    render(<Wrapper><DocumentDialog {...documentProps} open={true} onOpenChange={vi.fn()} /></Wrapper>);
     expect(screen.getByText("Annuleren")).toBeInTheDocument();
-    expect(screen.getByText("Toevoegen")).toBeInTheDocument();
+    expect(screen.getByText("Opslaan")).toBeInTheDocument();
   });
 
   it("closes dialog when Annuleren is clicked", async () => {
     const onOpenChange = vi.fn();
     const { DocumentDialog } = await import("@/components/fleet/DocumentDialog");
-    render(<Wrapper><DocumentDialog vehicleId="v1" open={true} onOpenChange={onOpenChange} /></Wrapper>);
+    render(<Wrapper><DocumentDialog {...documentProps} open={true} onOpenChange={onOpenChange} /></Wrapper>);
     fireEvent.click(screen.getByText("Annuleren"));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it("calls create.mutateAsync on submit", async () => {
+  it("calls onSubmit on submit", async () => {
     const { DocumentDialog } = await import("@/components/fleet/DocumentDialog");
-    render(<Wrapper><DocumentDialog vehicleId="v1" open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    fireEvent.click(screen.getByText("Toevoegen"));
+    render(
+      <Wrapper>
+        <DocumentDialog
+          {...documentProps}
+          open={true}
+          onOpenChange={vi.fn()}
+          initialSuggestion={{ doc_type: "APK", issued_date: null, expiry_date: null }}
+        />
+      </Wrapper>,
+    );
+    fireEvent.click(screen.getByText("Opslaan"));
     await waitFor(() => {
-      expect(mockCreateDocument.mutateAsync).toHaveBeenCalled();
+      expect(documentSubmit).toHaveBeenCalled();
     });
   });
 
   it("fills in notes field", async () => {
     const { DocumentDialog } = await import("@/components/fleet/DocumentDialog");
-    render(<Wrapper><DocumentDialog vehicleId="v1" open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    const notesInput = screen.getByPlaceholderText("Optionele notities...");
+    render(<Wrapper><DocumentDialog {...documentProps} open={true} onOpenChange={vi.fn()} /></Wrapper>);
+    const notesInput = screen.getByPlaceholderText("Optioneel, bijv. uitgegeven door, keuringsinstantie, opmerkingen.");
     fireEvent.change(notesInput, { target: { value: "Test notities" } });
     expect(notesInput).toHaveValue("Test notities");
   });
 
   it("does not render when closed", async () => {
     const { DocumentDialog } = await import("@/components/fleet/DocumentDialog");
-    render(<Wrapper><DocumentDialog vehicleId="v1" open={false} onOpenChange={vi.fn()} /></Wrapper>);
-    expect(screen.queryByText("Document Toevoegen")).not.toBeInTheDocument();
+    render(<Wrapper><DocumentDialog {...documentProps} open={false} onOpenChange={vi.fn()} /></Wrapper>);
+    expect(screen.queryByText("Document toevoegen")).not.toBeInTheDocument();
   });
 });
 
@@ -526,7 +593,7 @@ describe("BulkImportDialog", () => {
     const { BulkImportDialog } = await import("@/components/orders/BulkImportDialog");
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     expect(screen.getByText("Orders importeren")).toBeInTheDocument();
-    expect(screen.getByText(/Sleep een CSV- of Excel-bestand/)).toBeInTheDocument();
+    expect(screen.getByText(/Sleep een CSV-bestand hierheen/)).toBeInTheDocument();
   });
 
   it("does not render when closed", async () => {
@@ -558,7 +625,7 @@ describe("BulkImportDialog", () => {
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     const fileInput = document.querySelector('input[type="file"]');
     expect(fileInput).toBeInTheDocument();
-    expect(fileInput?.getAttribute("accept")).toBe(".csv,.txt,.xlsx,.xls");
+    expect(fileInput?.getAttribute("accept")).toBe(".csv,.txt");
   });
 
   it("handles non-CSV file with error toast", async () => {
@@ -568,7 +635,7 @@ describe("BulkImportDialog", () => {
     const fileInput = document.querySelector('input[type="file"]')!;
     const file = new File(["content"], "test.pdf", { type: "application/pdf" });
     fireEvent.change(fileInput, { target: { files: [file] } });
-    expect(toast.error).toHaveBeenCalledWith("Alleen CSV- en Excel-bestanden worden ondersteund (.csv, .txt, .xlsx, .xls)");
+    expect(toast.error).toHaveBeenCalledWith("Alleen CSV-bestanden worden ondersteund (.csv, .txt)");
   });
 
   it("transitions to preview step after uploading a valid CSV", async () => {
@@ -650,7 +717,7 @@ describe("BulkImportDialog", () => {
       expect(screen.getByText("Terug")).toBeInTheDocument();
     });
     fireEvent.click(screen.getByText("Terug"));
-    expect(screen.getByText(/Sleep een CSV- of Excel-bestand/)).toBeInTheDocument();
+    expect(screen.getByText(/Sleep een CSV-bestand hierheen/)).toBeInTheDocument();
   });
 
   it("handles empty CSV with error toast", async () => {
@@ -694,7 +761,7 @@ describe("BulkImportDialog", () => {
   it("handles dragOver and dragLeave events on drop zone", async () => {
     const { BulkImportDialog } = await import("@/components/orders/BulkImportDialog");
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    const dropZone = screen.getByText(/Sleep een CSV- of Excel-bestand/).closest("div[class*='border-dashed']")!;
+    const dropZone = screen.getByText(/Sleep een CSV-bestand hierheen/).closest("div[class*='border-dashed']")!;
     fireEvent.dragOver(dropZone, { preventDefault: vi.fn() });
     expect(dropZone.className).toContain("border-primary");
     fireEvent.dragLeave(dropZone);
@@ -703,7 +770,7 @@ describe("BulkImportDialog", () => {
   it("handles drop event with valid CSV file", async () => {
     const { BulkImportDialog } = await import("@/components/orders/BulkImportDialog");
     render(<Wrapper><BulkImportDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
-    const dropZone = screen.getByText(/Sleep een CSV- of Excel-bestand/).closest("div[class*='border-dashed']")!;
+    const dropZone = screen.getByText(/Sleep een CSV-bestand hierheen/).closest("div[class*='border-dashed']")!;
     const csvContent = "klant;ophalen\nACME;Amsterdam\n";
     const file = new File([csvContent], "drop.csv", { type: "text/csv" });
     fireEvent.drop(dropZone, {
@@ -746,7 +813,7 @@ describe("BulkImportDialog", () => {
     });
     // Click Terug to reset
     fireEvent.click(screen.getByText("Terug"));
-    expect(screen.getByText(/Sleep een CSV- of Excel-bestand/)).toBeInTheDocument();
+    expect(screen.getByText(/Sleep een CSV-bestand hierheen/)).toBeInTheDocument();
   });
 
   it("detects comma delimiter in CSV", async () => {

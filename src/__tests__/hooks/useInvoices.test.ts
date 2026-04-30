@@ -18,7 +18,7 @@ const { mockFrom, mockRpc, mockSupabase } = vi.hoisted(() => {
     },
     channel: vi.fn().mockReturnValue({ on: vi.fn().mockReturnThis(), subscribe: vi.fn() }),
     removeChannel: vi.fn(),
-    functions: { invoke: vi.fn() },
+    functions: { invoke: vi.fn().mockResolvedValue({ data: null, error: null }) },
   };
 
   return { mockFrom, mockRpc, mockSupabase };
@@ -287,7 +287,7 @@ describe("useUpdateInvoiceStatus", () => {
     const { result } = renderHook(() => useUpdateInvoiceStatus(), { wrapper: createWrapper() });
 
     await act(async () => {
-      result.current.mutate({ id: "inv1", status: "verzonden" });
+      await result.current.mutateAsync({ id: "inv1", status: "verzonden" });
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));

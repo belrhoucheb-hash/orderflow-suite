@@ -1,6 +1,6 @@
 // src/__tests__/components/TimeWindowManager.test.tsx
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -28,6 +28,14 @@ function createWrapper() {
 }
 
 describe("TimeWindowManager", () => {
+  beforeEach(() => {
+    cleanup();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders time windows as rows", () => {
     render(<TimeWindowManager locationId="loc1" tenantId="t1" />, { wrapper: createWrapper() });
     expect(screen.getByText("Maandag")).toBeDefined();

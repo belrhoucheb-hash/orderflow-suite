@@ -1,6 +1,6 @@
 // src/__tests__/components/ConsolidationCard.test.tsx
-import { render, screen, fireEvent } from "@testing-library/react";
-import { vi, describe, it, expect } from "vitest";
+import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { vi, describe, it, expect, afterEach } from "vitest";
 import { ConsolidationCard } from "@/components/planning/ConsolidationCard";
 import type { ConsolidationGroup } from "@/types/consolidation";
 
@@ -29,6 +29,10 @@ function makeGroup(overrides: Partial<ConsolidationGroup> = {}): ConsolidationGr
 }
 
 describe("ConsolidationCard", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders group name and region", () => {
     render(<ConsolidationCard group={makeGroup()} onApprove={vi.fn()} onReject={vi.fn()} />);
     expect(screen.getByText("Regio Amsterdam 04-apr")).toBeDefined();

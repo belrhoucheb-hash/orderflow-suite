@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -49,6 +49,7 @@ vi.mock("@/contexts/AuthContext", () => ({
     isAdmin: true,
     loading: false,
     signOut: mockSignOut,
+    hasRouteAccess: vi.fn(() => true),
   }),
   AuthProvider: ({ children }: any) => children,
 }));
@@ -144,6 +145,12 @@ vi.mock("@/hooks/useNotifications", () => ({
     clearAll: vi.fn(),
   }),
 }));
+
+beforeEach(() => {
+  cleanup();
+});
+
+afterEach(() => cleanup());
 
 function createQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -259,7 +266,7 @@ describe("ProtectedRoute", () => {
 
   it("redirects to /login when no session", async () => {
     vi.doMock("@/contexts/AuthContext", () => ({
-      useAuth: () => ({ session: null, loading: false, user: null, profile: null, roles: [], effectiveRole: "planner", isAdmin: false, signOut: vi.fn() }),
+      useAuth: () => ({ session: null, loading: false, user: null, profile: null, roles: [], effectiveRole: "planner", isAdmin: false, signOut: vi.fn(), hasRouteAccess: vi.fn(() => true) }),
     }));
     // Reset module cache
     vi.resetModules();
@@ -275,7 +282,7 @@ describe("ProtectedRoute", () => {
       useAuth: () => ({
         session: { user: { id: "u1" } }, user: { id: "u1", email: "t@t.nl" },
         profile: { display_name: "Test User", avatar_url: null }, roles: ["admin"],
-        effectiveRole: "admin", isAdmin: true, loading: false, signOut: mockSignOut,
+        effectiveRole: "admin", isAdmin: true, loading: false, signOut: mockSignOut, hasRouteAccess: vi.fn(() => true),
       }),
     }));
     vi.resetModules();
@@ -283,7 +290,7 @@ describe("ProtectedRoute", () => {
 
   it("shows loading spinner when loading", async () => {
     vi.doMock("@/contexts/AuthContext", () => ({
-      useAuth: () => ({ session: null, loading: true, user: null, profile: null, roles: [], effectiveRole: "planner", isAdmin: false, signOut: vi.fn() }),
+      useAuth: () => ({ session: null, loading: true, user: null, profile: null, roles: [], effectiveRole: "planner", isAdmin: false, signOut: vi.fn(), hasRouteAccess: vi.fn(() => true) }),
     }));
     vi.resetModules();
     const { ProtectedRoute } = await import("@/components/ProtectedRoute");
@@ -299,7 +306,7 @@ describe("ProtectedRoute", () => {
       useAuth: () => ({
         session: { user: { id: "u1" } }, user: { id: "u1", email: "t@t.nl" },
         profile: { display_name: "Test User", avatar_url: null }, roles: ["admin"],
-        effectiveRole: "admin", isAdmin: true, loading: false, signOut: mockSignOut,
+        effectiveRole: "admin", isAdmin: true, loading: false, signOut: mockSignOut, hasRouteAccess: vi.fn(() => true),
       }),
     }));
     vi.resetModules();
@@ -515,7 +522,7 @@ describe("AppSidebar", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Overzicht")).toBeInTheDocument();
     expect(screen.getByText("Inbox")).toBeInTheDocument();
     expect(screen.getByText("Orders")).toBeInTheDocument();
     expect(screen.getByText("Planbord")).toBeInTheDocument();
@@ -526,7 +533,7 @@ describe("AppSidebar", () => {
     const { AppSidebar } = await import("@/components/AppSidebar");
     const qc = createQueryClient();
     render(<QueryClientProvider client={qc}><MemoryRouter><TooltipProvider><SidebarProvider><AppSidebar /></SidebarProvider></TooltipProvider></MemoryRouter></QueryClientProvider>);
-    expect(screen.getByText("Admin")).toBeInTheDocument();
+    expect(screen.getByText("Beheer")).toBeInTheDocument();
     expect(screen.getByText("Gebruikers")).toBeInTheDocument();
     expect(screen.getByText("Instellingen")).toBeInTheDocument();
   });
@@ -581,7 +588,7 @@ describe("AppSidebar", () => {
     const { AppSidebar } = await import("@/components/AppSidebar");
     const qc = createQueryClient();
     render(<QueryClientProvider client={qc}><MemoryRouter><TooltipProvider><SidebarProvider><AppSidebar /></SidebarProvider></TooltipProvider></MemoryRouter></QueryClientProvider>);
-    expect(screen.getByLabelText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByLabelText("Overzicht")).toBeInTheDocument();
     expect(screen.getByLabelText("Inbox")).toBeInTheDocument();
     expect(screen.getByLabelText("Orders")).toBeInTheDocument();
   });
@@ -621,7 +628,7 @@ describe("MobileNav", () => {
   it("renders primary navigation items", async () => {
     const { MobileNav } = await import("@/components/MobileNav");
     render(<Wrapper><MobileNav /></Wrapper>);
-    expect(screen.getByLabelText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByLabelText("Overzicht")).toBeInTheDocument();
     expect(screen.getByLabelText("Inbox")).toBeInTheDocument();
     expect(screen.getByLabelText("Orders")).toBeInTheDocument();
     expect(screen.getByLabelText("Planbord")).toBeInTheDocument();
@@ -641,7 +648,7 @@ describe("MobileNav", () => {
     await waitFor(() => {
       expect(screen.getByText("Navigatie")).toBeInTheDocument();
       expect(screen.getByText("Dispatch")).toBeInTheDocument();
-      expect(screen.getByText("Ritoverzicht")).toBeInTheDocument();
+      expect(screen.getByText("Autonomie")).toBeInTheDocument();
       expect(screen.getByText("Klanten")).toBeInTheDocument();
       expect(screen.getByText("Chauffeurs")).toBeInTheDocument();
       expect(screen.getByText("Vloot")).toBeInTheDocument();
@@ -674,7 +681,7 @@ describe("MobileNav", () => {
       </QueryClientProvider>,
     );
     const meerButton = screen.getByLabelText("Meer navigatie");
-    expect(meerButton.className).toContain("text-primary");
+    expect(meerButton.className).toContain("text-white");
   });
 });
 

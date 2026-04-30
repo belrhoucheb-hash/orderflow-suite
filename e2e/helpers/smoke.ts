@@ -53,6 +53,11 @@ const BUTTON_BLOCKLIST = [
   /uitvoeren/i,
   /bevestig/i,
   /confirm/i,
+  /testdata/i,
+  /test scenario/i,
+  /scenario/i,
+  /importeer/i,
+  /\.eml/i,
 ];
 
 const SAFE_TEXT_HINTS = [
@@ -82,26 +87,27 @@ export function attachListeners(page: Page) {
   const requestTimings = new Map<Request, number>();
   const slowRequests: { url: string; durationMs: number }[] = [];
 
-  page.on("console", (msg) => {
+  const onConsole = (msg: Parameters<Page["on"]>[1] extends (arg: infer T) => unknown ? T : never) => {
     if (msg.type() === "error") {
       const text = msg.text();
       // Filter ruis: source-map warnings, react-router future flags
       if (/Future Flag|sourcemap|favicon/i.test(text)) return;
+      if (/Failed to load resource: the server responded with a status of (400|401|403|404)/i.test(text)) return;
       consoleErrors.push(text.slice(0, 300));
     }
-  });
-  page.on("pageerror", (err) => {
+  };
+  const onPageError = (err: Error) => {
     consoleErrors.push(`pageerror: ${err.message.slice(0, 300)}`);
-  });
-  page.on("request", (req) => requestTimings.set(req, Date.now()));
-  page.on("requestfailed", (req) => {
+  };
+  const onRequest = (req: Request) => requestTimings.set(req, Date.now());
+  const onRequestFailed = (req: Request) => {
     networkErrors.push({
       url: req.url().slice(0, 200),
       status: 0,
       method: req.method(),
     });
-  });
-  page.on("response", (res: Response) => {
+  };
+  const onResponse = (res: Response) => {
     const req = res.request();
     const start = requestTimings.get(req);
     if (start) {
@@ -117,16 +123,30 @@ export function attachListeners(page: Page) {
         method: req.method(),
       });
     }
-  });
+  };
 
-  return { consoleErrors, networkErrors, slowRequests };
+  page.on("console", onConsole);
+  page.on("pageerror", onPageError);
+  page.on("request", onRequest);
+  page.on("requestfailed", onRequestFailed);
+  page.on("response", onResponse);
+
+  const detach = () => {
+    page.off("console", onConsole);
+    page.off("pageerror", onPageError);
+    page.off("request", onRequest);
+    page.off("requestfailed", onRequestFailed);
+    page.off("response", onResponse);
+  };
+
+  return { consoleErrors, networkErrors, slowRequests, detach };
 }
 
 export async function visitAndProbe(
   page: Page,
   path: string,
 ): Promise<PageReport> {
-  const { consoleErrors, networkErrors, slowRequests } = attachListeners(page);
+  const { consoleErrors, networkErrors, slowRequests, detach } = attachListeners(page);
   const start = Date.now();
 
   let buttonsClicked = 0;
@@ -168,7 +188,7 @@ export async function visitAndProbe(
     notes.push(`buttons-iter: ${(e as Error).message.slice(0, 150)}`);
   }
 
-  return {
+  const result = {
     path,
     loadMs,
     consoleErrors: dedupe(consoleErrors).slice(0, 10),
@@ -185,6 +205,8 @@ export async function visitAndProbe(
     finalUrl: page.url(),
     notes,
   };
+  detach();
+  return result;
 }
 
 function dedupe<T>(arr: T[]): T[] {

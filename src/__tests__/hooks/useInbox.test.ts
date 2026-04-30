@@ -33,6 +33,11 @@ vi.mock("@/hooks/useConfidenceStore", () => ({
 vi.mock("@/contexts/TenantContext", () => ({
   useTenant: () => ({ tenant: { id: "tenant-1", name: "Test Tenant", slug: "test", logoUrl: null, primaryColor: "#000" }, loading: false }),
 }));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({
+    user: { id: "u1", app_metadata: { tenant_id: "tenant-1" } },
+  }),
+}));
 vi.mock("@/hooks/useFleet", () => ({
   useFleetVehicles: () => ({ data: [] }),
 }));

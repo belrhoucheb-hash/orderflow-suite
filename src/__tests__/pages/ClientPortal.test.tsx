@@ -1,6 +1,6 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 // ── Hoisted mock ────────────────────────────────────────────────────
@@ -12,6 +12,7 @@ const { mockSupabase } = vi.hoisted(() => ({
         return { data: { subscription: { unsubscribe: vi.fn() } } };
       }),
       signInWithPassword: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      signInWithOtp: vi.fn().mockResolvedValue({ data: {}, error: null }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
     },
     from: vi.fn().mockReturnValue({
@@ -71,7 +72,18 @@ function renderWithSession() {
 }
 
 describe("ClientPortal", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    mockSupabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    mockSupabase.auth.onAuthStateChange.mockImplementation(() => {
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
+    mockSupabase.auth.signInWithPassword.mockResolvedValue({ data: {}, error: null });
+    mockSupabase.auth.signInWithOtp.mockResolvedValue({ data: {}, error: null });
+  });
+
+  afterEach(() => cleanup());
 
   it("renders without crashing", async () => {
     renderClientPortal();
@@ -100,7 +112,7 @@ describe("ClientPortal", () => {
   it("shows email input field", async () => {
     renderClientPortal();
     await waitFor(() => {
-      const emailInput = screen.getByPlaceholderText(/u@bedrijf/i);
+      const emailInput = screen.getAllByPlaceholderText(/u@bedrijf/i)[0];
       expect(emailInput).toBeInTheDocument();
     });
   });

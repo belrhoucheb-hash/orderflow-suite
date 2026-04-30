@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
@@ -60,6 +60,11 @@ vi.mock("@/hooks/useNotificationCenter", () => ({
     isLoading: false,
   }),
 }));
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("NotificationCenter", () => {
   beforeEach(() => {
