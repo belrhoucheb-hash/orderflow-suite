@@ -23,6 +23,17 @@ vi.mock("@/hooks/useClients", () => ({
     isError: false,
     refetch: vi.fn(),
   }),
+  useClientsPageData: () => ({
+    data: {
+      clients: mockClients,
+      totalCount: mockClients.length,
+      stats: { total: 2, active: 1, inactive: 1, dormant: 0 },
+      countries: [],
+    },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
   useClientCountries: () => ({ data: [] }),
   useClientStats: () => ({
     data: { total: 2, active: 1, inactive: 1, dormant: 0 },

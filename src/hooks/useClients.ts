@@ -194,13 +194,6 @@ export interface ClientsPageData extends UseClientsListResult {
   countries: string[];
 }
 
-const EMPTY_CLIENT_STATS: ClientStats = {
-  total: 0,
-  active: 0,
-  inactive: 0,
-  dormant: 0,
-};
-
 export function useClientsPageData(opts: UseClientsListOptions = {}) {
   const {
     search,
@@ -445,7 +438,6 @@ export function useClientStats() {
       }
       return { total: rows.length, active, inactive, dormant };
     },
-    placeholderData: EMPTY_CLIENT_STATS,
   });
 }
 

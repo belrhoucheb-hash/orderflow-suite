@@ -40,7 +40,23 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("@/hooks/useOrders", () => ({
   useOrders: (...args: any[]) => mockUseOrders(...args),
+  useOrdersListMeta: () => ({
+    data: {
+      totalCount: 3,
+      staleDraftCount: 0,
+      staleDraftCutoffIso: new Date().toISOString(),
+      byStatus: {},
+      awaitingInfoCount: 0,
+      overdueInfoCount: 0,
+      priorityCount: 2,
+      totalWeightKg: 2000,
+    },
+  }),
   useStaleDraftCount: () => ({ data: { count: 0, cutoffIso: new Date().toISOString() } }),
+}));
+
+vi.mock("@/hooks/useOrderNotesRead", () => ({
+  useUnreadNoteOrderIds: () => ({ unreadOrderIds: new Set<string>(), isLoading: false }),
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
