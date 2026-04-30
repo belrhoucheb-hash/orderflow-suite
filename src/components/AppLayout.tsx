@@ -36,7 +36,7 @@ export function AppLayout() {
               <NotificationCenter />
             </div>
           </header>
-          <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">
+          <main className="app-main flex-1 overflow-auto p-3 md:p-6 pb-20 md:pb-6">
             <Outlet />
           </main>
           <MobileNav />

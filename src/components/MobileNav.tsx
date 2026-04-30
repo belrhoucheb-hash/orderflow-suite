@@ -44,7 +44,7 @@ const sections = [
     ],
   },
   {
-    label: "Controle",
+    label: "Financieel",
     items: [
       { label: "Autonomie", path: "/autonomie", icon: Activity },
       { label: "Facturatie", path: "/facturatie", icon: Receipt },
@@ -52,7 +52,7 @@ const sections = [
     ],
   },
   {
-    label: "Netwerk",
+    label: "Relaties",
     items: [
       { label: "Klanten", path: "/klanten", icon: Building2 },
       { label: "Chauffeurs", path: "/chauffeurs", icon: Users },
@@ -90,9 +90,9 @@ export function MobileNav() {
       <nav
         className="fixed bottom-0 left-0 right-0 z-50 border-t md:hidden safe-area-bottom"
         style={{
-          background: "hsl(222 24% 12% / 0.96)",
-          borderColor: "hsl(218 24% 18%)",
-          backdropFilter: "blur(14px)",
+          background: "linear-gradient(180deg, hsl(224 28% 13% / 0.94), hsl(220 27% 9% / 0.98))",
+          borderColor: "hsl(var(--gold) / 0.14)",
+          backdropFilter: "blur(18px)",
         }}
       >
         <div className="flex h-14 items-center justify-around px-2">
@@ -104,9 +104,10 @@ export function MobileNav() {
                 to={item.path}
                 className={cn(
                   "flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 transition-colors",
+                  "min-h-[44px]",
                   active ? "text-white" : "text-white/52"
                 )}
-                style={active ? { background: "hsl(219 22% 17%)", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
+                style={active ? { background: "linear-gradient(180deg, hsl(220 23% 18%), hsl(220 22% 14%))", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
                 aria-label={item.label}
                 onPointerEnter={() => preloadAppRoute(item.path)}
                 onFocus={() => preloadAppRoute(item.path)}
@@ -128,9 +129,10 @@ export function MobileNav() {
               <button
                 className={cn(
                   "flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 transition-colors",
+                  "min-h-[44px]",
                   moreIsActive ? "text-white" : "text-white/52"
                 )}
-                style={moreIsActive ? { background: "hsl(219 22% 17%)", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
+                style={moreIsActive ? { background: "linear-gradient(180deg, hsl(220 23% 18%), hsl(220 22% 14%))", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
                 aria-label="Meer navigatie"
               >
                 <div className="relative">
@@ -188,6 +190,7 @@ export function MobileNav() {
                             }}
                             className={cn(
                               "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors",
+                              "min-h-[52px]",
                               active ? "text-white" : "text-white/72",
                             )}
                             style={active ? {

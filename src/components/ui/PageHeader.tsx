@@ -22,7 +22,7 @@ export function PageHeader({ title, eyebrow = "Overzicht", meta, subtitle, actio
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.46),hsl(var(--card))_46%,hsl(var(--gold-soft)/0.18))] px-5 py-5 shadow-[0_22px_70px_-54px_hsl(32_45%_26%/0.45)]",
+        "page-header-premium relative overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)/0.46),hsl(var(--card))_46%,hsl(var(--gold-soft)/0.18))] px-5 py-5 shadow-[0_22px_70px_-54px_hsl(32_45%_26%/0.45)]",
         className,
       )}
     >
@@ -31,7 +31,7 @@ export function PageHeader({ title, eyebrow = "Overzicht", meta, subtitle, actio
         className="pointer-events-none absolute inset-x-0 top-0 h-px"
         style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold) / 0.62), transparent)" }}
       />
-      <div className="relative flex flex-wrap items-end justify-between gap-5">
+      <div className="page-header-premium__inner relative flex flex-wrap items-end justify-between gap-5">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2" style={{ fontFamily: "var(--font-display)" }}>
             <span aria-hidden className="inline-block h-[1px] w-6" style={{ background: "hsl(var(--gold) / 0.7)" }} />
@@ -53,7 +53,7 @@ export function PageHeader({ title, eyebrow = "Overzicht", meta, subtitle, actio
           {subtitle && <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{subtitle}</p>}
           {children && <div className="mt-3">{children}</div>}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && <div className="page-header-premium__actions flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
     </div>
   );

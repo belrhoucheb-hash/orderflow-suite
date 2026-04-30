@@ -293,6 +293,118 @@
     @apply space-y-5;
   }
 
+  .app-main {
+    scrollbar-gutter: stable;
+  }
+
+  .page-header-premium__actions {
+    min-height: 2.75rem;
+  }
+
+  .page-container .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .page-container table {
+    min-width: 44rem;
+  }
+
+  .page-container button,
+  .page-container a[role="button"],
+  .page-container [role="button"],
+  .page-container input,
+  .page-container select,
+  .page-container textarea {
+    touch-action: manipulation;
+  }
+
+  .mobile-detail-panel {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  @media (max-width: 767px) {
+    :root {
+      --page-padding-x: 0.75rem;
+      --page-padding-y: 0.75rem;
+    }
+
+    .page-container {
+      @apply space-y-3;
+    }
+
+    .page-header-row {
+      @apply items-start gap-3;
+    }
+
+    .page-header-premium {
+      @apply rounded-xl px-4 py-4;
+    }
+
+    .page-header-premium__inner {
+      @apply items-start gap-3;
+    }
+
+    .page-header-premium h1 {
+      font-size: 1.75rem;
+      line-height: 1.08;
+    }
+
+    .page-header-premium p {
+      font-size: 0.8125rem;
+      line-height: 1.45;
+    }
+
+    .page-header-premium__actions {
+      @apply w-full flex-wrap justify-start;
+    }
+
+    .page-header-premium__actions > * {
+      min-height: 2.75rem;
+    }
+
+    .card--luxe {
+      border-radius: 0.875rem;
+    }
+
+    .card--luxe.p-4 {
+      padding: 0.75rem;
+    }
+
+    .page-container .card--luxe[class*="flex"][class*="flex-wrap"] > * {
+      min-width: min(100%, 16rem);
+    }
+
+    .page-container .card--luxe[class*="flex"][class*="flex-wrap"] [data-radix-select-trigger],
+    .page-container .card--luxe[class*="flex"][class*="flex-wrap"] button,
+    .page-container .card--luxe[class*="flex"][class*="flex-wrap"] input {
+      min-height: 2.75rem;
+    }
+
+    .page-container .overflow-x-auto {
+      margin-inline: -0.75rem;
+      padding-inline: 0.75rem;
+      scroll-padding-inline: 0.75rem;
+    }
+
+    .page-container table {
+      min-width: 42rem;
+    }
+
+    .page-container th,
+    .page-container td {
+      white-space: nowrap;
+    }
+
+    .mobile-detail-panel {
+      top: 0;
+      z-index: 60;
+      width: 100%;
+      border-left: 0;
+      border-radius: 0;
+    }
+  }
+
   .page-header-row {
     @apply flex items-end justify-between flex-wrap gap-4;
   }
