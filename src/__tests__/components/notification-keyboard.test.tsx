@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 
 // ─── Global Mocks ────────────────────────────────────────────
 const mockNavigate = vi.fn();
+const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true };
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
   return { ...actual, useNavigate: () => mockNavigate };
@@ -81,55 +82,55 @@ describe("NotificationCenter", () => {
 
   it("renders bell button", async () => {
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     const buttons = screen.getAllByRole("button");
     expect(buttons.length).toBeGreaterThanOrEqual(1);
   });
 
   it("does not show unread badge when 0", async () => {
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
 
   it("opens notification panel on click and shows empty state", async () => {
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     fireEvent.click(screen.getAllByRole("button")[0]);
-    expect(screen.getByText("Notificaties")).toBeInTheDocument();
-    expect(screen.getByText("Geen notificaties")).toBeInTheDocument();
+    expect(screen.getByText("Meldingen")).toBeInTheDocument();
+    expect(screen.getByText("Geen meldingen")).toBeInTheDocument();
     expect(screen.getByText("Alles is up-to-date")).toBeInTheDocument();
   });
 
   it("closes on Escape key (handleEscape)", async () => {
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     fireEvent.click(screen.getAllByRole("button")[0]);
-    expect(screen.getByText("Notificaties")).toBeInTheDocument();
+    expect(screen.getByText("Meldingen")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => {
-      expect(screen.queryByText("Notificaties")).not.toBeInTheDocument();
+      expect(screen.queryByText("Meldingen")).not.toBeInTheDocument();
     });
   });
 
   it("does not show Alles gelezen when unreadCount is 0", async () => {
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     fireEvent.click(screen.getAllByRole("button")[0]);
     expect(screen.queryByText("Alles gelezen")).not.toBeInTheDocument();
   });
 
   it("toggles open/close on bell click (setIsOpen toggle)", async () => {
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     const bellBtn = screen.getAllByRole("button")[0];
     // Open
     fireEvent.click(bellBtn);
-    expect(screen.getByText("Notificaties")).toBeInTheDocument();
+    expect(screen.getByText("Meldingen")).toBeInTheDocument();
     // Close
     fireEvent.click(bellBtn);
     await waitFor(() => {
-      expect(screen.queryByText("Notificaties")).not.toBeInTheDocument();
+      expect(screen.queryByText("Meldingen")).not.toBeInTheDocument();
     });
   });
 
@@ -145,7 +146,7 @@ describe("NotificationCenter", () => {
       clearAll: mockClearAll2,
     });
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     expect(screen.getByText("1")).toBeInTheDocument();
   });
 
@@ -161,7 +162,7 @@ describe("NotificationCenter", () => {
       clearAll: mockClearAll2,
     });
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     fireEvent.click(screen.getAllByRole("button")[0]);
     expect(screen.getByText("Test Notif")).toBeInTheDocument();
     expect(screen.getByText("Alles gelezen")).toBeInTheDocument();
@@ -182,7 +183,7 @@ describe("NotificationCenter", () => {
       clearAll: mockClearAll2,
     });
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     fireEvent.click(screen.getAllByRole("button")[0]);
     // Click the notification item
     fireEvent.click(screen.getByText("Order Update"));
@@ -202,7 +203,7 @@ describe("NotificationCenter", () => {
       clearAll: mockClearAll2,
     });
     const { NotificationCenter } = await import("@/components/NotificationCenter");
-    render(<MemoryRouter><NotificationCenter /></MemoryRouter>);
+    render(<MemoryRouter future={routerFuture}><NotificationCenter /></MemoryRouter>);
     fireEvent.click(screen.getAllByRole("button")[0]);
     // Find delete button (trash icon button)
     const allBtns = document.querySelectorAll("button");
@@ -217,7 +218,7 @@ describe("NotificationCenter", () => {
   it("closes on outside click (handleClickOutside)", async () => {
     const { NotificationCenter } = await import("@/components/NotificationCenter");
     render(
-      <MemoryRouter>
+      <MemoryRouter future={routerFuture}>
         <div>
           <NotificationCenter />
           <button data-testid="outside">Outside</button>
@@ -226,12 +227,12 @@ describe("NotificationCenter", () => {
     );
     const bellBtn = screen.getAllByRole("button")[0];
     fireEvent.click(bellBtn);
-    expect(screen.getByText("Notificaties")).toBeInTheDocument();
+    expect(screen.getByText("Meldingen")).toBeInTheDocument();
     // Popover uses Radix which closes on pointer-down outside;
     // in JSDOM we simulate by clicking the trigger again (toggle)
     fireEvent.click(bellBtn);
     await waitFor(() => {
-      expect(screen.queryByText("Notificaties")).not.toBeInTheDocument();
+      expect(screen.queryByText("Meldingen")).not.toBeInTheDocument();
     });
   });
 });

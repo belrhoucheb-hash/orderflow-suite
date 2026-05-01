@@ -98,7 +98,9 @@ describe("Clients", () => {
     const user = userEvent.setup();
     renderClients();
     await user.click(screen.getByText("Nieuwe klant"));
-    expect(screen.getByTestId("new-client-dialog")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("new-client-dialog")).toBeInTheDocument();
+    });
   });
 
   it("has search input", () => {

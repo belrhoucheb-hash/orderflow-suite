@@ -767,7 +767,7 @@ const Settings = () => {
       setIntegrations(prev => {
         const merged = { ...prev, ...savedIntegrations };
         setIntegrationsBaseline(JSON.stringify(merged));
-        return merged;
+        return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
       });
     } else if (savedIntegrations !== undefined) {
       setIntegrationsBaseline((prev) => prev || JSON.stringify(integrations));
@@ -779,7 +779,7 @@ const Settings = () => {
       setNotifications(prev => {
         const merged = { ...prev, ...savedNotifications };
         setNotificationsBaseline(JSON.stringify(merged));
-        return merged;
+        return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
       });
     } else if (savedNotifications !== undefined) {
       setNotificationsBaseline((prev) => prev || JSON.stringify(notifications));
@@ -794,7 +794,12 @@ const Settings = () => {
       if (savedSms.twilioFromNumber) setTwilioFromNumber(savedSms.twilioFromNumber);
       setMessageBirdApiKey(savedSms.messageBirdApiKey ?? "");
       if (savedSms.messageBirdOriginator) setMessageBirdOriginator(savedSms.messageBirdOriginator);
-      if (savedSms.smsEvents) setSmsEvents(prev => ({ ...prev, ...savedSms.smsEvents }));
+      if (savedSms.smsEvents) {
+        setSmsEvents(prev => {
+          const merged = { ...prev, ...savedSms.smsEvents };
+          return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
+        });
+      }
       if (savedSms.smsTemplate) setSmsTemplate(savedSms.smsTemplate);
       setSmsBaseline(JSON.stringify({
         smsProvider: savedSms.smsProvider ?? "twilio",

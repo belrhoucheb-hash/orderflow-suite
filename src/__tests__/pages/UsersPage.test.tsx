@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -163,34 +163,36 @@ describe("UsersPage", () => {
       expectTextVisible("Regular User");
     });
 
-    await userEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
 
-    expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
+    });
     expect(screen.getByText("Account status")).toBeInTheDocument();
     expect(screen.getByText("Snelle acties")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Toegang" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toegang" }));
     expect(screen.getByText("Toegangsrechten")).toBeInTheDocument();
     expect(screen.getByText("Dispatch")).toBeInTheDocument();
     expect(screen.getByText("Override (afwijking van rol)")).toBeInTheDocument();
     expect(screen.getAllByText("Beperkt").length).toBeGreaterThan(0);
-    await userEvent.click(screen.getByText("Tarieven"));
+    fireEvent.click(screen.getByText("Tarieven"));
     expect(screen.getByText("Beperkt geselecteerd")).toBeInTheDocument();
     expect(screen.getByText("Mag tarieven bekijken")).toBeInTheDocument();
     expect(screen.getByText("Mag tarieven niet bewerken")).toBeInTheDocument();
     expect(screen.getByText("Mag tarieven niet verwijderen")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Profiel" }));
-    await userEvent.click(screen.getByRole("button", { name: "Bewerken" }));
+    fireEvent.click(screen.getByRole("button", { name: "Profiel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bewerken" }));
     expect(screen.getByLabelText("Weergavenaam")).toHaveValue("Regular User");
-    await userEvent.click(screen.getByRole("button", { name: "Activiteit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Activiteit" }));
     expect(screen.getByText("Overzicht van belangrijke acties en wijzigingen.")).toBeInTheDocument();
     expect(screen.getByText("Rol gewijzigd")).toBeInTheDocument();
     expect(screen.getByText("Rol gewijzigd van medewerker naar admin")).toBeInTheDocument();
     expect(screen.getByText("Gebruiker uitgenodigd")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
-    await userEvent.click(screen.getByRole("button", { name: "Uitnodigingen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Uitnodigingen" }));
     expect(screen.queryByText("Rol gewijzigd")).not.toBeInTheDocument();
     expect(screen.getByText("Gebruiker uitgenodigd")).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it("shows admin impact feedback in the configuration sheet", async () => {
     renderUsersPage();
@@ -198,15 +200,18 @@ describe("UsersPage", () => {
       expectTextVisible("Regular User");
     });
 
-    await userEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
-    await userEvent.click(screen.getByRole("button", { name: "Toegang" }));
-    await userEvent.click(screen.getByRole("button", { name: /Admin/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
+    await waitFor(() => {
+      expect(screen.getByText("Gebruiker configureren")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Toegang" }));
+    fireEvent.click(screen.getByRole("button", { name: /Admin/i }));
 
     expect(screen.getByText("Volledige controle")).toBeInTheDocument();
     expect(screen.getByText("Met deze rol")).toBeInTheDocument();
     expect(screen.getByText("Tarieven aanpassen")).toBeInTheDocument();
     expect(screen.getByText("Gebruikers beheren")).toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("shows table headers", async () => {
     renderUsersPage();

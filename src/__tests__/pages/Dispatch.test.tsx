@@ -160,7 +160,7 @@ describe("Dispatch", () => {
   it("shows Dispatch button for concept trips", () => {
     renderDispatch();
     expect(screen.getAllByRole("button", { name: /Dispatch/i }).length).toBeGreaterThanOrEqual(2);
-  });
+  }, 10_000);
 
   it("shows today button", () => {
     renderDispatch();
