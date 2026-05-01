@@ -163,7 +163,7 @@ function renderChauffeurApp() {
   localStorage.removeItem("orderflow_test_driver_id");
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ChauffeurApp />
       </MemoryRouter>
     </QueryClientProvider>
@@ -175,7 +175,7 @@ function renderWithActiveDriver(driverId = "d1") {
   localStorage.setItem("orderflow_test_driver_id", driverId);
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ChauffeurApp />
       </MemoryRouter>
     </QueryClientProvider>

@@ -33,7 +33,7 @@ import ClientPortal from "@/pages/ClientPortal";
 
 function renderClientPortal() {
   return render(
-    <MemoryRouter>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ClientPortal />
     </MemoryRouter>
   );
@@ -65,7 +65,7 @@ function renderWithSession() {
     error: null,
   });
   return render(
-    <MemoryRouter>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ClientPortal />
     </MemoryRouter>
   );

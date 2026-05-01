@@ -58,7 +58,7 @@ function renderClients() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Clients />
       </MemoryRouter>
     </QueryClientProvider>

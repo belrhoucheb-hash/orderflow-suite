@@ -67,10 +67,17 @@ vi.mock("@/components/orders/BulkImportDialog", () => ({
   BulkImportDialog: ({ open, onOpenChange }: any) => open ? <div data-testid="import-dialog"><button data-testid="close-import" onClick={() => onOpenChange(false)}>Close</button></div> : null,
 }));
 vi.mock("@/components/orders/SmartLabel", () => ({ default: () => <div data-testid="smart-label" /> }));
+const stripMotionProps = ({ children, layout, initial, animate, exit, transition, whileHover, whileTap, ...props }: any) => ({ children, props });
 vi.mock("framer-motion", async () => ({
   motion: {
-    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-    tr: ({ children, ...props }: any) => <tr {...props}>{children}</tr>,
+    div: (input: any) => {
+      const { children, props } = stripMotionProps(input);
+      return <div {...props}>{children}</div>;
+    },
+    tr: (input: any) => {
+      const { children, props } = stripMotionProps(input);
+      return <tr {...props}>{children}</tr>;
+    },
   },
   AnimatePresence: ({ children }: any) => children,
 }));
@@ -87,7 +94,7 @@ function renderOrders() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Orders />
       </MemoryRouter>
     </QueryClientProvider>

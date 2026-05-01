@@ -58,9 +58,10 @@ function renderDetail(id = "inv-1") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/facturatie/${id}`]}>
+      <MemoryRouter initialEntries={[`/facturatie/${id}`]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/facturatie/:id" element={<FacturatieDetail />} />
+          <Route path="/facturatie" element={<div>Facturatie overzicht</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>

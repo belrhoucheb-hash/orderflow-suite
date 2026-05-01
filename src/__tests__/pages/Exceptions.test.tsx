@@ -132,7 +132,7 @@ function renderExceptions() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Exceptions />
       </MemoryRouter>
     </QueryClientProvider>,

@@ -460,10 +460,17 @@ export default function Fleet() {
                           const highlightCard = section.key === "beschikbaar" && index === 0 && statusFilter === "all" && !search;
 
                           return (
-                            <button
+                            <div
                               key={vehicle.id}
-                              type="button"
+                              role="button"
+                              tabIndex={0}
                               onClick={() => setSelectedVehicleId(vehicle.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setSelectedVehicleId(vehicle.id);
+                                }
+                              }}
                               className={cn(
                                 "card--luxe group relative overflow-hidden p-4 text-left transition-all duration-200",
                                 isSelected && "ring-1 ring-[hsl(var(--gold)/0.26)] shadow-[0_24px_70px_-34px_hsl(var(--gold-deep)/0.34)]",
@@ -585,7 +592,7 @@ export default function Fleet() {
                                   </Link>
                                 </div>
                               </div>
-                            </button>
+                            </div>
                           );
                         })}
                       </div>

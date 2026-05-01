@@ -22,7 +22,7 @@ import TrackTrace from "@/pages/TrackTrace";
 
 function renderTrackTrace() {
   return render(
-    <MemoryRouter>
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <TrackTrace />
     </MemoryRouter>
   );
@@ -188,6 +188,7 @@ describe("TrackTrace", () => {
 
   it("shows error message on API failure", async () => {
     const user = userEvent.setup();
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockSupabase.from.mockImplementation(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -200,6 +201,7 @@ describe("TrackTrace", () => {
     await waitFor(() => {
       expect(screen.getByText(/fout opgetreden/i)).toBeInTheDocument();
     });
+    consoleErrorSpy.mockRestore();
   });
 
   it("shows pickup and delivery addresses", async () => {

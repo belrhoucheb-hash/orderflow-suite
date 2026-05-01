@@ -295,7 +295,7 @@ function renderPlanning() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <TooltipProvider>
           <Planning />
         </TooltipProvider>
@@ -974,6 +974,7 @@ describe("Planning", () => {
   // ──────────────────────────────────────────────────────────────
   it("shows error toast when confirm fails", async () => {
     const user = userEvent.setup();
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     renderPlanning();
     await waitFor(() => {
@@ -1025,6 +1026,7 @@ describe("Planning", () => {
         expect.any(Object),
       );
     });
+    consoleErrorSpy.mockRestore();
   });
 
   // ──────────────────────────────────────────────────────────────

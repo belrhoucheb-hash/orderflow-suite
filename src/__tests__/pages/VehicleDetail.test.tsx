@@ -84,7 +84,7 @@ function renderVehicleDetail(id = "v1") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/fleet/${id}`]}>
+      <MemoryRouter initialEntries={[`/fleet/${id}`]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/fleet/:id" element={<VehicleDetail />} />
         </Routes>

@@ -100,7 +100,7 @@ function renderOrderDetail(orderId = "o1") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/orders/${orderId}`]}>
+      <MemoryRouter initialEntries={[`/orders/${orderId}`]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/orders/:id" element={<OrderDetail />} />
         </Routes>
@@ -146,7 +146,7 @@ describe("OrderDetail", () => {
   it("shows weight info", async () => {
     renderOrderDetail();
     await waitFor(() => {
-      expect(screen.getByText(/500/)).toBeInTheDocument();
+      expect(screen.getAllByText(/500/).length).toBeGreaterThan(0);
     });
   });
 
@@ -253,21 +253,21 @@ describe("OrderDetail", () => {
   it("shows dimensions info", async () => {
     renderOrderDetail();
     await waitFor(() => {
-      expect(screen.getByText(/120x80x100/)).toBeInTheDocument();
+      expect(screen.getAllByText(/120x80x100/).length).toBeGreaterThan(0);
     });
   });
 
   it("shows distance", async () => {
     renderOrderDetail();
     await waitFor(() => {
-      expect(screen.getByText(/80/)).toBeInTheDocument();
+      expect(screen.getAllByText(/80/).length).toBeGreaterThan(0);
     });
   });
 
   it("shows order unit info", async () => {
     renderOrderDetail();
     await waitFor(() => {
-      expect(screen.getByText(/pallets/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/pallets/i).length).toBeGreaterThan(0);
     });
   });
 

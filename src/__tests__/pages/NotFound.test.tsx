@@ -4,17 +4,26 @@ import { MemoryRouter } from "react-router-dom";
 
 import NotFound from "@/pages/NotFound";
 
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
 function renderNotFound() {
   return render(
-    <MemoryRouter initialEntries={["/unknown-page"]}>
+    <MemoryRouter initialEntries={["/unknown-page"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <NotFound />
     </MemoryRouter>
   );
 }
 
 describe("NotFound", () => {
-  beforeEach(() => vi.clearAllMocks());
-  afterEach(() => cleanup());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    cleanup();
+  });
 
   it("renders without crashing", () => {
     renderNotFound();
@@ -34,12 +43,10 @@ describe("NotFound", () => {
   });
 
   it("logs 404 error to console", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     renderNotFound();
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
       "404 Error: User attempted to access non-existent route:",
       expect.any(String)
     );
-    consoleSpy.mockRestore();
   });
 });

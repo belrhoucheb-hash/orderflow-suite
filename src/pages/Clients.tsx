@@ -402,10 +402,17 @@ export default function Clients() {
                 pageRows.map((client) => {
                   const isChecked = selectedIds.has(client.id);
                   return (
-                    <button
+                    <div
                       key={client.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedClient(client)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedClient(client);
+                        }
+                      }}
                       className="w-full px-4 py-3.5 text-left transition-colors hover:bg-[hsl(var(--gold-soft)/0.24)]"
                     >
                       <div className="flex items-start gap-3">
@@ -444,7 +451,7 @@ export default function Clients() {
                           />
                         </span>
                       </div>
-                    </button>
+                    </div>
                   );
                 })
               )}

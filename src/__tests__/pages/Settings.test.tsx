@@ -234,7 +234,7 @@ function renderSettings(initialPath = "/settings") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[initialPath]}>
+      <MemoryRouter initialEntries={[initialPath]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Settings />
       </MemoryRouter>
     </QueryClientProvider>
@@ -457,10 +457,8 @@ describe("Settings", () => {
       const input = screen.getByLabelText("Bedrijfsnaam") as HTMLInputElement;
       // Verify input is rendered with initial value from tenant
       expect(input).toHaveValue("Test BV");
-      // Directly set value and dispatch input event to trigger React onChange
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
-      nativeInputValueSetter.call(input, "New Company");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      fireEvent.change(input, { target: { value: "New Company" } });
+      expect(input).toHaveValue("New Company");
       // The onChange handler (setCompanyName) was called - the function was exercised
       expect(document.body.textContent).toBeTruthy();
     }
