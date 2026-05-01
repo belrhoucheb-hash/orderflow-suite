@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -95,6 +95,7 @@ function renderVehicleDetail(id = "v1") {
 
 describe("VehicleDetail", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => cleanup());
 
   it("renders without crashing", () => {
     renderVehicleDetail();

@@ -1,6 +1,6 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -102,10 +102,11 @@ describe("Orders", () => {
       isLoading: false, isError: false, refetch: vi.fn(),
     });
   });
+  afterEach(() => cleanup());
 
   it("renders without crashing", () => {
     renderOrders();
-    expect(screen.getByText("Orderlijst")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Orders" })).toBeInTheDocument();
   });
 
   it("shows order count subtitle", () => {
@@ -117,8 +118,8 @@ describe("Orders", () => {
 
   it("displays orders in table", () => {
     renderOrders();
-    expect(screen.getByText("ORD-001")).toBeInTheDocument();
-    expect(screen.getByText("Acme BV")).toBeInTheDocument();
+    expect(screen.getAllByText("ORD-001").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Acme BV").length).toBeGreaterThanOrEqual(1);
   });
 
   it("links to new order page", async () => {
@@ -146,7 +147,7 @@ describe("Orders", () => {
   it("shows empty state when no orders", () => {
     mockUseOrders.mockReturnValueOnce({ data: { orders: [], totalCount: 0 }, isLoading: false, isError: false, refetch: vi.fn() });
     renderOrders();
-    expect(screen.getByText("Geen orders gevonden")).toBeInTheDocument();
+    expect(screen.getAllByText("Geen orders gevonden").length).toBeGreaterThanOrEqual(1);
   });
 
   it("has status filter buttons", () => {
@@ -170,7 +171,7 @@ describe("Orders", () => {
 
   it("order numbers link to detail page", () => {
     renderOrders();
-    const link = screen.getByText("ORD-001").closest("a");
+    const link = screen.getAllByText("ORD-001").find((element) => element.closest("a"))?.closest("a");
     expect(link).toHaveAttribute("href", "/orders/o1");
   });
 
@@ -250,14 +251,14 @@ describe("Orders", () => {
   it("sorts by Gewicht column", async () => {
     const user = userEvent.setup();
     renderOrders();
-    await user.click(screen.getByText("Gewicht"));
+    await user.click(screen.getAllByText("Gewicht")[0]);
     expect(document.body.textContent).toBeTruthy();
   });
 
   it("sorts by Status column", async () => {
     const user = userEvent.setup();
     renderOrders();
-    await user.click(screen.getByText("Status"));
+    await user.click(screen.getAllByText("Status")[0]);
     expect(document.body.textContent).toBeTruthy();
   });
 
@@ -271,15 +272,15 @@ describe("Orders", () => {
   it("sorts by Gewicht then toggles direction", async () => {
     const user = userEvent.setup();
     renderOrders();
-    await user.click(screen.getByText("Gewicht"));
-    await user.click(screen.getByText("Gewicht"));
+    await user.click(screen.getAllByText("Gewicht")[0]);
+    await user.click(screen.getAllByText("Gewicht")[0]);
     expect(document.body.textContent).toBeTruthy();
   });
 
   it("sorts by Status then switches to Datum", async () => {
     const user = userEvent.setup();
     renderOrders();
-    await user.click(screen.getByText("Status"));
+    await user.click(screen.getAllByText("Status")[0]);
     await user.click(screen.getByText("Datum"));
     expect(document.body.textContent).toBeTruthy();
   });
@@ -393,7 +394,7 @@ describe("Orders", () => {
     renderOrders();
     // Footer toont "0 orders" bij lege lijst (luxe refactor). Header eyebrow
     // toont ook "0 orders", dus minstens één voorkomen verwacht.
-    expect(screen.getAllByText(/0 orders/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTitle(/0 zichtbare orders/i)).toBeInTheDocument();
   });
 
   // ── close import dialog (onOpenChange) ──

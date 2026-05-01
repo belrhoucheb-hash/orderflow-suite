@@ -1,6 +1,6 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -126,6 +126,7 @@ describe("Inbox", () => {
     vi.clearAllMocks();
     mockUseInbox.mockReturnValue(defaultHookReturn());
   });
+  afterEach(() => cleanup());
 
   it("renders without crashing", () => {
     renderInbox();

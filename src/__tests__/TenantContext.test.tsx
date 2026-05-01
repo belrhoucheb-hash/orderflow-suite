@@ -161,6 +161,7 @@ describe("TenantContext", () => {
       slug: "acme",
       logoUrl: "https://logo.png",
       primaryColor: "#3b82f6",
+      brandingSettings: {},
       ...defaultInvoiceTemplateFields,
     });
   });
@@ -184,6 +185,7 @@ describe("TenantContext", () => {
       slug: "acme",
       logoUrl: "https://logo.png",
       primaryColor: "#3b82f6",
+      brandingSettings: {},
       ...defaultInvoiceTemplateFields,
     });
   });
@@ -255,6 +257,7 @@ describe("TenantContext", () => {
       slug: "localhost-dev",
       logoUrl: null,
       primaryColor: "#dc2626",
+      brandingSettings: {},
       ...defaultInvoiceTemplateFields,
     });
 

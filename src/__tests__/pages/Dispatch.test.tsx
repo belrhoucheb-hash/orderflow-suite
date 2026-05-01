@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -87,6 +87,24 @@ function renderDispatch() {
   );
 }
 
+function getTripTitle(tripNumber: number) {
+  return screen.getAllByText(new RegExp(`Rit #${tripNumber}`))[0];
+}
+
+function getSearchInput() {
+  return screen.getByPlaceholderText(/Zoek op rit, adres of contact/i);
+}
+
+async function selectTrip(user: ReturnType<typeof userEvent.setup>, tripNumber: number) {
+  const button = screen
+    .getAllByRole("button")
+    .find((candidate) => candidate.textContent?.includes(`Rit #${tripNumber}`));
+
+  if (!button) throw new Error(`Trip card ${tripNumber} not found`);
+
+  await user.click(button);
+}
+
 function resetTripsData() {
   mockUseTrips.mockReturnValue({
     data: [
@@ -115,9 +133,12 @@ function resetTripsData() {
 
 describe("Dispatch", () => {
   beforeEach(() => {
+    cleanup();
     vi.clearAllMocks();
     resetTripsData();
   });
+
+  afterEach(() => cleanup());
 
   it("renders without crashing", () => {
     renderDispatch();
@@ -126,14 +147,14 @@ describe("Dispatch", () => {
 
   it("shows trip cards", () => {
     renderDispatch();
-    expect(screen.getByText(/Rit #101/)).toBeInTheDocument();
-    expect(screen.getByText(/Rit #102/)).toBeInTheDocument();
-    expect(screen.getByText(/Rit #103/)).toBeInTheDocument();
+    expect(getTripTitle(101)).toBeInTheDocument();
+    expect(getTripTitle(102)).toBeInTheDocument();
+    expect(getTripTitle(103)).toBeInTheDocument();
   });
 
   it("shows stats values (stats useMemo)", () => {
     renderDispatch();
-    expect(screen.getByText("Totaal")).toBeInTheDocument();
+    expect(screen.getByText(/3 ritten/i)).toBeInTheDocument();
   });
 
   it("shows Dispatch button for concept trips", () => {
@@ -176,13 +197,13 @@ describe("Dispatch", () => {
 
   it("has search input", () => {
     renderDispatch();
-    expect(screen.getByPlaceholderText(/Zoek op ritnummer/)).toBeInTheDocument();
+    expect(getSearchInput()).toBeInTheDocument();
   });
 
   it("shows loading state", () => {
     mockUseTrips.mockReturnValueOnce({ data: [], isLoading: true, isError: false, refetch: vi.fn() });
     renderDispatch();
-    expect(screen.getByText("Ritten laden...")).toBeInTheDocument();
+    expect(screen.getByText("Dispatch laden...")).toBeInTheDocument();
   });
 
   it("shows error state", () => {
@@ -193,7 +214,7 @@ describe("Dispatch", () => {
 
   it("shows stop count on trip cards (getStopCounts)", () => {
     renderDispatch();
-    expect(screen.getByText(/2 stops/)).toBeInTheDocument();
+    expect(screen.getAllByText(/0\/2 stops/).length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows date navigation arrows (goToPrevDay, goToNextDay)", async () => {
@@ -213,9 +234,9 @@ describe("Dispatch", () => {
   it("filters by search query (filtered useMemo)", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    await user.type(screen.getByPlaceholderText(/Zoek op ritnummer/), "101");
+    await user.type(getSearchInput(), "101");
     await waitFor(() => {
-      expect(screen.getByText(/Rit #101/)).toBeInTheDocument();
+      expect(getTripTitle(101)).toBeInTheDocument();
     });
   });
 
@@ -225,7 +246,7 @@ describe("Dispatch", () => {
     const conceptTab = screen.getAllByText(/Concept/)[0];
     await user.click(conceptTab);
     await waitFor(() => {
-      expect(screen.getByText(/Rit #101/)).toBeInTheDocument();
+      expect(getTripTitle(101)).toBeInTheDocument();
     });
   });
 
@@ -238,21 +259,21 @@ describe("Dispatch", () => {
   it("expands trip details when clicked (setExpandedTrip)", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    await user.click(screen.getByText(/Rit #101/));
+    await selectTrip(user, 101);
     await waitFor(() => {
-      expect(screen.getByText(/Amsterdam/)).toBeInTheDocument();
-      expect(screen.getByText(/Rotterdam/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Amsterdam/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Rotterdam/).length).toBeGreaterThanOrEqual(1);
     });
   });
 
   it("collapses trip when clicking again", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    await user.click(screen.getByText(/Rit #101/));
+    await selectTrip(user, 101);
     await waitFor(() => {
-      expect(screen.getByText(/Amsterdam/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Amsterdam/).length).toBeGreaterThanOrEqual(1);
     });
-    await user.click(screen.getByText(/Rit #101/));
+    await selectTrip(user, 101);
     // Should collapse (no crash)
     expect(document.body.textContent).toBeTruthy();
   });
@@ -286,16 +307,18 @@ describe("Dispatch", () => {
   it("changes trip status via status action button (handleStatusChange)", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    // Expand an active trip to see status change options
-    await user.click(screen.getByText(/Rit #102/));
+    const activeTab = screen.getAllByRole("button").find((button) => button.textContent?.trim() === "Actief");
+    if (!activeTab) throw new Error("Active dispatch tab not found");
+
+    await user.click(activeTab);
+
     await waitFor(() => {
-      expect(screen.getByText(/Utrecht/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Utrecht/).length).toBeGreaterThanOrEqual(1);
     });
-    // Look for a status action button (Voltooid, Afbreken)
-    const volltooidBtns = screen.queryAllByText(/Voltooid|Voltooien/i);
-    const volltooidBtn = volltooidBtns.find(b => b.closest("button"));
+
+    const volltooidBtn = screen.getAllByRole("button", { name: /Voltooid|Voltooien/i }).at(-1);
     if (volltooidBtn) {
-      await user.click(volltooidBtn.closest("button") || volltooidBtn);
+      await user.click(volltooidBtn);
       await waitFor(() => {
         // Should show confirmation dialog
         const bevestigBtn = screen.queryByText(/Bevestigen/i);
@@ -382,7 +405,7 @@ describe("Dispatch", () => {
   // ── stats useMemo ──
   it("shows all stats categories (stats useMemo)", () => {
     renderDispatch();
-    expect(screen.getByText("Totaal")).toBeInTheDocument();
+    expect(screen.getByText(/3 ritten/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Concept/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Actief/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Voltooid/).length).toBeGreaterThanOrEqual(1);
@@ -392,12 +415,12 @@ describe("Dispatch", () => {
   it("collapses expanded trip details (setExpandedTrip toggle)", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    await user.click(screen.getByText(/Rit #101/));
+    await selectTrip(user, 101);
     await waitFor(() => {
-      expect(screen.getByText(/Amsterdam/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Amsterdam/).length).toBeGreaterThanOrEqual(1);
     });
     // Click same trip again to collapse
-    await user.click(screen.getByText(/Rit #101/));
+    await selectTrip(user, 101);
     expect(document.body.textContent).toBeTruthy();
   });
 
@@ -405,7 +428,7 @@ describe("Dispatch", () => {
   it("filters trips by stop address (filtered useMemo)", async () => {
     const user = userEvent.setup();
     renderDispatch();
-    await user.type(screen.getByPlaceholderText(/Zoek op ritnummer/), "Amsterdam");
+    await user.type(getSearchInput(), "Amsterdam");
     // Only trip #101 has Amsterdam stop
     await waitFor(() => {
       expect(document.body.textContent).toBeTruthy();

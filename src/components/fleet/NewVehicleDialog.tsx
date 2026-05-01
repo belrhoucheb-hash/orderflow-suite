@@ -21,10 +21,12 @@ interface VehicleTypeOption {
 }
 
 export function NewVehicleDialog({ open, onOpenChange }: Props) {
+  const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
   const [type, setType] = useState("");
   const [capacityKg, setCapacityKg] = useState("");
+  const [capacityPallets, setCapacityPallets] = useState("");
   const [loadLength, setLoadLength] = useState("");
   const [loadWidth, setLoadWidth] = useState("");
   const [loadHeight, setLoadHeight] = useState("");
@@ -57,10 +59,12 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
   }, [open]);
 
   const reset = () => {
+    setCode("");
     setName("");
     setPlate("");
     setType("");
     setCapacityKg("");
+    setCapacityPallets("");
     setLoadLength("");
     setLoadWidth("");
     setLoadHeight("");
@@ -68,10 +72,12 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
 
   const handleSubmit = async () => {
     const parsed = vehicleInputSchema.safeParse({
+      code,
       name,
       plate,
       type,
       capacity_kg: capacityKg ? Number(capacityKg) : undefined,
+      capacity_pallets: capacityPallets ? Number(capacityPallets) : undefined,
       load_length_cm: loadLength ? Number(loadLength) : undefined,
       load_width_cm: loadWidth ? Number(loadWidth) : undefined,
       load_height_cm: loadHeight ? Number(loadHeight) : undefined,
@@ -89,10 +95,12 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
 
     try {
       await addVehicle.mutateAsync({
+        code: parsed.data.code,
         name: parsed.data.name,
         plate: parsed.data.plate,
         type: parsed.data.type,
         capacity_kg: parsed.data.capacity_kg,
+        capacity_pallets: parsed.data.capacity_pallets,
         load_length_cm: parsed.data.load_length_cm,
         load_width_cm: parsed.data.load_width_cm,
         load_height_cm: parsed.data.load_height_cm,
@@ -115,6 +123,11 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
           <div>
             <SectionTitle>Voertuiggegevens</SectionTitle>
             <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label className="text-xs text-muted-foreground">Code</Label>
+                <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="VH-04" />
+                {errors.code && <ErrorText>{errors.code}</ErrorText>}
+              </div>
               <div className="col-span-2">
                 <Label className="text-xs text-muted-foreground">Naam</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mercedes Sprinter" />
@@ -184,10 +197,17 @@ export function NewVehicleDialog({ open, onOpenChange }: Props) {
 
           <div>
             <SectionTitle>Capaciteit</SectionTitle>
-            <div>
-              <Label className="text-xs text-muted-foreground">Max gewicht (kg)</Label>
-              <Input type="number" value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
-              {errors.capacity_kg && <ErrorText>{errors.capacity_kg}</ErrorText>}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Max gewicht (kg)</Label>
+                <Input type="number" value={capacityKg} onChange={(e) => setCapacityKg(e.target.value)} />
+                {errors.capacity_kg && <ErrorText>{errors.capacity_kg}</ErrorText>}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Palletplaatsen</Label>
+                <Input type="number" min={0} value={capacityPallets} onChange={(e) => setCapacityPallets(e.target.value)} />
+                {errors.capacity_pallets && <ErrorText>{errors.capacity_pallets}</ErrorText>}
+              </div>
             </div>
           </div>
 

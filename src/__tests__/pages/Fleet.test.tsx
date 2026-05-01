@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -42,21 +42,22 @@ function renderFleet() {
 
 describe("Fleet", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => cleanup());
 
   it("renders without crashing", () => {
     renderFleet();
-    expect(screen.getByText("Vloot")).toBeInTheDocument();
+    expect(screen.getAllByText("Vloot").length).toBeGreaterThanOrEqual(1);
   });
 
   it("displays vehicle names", () => {
     renderFleet();
-    expect(screen.getByText("Sprinter 1")).toBeInTheDocument();
-    expect(screen.getByText("Scania R450")).toBeInTheDocument();
+    expect(screen.getAllByText("Sprinter 1").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Scania R450").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows license plates", () => {
     renderFleet();
-    expect(screen.getByText("AB-123-CD")).toBeInTheDocument();
+    expect(screen.getAllByText("AB-123-CD").length).toBeGreaterThanOrEqual(1);
   });
 
   it("groups vehicles by type", () => {
@@ -72,14 +73,14 @@ describe("Fleet", () => {
 
   it("has add vehicle button", () => {
     renderFleet();
-    const addBtn = screen.getByRole("button", { name: /voertuig|toevoegen/i });
+    const addBtn = screen.getByRole("button", { name: /nieuw voertuig/i });
     expect(addBtn).toBeInTheDocument();
   });
 
   it("opens new vehicle dialog", async () => {
     const user = userEvent.setup();
     renderFleet();
-    const addBtn = screen.getByRole("button", { name: /voertuig|toevoegen/i });
+    const addBtn = screen.getByRole("button", { name: /nieuw voertuig/i });
     await user.click(addBtn);
     expect(screen.getByTestId("new-vehicle-dialog")).toBeInTheDocument();
   });

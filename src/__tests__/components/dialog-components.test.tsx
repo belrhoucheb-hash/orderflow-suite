@@ -320,6 +320,7 @@ describe("NewVehicleDialog", () => {
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     fireEvent.click(screen.getByText("Toevoegen"));
     await waitFor(() => {
+      expect(screen.getByText("Voertuigcode is verplicht")).toBeInTheDocument();
       expect(screen.getByText("Naam is verplicht")).toBeInTheDocument();
       expect(screen.getByText("Kenteken is verplicht")).toBeInTheDocument();
     });
@@ -329,6 +330,7 @@ describe("NewVehicleDialog", () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     await waitForVehicleType();
+    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-01" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "Scania R450" } });
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "AB-123-CD" } });
     fireEvent.click(screen.getByText("Toevoegen"));
@@ -341,12 +343,15 @@ describe("NewVehicleDialog", () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     expect(screen.getByText("Max gewicht (kg)")).toBeInTheDocument();
+    expect(screen.getByText("Palletplaatsen")).toBeInTheDocument();
     expect(screen.getByText("Laadruimte")).toBeInTheDocument();
   });
 
   it("shows Merk field", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
+    expect(screen.getByText("Code")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("VH-04")).toBeInTheDocument();
     expect(screen.getByText("Naam")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Mercedes Sprinter")).toBeInTheDocument();
   });
@@ -360,15 +365,20 @@ describe("NewVehicleDialog", () => {
   it("fills all input fields including brand and capacities", async () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
+    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-99" } });
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "ZZ-999-AA" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "DAF XF" } });
     // Get number inputs by their container labels.
     const kgInput = screen.getByText("Max gewicht (kg)").parentElement!.querySelector("input")!;
+    const palletInput = screen.getByText("Palletplaatsen").parentElement!.querySelector("input")!;
     const lengthInput = screen.getByText("Lengte (cm)").parentElement!.querySelector("input")!;
     fireEvent.change(kgInput, { target: { value: "15000" } });
+    fireEvent.change(palletInput, { target: { value: "18" } });
     fireEvent.change(lengthInput, { target: { value: "420" } });
+    expect(screen.getByPlaceholderText("VH-04")).toHaveValue("VH-99");
     expect(screen.getByPlaceholderText("Mercedes Sprinter")).toHaveValue("DAF XF");
     expect(kgInput).toHaveValue(15000);
+    expect(palletInput).toHaveValue(18);
     expect(lengthInput).toHaveValue(420);
   });
 
@@ -377,19 +387,24 @@ describe("NewVehicleDialog", () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={onOpenChange} /></Wrapper>);
     await waitForVehicleType();
+    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-02" } });
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "AB-999-CD" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "Scania" } });
     const kgInput = screen.getByText("Max gewicht (kg)").parentElement!.querySelector("input")!;
+    const palletInput = screen.getByText("Palletplaatsen").parentElement!.querySelector("input")!;
     const lengthInput = screen.getByText("Lengte (cm)").parentElement!.querySelector("input")!;
     fireEvent.change(kgInput, { target: { value: "20000" } });
+    fireEvent.change(palletInput, { target: { value: "24" } });
     fireEvent.change(lengthInput, { target: { value: "430" } });
     fireEvent.click(screen.getByText("Toevoegen"));
     await waitFor(() => {
       expect(mockAddVehicle.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+        code: "VH-02",
         name: "Scania",
         plate: "AB-999-CD",
         type: "van",
         capacity_kg: 20000,
+        capacity_pallets: 24,
         load_length_cm: 430,
       }));
     });
@@ -400,6 +415,7 @@ describe("NewVehicleDialog", () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={onOpenChange} /></Wrapper>);
     await waitForVehicleType();
+    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-03" } });
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "XX-555-YY" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "Volvo" } });
     fireEvent.click(screen.getByText("Toevoegen"));
@@ -414,6 +430,7 @@ describe("NewVehicleDialog", () => {
     const { NewVehicleDialog } = await import("@/components/fleet/NewVehicleDialog");
     render(<Wrapper><NewVehicleDialog open={true} onOpenChange={vi.fn()} /></Wrapper>);
     await waitForVehicleType();
+    fireEvent.change(screen.getByPlaceholderText("VH-04"), { target: { value: "VH-ERR" } });
     fireEvent.change(screen.getByPlaceholderText("XX-123-YY"), { target: { value: "ER-ROR-11" } });
     fireEvent.change(screen.getByPlaceholderText("Mercedes Sprinter"), { target: { value: "Error" } });
     fireEvent.click(screen.getByText("Toevoegen"));

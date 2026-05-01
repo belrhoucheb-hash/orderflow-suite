@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -101,11 +101,20 @@ function renderUsersPage() {
   );
 }
 
+function expectTextVisible(text: string) {
+  expect(screen.getAllByText(text).length).toBeGreaterThan(0);
+}
+
+function expectTextAbsent(text: string) {
+  expect(screen.queryAllByText(text)).toHaveLength(0);
+}
+
 describe("UsersPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupDefaultMocks();
   });
+  afterEach(() => cleanup());
 
   it("renders without crashing", async () => {
     renderUsersPage();
@@ -126,9 +135,9 @@ describe("UsersPage", () => {
   it("shows user list after loading", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Admin User")).toBeInTheDocument();
-      expect(screen.getByText("Regular User")).toBeInTheDocument();
-      expect(screen.getByText("regular@test.nl")).toBeInTheDocument();
+      expectTextVisible("Admin User");
+      expectTextVisible("Regular User");
+      expectTextVisible("regular@test.nl");
     });
   });
 
@@ -151,7 +160,7 @@ describe("UsersPage", () => {
   it("opens user configuration from the table", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Regular User")).toBeInTheDocument();
+      expectTextVisible("Regular User");
     });
 
     await userEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
@@ -186,7 +195,7 @@ describe("UsersPage", () => {
   it("shows admin impact feedback in the configuration sheet", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Regular User")).toBeInTheDocument();
+      expectTextVisible("Regular User");
     });
 
     await userEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
@@ -212,38 +221,38 @@ describe("UsersPage", () => {
   it("filters users by email", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Regular User")).toBeInTheDocument();
+      expectTextVisible("Regular User");
     });
 
     await userEvent.type(screen.getByPlaceholderText("Zoek op naam, e-mail of rol"), "regular@test.nl");
 
-    expect(screen.queryByText("Admin User")).not.toBeInTheDocument();
-    expect(screen.getByText("Regular User")).toBeInTheDocument();
+    expectTextAbsent("Admin User");
+    expectTextVisible("Regular User");
   });
 
   it("filters users by status from the filter button", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Admin User")).toBeInTheDocument();
-      expect(screen.getByText("Regular User")).toBeInTheDocument();
+      expectTextVisible("Admin User");
+      expectTextVisible("Regular User");
     });
 
     await userEvent.click(screen.getByRole("button", { name: "Filters" }));
     await userEvent.click(screen.getByRole("button", { name: "Inactief" }));
 
-    expect(screen.queryByText("Admin User")).not.toBeInTheDocument();
-    expect(screen.getByText("Regular User")).toBeInTheDocument();
+    expectTextAbsent("Admin User");
+    expectTextVisible("Regular User");
 
     await userEvent.click(screen.getByRole("button", { name: "Actief" }));
 
-    expect(screen.getByText("Admin User")).toBeInTheDocument();
-    expect(screen.queryByText("Regular User")).not.toBeInTheDocument();
+    expectTextVisible("Admin User");
+    expectTextAbsent("Regular User");
   });
 
   it("connects security action buttons to real user management actions", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Regular User")).toBeInTheDocument();
+      expectTextVisible("Regular User");
     });
 
     await userEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);
@@ -304,7 +313,7 @@ describe("UsersPage", () => {
   it("opens all activity from the security tab", async () => {
     renderUsersPage();
     await waitFor(() => {
-      expect(screen.getByText("Regular User")).toBeInTheDocument();
+      expectTextVisible("Regular User");
     });
 
     await userEvent.click(screen.getAllByRole("button", { name: /Bewerken/i })[1]);

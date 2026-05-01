@@ -30,6 +30,7 @@ const optionalPositiveInt = z
   .optional();
 
 export const vehicleInputSchema = z.object({
+  code: z.string().trim().min(1, "Voertuigcode is verplicht"),
   name: z.string().trim().min(1, "Naam is verplicht"),
   plate: z
     .string()
@@ -48,6 +49,7 @@ export const vehicleInputSchema = z.object({
     .number()
     .min(0, "Gewicht kan niet negatief zijn")
     .optional(),
+  capacity_pallets: optionalPositiveInt,
   load_length_cm: optionalPositiveInt,
   load_width_cm: optionalPositiveInt,
   load_height_cm: optionalPositiveInt,
