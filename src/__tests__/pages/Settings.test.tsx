@@ -1,6 +1,6 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import nl from "@/i18n/locales/nl.json";
@@ -231,7 +231,7 @@ Object.defineProperty(navigator, "clipboard", {
 import Settings from "@/pages/Settings";
 
 function renderSettings(initialPath = "/settings") {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[initialPath]}>
@@ -253,6 +253,7 @@ function getButton(name: string | RegExp) {
 
 describe("Settings", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => cleanup());
 
   it("renders without crashing", () => {
     renderSettings();

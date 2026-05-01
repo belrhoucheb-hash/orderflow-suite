@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import NotFound from "@/pages/NotFound";
@@ -14,6 +14,7 @@ function renderNotFound() {
 
 describe("NotFound", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => cleanup());
 
   it("renders without crashing", () => {
     renderNotFound();
