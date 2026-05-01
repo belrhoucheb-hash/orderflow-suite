@@ -4,6 +4,7 @@ import {
   Inbox,
   Package,
   Truck,
+  MapPinned,
   MoreHorizontal,
   Building2,
   Send,
@@ -20,6 +21,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { preloadAppRoute } from "@/lib/routePreload";
 import { useExceptionCount } from "@/hooks/useExceptionCount";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Sheet,
   SheetContent,
@@ -40,6 +42,7 @@ const sections = [
     label: "Operatie",
     items: [
       { label: "Dispatch", path: "/dispatch", icon: Send },
+      { label: "Tracking", path: "/tracking", icon: MapPinned },
       { label: "Uitzonderingen", path: "/exceptions", icon: AlertTriangle },
     ],
   },
@@ -62,6 +65,7 @@ const sections = [
   {
     label: "Beheer",
     items: [
+      { label: "Gebruikers", path: "/users", icon: Users },
       { label: "Instellingen", path: "/settings", icon: Settings },
     ],
   },
@@ -71,6 +75,7 @@ export function MobileNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
+  const { hasRouteAccess } = useAuth();
   const { data: exceptionCount } = useExceptionCount();
   const exceptionBadgeValue = exceptionCount?.total ?? 0;
   const isExceptionsActive = location.pathname.startsWith("/exceptions");
@@ -82,7 +87,20 @@ export function MobileNav() {
     return location.pathname.startsWith(path);
   };
 
-  const moreItems = useMemo(() => sections.flatMap((section) => section.items), []);
+  const visiblePrimaryItems = useMemo(
+    () => primaryItems.filter((item) => hasRouteAccess(item.path)),
+    [hasRouteAccess],
+  );
+  const visibleSections = useMemo(
+    () => sections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => hasRouteAccess(item.path)),
+      }))
+      .filter((section) => section.items.length > 0),
+    [hasRouteAccess],
+  );
+  const moreItems = useMemo(() => visibleSections.flatMap((section) => section.items), [visibleSections]);
   const moreIsActive = moreItems.some((item) => isActive(item.path));
 
   return (
@@ -90,13 +108,14 @@ export function MobileNav() {
       <nav
         className="fixed bottom-0 left-0 right-0 z-50 border-t md:hidden safe-area-bottom"
         style={{
-          background: "linear-gradient(180deg, hsl(224 28% 13% / 0.94), hsl(220 27% 9% / 0.98))",
-          borderColor: "hsl(var(--gold) / 0.14)",
+          background: "linear-gradient(180deg, hsl(42 34% 99% / 0.94), hsl(38 28% 95% / 0.98))",
+          borderColor: "hsl(var(--gold) / 0.18)",
+          boxShadow: "0 -16px 42px -28px hsl(var(--ink) / 0.28), inset 0 1px 0 hsl(0 0% 100% / 0.75)",
           backdropFilter: "blur(18px)",
         }}
       >
         <div className="flex h-14 items-center justify-around px-2">
-          {primaryItems.map((item) => {
+          {visiblePrimaryItems.map((item) => {
             const active = isActive(item.path);
             return (
               <NavLink
@@ -105,9 +124,12 @@ export function MobileNav() {
                 className={cn(
                   "flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 transition-colors",
                   "min-h-[44px]",
-                  active ? "text-white" : "text-white/52"
+                  active ? "text-[hsl(var(--gold-deep))]" : "text-muted-foreground"
                 )}
-                style={active ? { background: "linear-gradient(180deg, hsl(220 23% 18%), hsl(220 22% 14%))", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
+                style={active ? {
+                  background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.72), hsl(var(--card) / 0.95))",
+                  boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.24), 0 10px 24px -20px hsl(var(--gold-deep) / 0.45)",
+                } : undefined}
                 aria-label={item.label}
                 onPointerEnter={() => preloadAppRoute(item.path)}
                 onFocus={() => preloadAppRoute(item.path)}
@@ -116,7 +138,7 @@ export function MobileNav() {
                 <item.icon
                   className="h-5 w-5"
                   strokeWidth={active ? 2.2 : 1.9}
-                  style={active ? { color: "hsl(var(--gold-light))" } : undefined}
+                  style={active ? { color: "hsl(var(--gold-deep))" } : undefined}
                 />
                 <span className="truncate text-[11px] font-medium">{item.label}</span>
               </NavLink>
@@ -130,21 +152,24 @@ export function MobileNav() {
                 className={cn(
                   "flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 transition-colors",
                   "min-h-[44px]",
-                  moreIsActive ? "text-white" : "text-white/52"
+                  moreIsActive ? "text-[hsl(var(--gold-deep))]" : "text-muted-foreground"
                 )}
-                style={moreIsActive ? { background: "linear-gradient(180deg, hsl(220 23% 18%), hsl(220 22% 14%))", boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)" } : undefined}
+                style={moreIsActive ? {
+                  background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.72), hsl(var(--card) / 0.95))",
+                  boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.24), 0 10px 24px -20px hsl(var(--gold-deep) / 0.45)",
+                } : undefined}
                 aria-label="Meer navigatie"
               >
                 <div className="relative">
                   <MoreHorizontal
                     className="h-5 w-5"
                     strokeWidth={moreIsActive ? 2.2 : 1.9}
-                    style={moreIsActive ? { color: "hsl(var(--gold-light))" } : undefined}
+                    style={moreIsActive ? { color: "hsl(var(--gold-deep))" } : undefined}
                   />
                   {showExceptionDot && (
                     <span
                       className="absolute -right-1 -top-0.5 h-1.5 w-1.5 rounded-full"
-                      style={{ background: "hsl(var(--gold-light))" }}
+                      style={{ background: "hsl(var(--gold-deep))" }}
                     />
                   )}
                 </div>
@@ -153,24 +178,26 @@ export function MobileNav() {
             </SheetTrigger>
             <SheetContent
               side="bottom"
-              className="max-h-[75vh] rounded-t-3xl border-0 pb-safe"
+              className="max-h-[82vh] overflow-y-auto rounded-t-3xl border-x-0 border-b-0 pb-safe"
               style={{
-                background: "linear-gradient(180deg, hsl(224 29% 11%) 0%, hsl(220 25% 9%) 100%)",
+                background: "linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--gold-soft) / 0.22) 100%)",
+                borderColor: "hsl(var(--gold) / 0.18)",
+                boxShadow: "0 -22px 58px -34px hsl(var(--ink) / 0.4)",
               }}
             >
               <SheetHeader className="pb-3">
                 <SheetTitle
-                  className="text-sm font-semibold text-white"
+                  className="text-sm font-semibold text-foreground"
                   style={{ fontFamily: "var(--font-display)" }}
                 >
                   Navigatie
                 </SheetTitle>
               </SheetHeader>
               <div className="space-y-4 py-1">
-                {sections.map((section) => (
+                {visibleSections.map((section) => (
                   <div key={section.label}>
                     <p
-                      className="mb-1.5 px-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-white/30"
+                      className="mb-1.5 px-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-[hsl(var(--gold-deep))]"
                       style={{ fontFamily: "var(--font-display)" }}
                     >
                       {section.label}
@@ -191,30 +218,31 @@ export function MobileNav() {
                             className={cn(
                               "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors",
                               "min-h-[52px]",
-                              active ? "text-white" : "text-white/72",
+                              active ? "text-[hsl(var(--gold-deep))]" : "text-foreground",
                             )}
                             style={active ? {
-                              background: "hsl(219 22% 17%)",
-                              boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18)",
+                              background: "linear-gradient(180deg, hsl(var(--gold-soft) / 0.55), hsl(var(--card)))",
+                              boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.24)",
                             } : {
-                              background: "hsl(222 22% 12%)",
+                              background: "hsl(var(--background) / 0.72)",
+                              boxShadow: "inset 0 0 0 1px hsl(var(--border) / 0.7)",
                             }}
                           >
                             <div
                               className="relative flex h-9 w-9 items-center justify-center rounded-xl"
                               style={active ? {
                                 background: "hsl(var(--gold) / 0.18)",
-                                color: "hsl(var(--gold-light))",
+                                color: "hsl(var(--gold-deep))",
                               } : {
-                                background: "hsl(220 20% 15%)",
-                                color: "hsl(0 0% 100% / 0.72)",
+                                background: "hsl(var(--gold-soft) / 0.28)",
+                                color: "hsl(var(--muted-foreground))",
                               }}
                             >
                               <item.icon className="h-4 w-4" strokeWidth={active ? 2 : 1.85} />
                               {item.path === "/exceptions" && showExceptionDot && (
                                 <span
                                   className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full"
-                                  style={{ background: "hsl(var(--gold-light))" }}
+                                  style={{ background: "hsl(var(--gold-deep))" }}
                                 />
                               )}
                             </div>
@@ -224,13 +252,13 @@ export function MobileNav() {
                                 className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
                                 style={{
                                   background: exceptionBadgeValue >= 10 ? "hsl(8 82% 56%)" : "hsl(var(--gold) / 0.18)",
-                                  color: exceptionBadgeValue >= 10 ? "white" : "hsl(var(--gold-light))",
+                                  color: exceptionBadgeValue >= 10 ? "white" : "hsl(var(--gold-deep))",
                                 }}
                               >
                                 {Math.min(exceptionBadgeValue, 99)}
                               </span>
                             )}
-                            <ChevronRight className="h-4 w-4 text-white/28" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
                           </button>
                         );
                       })}

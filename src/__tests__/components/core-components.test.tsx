@@ -648,6 +648,7 @@ describe("MobileNav", () => {
     await waitFor(() => {
       expect(screen.getByText("Navigatie")).toBeInTheDocument();
       expect(screen.getByText("Dispatch")).toBeInTheDocument();
+      expect(screen.getByText("Tracking")).toBeInTheDocument();
       expect(screen.getByText("Autonomie")).toBeInTheDocument();
       expect(screen.getByText("Klanten")).toBeInTheDocument();
       expect(screen.getByText("Chauffeurs")).toBeInTheDocument();
@@ -655,6 +656,7 @@ describe("MobileNav", () => {
       expect(screen.getByText("Rapportage")).toBeInTheDocument();
       expect(screen.getByText("Uitzonderingen")).toBeInTheDocument();
       expect(screen.getByText("Facturatie")).toBeInTheDocument();
+      expect(screen.getByText("Gebruikers")).toBeInTheDocument();
       expect(screen.getByText("Instellingen")).toBeInTheDocument();
     });
   });
@@ -681,7 +683,7 @@ describe("MobileNav", () => {
       </QueryClientProvider>,
     );
     const meerButton = screen.getByLabelText("Meer navigatie");
-    expect(meerButton.className).toContain("text-white");
+    expect(meerButton.className).toContain("text-[hsl(var(--gold-deep))]");
   });
 });
 
