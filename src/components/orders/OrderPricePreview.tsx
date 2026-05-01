@@ -1,145 +1,163 @@
-import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calculator, AlertCircle } from "lucide-react";
-import { useClientRateCard } from "@/hooks/useRateCards";
-import { useSurcharges } from "@/hooks/useSurcharges";
-import { calculateOrderPrice } from "@/lib/pricingEngine";
+import { Calculator, CircleSlash } from "lucide-react";
 import { formatCurrency } from "@/lib/invoiceUtils";
-import type { PricingOrderInput } from "@/types/rateModels";
-import { LoadingState } from "@/components/ui/LoadingState";
+
+type PricingDetails = Record<string, unknown> | null | undefined;
 
 interface OrderPricePreviewProps {
-  clientId: string | null;
-  order: {
-    id: string;
-    order_number: number | string;
-    client_name: string | null;
-    pickup_address: string | null;
-    delivery_address: string | null;
-    transport_type: string | null;
-    weight_kg: number | null;
-    quantity: number | null;
-    requirements?: string[];
-    distance_km?: number;
-    stop_count?: number;
-    duration_hours?: number;
-  };
+  pricing: PricingDetails;
+  totalCents: number | null | undefined;
 }
 
-export function OrderPricePreview({ clientId, order }: OrderPricePreviewProps) {
-  const { data: rateCard, isLoading: rcLoading } = useClientRateCard(clientId);
-  const { data: surcharges, isLoading: sLoading } = useSurcharges(true);
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
 
-  const isLoading = rcLoading || sLoading;
+function asArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.map(asRecord).filter((item): item is Record<string, unknown> => Boolean(item))
+    : [];
+}
 
-  const pricingInput: PricingOrderInput = useMemo(() => ({
-    id: order.id,
-    order_number: order.order_number,
-    client_name: order.client_name,
-    pickup_address: order.pickup_address,
-    delivery_address: order.delivery_address,
-    transport_type: order.transport_type,
-    weight_kg: order.weight_kg,
-    quantity: order.quantity,
-    distance_km: order.distance_km ?? 150,
-    stop_count: order.stop_count ?? 2,
-    duration_hours: order.duration_hours ?? 3,
-    requirements: order.requirements ?? [],
-    day_of_week: new Date().getDay(),
-    waiting_time_min: 0,
-    pickup_country: "NL",
-    delivery_country: "NL",
-  }), [order]);
+function asNumber(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
 
-  const breakdown = useMemo(() => {
-    if (!rateCard) return null;
-    return calculateOrderPrice(pricingInput, rateCard, surcharges ?? []);
-  }, [pricingInput, rateCard, surcharges]);
+function asText(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
 
-  if (isLoading) return <LoadingState message="Prijs berekenen..." />;
+function totalFromCents(totalCents: number | null | undefined, details: Record<string, unknown> | null): number | null {
+  if (typeof totalCents === "number") return totalCents / 100;
+  return asNumber(details?.total) ?? asNumber(details?.amount);
+}
 
-  if (!rateCard) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calculator className="h-4 w-4" />
-            Prijsberekening
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-amber-600 text-sm">
-            <AlertCircle className="h-4 w-4" />
-            Geen tariefkaart gevonden voor deze klant. Configureer een tarief in klantinstellingen of stel een standaardtarief in.
-          </div>
-        </CardContent>
-      </Card>
-    );
+function modeLabel(mode: unknown): string {
+  switch (mode) {
+    case "client_rates":
+      return "Klanttarief";
+    case "engine":
+      return "Tariefmotor";
+    case "override":
+      return "Afwijkend tarief";
+    default:
+      return "New Order";
   }
+}
+
+export function OrderPricePreview({ pricing, totalCents }: OrderPricePreviewProps) {
+  const details = asRecord(pricing);
+  const total = totalFromCents(totalCents, details);
+  const mode = details?.mode;
+  const lineItems = asArray(details?.line_items ?? details?.lines);
+  const surcharges = asArray(details?.surcharges);
+  const manualLine = asRecord(details?.manual_line);
+  const manualAddOns = asRecord(details?.manual_add_ons);
+  const tollAmount = asNumber(details?.toll_amount) ?? 0;
+  const manualAddOnAmount = asNumber(manualAddOns?.base_amount) ?? 0;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Calculator className="h-4 w-4" />
             Prijsberekening
           </CardTitle>
-          <Badge variant="outline">{rateCard.name}</Badge>
+          <Badge variant="outline">{modeLabel(mode)}</Badge>
         </div>
       </CardHeader>
       <CardContent>
-        {breakdown && breakdown.regels.length > 0 ? (
+        {!details || total == null ? (
+          <div className="flex items-start gap-2 rounded-md border border-dashed border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.22)] p-3 text-sm text-muted-foreground">
+            <CircleSlash className="mt-0.5 h-4 w-4 text-[hsl(var(--gold-deep))]" />
+            <span>Geen tarief vastgelegd in New Order.</span>
+          </div>
+        ) : (
           <div className="space-y-3">
-            {/* Line items */}
-            <div className="space-y-1">
-              {breakdown.regels.map((regel, idx) => (
-                <div key={idx} className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    {regel.description}
-                  </span>
-                  <span className="font-mono tabular-nums">
-                    {formatCurrency(regel.total)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Subtotal */}
-            <div className="flex justify-between text-sm border-t pt-2">
-              <span className="font-medium">Basisbedrag</span>
-              <span className="font-mono tabular-nums font-medium">
-                {formatCurrency(breakdown.basisbedrag)}
-              </span>
-            </div>
-
-            {/* Surcharges */}
-            {breakdown.toeslagen.length > 0 && (
+            {lineItems.length > 0 && (
               <div className="space-y-1">
-                {breakdown.toeslagen.map((toeslag, idx) => (
-                  <div key={idx} className="flex justify-between text-sm text-amber-700">
-                    <span>+ {toeslag.name}</span>
-                    <span className="font-mono tabular-nums">
-                      {formatCurrency(toeslag.amount)}
-                    </span>
-                  </div>
-                ))}
+                {lineItems.map((line, idx) => {
+                  const description = asText(line.description, `Tariefregel ${idx + 1}`);
+                  const amount = asNumber(line.total) ?? 0;
+                  const quantity = asNumber(line.quantity);
+                  const unit = asText(line.unit, "");
+                  const unitPrice = asNumber(line.unitPrice ?? line.unit_price);
+                  const meta = quantity && unitPrice != null && unit
+                    ? `${quantity} ${unit} x EUR ${unitPrice}`
+                    : "";
+
+                  return (
+                    <div key={`${description}-${idx}`} className="flex justify-between gap-3 text-sm">
+                      <span className="min-w-0 text-muted-foreground">
+                        {description}
+                        {meta && <span className="ml-1 text-xs text-muted-foreground/70">{meta}</span>}
+                      </span>
+                      <span className="shrink-0 font-mono tabular-nums">
+                        {formatCurrency(amount)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {/* Total */}
+            {manualLine && (
+              <div className="flex justify-between gap-3 text-sm">
+                <span className="text-muted-foreground">
+                  {asText(manualLine.description, "Handmatige tariefregel")}
+                </span>
+                <span className="font-mono tabular-nums">
+                  {formatCurrency(asNumber(manualLine.amount) ?? 0)}
+                </span>
+              </div>
+            )}
+
+            {mode === "override" && (
+              <div className="rounded-md border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.18)] px-3 py-2 text-sm">
+                <div className="font-medium">Afwijkend tarief uit New Order</div>
+                {typeof details.reason === "string" && details.reason.trim() && (
+                  <div className="mt-1 text-muted-foreground">{details.reason}</div>
+                )}
+              </div>
+            )}
+
+            {(surcharges.length > 0 || manualAddOnAmount > 0 || tollAmount > 0) && (
+              <div className="space-y-1 border-t pt-2">
+                {surcharges.map((surcharge, idx) => (
+                  <div key={`${asText(surcharge.name, "Toeslag")}-${idx}`} className="flex justify-between gap-3 text-sm text-amber-700">
+                    <span>+ {asText(surcharge.name, "Toeslag")}</span>
+                    <span className="font-mono tabular-nums">
+                      {formatCurrency(asNumber(surcharge.amount) ?? 0)}
+                    </span>
+                  </div>
+                ))}
+                {manualAddOnAmount > 0 && (
+                  <div className="flex justify-between gap-3 text-sm text-amber-700">
+                    <span>+ Wacht- en stopkosten</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(manualAddOnAmount)}</span>
+                  </div>
+                )}
+                {tollAmount > 0 && (
+                  <div className="flex justify-between gap-3 text-sm text-amber-700">
+                    <span>+ Tol</span>
+                    <span className="font-mono tabular-nums">{formatCurrency(tollAmount)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-between border-t pt-2">
               <span className="font-bold">Totaal (excl. BTW)</span>
-              <span className="font-mono tabular-nums font-bold text-lg">
-                {formatCurrency(breakdown.totaal)}
+              <span className="font-mono tabular-nums text-lg font-bold">
+                {formatCurrency(total)}
               </span>
             </div>
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Geen tariefregels van toepassing op deze order.
-          </p>
         )}
       </CardContent>
     </Card>

@@ -690,6 +690,40 @@ describe("MobileNav", () => {
 // ═══════════════════════════════════════════════════════════════
 // BarcodeScanner
 // ═══════════════════════════════════════════════════════════════
+describe("OrderPricePreview", () => {
+  it("renders pricing that was saved by New Order", async () => {
+    const { OrderPricePreview } = await import("@/components/orders/OrderPricePreview");
+
+    render(
+      <OrderPricePreview
+        totalCents={43300}
+        pricing={{
+          mode: "engine",
+          line_items: [
+            { description: "PER UUR", quantity: 3, unit: "uur", unit_price: 52.5, total: 157.5 },
+          ],
+          surcharges: [
+            { name: "Avondtoeslag", amount: 86.63 },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Tariefmotor")).toBeInTheDocument();
+    expect(screen.getByText("PER UUR")).toBeInTheDocument();
+    expect(screen.getByText("+ Avondtoeslag")).toBeInTheDocument();
+    expect(screen.getByText(/433,00/)).toBeInTheDocument();
+  });
+
+  it("does not calculate a fallback price when New Order pricing is missing", async () => {
+    const { OrderPricePreview } = await import("@/components/orders/OrderPricePreview");
+
+    render(<OrderPricePreview totalCents={null} pricing={null} />);
+
+    expect(screen.getByText("Geen tarief vastgelegd in New Order.")).toBeInTheDocument();
+  });
+});
+
 describe("BarcodeScanner", () => {
   beforeEach(() => {
     vi.stubGlobal("navigator", {

@@ -1078,20 +1078,10 @@ const OrderDetail = () => {
 
         {/* Right column */}
         <div className="space-y-4">
-          {/* Tariefberekening, toont per-order pricing uit rate-card + toeslagen */}
+          {/* Tariefberekening: toont uitsluitend de pricing die via New Order is vastgelegd. */}
           <OrderPricePreview
-            clientId={order.client_id ?? null}
-            order={{
-              id: order.id,
-              order_number: order.order_number,
-              client_name: order.client_name,
-              pickup_address: order.pickup_address,
-              delivery_address: order.delivery_address,
-              transport_type: order.transport_type,
-              weight_kg: order.weight_kg,
-              quantity: order.quantity,
-              requirements: order.requirements ?? [],
-            }}
+            pricing={shipmentForBanner?.pricing ?? null}
+            totalCents={shipmentForBanner?.price_total_cents ?? null}
           />
 
           {/* Facturatie & documenten, statusoverzicht van CMR, factuur en PoD */}

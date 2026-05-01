@@ -17,6 +17,8 @@ export interface Shipment {
   destination_address: string | null;
   status: string;
   traject_rule_id: string | null;
+  price_total_cents: number | null;
+  pricing: Record<string, unknown> | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -154,6 +156,8 @@ export function useShipments(options: UseShipmentsOptions = {}) {
         destination_address: s.destination_address ?? null,
         status: s.status,
         traject_rule_id: s.traject_rule_id ?? null,
+        price_total_cents: s.price_total_cents ?? null,
+        pricing: s.pricing ?? null,
         notes: s.notes ?? null,
         created_at: s.created_at,
         updated_at: s.updated_at,
@@ -217,6 +221,8 @@ export function useShipment(id: string | null | undefined) {
         destination_address: shipment.destination_address ?? null,
         status: shipment.status,
         traject_rule_id: shipment.traject_rule_id ?? null,
+        price_total_cents: shipment.price_total_cents ?? null,
+        pricing: shipment.pricing ?? null,
         notes: shipment.notes ?? null,
         created_at: shipment.created_at,
         updated_at: shipment.updated_at,
