@@ -1,7 +1,7 @@
 // ─── Real-time Replanning Hooks ─────────────────────────────
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Trip } from "@/types/dispatch";
 import type { FleetVehicle } from "@/hooks/useVehicles";
@@ -19,8 +19,6 @@ export function useDisruptions(
   orders: Array<{ id: string; weight_kg?: number; time_window_start?: string | null; time_window_end?: string | null; status?: string }>,
   enabled = true,
 ) {
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const query = useQuery({
     queryKey: ["disruptions", trips.map((t) => t.id).join(",")],
     queryFn: () => {
@@ -30,15 +28,6 @@ export function useDisruptions(
     staleTime: 30_000,
     refetchInterval: 60_000, // Poll every 60 seconds
   });
-
-  // Clean up interval on unmount
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, []);
 
   return query;
 }

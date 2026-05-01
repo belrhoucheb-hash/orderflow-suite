@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -67,12 +67,7 @@ export default function PortalOrders() {
 
   const canCreateOrders = portalUser?.portal_role === "editor" || portalUser?.portal_role === "admin";
 
-  useEffect(() => {
-    if (!portalUser?.client_id) return;
-    loadOrders();
-  }, [portalUser?.client_id, statusFilter]);
-
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     if (!portalUser?.client_id) return;
     setLoading(true);
     try {
@@ -96,7 +91,12 @@ export default function PortalOrders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [portalUser?.client_id, statusFilter]);
+
+  useEffect(() => {
+    if (!portalUser?.client_id) return;
+    loadOrders();
+  }, [portalUser?.client_id, loadOrders]);
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();

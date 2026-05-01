@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+/* eslint-disable react-refresh/only-export-components -- context provider and hooks share the same module API. */
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -54,34 +55,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const profileFetchRef = useRef<{ userId: string; promise: Promise<void>; completedAt: number } | null>(null);
 
-  const ensureSessionKey = (userId: string) => {
+  const ensureSessionKey = useCallback((userId: string) => {
     const key = `office_session_key:${userId}`;
     const existing = localStorage.getItem(key);
     if (existing) return existing;
     const next = crypto.randomUUID();
     localStorage.setItem(key, next);
     return next;
-  };
+  }, []);
 
-  const browserLabel = () => {
+  const browserLabel = useCallback(() => {
     const agent = navigator.userAgent;
     if (agent.includes("Edg/")) return "Edge";
     if (agent.includes("Chrome/")) return "Chrome";
     if (agent.includes("Firefox/")) return "Firefox";
     if (agent.includes("Safari/")) return "Safari";
     return "Browser";
-  };
+  }, []);
 
-  const platformLabel = () => {
+  const platformLabel = useCallback(() => {
     const platform = navigator.platform || navigator.userAgent;
     if (/Mac/i.test(platform)) return "MacOS";
     if (/Win/i.test(platform)) return "Windows";
     if (/iPhone|iPad/i.test(navigator.userAgent)) return "iOS";
     if (/Android/i.test(navigator.userAgent)) return "Android";
     return platform || "Onbekend apparaat";
-  };
+  }, []);
 
-  const loadProfileAndRoles = async (userId: string) => {
+  const loadProfileAndRoles = useCallback(async (userId: string) => {
     if (userId === DEV_BYPASS_USER_ID) {
       setProfile({ display_name: "Local Admin", avatar_url: null });
       setRoles(["admin"]);
@@ -161,9 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // User is a linked driver if a driver record with their user_id exists
     setIsLinkedDriver(!!driverRes.data);
-  };
+  }, [browserLabel, ensureSessionKey, platformLabel]);
 
-  const fetchProfileAndRoles = async (userId: string) => {
+  const fetchProfileAndRoles = useCallback(async (userId: string) => {
     const cached = profileFetchRef.current;
     if (cached?.userId === userId) {
       if (cached.completedAt === 0 || Date.now() - cached.completedAt < 30_000) {
@@ -180,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profileFetchRef.current.completedAt = Date.now();
       }
     }
-  };
+  }, [loadProfileAndRoles]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -231,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [fetchProfileAndRoles]);
 
   useEffect(() => {
     if (!user || user.id === DEV_BYPASS_USER_ID) return undefined;
@@ -239,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void fetchProfileAndRoles(user.id);
     }, 60_000);
     return () => window.clearInterval(interval);
-  }, [user?.id]);
+  }, [fetchProfileAndRoles, user]);
 
   const signOut = async () => {
     await supabase.auth.signOut();

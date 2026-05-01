@@ -115,5 +115,5 @@ export function useCapacityMatch(input: MatchInput | null) {
     }
 
     return matches.sort((a, b) => b.score - a.score);
-  }, [vehicles, drivers, input?.requirements?.join(","), input?.weightKg, input?.quantity, input?.unit]);
+  }, [vehicles, drivers, input]);
 }

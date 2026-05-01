@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- exports EMPTY_ADDRESS beside the component for form defaults. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Autocomplete, GoogleMap, Marker } from "@react-google-maps/api";
 import { useGoogleMaps } from "@/hooks/useGoogleMaps";
@@ -315,11 +316,11 @@ export function AddressAutocomplete({
   })();
 
   const flowSuggestions = [...knownFlowSuggestions, ...googleFlowSuggestions];
-  const isFlowSuggestionBlocked = (suggestion: FlowSuggestion) => {
+  const isFlowSuggestionBlocked = useCallback((suggestion: FlowSuggestion) => {
     if (blockedAddressKeys.length === 0) return false;
     const key = suggestionKey(suggestion);
     return blockedAddressKeys.some((blocked) => key === blocked || key.includes(blocked) || blocked.includes(key));
-  };
+  }, [blockedAddressKeys]);
 
   const quickBadgeLabel = (badge?: string) => {
     if (!badge) return "bekend";
@@ -495,7 +496,7 @@ export function AddressAutocomplete({
     } finally {
       setFlowSearchLoading(false);
     }
-  }, [blockedMessage, blockedAddressKeys, onChange, onQuickSelect, onResolvedSelection, onSearchInputChange, searchInput, value]);
+  }, [blockedMessage, isFlowSuggestionBlocked, onChange, onQuickSelect, onResolvedSelection, onSearchInputChange, searchInput, value]);
 
   if (compactFlow) {
     return (

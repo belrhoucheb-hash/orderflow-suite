@@ -79,7 +79,7 @@ const Facturatie = () => {
     statusFilter: statusFilter !== "alle" ? statusFilter : undefined,
     search: search || undefined,
   });
-  const invoices = data?.invoices ?? [];
+  const invoices = useMemo(() => data?.invoices ?? [], [data?.invoices]);
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const queryClient = useQueryClient();

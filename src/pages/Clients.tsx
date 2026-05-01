@@ -123,7 +123,7 @@ export default function Clients() {
     setSelectedIds(new Set());
   }, [debouncedSearch, statusFilter, countryFilter, openOrdersFilter, activityFilter, page]);
 
-  const serverRows = data?.clients ?? [];
+  const serverRows = useMemo(() => data?.clients ?? [], [data?.clients]);
   const totalCount = data?.totalCount ?? 0;
 
   // Open-orders-filter blijft client-side op de huidige pagina: die count

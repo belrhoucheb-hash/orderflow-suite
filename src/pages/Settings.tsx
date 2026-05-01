@@ -633,14 +633,14 @@ const Settings = () => {
     btwGrootboek: string;
     mockMode: boolean;
   }
-  const EMPTY_SNELSTART: SnelstartFields = {
+  const EMPTY_SNELSTART = useMemo<SnelstartFields>(() => ({
     clientKey: "",
     subscriptionKey: "",
     administratieId: "",
     standaardGrootboek: "",
     btwGrootboek: "",
     mockMode: true,
-  };
+  }), []);
   const [snelstart, setSnelstart] = useState<{ enabled: boolean; fields: SnelstartFields }>(
     { enabled: false, fields: { ...EMPTY_SNELSTART } },
   );
@@ -658,7 +658,7 @@ const Settings = () => {
     };
     setSnelstart(merged);
     setSnelstartBaseline(JSON.stringify(merged));
-  }, [snelstartSaved]);
+  }, [EMPTY_SNELSTART, snelstartSaved]);
 
   const snelstartDirty =
     snelstartBaseline !== "" && JSON.stringify(snelstart) !== snelstartBaseline;
@@ -772,7 +772,7 @@ const Settings = () => {
     } else if (savedIntegrations !== undefined) {
       setIntegrationsBaseline((prev) => prev || JSON.stringify(integrations));
     }
-  }, [savedIntegrations]);
+  }, [integrations, savedIntegrations]);
 
   useEffect(() => {
     if (savedNotifications && Object.keys(savedNotifications).length > 0) {
@@ -784,7 +784,7 @@ const Settings = () => {
     } else if (savedNotifications !== undefined) {
       setNotificationsBaseline((prev) => prev || JSON.stringify(notifications));
     }
-  }, [savedNotifications]);
+  }, [notifications, savedNotifications]);
 
   useEffect(() => {
     if (savedSms && Object.keys(savedSms).length > 0) {
@@ -812,7 +812,17 @@ const Settings = () => {
         messageBirdApiKey, messageBirdOriginator, smsEvents, smsTemplate,
       }));
     }
-  }, [savedSms]);
+  }, [
+    messageBirdApiKey,
+    messageBirdOriginator,
+    savedSms,
+    smsEvents,
+    smsProvider,
+    smsTemplate,
+    twilioAccountSid,
+    twilioAuthToken,
+    twilioFromNumber,
+  ]);
 
   useEffect(() => {
     if (savedSla !== undefined) {
@@ -1009,14 +1019,14 @@ const Settings = () => {
     fromEmail: string;
     fromName: string;
   }
-  const EMPTY_SMTP: SmtpFields = {
+  const EMPTY_SMTP = useMemo<SmtpFields>(() => ({
     host: "",
     port: "587",
     username: "",
     password: "",
     fromEmail: "",
     fromName: "",
-  };
+  }), []);
   const [smtpSettings, setSmtpSettings] = useState<{ enabled: boolean; fields: SmtpFields }>(
     { enabled: false, fields: { ...EMPTY_SMTP } },
   );
@@ -1030,7 +1040,7 @@ const Settings = () => {
       enabled: smtpSaved.enabled,
       fields: { ...EMPTY_SMTP, ...smtpSaved.credentials, password: "" },
     });
-  }, [smtpSaved]);
+  }, [EMPTY_SMTP, smtpSaved]);
   const updateSmtpField = (field: keyof SmtpFields, value: string) => {
     setSmtpSettings((prev) => ({ ...prev, fields: { ...prev.fields, [field]: value } }));
   };

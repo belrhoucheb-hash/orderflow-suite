@@ -134,7 +134,6 @@ const Planning = () => {
       setDraftRestored(true);
       toast.success("Planning hersteld", { description: `Conceptplanning voor ${selectedDate} hersteld.` });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbDraftLoaded, dbDraft, selectedDate]);
 
   // ── Save current draft and load new when date changes ──
@@ -772,7 +771,7 @@ const Planning = () => {
   const totalAssigned = Object.values(assignments).reduce((s, a) => s + a.length, 0);
 
   // Collect all week drafts for the week view
-  const weekDrafts = useMemo(() => collectWeekDrafts(selectedDate), [selectedDate, assignments]);
+  const weekDrafts = useMemo(() => collectWeekDrafts(selectedDate), [selectedDate]);
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>

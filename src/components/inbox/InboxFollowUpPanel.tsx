@@ -31,7 +31,7 @@ export function FollowUpPanel({ selected }: { selected: OrderDraft }) {
 
   useEffect(() => {
     setDraft(selected.follow_up_draft || buildSuggestedFollowUpDraft(selected) || "");
-  }, [selected.id, selected.follow_up_draft, selected.missing_fields, selected.anomalies, selected.client_name]);
+  }, [selected]);
 
   if (!hasMissing && !draft) return null;
 

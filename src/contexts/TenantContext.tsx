@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- context provider and hooks share the same module API. */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -161,7 +162,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               invoiceTemplateUploadedAt: data.invoice_template_uploaded_at || null,
               brandingSettings: data.branding_settings ?? {}
             };
-          } else {
+          } else if (import.meta.env.DEV) {
              tenantData = {
                id: "00000000-0000-0000-0000-000000000001",
                name: DEFAULT_COMPANY.name,
@@ -173,6 +174,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
                invoiceTemplateUploadedAt: null,
                brandingSettings: {}
              };
+          } else {
+            throw new Error("Geen tenant gevonden voor deze gebruiker.");
           }
         }
         

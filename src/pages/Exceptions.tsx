@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useFleetVehicles, useVehicleUtilization } from "@/hooks/useFleet";
@@ -377,9 +377,9 @@ const Exceptions = () => {
   const slaSettings = normalizeSlaSettings(rawSlaSettings as Record<string, unknown>);
   const exceptionSettings = normalizeExceptionSettings(rawExceptionSettings as Record<string, unknown>);
 
-  const getUtilization = (vehicleId: string) => {
+  const getUtilization = useCallback((vehicleId: string) => {
     return (utilization as Record<string, number>)[vehicleId] ?? 0;
-  };
+  }, [utilization]);
 
   const { exceptions: rawExceptions } = useMemo(() => {
     if (!orderData) return { exceptions: [] as ExceptionItem[], counts: { delays: 0, missingData: 0, capacity: 0, sla: 0, delivery: 0 } };
@@ -714,10 +714,9 @@ const Exceptions = () => {
     deliveryExceptions,
     exceptionSettings,
     orderData,
-    rawExceptions,
     slaSettings.deadlineHours,
     slaSettings.enabled,
-    utilization,
+    getUtilization,
     vehicles,
   ]);
 

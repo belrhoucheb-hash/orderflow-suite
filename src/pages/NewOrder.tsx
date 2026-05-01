@@ -3240,17 +3240,19 @@ const NewOrder = () => {
       }
     } finally { setSaving(false); }
   };
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void handleSave(e.shiftKey);
+        void handleSaveRef.current(e.shiftKey);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleSave]);
+  }, []);
 
   // Prefill-flow: wacht tot klant-data binnen is (orders mag leeg zijn) en
   // pas eenmalig toe. Client_name/client_id zetten is genoeg — bij ontbreken
@@ -3343,7 +3345,7 @@ const NewOrder = () => {
         timeWindowEnd: clientLocations[0].time_window_end,
       });
     }
-  }, [applyPlannerLocation, clientId, clientLocations, deliveryAddr.street, fromOrderId, initialClientId, pickupAddr.street, selectedClient]);
+  }, [applyPlannerLocation, clientId, clientLocations, deliveryAddr.street, fromOrderId, handlePickupAddrChange, initialClientId, pickupAddr.street, selectedClient]);
 
   // Prefill vanuit ?from_order_id=: kopieer pickup, delivery, requirements,
   // afdeling, vehicle_type, order_type en klant-identificatie van een

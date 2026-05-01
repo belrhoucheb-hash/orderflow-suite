@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -137,14 +137,14 @@ export default function Fleet() {
     });
   }, [vehicles, search, typeFilter, statusFilter, featureFilter]);
 
-  const getUtilization = (vehicle: Vehicle) => {
+  const getUtilization = useCallback((vehicle: Vehicle) => {
     if (vehicle.status === "onderhoud" || vehicle.status === "defect") return 0;
     return utilization?.[vehicle.id] ?? 0;
-  };
+  }, [utilization]);
 
   const filteredSorted = useMemo(
     () => sortVehicles(filtered, sortMode, getUtilization),
-    [filtered, sortMode, utilization],
+    [filtered, sortMode, getUtilization],
   );
 
   const groupedByStatus = useMemo(() => {

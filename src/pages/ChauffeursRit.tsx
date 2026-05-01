@@ -361,7 +361,10 @@ const ChauffeursRit = () => {
 
   // Selected trip data
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
-  const selectedOrders = selectedVehicleId ? (tripsByVehicle.get(selectedVehicleId) || []) : [];
+  const selectedOrders = useMemo(
+    () => selectedVehicleId ? (tripsByVehicle.get(selectedVehicleId) || []) : [],
+    [selectedVehicleId, tripsByVehicle],
+  );
   const stops = useMemo(
     () => selectedOrders.length > 0 ? buildStops(selectedOrders, startTime) : [],
     [selectedOrders, startTime]

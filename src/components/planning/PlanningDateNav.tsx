@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- exports date helpers beside the navigation component. */
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
@@ -61,12 +62,14 @@ export function PlanningDateNav({
   const today = toDateString(new Date());
   const selected = new Date(selectedDate + "T00:00:00");
   const monday = getMonday(selected);
+  const mondayTime = monday.getTime();
 
   const weekDays = useMemo(() => {
+    const weekStart = new Date(mondayTime);
     const days: { date: Date; dateStr: string; label: string; dayLabel: string }[] = [];
     for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
       days.push({
         date: d,
         dateStr: toDateString(d),
@@ -75,7 +78,7 @@ export function PlanningDateNav({
       });
     }
     return days;
-  }, [monday.getTime()]);
+  }, [mondayTime]);
 
   const handlePrevWeek = () => {
     const prev = new Date(monday);

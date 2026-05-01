@@ -464,7 +464,10 @@ const UsersPage = () => {
   const { data: securityData, isLoading: securityLoading } = useUserSecurity(tenantId, selectedUser?.user_id);
   const securitySettings = securityData?.security ?? defaultSecuritySettings;
   const userApiTokens = securityData?.apiTokens ?? [];
-  const persistedAccessOverrides = securityData?.accessOverrides ?? [];
+  const persistedAccessOverrides = useMemo(
+    () => securityData?.accessOverrides ?? [],
+    [securityData?.accessOverrides],
+  );
   const userSessions = securityData?.sessions ?? [];
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ["users-admin"] });
@@ -662,7 +665,7 @@ const UsersPage = () => {
 
     setAccessOverrides(nextLevels);
     setCustomLimitedActions(nextActions);
-  }, [persistedAccessOverrides, securityLoading, selectedUser?.user_id]);
+  }, [persistedAccessOverrides, securityLoading, selectedUser]);
 
   const handleInvite = (event: FormEvent) => {
     event.preventDefault();

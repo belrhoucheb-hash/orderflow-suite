@@ -358,7 +358,7 @@ export function useInbox() {
         setLoadingScenario(null);
       }
     },
-    [queryClient, toast, enrichAddresses, resolveDraftDepartmentId, resolveTenantId],
+    [queryClient, enrichAddresses, resolveDraftDepartmentId, resolveTenantId],
   );
 
   // ─── Queries ───
@@ -789,7 +789,7 @@ export function useInbox() {
   const handleAutoSave = useCallback(() => {
     if (!selected || !formData[selected.id]) return;
     saveFormMutation.mutate({ id: selected.id, form: formData[selected.id] });
-  }, [selected, formData]);
+  }, [selected, formData, saveFormMutation]);
 
   const handleDelete = () => {
     if (!selected) return;

@@ -30,6 +30,7 @@ function getMonday(dateStr: string): Date {
 export function PlanningWeekView({ weekStart, onDayClick, draftAssignments }: PlanningWeekViewProps) {
   const { data: fleetVehicles = [] } = useVehicles();
   const monday = getMonday(weekStart);
+  const mondayTime = monday.getTime();
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 7);
 
@@ -86,14 +87,15 @@ export function PlanningWeekView({ weekStart, onDayClick, draftAssignments }: Pl
 
   // Build the week grid data
   const weekDays = useMemo(() => {
+    const weekStartDate = new Date(mondayTime);
     const days: string[] = [];
     for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
+      const d = new Date(weekStartDate);
+      d.setDate(weekStartDate.getDate() + i);
       days.push(toDateString(d));
     }
     return days;
-  }, [monday.getTime()]);
+  }, [mondayTime]);
 
   const today = toDateString(new Date());
 
