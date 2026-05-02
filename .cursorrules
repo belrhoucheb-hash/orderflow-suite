@@ -1,0 +1,115 @@
+# Supabase Agent Skills - OrderFlow Multi-Tenant TMS
+
+## System Overview
+Dit is OrderFlow, een multi-tenant Transport Management System (TMS) gebouwd op Supabase met complexe Row Level Security (RLS) policies.
+
+## Critical Security Patterns
+
+### 1. Multi-Tenant Architecture
+- **ALLE tabellen** hebben een `tenant_id UUID` kolom
+- **NOOIT** queries uitvoeren zonder tenant isolation 
+- Gebruik altijd: `WHERE tenant_id = auth.jwt() ->> 'app_metadata' ->> 'tenant_id'::uuid`
+
+### 2. RLS Policy Patterns
+```sql
+-- Standard tenant isolation policy pattern:
+CREATE POLICY "tenant_isolation" ON table_name
+  FOR ALL TO authenticated
+  USING (tenant_id = (auth.jwt() ->> 'app_metadata' ->> 'tenant_id')::uuid);
+
+-- Admin-only policy pattern:
+CREATE POLICY "admin_only" ON sensitive_table
+  FOR ALL TO authenticated  
+  USING (
+    tenant_id = (auth.jwt() ->> 'app_metadata' ->> 'tenant_id')::uuid
+    AND public.is_current_user_tenant_admin(tenant_id)
+  );
+```
+
+### 3. Function Security
+- Gebruik `SECURITY DEFINER` ALLEEN wanneer noodzakelijk
+- Valideer altijd tenant_id in functies:
+```sql
+CREATE OR REPLACE FUNCTION my_function(p_tenant_id UUID)
+RETURNS ... AS $$
+BEGIN
+  -- Validate tenant access
+  IF NOT EXISTS (
+    SELECT 1 FROM tenant_members 
+    WHERE user_id = auth.uid() 
+    AND tenant_id = p_tenant_id
+  ) THEN
+    RAISE EXCEPTION 'Access denied';
+  END IF;
+  -- Function logic here
+END;
+$$;
+```
+
+## Schema Guidelines
+
+### Core Tables (require tenant_id)
+- `clients` - Klanten per tenant
+- `orders` - Orders met mandatory tenant_id + client_id
+- `drivers` - Chauffeurs per tenant  
+- `vehicles` - Voertuigen per tenant
+- `trips` - Ritten met tenant isolation
+- `invoices` - Facturen per tenant
+- `shipments` - Zendingen met department_id validation
+
+### Audit & Monitoring
+- `audit_log` - Wijzigingen tracking
+- `anomalies` - Anomalie detectie per tenant
+- `ai_decisions` - AI beslissingen logging
+- `confidence_metrics` - AI confidence tracking
+
+### Special Patterns
+1. **Vehicle Types**: Globaal + tenant-specific overrides
+2. **Rate Cards**: Hierarchische pricing per client/tenant  
+3. **Time Windows**: Geïntegreerd met consolidation engine
+4. **Departments**: Afdeling-based access control binnen tenant
+
+## Migration Safety Rules
+
+### DO:
+- Altijd RLS inschakelen: `ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;`
+- Tenant isolation policy toevoegen voor nieuwe tabellen
+- Indexen maken op (tenant_id, frequently_queried_column)
+- Constraints toevoegen: `tenant_id NOT NULL`
+
+### DON'T:
+- NOOIT tabellen maken zonder tenant_id kolom
+- NOOIT RLS policies omzeilen met SECURITY DEFINER zonder validatie
+- NOOIT cross-tenant data toegang toestaan
+- NOOIT sensitive data in functies blootstellen
+
+## Testing Patterns
+```sql
+-- Test tenant isolation
+SET ROLE 'authenticated';
+SET "request.jwt.claims" = '{"sub": "user-id", "app_metadata": {"tenant_id": "test-tenant-id"}}';
+
+-- Verify RLS works
+SELECT * FROM table_name; -- Should only return tenant-specific data
+```
+
+## AI Assistant Instructions
+1. **Altijd** controleer of nieuwe tabellen tenant_id hebben
+2. **Altijd** voeg RLS policies toe bij schema wijzigingen  
+3. **Nooit** voorstellen om RLS uit te schakelen
+4. **Valideer** dat migraties backwards compatible zijn
+5. **Test** dat policies werken zoals verwacht
+
+## Common Anti-Patterns to Avoid
+- `DISABLE ROW LEVEL SECURITY` - gebruik dit NOOIT
+- Cross-tenant JOINs zonder proper filtering
+- Hardcoded tenant IDs in policies
+- Missing tenant_id in WHERE clauses
+- SECURITY DEFINER zonder access validation
+
+## Pricing Engine Specifics  
+- Gecontroleerd per tenant via `public.is_pricing_engine_enabled(tenant_id)`
+- Vereist actieve `vehicle_types` en `rate_cards` per tenant
+- Gebruikt complexe consolidation algoritmes
+
+Volg deze richtlijnen nauwgezet om data leaks tussen tenants te voorkomen en de security integrity van OrderFlow te behouden.
