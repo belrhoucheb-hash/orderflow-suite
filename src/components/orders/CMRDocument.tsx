@@ -1,7 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Truck, AlertTriangle, Snowflake } from "lucide-react";
 import { DEFAULT_COMPANY } from "@/lib/companyConfig";
+import { getPodFileUrl, isExternalPodUrl } from "@/lib/podStorage";
 
 interface CMRDocumentProps {
   order: any;
@@ -22,6 +23,9 @@ const CMRDocument: React.FC<CMRDocumentProps> = ({
   const requirements = (order.requirements || []) as string[];
   const isADR = requirements.some(r => r.toUpperCase().includes("ADR"));
   const isKoel = requirements.some(r => r.toUpperCase().includes("KOELING"));
+  const [podSignatureUrl, setPodSignatureUrl] = useState<string | null>(
+    isExternalPodUrl(order.pod_signature_url) ? order.pod_signature_url : null,
+  );
 
   const cmrNumber = order.cmr_number || `CMR-${new Date().getFullYear()}-${String(order.order_number).padStart(4, "0")}`;
   const shareUrl = `${window.location.origin}/orders/${order.id}`;
@@ -41,6 +45,19 @@ const CMRDocument: React.FC<CMRDocumentProps> = ({
   if (order.internal_note && !order.internal_note.startsWith("[")) {
     instructions.push(order.internal_note);
   }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getPodFileUrl(order.pod_signature_url, { orderId: order.id, purpose: "cmr" })
+      .then((url) => {
+        if (!cancelled) setPodSignatureUrl(url);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [order.id, order.pod_signature_url]);
 
   return (
     <div className="print:block hidden">
@@ -315,8 +332,8 @@ const CMRDocument: React.FC<CMRDocumentProps> = ({
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Geadresseerde</span>
               </div>
               <div className="h-16 border border-dashed border-slate-200 rounded-lg flex items-center justify-center overflow-hidden">
-                {order.pod_signature_url ? (
-                  <img src={order.pod_signature_url} alt="PoD" className="max-h-full max-w-full object-contain" />
+                {podSignatureUrl ? (
+                  <img src={podSignatureUrl} alt="PoD" className="max-h-full max-w-full object-contain" />
                 ) : (
                   <p className="text-xs text-slate-300">Handtekening ontvanger</p>
                 )}

@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Image, Download, User, Clock, MessageSquare, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getPodFileUrl, isExternalPodUrl } from "@/lib/podStorage";
 
 interface PodViewerProps {
   order: any;
@@ -12,10 +13,47 @@ interface PodViewerProps {
 
 const PodViewer: React.FC<PodViewerProps> = ({ order, compact = false }) => {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
-
   const hasSignature = !!order.pod_signature_url;
   const photos: string[] = Array.isArray(order.pod_photos) ? order.pod_photos : [];
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(
+    isExternalPodUrl(order.pod_signature_url) ? order.pod_signature_url : null,
+  );
+  const [photoUrls, setPhotoUrls] = useState<string[]>(
+    photos.filter((photo) => isExternalPodUrl(photo)),
+  );
   const hasPod = hasSignature || photos.length > 0;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveEvidence = async () => {
+      const allEvidenceIsAlreadyRenderable =
+        (!order.pod_signature_url || isExternalPodUrl(order.pod_signature_url))
+        && photos.every((photo) => isExternalPodUrl(photo));
+
+      if (allEvidenceIsAlreadyRenderable) {
+        return;
+      }
+
+      const [resolvedSignature, resolvedPhotos] = await Promise.all([
+        getPodFileUrl(order.pod_signature_url, { orderId: order.id, purpose: "view" }),
+        Promise.all(
+          photos.map((photo) => getPodFileUrl(photo, { orderId: order.id, purpose: "view" })),
+        ),
+      ]);
+
+      if (!cancelled) {
+        setSignatureUrl(resolvedSignature);
+        setPhotoUrls(resolvedPhotos.filter((url): url is string => !!url));
+      }
+    };
+
+    resolveEvidence();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [order.id, order.pod_signature_url, order.pod_photos]);
 
   if (!hasPod && !order.pod_signed_by) return null;
 
@@ -57,14 +95,14 @@ const PodViewer: React.FC<PodViewerProps> = ({ order, compact = false }) => {
       </div>
 
       {/* Signature Preview */}
-      {hasSignature && (
+      {signatureUrl && (
         <div className="mb-3">
           <p className="text-xs text-emerald-600/70 uppercase font-semibold tracking-wider mb-1.5">Handtekening</p>
           <Dialog>
             <DialogTrigger asChild>
               <button className="block w-full max-w-[240px] bg-white border border-emerald-200 rounded-lg p-2 hover:shadow-md transition-shadow cursor-zoom-in">
                 <img
-                  src={order.pod_signature_url}
+                  src={signatureUrl}
                   alt="Handtekening ontvanger"
                   className="w-full h-auto"
                 />
@@ -74,7 +112,7 @@ const PodViewer: React.FC<PodViewerProps> = ({ order, compact = false }) => {
               <div className="p-4">
                 <h3 className="font-semibold mb-3">Digitale Handtekening</h3>
                 <div className="bg-white border rounded-lg p-3">
-                  <img src={order.pod_signature_url} alt="Handtekening" className="w-full h-auto" />
+                  <img src={signatureUrl} alt="Handtekening" className="w-full h-auto" />
                 </div>
                 {order.pod_signed_by && (
                   <p className="text-sm text-muted-foreground mt-2">Getekend door: {order.pod_signed_by}</p>
@@ -86,11 +124,11 @@ const PodViewer: React.FC<PodViewerProps> = ({ order, compact = false }) => {
       )}
 
       {/* Photo Grid */}
-      {photos.length > 0 && (
+      {photoUrls.length > 0 && (
         <div>
-          <p className="text-xs text-emerald-600/70 uppercase font-semibold tracking-wider mb-1.5">Foto-bewijs ({photos.length})</p>
+          <p className="text-xs text-emerald-600/70 uppercase font-semibold tracking-wider mb-1.5">Foto-bewijs ({photoUrls.length})</p>
           <div className="grid grid-cols-4 gap-2">
-            {photos.map((url, i) => (
+            {photoUrls.map((url, i) => (
               <Dialog key={i}>
                 <DialogTrigger asChild>
                   <button className="aspect-square rounded-lg overflow-hidden border border-emerald-200 bg-white hover:shadow-md transition-shadow cursor-zoom-in">
@@ -107,7 +145,7 @@ const PodViewer: React.FC<PodViewerProps> = ({ order, compact = false }) => {
       )}
 
       {/* Download all */}
-      {(hasSignature || photos.length > 0) && !compact && (
+      {(signatureUrl || photoUrls.length > 0) && !compact && (
         <div className="mt-3 pt-3 border-t border-emerald-200/60">
           <Button
             variant="outline"
@@ -115,9 +153,9 @@ const PodViewer: React.FC<PodViewerProps> = ({ order, compact = false }) => {
             className="gap-1.5 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-100"
             onClick={() => {
               // Download signature
-              if (hasSignature) {
+              if (signatureUrl) {
                 const a = document.createElement("a");
-                a.href = order.pod_signature_url;
+                a.href = signatureUrl;
                 a.download = `pod-signature-${order.order_number}.png`;
                 a.click();
               }

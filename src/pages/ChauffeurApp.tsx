@@ -20,6 +20,7 @@ import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
 import { cn } from "@/lib/utils";
 import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineStore";
+import { getPodFileUrl, uploadPodBlob } from "@/lib/podStorage";
 
 /**
  * Hash a PIN using PBKDF2 (100k iteraties, SHA-256) met een per-driver salt.
@@ -708,22 +709,14 @@ export default function ChauffeurApp() {
       canvas.toBlob(async (blob) => {
         if (!blob) { resolve(null); return; }
 
-        const fileName = `signatures/${orderId}-${Date.now()}.png`;
-        const { error: uploadError } = await supabase.storage
-          .from("pod-files")
-          .upload(fileName, blob, { contentType: "image/png", upsert: true });
+        const storagePath = await uploadPodBlob(blob, {
+          orderId,
+          kind: "signature",
+          contentType: "image/png",
+          extension: "png",
+        });
 
-        if (uploadError) {
-          console.error("Signature upload error:", uploadError);
-          resolve(null);
-          return;
-        }
-
-        const { data: urlData } = supabase.storage
-          .from("pod-files")
-          .getPublicUrl(fileName);
-
-        resolve(urlData?.publicUrl || null);
+        resolve(storagePath);
       }, "image/png");
     });
   };
@@ -737,25 +730,56 @@ export default function ChauffeurApp() {
       const response = await fetch(dataUrl);
       const blob = await response.blob();
       
-      const fileName = `photos/${orderId}-${Date.now()}-${i}.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from("pod-files")
-        .upload(fileName, blob, { contentType: "image/jpeg", upsert: true });
+      const storagePath = await uploadPodBlob(blob, {
+        orderId,
+        kind: "photo",
+        contentType: "image/jpeg",
+        extension: "jpg",
+      });
 
-      if (uploadError) {
-        console.error("Photo upload error:", uploadError);
-        continue;
-      }
-
-      const { data: urlData } = supabase.storage
-        .from("pod-files")
-        .getPublicUrl(fileName);
-
-      if (urlData?.publicUrl) urls.push(urlData.publicUrl);
+      if (storagePath) urls.push(storagePath);
     }
 
     return urls;
   };
+
+  const [viewingPodSignatureUrl, setViewingPodSignatureUrl] = useState<string | null>(null);
+  const [viewingPodPhotoUrls, setViewingPodPhotoUrls] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolvePodEvidence = async () => {
+      if (!viewingPod) {
+        setViewingPodSignatureUrl(null);
+        setViewingPodPhotoUrls([]);
+        return;
+      }
+
+      const [signatureUrl, photoUrls] = await Promise.all([
+        getPodFileUrl(viewingPod.pod_signature_url, {
+          orderId: viewingPod.id,
+          purpose: "view",
+        }),
+        Promise.all(
+          (Array.isArray(viewingPod.pod_photos) ? viewingPod.pod_photos : []).map((photo: string) =>
+            getPodFileUrl(photo, { orderId: viewingPod.id, purpose: "view" })
+          ),
+        ),
+      ]);
+
+      if (!cancelled) {
+        setViewingPodSignatureUrl(signatureUrl);
+        setViewingPodPhotoUrls(photoUrls.filter((url): url is string => !!url));
+      }
+    };
+
+    resolvePodEvidence();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewingPod]);
 
   // -- Complete delivery with full PoD --
   const handleCompleteDelivery = async () => {
@@ -1383,11 +1407,11 @@ export default function ChauffeurApp() {
             
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {/* Signature */}
-              {viewingPod.pod_signature_url && (
+              {viewingPodSignatureUrl && (
                 <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">Handtekening</p>
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
-                    <img src={viewingPod.pod_signature_url} alt="Handtekening" className="w-full max-h-40 object-contain" />
+                    <img src={viewingPodSignatureUrl} alt="Handtekening" className="w-full max-h-40 object-contain" />
                   </div>
                 </div>
               )}
@@ -1418,11 +1442,11 @@ export default function ChauffeurApp() {
               </div>
 
               {/* Photos */}
-              {Array.isArray(viewingPod.pod_photos) && viewingPod.pod_photos.length > 0 && (
+              {viewingPodPhotoUrls.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">Foto-bewijs ({viewingPod.pod_photos.length})</p>
+                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">Foto-bewijs ({viewingPodPhotoUrls.length})</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {viewingPod.pod_photos.map((url: string, i: number) => (
+                    {viewingPodPhotoUrls.map((url, i) => (
                       <div key={i} className="aspect-square rounded-xl overflow-hidden border border-slate-200">
                         <img src={url} alt={`PoD foto ${i+1}`} className="w-full h-full object-cover" />
                       </div>

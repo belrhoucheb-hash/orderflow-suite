@@ -1,24 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── Mock Supabase (hoisted) ──────────────────────────────────────────
-const { mockUpload, mockGetPublicUrl, mockStorageFrom, mockInsert, mockFrom } = vi.hoisted(() => {
+const { mockUpload, mockStorageFrom, mockInsert, mockFrom, mockGetSession } = vi.hoisted(() => {
   const mockUpload = vi.fn().mockResolvedValue({ error: null });
-  const mockGetPublicUrl = vi.fn().mockReturnValue({
-    data: { publicUrl: "https://storage.example.com/file.png" },
-  });
   const mockStorageFrom = vi.fn().mockReturnValue({
     upload: mockUpload,
-    getPublicUrl: mockGetPublicUrl,
   });
   const mockInsert = vi.fn().mockResolvedValue({ error: null });
   const mockFrom = vi.fn().mockReturnValue({ insert: mockInsert });
-  return { mockUpload, mockGetPublicUrl, mockStorageFrom, mockInsert, mockFrom };
+  const mockGetSession = vi.fn().mockResolvedValue({
+    data: { session: { user: { app_metadata: { tenant_id: "tenant-1" } } } },
+    error: null,
+  });
+  return { mockUpload, mockStorageFrom, mockInsert, mockFrom, mockGetSession };
 });
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: mockFrom,
     storage: { from: mockStorageFrom },
+    auth: { getSession: mockGetSession },
   },
 }));
 
@@ -181,14 +182,14 @@ describe("syncPendingPODs", () => {
     setupPersistentIDB();
     mockUpload.mockResolvedValue({ error: null });
     mockInsert.mockResolvedValue({ error: null });
-    mockGetPublicUrl.mockReturnValue({
-      data: { publicUrl: "https://storage.example.com/file.png" },
-    });
     mockStorageFrom.mockReturnValue({
       upload: mockUpload,
-      getPublicUrl: mockGetPublicUrl,
     });
     mockFrom.mockReturnValue({ insert: mockInsert });
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { app_metadata: { tenant_id: "tenant-1" } } } },
+      error: null,
+    });
   });
 
   it("returns zero counts when there are no pending PODs", async () => {
@@ -313,6 +314,11 @@ describe("syncPendingPODs", () => {
         trip_stop_id: "ts-1",
         order_id: "ord-1",
         pod_status: "ONTVANGEN",
+        signature_url: expect.stringMatching(/^tenant-1\/signatures\/ord-1-/),
+        photos: [expect.objectContaining({
+          url: expect.stringMatching(/^tenant-1\/photos\/ord-1-/),
+          type: "delivery_photo",
+        })],
         recipient_name: "Jan Jansen",
         received_at: "2026-04-03T10:00:00Z",
         notes: "Left at door",

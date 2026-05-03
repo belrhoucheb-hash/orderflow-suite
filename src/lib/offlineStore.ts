@@ -5,6 +5,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { uploadPodDataUrl } from "@/lib/podStorage";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -96,41 +97,16 @@ export async function removePendingPOD(id: string): Promise<void> {
 // ─── Sync Logic ─────────────────────────────────────────────────────
 
 /**
- * Convert a data URL to a Blob for upload.
- */
-function dataUrlToBlob(dataUrl: string): Blob {
-  const [header, base64] = dataUrl.split(",");
-  const mimeMatch = header.match(/:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : "image/png";
-  const binary = atob(base64);
-  const array = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    array[i] = binary.charCodeAt(i);
-  }
-  return new Blob([array], { type: mime });
-}
-
-/**
- * Upload a single data-URL image to Supabase storage and return the public URL.
+ * Upload a single data-URL image to private Supabase storage and return the storage path.
  */
 async function uploadDataUrl(
-  bucket: string,
-  path: string,
+  orderId: string,
+  kind: "signature" | "photo",
   dataUrl: string,
-  contentType: string
+  contentType: string,
+  extension: "png" | "jpg",
 ): Promise<string | null> {
-  const blob = dataUrlToBlob(dataUrl);
-  const { error } = await supabase.storage
-    .from(bucket)
-    .upload(path, blob, { contentType, upsert: true });
-
-  if (error) {
-    console.error("Offline sync upload error:", error);
-    return null;
-  }
-
-  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
-  return urlData?.publicUrl || null;
+  return uploadPodDataUrl(dataUrl, { orderId, kind, contentType, extension });
 }
 
 /**
@@ -142,15 +118,13 @@ async function syncSinglePOD(pod: PendingPOD): Promise<boolean> {
     // Upload signature
     let signatureUrl: string | null = null;
     if (pod.signatureDataUrl) {
-      const sigPath = `signatures/${pod.orderId}-offline-${Date.now()}.png`;
-      signatureUrl = await uploadDataUrl("pod-files", sigPath, pod.signatureDataUrl, "image/png");
+      signatureUrl = await uploadDataUrl(pod.orderId, "signature", pod.signatureDataUrl, "image/png", "png");
     }
 
     // Upload photos
     const photoEntries: { url: string; type: string }[] = [];
     for (let i = 0; i < pod.photoDataUrls.length; i++) {
-      const photoPath = `photos/${pod.orderId}-offline-${Date.now()}-${i}.jpg`;
-      const url = await uploadDataUrl("pod-files", photoPath, pod.photoDataUrls[i], "image/jpeg");
+      const url = await uploadDataUrl(pod.orderId, "photo", pod.photoDataUrls[i], "image/jpeg", "jpg");
       if (url) {
         photoEntries.push({ url, type: "delivery_photo" });
       }
