@@ -185,6 +185,9 @@ Doel: externe toegang, incidenten en leveranciers aantoonbaar beheersen.
 - Verplichte API-token eigenaar, expiry, reviewdatum en rotation deadline.
 - Append-only `api_token_events` voor review, rotatie, revoke en anomalies.
 - Gateway weigert tokens waarvan rotatie vereist is.
+- `security_incidents` en append-only incident timeline.
+- `backup_restore_tests` voor RPO/RTO en restore evidence.
+- `supplier_security_register` voor leveranciers/subprocessors en security reviews.
 
 ### Acceptatiecriteria
 
