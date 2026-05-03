@@ -217,6 +217,9 @@ Doel: Orderflow voorbereiden op eFTI en beslissing nemen over certificering of p
 - Authority access log.
 - QR/link flow voor inspectie.
 - Beslisdocument: zelf certificeren of integreren met gecertificeerde eFTI-provider.
+- Versioned `efti_datasets` met hash per machine-readable JSON snapshot.
+- Append-only `efti_access_log` voor generatie, export en inspectieviews.
+- RPC's voor datasetgeneratie, tijdelijke inspectietoken en token-based authority view.
 
 ### Acceptatiecriteria
 
