@@ -119,6 +119,7 @@ Doel: van "CMR document genereren" naar bewijsbaar, onveranderbaar CMR-dossier.
 - Hashing van definitieve CMR PDF/data.
 - Sign-flow voor afzender, vervoerder, ontvanger.
 - Public/private verification endpoint met beperkte data.
+- RPC `finalize_cmr_document` voor hash, versie en eventlog.
 
 ### Acceptatiecriteria
 
