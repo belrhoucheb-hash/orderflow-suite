@@ -245,6 +245,10 @@ Doel: sector-specifieke compliance alleen activeren waar klanten dit nodig hebbe
 - Module is tenant-configurable.
 - Velden, documenten en bewaartermijnen verschijnen alleen als de module actief is.
 - Elke module heeft eigen documenttypes, validaties en exports.
+- `compliance_modules` schakelt ADR, douane, cold chain, afval en farma/food per tenant.
+- `compliance_document_requirements` definieert module-specifieke documenten en retentie.
+- `order_compliance_checks` legt per order vast wat ontbreekt of blokkeert.
+- Append-only `compliance_module_events` bewaart activatie- en configuratiebewijs.
 
 ## Definition Of Done
 
