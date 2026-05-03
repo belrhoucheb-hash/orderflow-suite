@@ -1,4 +1,4 @@
-import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown, MapPinned } from "lucide-react";
+import { LayoutDashboard, Inbox, Package, Building2, Truck, Route, LogOut, Users, Settings, BarChart3, Receipt, Moon, Sun, Container, Send, AlertTriangle, Activity, ChevronDown, MapPinned, ShieldCheck } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -46,6 +46,7 @@ const masterDataItemsDef = [
 ];
 
 const adminItemsDef = [
+  { title: "Compliance", url: "/compliance", icon: ShieldCheck },
   { titleKey: "nav.users", url: "/users", icon: Users },
   { titleKey: "nav.settings", url: "/settings", icon: Settings },
 ];

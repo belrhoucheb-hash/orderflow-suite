@@ -68,6 +68,7 @@ const PortalSettings = lazy(() => import("@/pages/portal/PortalSettings"));
 const Dispatch = lazy(() => import("@/pages/Dispatch"));
 const LiveTracking = lazy(() => import("@/pages/LiveTracking"));
 const Autonomie = lazy(() => import("@/pages/Autonomie"));
+const Compliance = lazy(() => import("@/pages/Compliance"));
 
 // Performance: saner React Query defaults.
 //   * staleTime 60s — avoids instant re-fetch op elk mount.
@@ -136,6 +137,7 @@ const App = () => (
               <Route path="/tracking" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><LiveTracking /></Suspense></ErrorBoundary>} />
               <Route path="/exceptions" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Exceptions /></Suspense></ErrorBoundary>} />
               <Route path="/autonomie" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Autonomie /></Suspense></ErrorBoundary>} />
+              <Route path="/compliance" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Compliance /></Suspense></ErrorBoundary></RoleGuard>} />
               <Route path="/settings" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />
               <Route path="/settings/*" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />
             </Route>
