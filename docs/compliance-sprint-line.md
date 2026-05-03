@@ -149,6 +149,9 @@ Doel: facturen en financiële administratie controleerbaar en onveranderbaar bew
 - Creditnota workflow.
 - Exportpakket voor Belastingdienst/accountant.
 - Connector sync log voor SnelStart/Exact.
+- Fiscale lock op verzonden/betaalde facturen met minimale 7 jaar bewaartermijn.
+- Append-only `invoice_archive_events` voor view/export/correctie-bewijs.
+- RPC `archive_invoice_snapshot` voor hash, snapshot en lock.
 
 ### Acceptatiecriteria
 
