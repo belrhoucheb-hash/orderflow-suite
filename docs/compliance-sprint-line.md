@@ -249,6 +249,8 @@ Doel: sector-specifieke compliance alleen activeren waar klanten dit nodig hebbe
 - `compliance_document_requirements` definieert module-specifieke documenten en retentie.
 - `order_compliance_checks` legt per order vast wat ontbreekt of blokkeert.
 - Append-only `compliance_module_events` bewaart activatie- en configuratiebewijs.
+- `order_compliance_evidence` registreert per order geaccepteerd/geverifieerd modulebewijs.
+- RPC `evaluate_order_compliance` vult orderchecks zonder aparte zichtbare compliance-tab.
 
 ## Definition Of Done
 
