@@ -1,17 +1,19 @@
 import type React from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
   Database,
+  Download,
   FileText,
   Globe2,
   PackageCheck,
   RotateCw,
   ShieldCheck,
 } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +34,26 @@ type ComplianceCounts = {
 };
 
 const emptyCount: CountResult = { value: 0, available: false };
+
+const auditTables = [
+  { key: "privacy_requests", label: "AVG verzoeken" },
+  { key: "privacy_request_events", label: "AVG events" },
+  { key: "cmr_documents", label: "CMR documenten" },
+  { key: "cmr_events", label: "CMR events" },
+  { key: "invoice_archive", label: "Fiscaal archief" },
+  { key: "invoice_archive_events", label: "Factuur events" },
+  { key: "api_token_events", label: "API token events" },
+  { key: "security_incidents", label: "Security incidenten" },
+  { key: "security_incident_events", label: "Incident timeline" },
+  { key: "backup_restore_tests", label: "Backup restore tests" },
+  { key: "supplier_security_register", label: "Leveranciersregister" },
+  { key: "efti_datasets", label: "eFTI datasets" },
+  { key: "efti_access_log", label: "eFTI access log" },
+  { key: "compliance_modules", label: "Transport modules" },
+  { key: "compliance_module_events", label: "Module events" },
+  { key: "compliance_document_requirements", label: "Documentregels" },
+  { key: "order_compliance_checks", label: "Order compliance checks" },
+];
 
 const sprintRows = [
   {
@@ -101,6 +123,43 @@ async function safeCount(table: string): Promise<CountResult> {
   }
 
   return { value: count ?? 0, available: true };
+}
+
+async function safeRows(table: string) {
+  const db = supabase as any;
+  const { data, error } = await db
+    .from(table)
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) {
+    return {
+      available: false,
+      error: error.message,
+      rows: [],
+    };
+  }
+
+  return {
+    available: true,
+    error: null,
+    rows: data ?? [],
+  };
+}
+
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 async function loadComplianceCounts(): Promise<ComplianceCounts> {
@@ -202,6 +261,7 @@ function MetricBlock({
 }
 
 export default function Compliance() {
+  const [isExporting, setIsExporting] = useState(false);
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["compliance-cockpit-counts"],
     queryFn: loadComplianceCounts,
@@ -230,6 +290,68 @@ export default function Compliance() {
     counts.securityIncidents.value +
     counts.eftiDatasets.value;
 
+  const handleAuditExport = async () => {
+    setIsExporting(true);
+
+    try {
+      const tableResults = await Promise.all(
+        auditTables.map(async (table) => ({
+          ...table,
+          result: await safeRows(table.key),
+        })),
+      );
+
+      const unavailableTables = tableResults
+        .filter((entry) => !entry.result.available)
+        .map((entry) => ({ table: entry.key, label: entry.label, error: entry.result.error }));
+
+      const payload = {
+        report: "orderflow-compliance-audit-export",
+        version: 1,
+        generated_at: new Date().toISOString(),
+        scope: {
+          latest_rows_per_table: 100,
+          note: "Export bevat de laatste bewijsregels die via de huidige gebruiker/RLS beschikbaar zijn.",
+        },
+        dashboard: {
+          evidence_total: evidenceTotal,
+          unavailable_count: unavailableCount,
+          counts,
+        },
+        sprint_line: sprintRows,
+        conditional_modules: moduleRows,
+        unavailable_tables: unavailableTables,
+        evidence_tables: Object.fromEntries(
+          tableResults.map((entry) => [
+            entry.key,
+            {
+              label: entry.label,
+              available: entry.result.available,
+              row_count: entry.result.rows.length,
+              rows: entry.result.rows,
+            },
+          ]),
+        ),
+      };
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadJson(`orderflow-compliance-audit-${stamp}.json`, payload);
+
+      if (unavailableTables.length > 0) {
+        toast.warning("Audit export gemaakt met ontbrekende tabellen", {
+          description: `${unavailableTables.length} onderdelen zijn nog niet beschikbaar voor deze gebruiker of omgeving.`,
+        });
+      } else {
+        toast.success("Audit export gedownload");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Onbekende fout";
+      toast.error("Audit export mislukt", { description: message });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="page-container">
       <header className="rounded-2xl border border-[hsl(var(--gold)/0.14)] bg-[linear-gradient(135deg,hsl(42_36%_98%),hsl(var(--card))_48%,hsl(var(--gold-soft)/0.28))] px-5 py-5 shadow-[0_18px_60px_-52px_hsl(32_35%_28%/0.35)]">
@@ -252,8 +374,8 @@ export default function Compliance() {
               <RotateCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
               Vernieuwen
             </button>
-            <button className="btn-luxe btn-luxe--primary" type="button">
-              <FileText className="h-4 w-4" />
+            <button className="btn-luxe btn-luxe--primary" type="button" onClick={() => void handleAuditExport()} disabled={isExporting}>
+              <Download className={cn("h-4 w-4", isExporting && "animate-pulse")} />
               Audit export
             </button>
           </div>
@@ -348,7 +470,7 @@ export default function Compliance() {
             {[
               "Orderdetail: compliance status per dossier tonen.",
               "Settings: modules activeren en documentregels beheren.",
-              "Audit export: bewijsrapport per periode genereren.",
+              "Audit export: periodefilter en accountant-profiel toevoegen.",
             ].map((item, index) => (
               <div key={item} className="flex items-center gap-3 rounded-xl bg-[hsl(var(--gold-soft)/0.12)] px-3.5 py-3">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[hsl(var(--gold)/0.18)] bg-card text-[11px] font-semibold text-[hsl(var(--gold-deep))]">
