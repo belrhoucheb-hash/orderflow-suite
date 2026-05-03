@@ -86,6 +86,9 @@ Doel: tracking aantoonbaar rechtmatig, beperkt en transparant maken.
 - Privacy mode/off-duty control.
 - Persoonsdata-export voor chauffeur/order/contact.
 - Verwijder/anonymiseer workflow met legal-hold blokkades.
+- `privacy_requests` en `privacy_request_events` voor AVG-verzoeken.
+- RPC voor chauffeur/klant/order-contact export.
+- RPC voor chauffeur-anonimisering met legal-hold blokkade.
 
 ### Acceptatiecriteria
 
