@@ -182,6 +182,9 @@ Doel: externe toegang, incidenten en leveranciers aantoonbaar beheersen.
 - Access review workflow.
 - Backup restore test log.
 - Supplier/subprocessor overzicht.
+- Verplichte API-token eigenaar, expiry, reviewdatum en rotation deadline.
+- Append-only `api_token_events` voor review, rotatie, revoke en anomalies.
+- Gateway weigert tokens waarvan rotatie vereist is.
 
 ### Acceptatiecriteria
 

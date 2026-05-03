@@ -14,6 +14,10 @@ export interface ApiToken {
   last_used_at: string | null;
   expires_at: string | null;
   revoked_at: string | null;
+  owner_user_id?: string | null;
+  review_due_at?: string | null;
+  rotation_required_at?: string | null;
+  risk_level?: "low" | "standard" | "high" | "critical";
 }
 
 export const AVAILABLE_SCOPES = [
@@ -27,6 +31,8 @@ export const AVAILABLE_SCOPES = [
 export const TENANT_ONLY_SCOPES = new Set(["trips:read"]);
 
 const TOKEN_PREFIX = "ofs_";
+const DEFAULT_TOKEN_TTL_DAYS = 90;
+const DEFAULT_REVIEW_DAYS = 90;
 
 async function sha256Hex(plaintext: string): Promise<string> {
   const enc = new TextEncoder();
@@ -47,6 +53,12 @@ function generatePlaintext(): string {
     .replace(/=+$/, "")
     .slice(0, 40);
   return `${TOKEN_PREFIX}${rand}`;
+}
+
+function daysFromNow(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
 }
 
 export function useApiTokens(clientId?: string | null) {
@@ -86,6 +98,7 @@ export function useCreateApiToken() {
       const userId = userRes.user?.id ?? null;
       const tenantId = (userRes.user?.app_metadata as { tenant_id?: string })?.tenant_id;
       if (!tenantId) throw new Error("Geen tenant-id in sessie");
+      if (!userId) throw new Error("Geen gebruiker in sessie");
       if (input.client_id && input.scopes.some((scope) => TENANT_ONLY_SCOPES.has(scope))) {
         throw new Error("Klant-tokens mogen geen tenant-brede scopes bevatten");
       }
@@ -103,8 +116,12 @@ export function useCreateApiToken() {
           token_hash,
           token_prefix,
           scopes: input.scopes,
-          expires_at: input.expires_at ?? null,
+          expires_at: input.expires_at ?? daysFromNow(DEFAULT_TOKEN_TTL_DAYS),
           created_by: userId,
+          owner_user_id: userId,
+          review_due_at: daysFromNow(DEFAULT_REVIEW_DAYS),
+          rotation_required_at: input.expires_at ?? daysFromNow(DEFAULT_TOKEN_TTL_DAYS),
+          risk_level: input.scopes.some((scope) => scope.endsWith(":write")) ? "high" : "standard",
         })
         .select()
         .single();

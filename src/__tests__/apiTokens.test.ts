@@ -75,6 +75,7 @@ describe("hasScope", () => {
     scopes: ["orders:read", "invoices:read"],
     expires_at: null,
     revoked_at: null,
+    rotation_required_at: null,
   };
 
   it("true als scope aanwezig", () => {

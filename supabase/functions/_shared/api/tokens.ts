@@ -18,6 +18,7 @@ export interface ApiToken {
   scopes: string[];
   expires_at: string | null;
   revoked_at: string | null;
+  rotation_required_at?: string | null;
 }
 
 export interface TokenVerifyOk {
@@ -84,7 +85,7 @@ export async function verifyToken(
 
   const { data, error } = await supabase
     .from("api_tokens")
-    .select("id, tenant_id, client_id, scopes, expires_at, revoked_at")
+    .select("id, tenant_id, client_id, scopes, expires_at, revoked_at, rotation_required_at")
     .eq("token_hash", hash)
     .is("revoked_at", null)
     .maybeSingle();
@@ -97,6 +98,20 @@ export async function verifyToken(
 
   if (token.expires_at && new Date(token.expires_at) < new Date()) {
     return { ok: false, status: 401, error: "token_expired" };
+  }
+
+  if (token.rotation_required_at && new Date(token.rotation_required_at) <= new Date()) {
+    try {
+      await supabase.rpc("log_api_token_event_from_gateway", {
+        p_token_id: token.id,
+        p_event_type: "rotation_required",
+        p_note: "Rejected API request because token rotation is required",
+        p_metadata: {},
+      });
+    } catch {
+      // Audit logging should not change the external error shape.
+    }
+    return { ok: false, status: 401, error: "token_rotation_required" };
   }
 
   return { ok: true, token };
