@@ -33,6 +33,7 @@ import {
 } from "@/hooks/useTracking";
 import type { Trip, TripStop } from "@/types/dispatch";
 import type { VehiclePosition, TripTrackingStatus } from "@/types/tracking";
+import { logTrackingAccess } from "@/lib/trackingPrivacy";
 
 // ─── Map marker helpers ────────────────────────────────────────
 
@@ -92,6 +93,8 @@ const LiveTracking = () => {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
+  const pageAccessLoggedRef = useRef(false);
+  const lastFocusedTripLoggedRef = useRef<string | null>(null);
 
   // Build driver map
   const driverMap = useMemo(() => {
@@ -109,6 +112,42 @@ const LiveTracking = () => {
 
   const statuses = useTripTrackingStatuses(trips, driverMap);
   const alerts = useTrackingAlerts(statuses, positions, previousPositions);
+
+  useEffect(() => {
+    if (pageAccessLoggedRef.current || trips.length === 0) return;
+    pageAccessLoggedRef.current = true;
+
+    logTrackingAccess({
+      purposeCode: "route_execution",
+      accessType: "live_view",
+      source: "live-tracking",
+      metadata: {
+        tripCount: trips.length,
+        positionCount: positions.length,
+      },
+    });
+  }, [trips.length, positions.length]);
+
+  useEffect(() => {
+    if (!selectedTripId) return;
+    if (lastFocusedTripLoggedRef.current === selectedTripId) return;
+    lastFocusedTripLoggedRef.current = selectedTripId;
+
+    const selectedPosition = positions.find((p) => p.tripId === selectedTripId);
+    const selectedTrip = trips.find((trip) => trip.id === selectedTripId) as any;
+
+    logTrackingAccess({
+      purposeCode: "route_execution",
+      accessType: "live_view",
+      tripId: selectedTripId,
+      driverId: selectedTrip?.driver_id ?? selectedTrip?.driverId ?? null,
+      vehicleId: selectedPosition?.vehicleId ?? selectedTrip?.vehicle_id ?? null,
+      source: "live-tracking-trip-focus",
+      metadata: {
+        hasPosition: !!selectedPosition,
+      },
+    });
+  }, [selectedTripId, positions, trips]);
 
   // Track previous positions for idle detection
   useEffect(() => {

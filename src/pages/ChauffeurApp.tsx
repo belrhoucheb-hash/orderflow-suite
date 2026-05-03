@@ -526,6 +526,12 @@ export default function ChauffeurApp() {
       stopTracking();
       toast.info("GPS tracking gestopt");
     } else {
+      if (!activeTripId) {
+        toast.info("GPS start automatisch tijdens een actieve rit.", {
+          description: "Zo blijft tracking beperkt tot route-uitvoering.",
+        });
+        return;
+      }
       startTracking();
       toast.success("GPS tracking gestart");
     }
@@ -1232,6 +1238,39 @@ export default function ChauffeurApp() {
         {/* Clock In/Out & Time Tracking */}
         <Card className="rounded-2xl border-none shadow-sm bg-white ring-1 ring-slate-200">
           <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                "mt-0.5 h-9 w-9 rounded-full flex items-center justify-center shrink-0",
+                activeTripId && (positionReporter.isTracking || isTracking)
+                  ? "bg-emerald-100 text-emerald-600"
+                  : "bg-slate-100 text-slate-400",
+              )}>
+                <MapPin className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-900">GPS privacy</p>
+                  <Badge className={cn(
+                    "border-0 text-[11px] font-semibold",
+                    activeTripId && (positionReporter.isTracking || isTracking)
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-100 text-slate-600",
+                  )}>
+                    {activeTripId && (positionReporter.isTracking || isTracking) ? "Actieve rit" : "Uit"}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  Locatie wordt alleen gebruikt voor route-uitvoering, ETA en veiligheid tijdens een actieve rit.
+                  Toegang door planners wordt gelogd.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Clock In/Out & Time Tracking */}
+        <Card className="rounded-2xl border-none shadow-sm bg-white ring-1 ring-slate-200">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
@@ -1309,9 +1348,11 @@ export default function ChauffeurApp() {
           }} onTripStarted={(tripId) => {
             setActiveTripId(tripId);
             if (!positionReporter.isTracking) positionReporter.startTracking();
+            if (!isTracking) startTracking();
           }} onTripCompleted={(tripId) => {
             if (activeTripId === tripId) {
               positionReporter.stopTracking();
+              if (isTracking) stopTracking();
               setActiveTripId(null);
             }
           }} />

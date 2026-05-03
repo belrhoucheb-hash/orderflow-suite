@@ -131,11 +131,17 @@ vi.mock("@/hooks/useTrips", () => ({
 }));
 
 vi.mock("@/components/chauffeur/TripFlow", () => ({
-  TripFlow: ({ driverId, onStartPOD }: any) => (
+  TripFlow: ({ driverId, onStartPOD, onTripStarted, onTripCompleted }: any) => (
     <div data-testid="trip-flow" data-driver-id={driverId}>
       Trip Flow
       <button data-testid="start-pod-btn" onClick={() => onStartPOD({ id: "stop1", order_id: "order1", contact_name: "Test Klant", planned_address: "Teststraat 1" })}>
         Start POD
+      </button>
+      <button data-testid="start-trip-btn" onClick={() => onTripStarted("trip-1")}>
+        Start trip
+      </button>
+      <button data-testid="complete-trip-btn" onClick={() => onTripCompleted("trip-1")}>
+        Complete trip
       </button>
     </div>
   ),
@@ -575,7 +581,7 @@ describe("ChauffeurApp", () => {
   // GPS TRACKING (handleToggleGPS)
   // ════════════════════════════════════════════════════════════════════
 
-  it("handleToggleGPS - starts GPS tracking when off", async () => {
+  it("handleToggleGPS - does not start GPS tracking outside an active trip", async () => {
     mockIsTracking.value = false;
     renderWithActiveDriver("d1");
     await waitFor(() => {
@@ -585,8 +591,23 @@ describe("ChauffeurApp", () => {
     await act(async () => {
       fireEvent.click(gpsBtn);
     });
+    expect(mockStartTracking).not.toHaveBeenCalled();
+    expect(mockToastInfo).toHaveBeenCalledWith(
+      "GPS start automatisch tijdens een actieve rit.",
+      expect.objectContaining({ description: "Zo blijft tracking beperkt tot route-uitvoering." }),
+    );
+  });
+
+  it("starts GPS tracking when a trip starts", async () => {
+    mockIsTracking.value = false;
+    renderWithActiveDriver("d1");
+    const startTripBtn = await screen.findByTestId("start-trip-btn");
+
+    await act(async () => {
+      fireEvent.click(startTripBtn);
+    });
+
     expect(mockStartTracking).toHaveBeenCalledTimes(1);
-    expect(mockToastSuccess).toHaveBeenCalledWith("GPS tracking gestart");
   });
 
   it("handleToggleGPS - stops GPS tracking when on", async () => {
