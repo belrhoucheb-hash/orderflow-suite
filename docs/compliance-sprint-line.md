@@ -252,6 +252,24 @@ Doel: sector-specifieke compliance alleen activeren waar klanten dit nodig hebbe
 - `order_compliance_evidence` registreert per order geaccepteerd/geverifieerd modulebewijs.
 - RPC `evaluate_order_compliance` vult orderchecks zonder aparte zichtbare compliance-tab.
 
+## Sprint 9 - Compliance Verification & Operations
+
+Doel: compliance als interne operatie aantoonbaar laten draaien zonder zichtbare app-tab.
+
+### Scope
+
+- Dagelijkse retentie-run registreren en verifieerbaar maken.
+- Guardrail-tests voor RLS, auditlogs, append-only bewijs en interne-only navigatie.
+- Bewijs dat compliance-jobs ingericht zijn via scheduler-register.
+- Build/test gate voordat compliance-slices worden gepusht.
+
+### Acceptatiecriteria
+
+- `compliance_job_schedules` registreert verplichte compliance achtergrondtaken.
+- `run-compliance-retention` staat dagelijks gepland via pg_cron of Supabase Scheduler fallback.
+- Migratietests bewaken dat compliance niet terugkomt als primaire app-route.
+- Migratietests bewaken RLS, service-role paden en append-only eventlogs.
+
 ## Definition Of Done
 
 Een compliance-feature is pas klaar als:
