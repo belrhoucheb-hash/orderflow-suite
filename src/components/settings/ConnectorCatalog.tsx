@@ -100,14 +100,11 @@ export function ConnectorCatalog({ onSelect }: Props) {
       if (c.status === "beta") return 2;
       return 3;
     };
-<<<<<<< Updated upstream
-    return [...all].sort((a, b) => order(a) - order(b)).slice(0, 4);
-=======
+    // Eerst hand-gecureerde featured-connectors, daarna eventueel aangevuld op status.
     const curated = all.filter((c) => c.featured).sort((a, b) => order(a) - order(b));
     if (curated.length >= 4) return curated.slice(0, 4);
     const fallback = all.filter((c) => !c.featured).sort((a, b) => order(a) - order(b));
     return [...curated, ...fallback].slice(0, 4);
->>>>>>> Stashed changes
   }, [all]);
 
   if (list.isLoading) {
@@ -369,20 +366,11 @@ function CatalogSkeleton() {
             <div key={i} className="h-16 rounded-xl bg-slate-50" />
           ))}
         </div>
-<<<<<<< Updated upstream
-        <button
-          type="button"
-          className="h-10 px-4 rounded-xl text-xs font-display font-semibold bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm hover:opacity-95 transition-opacity"
-        >
-          Vraag aan
-        </button>
-=======
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="h-44 rounded-2xl bg-white border border-[hsl(var(--gold)/0.12)] animate-pulse" />
         ))}
->>>>>>> Stashed changes
       </div>
     </div>
   );
