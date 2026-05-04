@@ -2359,7 +2359,8 @@ const NewOrder = () => {
         return;
       }
       setWizardStep("route");
-      setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+      setRouteManualBack(false);
+      setRouteActiveQuestion(1);
       return;
     }
     if (wizardStep === "route") {
@@ -2402,9 +2403,9 @@ const NewOrder = () => {
         return;
       }
     }
-    if (wizardStep === "route" && routeActiveQuestion < routeSuggestedQuestion) {
+    if (wizardStep === "route" && routeActiveQuestion < 4) {
       setRouteManualBack(false);
-      setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+      setRouteActiveQuestion((routeActiveQuestion + 1) as 1 | 2 | 3 | 4);
       return;
     }
     if (wizardStep === "cargo" && cargoActiveQuestion < cargoSuggestedQuestion) {
@@ -2419,7 +2420,7 @@ const NewOrder = () => {
       if (current === "financial") return "review";
       return "review";
     });
-  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, selectedContactId, transportFlowChoice, wizardStep]);
+  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, selectedContactId, transportFlowChoice, wizardStep]);
 
   const goToPreviousWizardStep = useCallback(() => {
     if (wizardStep === "intake" && intakeActiveQuestion > 1) {
@@ -4481,7 +4482,7 @@ const NewOrder = () => {
     }
     if (step === "route") {
       setRouteManualBack(true);
-      setRouteActiveQuestion((routeSuggestedQuestion || 1) as 1 | 2 | 3 | 4);
+      setRouteActiveQuestion(1);
       return;
     }
     if (step === "cargo") {
@@ -4490,7 +4491,7 @@ const NewOrder = () => {
       return;
     }
     setReviewActiveQuestion(2);
-  }, [cargoSuggestedQuestion, routeSuggestedQuestion]);
+  }, [cargoSuggestedQuestion]);
 
   const renderFlowModules = (variant: "side" | "top" = "side") => {
     const isSide = variant === "side";
