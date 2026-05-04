@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Truck, MapPin, Navigation, LogOut, Fingerprint, Camera, X, User, MessageSquare, Clock, Coffee, Play, Square, WifiOff, RefreshCw, Bell, Calendar as CalendarIcon, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +25,8 @@ import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineSt
 import { uploadPodBlob } from "@/lib/podStorage";
 import { vibrate, HAPTICS } from "@/lib/haptics";
 import { compressImage, compressImageToDataUrl } from "@/lib/imageCompress";
+import { generateCmrPdf } from "@/lib/cmrPdf";
+import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 
 /**
  * Hash a PIN using PBKDF2 (100k iteraties, SHA-256) met een per-driver salt.
@@ -510,6 +512,9 @@ export default function ChauffeurApp() {
   // -- Position Reporter (GPS -> vehicle_positions) --
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const activeDriverVehicleId = drivers?.find(d => d.id === activeDriverId)?.current_vehicle_id || null;
+  // Voertuig-info nodig voor de CMR-PDF (naam + kenteken).
+  const vehiclesRawOptions = useMemo(() => ({ includeInactive: true }), []);
+  const { data: rawVehicles = [] } = useVehiclesRaw(vehiclesRawOptions);
 
   // Voertuigcheck-gate: mag chauffeur vandaag orders zien voor dit voertuig?
   const gateQ = useVehicleCheckGate(activeDriverId, activeDriverVehicleId);
@@ -810,7 +815,7 @@ export default function ChauffeurApp() {
         uploadPhotos(selectedOrder.id),
       ]);
 
-      await savePOD.mutateAsync({
+      const savedPod = await savePOD.mutateAsync({
         trip_stop_id: tripStopId,
         order_id: selectedOrder.id || undefined,
         signature_url: signatureUrl ?? "",
@@ -820,6 +825,52 @@ export default function ChauffeurApp() {
       });
 
       await updateStopStatus.mutateAsync({ stopId: tripStopId, status: "AFGELEVERD" });
+
+      // CMR-PDF on-device genereren en koppelen. Fail-soft: als PDF-generatie of
+      // upload faalt, blijft de POD staan, alleen ontbreekt de gegenereerde PDF.
+      try {
+        const canvas = canvasRef.current;
+        const signatureDataUrl = canvas && !isCanvasEmpty()
+          ? canvas.toDataURL("image/png")
+          : "";
+
+        const vehicle = rawVehicles.find(v => v.id === activeDriverVehicleId) ?? null;
+
+        const pdfBlob = await generateCmrPdf({
+          orderId: selectedOrder.id,
+          recipientName: podSignedBy || "",
+          signatureDataUrl,
+          photoUrls: [],
+          vehicle: vehicle ? { name: vehicle.name, plate: vehicle.plate } : null,
+          driver: activeDriver ? { name: activeDriver.name } : null,
+          pickup: null,
+          delivery: { address: selectedOrder.delivery_address ?? null },
+          weightKg: null,
+          palletCount: null,
+          signedAt: new Date().toISOString(),
+          notes: podNotes || null,
+          reference: selectedOrder.id,
+        });
+
+        const cmrPath = await uploadPodBlob(pdfBlob, {
+          orderId: selectedOrder.id,
+          kind: "cmr",
+          contentType: "application/pdf",
+          extension: "pdf",
+        });
+
+        if (cmrPath && savedPod?.id) {
+          const { error: patchError } = await supabase
+            .from("proof_of_delivery")
+            .update({ cmr_pdf_url: cmrPath } as any)
+            .eq("id", savedPod.id);
+          if (patchError) {
+            console.warn("CMR-PDF gekoppeld niet aan POD:", patchError);
+          }
+        }
+      } catch (cmrErr) {
+        console.warn("CMR-PDF generatie faalde, POD is wel opgeslagen:", cmrErr);
+      }
 
       toast.success("Zending succesvol afgeleverd!", {
         description: "Handtekening en bewijs zijn opgeslagen.",

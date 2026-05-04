@@ -236,7 +236,7 @@ describe("syncPendingPODs", () => {
     );
   });
 
-  it("handles upload errors for photos gracefully", async () => {
+  it("retries when every photo upload fails (geen partial success)", async () => {
     idbData.set("pod-1", samplePOD);
     mockUpload
       .mockResolvedValueOnce({ error: null })       // signature succeeds
@@ -245,8 +245,44 @@ describe("syncPendingPODs", () => {
 
     const result = await syncPendingPODs();
 
-    // Still syncs because the insert itself succeeds
+    // Geen enkele foto slaagde terwijl er wel foto's waren: niet inserten,
+    // wel de retry-teller bumpen zodat we het later opnieuw proberen.
+    expect(result.synced).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(idbData.has("pod-1")).toBe(true);
+    expect((idbData.get("pod-1") as PendingPOD).retryCount).toBe(1);
+    (console.error as any).mockRestore();
+  });
+
+  it("inserts with partial photo success when at least one photo uploads", async () => {
+    const podTwoPhotos: PendingPOD = {
+      ...samplePOD,
+      photoDataUrls: [
+        "data:image/jpeg;base64,/9j/photo1",
+        "data:image/jpeg;base64,/9j/photo2",
+      ],
+    };
+    idbData.set("pod-1", podTwoPhotos);
+    mockUpload
+      .mockResolvedValueOnce({ error: null }) // signature succeeds
+      .mockResolvedValueOnce({ error: null }) // first photo succeeds
+      .mockResolvedValueOnce({ error: { message: "Upload failed" } }); // second photo fails
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await syncPendingPODs();
+
+    // Eén foto lukte: insert het POD met die ene foto en markeer als synced.
     expect(result.synced).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        photos: [
+          expect.objectContaining({ type: "delivery_photo" }),
+        ],
+      }),
+    );
     (console.error as any).mockRestore();
   });
 
