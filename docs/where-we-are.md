@@ -19,6 +19,7 @@
 
 ## Wat is af in code (gemerged op origin/main)
 
+- **Chauffeursportaal Uber-flow productie** (PR #20, #21, #23): `/chauffeur` heeft full-bleed Leaflet map, glass header, draggable bottom-sheet met SwipeToConfirm, hamburger drawer met voertuigcheck-gate, rooster (week+maand), beschikbaarheid, chat, documenten, cijfers, bonnetjes, tachograaf-import stub, instellingen (taal/nav-app/dark-mode/GPS-spaarmodus/haptics/notificaties), SOS. Bottom-sheet met NextStopHero + km/ETA + Navigeer/Bel. Geofence-toast met stop-naam + 5s undo. CMR on-the-spot signing met email-copy + on-device PDF via jspdf, gepatcht naar `proof_of_delivery.cmr_pdf_url`. Klant-broadcast Edge Function `notify-customer-stop-status` met `last_notified_status` dedup. `messages`-tabel + realtime voor driver↔planner chat. `IncidentDialog` met 4 categorieen + verplichte foto + planner-notificatie. Offline POD queue in IndexedDB met parallel foto-upload + partial-success-semantiek. PIN-flow met PBKDF2/100k + DB-side lockout. `IconBubble` premium icon-treatment. `/chauffeur-demo` blijft als auth-loze visuele showcase.
 - **Sprint 5**, outbound webhooks (HMAC, retry, replay, delivery-log), tab onder Settings > Webhooks.
 - **Sprint 6**, publieke REST API v1 (bearer-tokens, scopes, rate-limit), tab onder Settings > API-tokens, ook in klantportaal.
 - **Sprint 7**, rooster-module met dag/week-view, dag-acties, filters, plus later patroon-detectie, learned defaults, capaciteit-banner en eligibility-checks voor voertuig/chauffeur.
@@ -35,13 +36,24 @@
 
 ## Openstaande deploy-acties (door gebruiker te doen)
 
-1. **Frontend redeploy** vanaf commit `bd0e3b4`. Vercel/Netlify dashboard, redeploy of lege commit pushen.
-2. **Migraties uitrollen**: `supabase db push` voor 14 migraties sinds `20260424000000_webhook_subscriptions.sql`.
-3. **Edge functions deployen**: `supabase functions deploy connector-snelstart connector-exact_online oauth-callback-exact connector-dispatcher eta-watcher`.
-4. **Env vars** op Supabase: `EXACT_CLIENT_ID`, `EXACT_CLIENT_SECRET`, `EXACT_REDIRECT_URI`, `CRON_SECRET`. Frontend (.env): `VITE_EXACT_CLIENT_ID`, `VITE_EXACT_REDIRECT_URI`.
-5. **DB-webhooks** in Supabase Dashboard: `webhook_deliveries` INSERT → `webhook-dispatcher` (klant-webhooks) **én** → `connector-dispatcher` (interne connectoren). Twee aparte hooks op dezelfde insert.
-6. **Cron jobs**: elke minuut `eta-watcher` en `webhook-dispatcher`, elke 5 min `connector-dispatcher` als catch-up.
-7. **Exact-app** registreren via apps.exactonline.com met redirect `https://{project}.functions.supabase.co/oauth-callback-exact`.
+### Net na chauffeursportaal batch 2 (PR #23, urgent)
+1. **`supabase db push`** voor 6 migraties die nog wachten:
+   - `20260504120030_warehouse_flow_references.sql`
+   - `20260504120100_stop_incidents.sql`
+   - `20260504120200_driver_planner_messages.sql`
+   - `20260504130000_trip_stops_last_notified.sql`
+   - `20260504141741_proof_of_delivery_cmr_pdf.sql`
+   - `20260505000000_secure_tenant_membership.sql`
+   `20260504120000_trip_stops_extra_field.sql` is al toegepast en wordt overgeslagen.
+2. **`supabase functions deploy notify-customer-stop-status`** voor de nieuwe dedup-logica via `last_notified_status`. Zonder deze deploy blijft de klant dubbele AANGEKOMEN-broadcasts ontvangen.
+3. **Frontend redeploy** vanaf commit `dfdf76d` zodat de Uber-flow `/chauffeur` UI live komt.
+
+### Sprint 8 connector-platform (nog steeds pending)
+4. **Connector-platform migraties + functions**: `supabase functions deploy connector-snelstart connector-exact_online oauth-callback-exact connector-dispatcher eta-watcher`.
+5. **Env vars** op Supabase: `EXACT_CLIENT_ID`, `EXACT_CLIENT_SECRET`, `EXACT_REDIRECT_URI`, `CRON_SECRET`. Frontend (.env): `VITE_EXACT_CLIENT_ID`, `VITE_EXACT_REDIRECT_URI`.
+6. **DB-webhooks** in Supabase Dashboard: `webhook_deliveries` INSERT → `webhook-dispatcher` (klant-webhooks) **én** → `connector-dispatcher` (interne connectoren). Twee aparte hooks op dezelfde insert.
+7. **Cron jobs**: elke minuut `eta-watcher` en `webhook-dispatcher`, elke 5 min `connector-dispatcher` als catch-up.
+8. **Exact-app** registreren via apps.exactonline.com met redirect `https://{project}.functions.supabase.co/oauth-callback-exact`.
 
 ---
 
