@@ -2,19 +2,29 @@ import { useMemo, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Clock, Search, Sparkles, Zap, AlertCircle, ArrowRight, Activity,
-  Lock, Radio, ArrowLeftRight, Webhook, KeyRound, Globe2, MapPin,
+  Lock, Radio, ArrowLeftRight, Webhook, KeyRound, Globe2, MapPin, Package, ChevronUp,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   CATEGORY_LABELS,
   type ConnectorCategory,
 } from "@/lib/connectors/catalog";
+import { CONNECTOR_BUNDLES, type ConnectorBundle } from "@/lib/connectors/bundles";
 import { useConnectorList, type ConnectorWithStatus } from "@/hooks/useConnectors";
+import { useConnectorVotes } from "@/hooks/useConnectorVotes";
 import { cn } from "@/lib/utils";
 
 interface Props {
   onSelect: (slug: string) => void;
+  onSelectBundle?: (bundleId: string) => void;
 }
+
+const BUNDLE_ICONS = {
+  sparkles: <Sparkles className="h-4 w-4" />,
+  radio: <Radio className="h-4 w-4" />,
+  "map-pin": <MapPin className="h-4 w-4" />,
+  package: <Package className="h-4 w-4" />,
+};
 
 type FilterChip = "alle" | ConnectorCategory;
 
@@ -31,39 +41,6 @@ const BADGE_LABELS: Record<NonNullable<ConnectorWithStatus["badge"]>, string> = 
   aanbevolen: "Aanbevolen",
 };
 
-const BUNDLES: Array<{
-  id: string;
-  title: string;
-  blurb: string;
-  slugs: string[];
-  accent: string;
-  icon: ReactNode;
-}> = [
-  {
-    id: "boekhouding-nl",
-    title: "Boekhouding NL",
-    blurb: "Snelstart en Exact, klaar voor verkoopboekingen vanaf dag 1.",
-    slugs: ["snelstart", "exact_online"],
-    accent: "from-rose-50 to-amber-50",
-    icon: <Sparkles className="h-4 w-4" />,
-  },
-  {
-    id: "klant-communicatie",
-    title: "Klantcommunicatie",
-    blurb: "WhatsApp, Slack en Twilio voor live klant- en team-updates.",
-    slugs: ["whatsapp_business", "slack", "twilio"],
-    accent: "from-emerald-50 to-sky-50",
-    icon: <Radio className="h-4 w-4" />,
-  },
-  {
-    id: "fleet-pro",
-    title: "Fleet pro",
-    blurb: "Live tracking en chauffeurinzicht via Webfleet en Samsara.",
-    slugs: ["webfleet", "samsara"],
-    accent: "from-slate-50 to-indigo-50",
-    icon: <MapPin className="h-4 w-4" />,
-  },
-];
 
 const CAPABILITY_ICON: Array<{ test: (cap: string) => boolean; icon: ReactNode }> = [
   { test: (c) => /oauth/i.test(c), icon: <Lock className="h-3 w-3" /> },
@@ -86,8 +63,9 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export function ConnectorCatalog({ onSelect }: Props) {
+export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
   const list = useConnectorList();
+  const votes = useConnectorVotes();
   const [filter, setFilter] = useState<FilterChip>("alle");
   const [query, setQuery] = useState("");
 
@@ -222,15 +200,15 @@ export function ConnectorCatalog({ onSelect }: Props) {
 
       {showBundles && (
         <section>
-          <SectionHeader eyebrow="Bundels" subtitle="Klaar-voor-gebruik combinaties" icon={<Zap className="h-3.5 w-3.5" />} />
+          <SectionHeader eyebrow="Bundels" subtitle="Klaar-voor-gebruik combinaties met onboarding-wizard" icon={<Zap className="h-3.5 w-3.5" />} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
-            {BUNDLES.map((bundle, i) => (
+            {CONNECTOR_BUNDLES.map((bundle, i) => (
               <BundleCard
                 key={bundle.id}
                 bundle={bundle}
                 connectors={all.filter((c) => bundle.slugs.includes(c.slug))}
                 delay={i * 0.05}
-                onSelect={onSelect}
+                onOpen={() => onSelectBundle?.(bundle.id)}
               />
             ))}
           </div>
@@ -299,14 +277,23 @@ export function ConnectorCatalog({ onSelect }: Props) {
             <section className="space-y-4">
               <SectionHeader
                 eyebrow="Op de roadmap"
-                subtitle="Aangekondigd, deze koppelingen worden binnenkort live gezet"
+                subtitle="Stem voor de koppelingen die jij het hardste nodig hebt, hoogste stemmen eerst"
                 icon={<Clock className="h-3.5 w-3.5" />}
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 <AnimatePresence>
-                  {roadmap.map((c, i) => (
-                    <RoadmapCard key={c.slug} connector={c} delay={i * 0.03} />
-                  ))}
+                  {[...roadmap]
+                    .sort((a, b) => votes.voteCount(b.slug) - votes.voteCount(a.slug))
+                    .map((c, i) => (
+                      <RoadmapCard
+                        key={c.slug}
+                        connector={c}
+                        delay={i * 0.03}
+                        voteCount={votes.voteCount(c.slug)}
+                        hasVoted={votes.hasVoted(c.slug)}
+                        onVote={() => votes.toggleVote(c.slug)}
+                      />
+                    ))}
                 </AnimatePresence>
               </div>
             </section>
@@ -572,14 +559,26 @@ function ConnectorCard({
   );
 }
 
-function RoadmapCard({ connector, delay }: { connector: ConnectorWithStatus; delay: number }) {
+function RoadmapCard({
+  connector,
+  delay,
+  voteCount,
+  hasVoted,
+  onVote,
+}: {
+  connector: ConnectorWithStatus;
+  delay: number;
+  voteCount: number;
+  hasVoted: boolean;
+  onVote: () => void;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
       transition={{ duration: 0.25, delay }}
-      className="rounded-2xl border border-[hsl(var(--gold)/0.14)] bg-gradient-to-br from-white to-slate-50/40 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] opacity-90 hover:opacity-100 hover:border-[hsl(var(--gold)/0.3)] transition-all"
+      className="rounded-2xl border border-[hsl(var(--gold)/0.14)] bg-gradient-to-br from-white to-slate-50/40 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] hover:border-[hsl(var(--gold)/0.3)] transition-all"
     >
       <div className="flex items-start justify-between gap-3">
         <BrandTile connector={connector} size={40} muted />
@@ -592,6 +591,25 @@ function RoadmapCard({ connector, delay }: { connector: ConnectorWithStatus; del
       <p className="mt-0.5 text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
         {connector.description}
       </p>
+      <div className="mt-3 pt-3 border-t border-[hsl(var(--gold)/0.1)] flex items-center justify-between">
+        <span className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          Stem voor versnelling
+        </span>
+        <button
+          type="button"
+          onClick={onVote}
+          aria-pressed={hasVoted}
+          className={cn(
+            "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[11px] font-display font-semibold tabular-nums transition-all",
+            hasVoted
+              ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white border-transparent shadow-[0_4px_12px_-4px_hsl(var(--gold-deep)/0.4)]"
+              : "bg-white text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.3)] hover:border-[hsl(var(--gold)/0.5)] hover:bg-[hsl(var(--gold-soft)/0.4)]",
+          )}
+        >
+          <ChevronUp className={cn("h-3 w-3 transition-transform", hasVoted && "scale-110")} />
+          {voteCount}
+        </button>
+      </div>
     </motion.div>
   );
 }
@@ -600,26 +618,30 @@ function BundleCard({
   bundle,
   connectors,
   delay,
-  onSelect,
+  onOpen,
 }: {
-  bundle: typeof BUNDLES[number];
+  bundle: ConnectorBundle;
   connectors: ConnectorWithStatus[];
   delay: number;
-  onSelect: (slug: string) => void;
+  onOpen: () => void;
 }) {
+  const liveCount = connectors.filter((c) => c.enabled && c.hasCredentials).length;
   return (
-    <motion.div
+    <motion.button
+      type="button"
+      onClick={onOpen}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay }}
+      whileHover={{ y: -3 }}
       className={cn(
-        "relative rounded-2xl border border-[hsl(var(--gold)/0.18)] p-5 overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.05)] bg-gradient-to-br",
+        "group relative rounded-2xl border border-[hsl(var(--gold)/0.18)] p-5 overflow-hidden text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.05)] hover:border-[hsl(var(--gold)/0.4)] hover:shadow-[0_16px_36px_-16px_rgba(0,0,0,0.22)] transition-shadow bg-gradient-to-br",
         bundle.accent,
       )}
     >
       <div className="flex items-center gap-2 mb-2">
         <span className="h-8 w-8 rounded-xl bg-white/80 backdrop-blur-sm flex items-center justify-center text-[hsl(var(--gold-deep))] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_4px_rgba(0,0,0,0.05)]">
-          {bundle.icon}
+          {BUNDLE_ICONS[bundle.icon]}
         </span>
         <p className="text-[10px] font-display font-semibold uppercase tracking-[0.2em] text-[hsl(var(--gold-deep))]">Bundel</p>
       </div>
@@ -634,18 +656,14 @@ function BundleCard({
       </div>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-semibold text-muted-foreground">
-          {connectors.length} koppeling{connectors.length === 1 ? "" : "en"}
+          {liveCount} van {connectors.length} actief
         </span>
-        <button
-          type="button"
-          onClick={() => connectors[0] && onSelect(connectors[0].slug)}
-          className="inline-flex items-center gap-1 text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] hover:gap-1.5 transition-all"
-        >
-          Open bundel
+        <span className="inline-flex items-center gap-1 text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] group-hover:gap-1.5 transition-all">
+          Open onboarding
           <ArrowRight className="h-3 w-3" />
-        </button>
+        </span>
       </div>
-    </motion.div>
+    </motion.button>
   );
 }
 
