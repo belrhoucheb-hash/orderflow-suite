@@ -20,6 +20,10 @@ export interface AddressBookEntryInput extends AddressBookValue {
   address?: string | null;
   location_type?: "pickup" | "delivery" | "both";
   notes?: string | null;
+  driver_instructions?: string | null;
+  requires_tail_lift?: boolean | null;
+  temperature_controlled?: boolean | null;
+  photo_required?: boolean | null;
   time_window_start?: string | null;
   time_window_end?: string | null;
   source?: string;
@@ -168,6 +172,10 @@ export function toAddressBookPayload(input: AddressBookEntryInput) {
     coords_manual: Boolean(input.coords_manual),
     location_type: input.location_type || "both",
     notes: input.notes?.trim() || null,
+    driver_instructions: input.driver_instructions?.trim() || null,
+    requires_tail_lift: Boolean(input.requires_tail_lift),
+    temperature_controlled: Boolean(input.temperature_controlled),
+    photo_required: Boolean(input.photo_required),
     time_window_start: input.time_window_start || null,
     time_window_end: input.time_window_end || null,
     normalized_company_key,

@@ -26,6 +26,10 @@ export interface AddressBookEntry {
   coords_manual: boolean;
   location_type: "pickup" | "delivery" | "both";
   notes: string | null;
+  driver_instructions: string | null;
+  requires_tail_lift: boolean;
+  temperature_controlled: boolean;
+  photo_required: boolean;
   time_window_start: string | null;
   time_window_end: string | null;
   usage_count: number;

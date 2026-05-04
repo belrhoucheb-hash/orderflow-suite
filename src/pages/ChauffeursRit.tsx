@@ -14,7 +14,7 @@ import {
   Truck, Search, Package, MapPin, Clock, User,
   Loader2, Calendar, Route,
   Snowflake, AlertTriangle, Send, Printer, ScrollText,
-  CheckCircle2, CircleAlert, RefreshCw, ExternalLink,
+  CheckCircle2, CircleAlert, RefreshCw, ExternalLink, Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -93,6 +93,53 @@ function getCity(address: string | null) {
 
 function hasTag(order: TripOrder, tag: string) {
   return order.requirements?.some((r) => r.toUpperCase().includes(tag)) ?? false;
+}
+
+function getOperationalTags(order: TripOrder) {
+  const tags: Array<{
+    key: string;
+    label: string;
+    className: string;
+    icon: typeof AlertTriangle;
+  }> = [];
+
+  if (hasTag(order, "ADR")) {
+    tags.push({
+      key: "adr",
+      label: "ADR",
+      icon: AlertTriangle,
+      className: "bg-amber-500/10 text-amber-700 border-amber-200/60",
+    });
+  }
+
+  if (hasTag(order, "KOELING") || hasTag(order, "TEMPERATUUR")) {
+    tags.push({
+      key: "temperature",
+      label: "TEMP",
+      icon: Snowflake,
+      className: "bg-cyan-500/10 text-cyan-700 border-cyan-200/60",
+    });
+  }
+
+  if (hasTag(order, "LAADKLEP")) {
+    tags.push({
+      key: "tail-lift",
+      label: "LAADKLEP",
+      icon: Truck,
+      className: "bg-stone-500/10 text-stone-700 border-stone-200/70",
+    });
+  }
+
+  if (hasTag(order, "FOTOS")) {
+    tags.push({
+      key: "photos",
+      label: "FOTO'S",
+      icon: Camera,
+      className: "bg-emerald-500/10 text-emerald-700 border-emerald-200/70",
+    });
+  }
+
+  return tags;
 }
 
 function getTripDriverName(orders: TripOrder[], drivers: Array<{ id: string; name: string; current_vehicle_id?: string | null }>, vehicleId?: string | null) {
@@ -337,18 +384,16 @@ function StopTimelineItem({ stop, isLast, isFirst }: { stop: TripStop; isLast: b
         </div>
 
         {/* Requirements tags */}
-        {!isFirst && (hasTag(stop.order, "ADR") || hasTag(stop.order, "KOELING")) && (
+        {!isFirst && getOperationalTags(stop.order).length > 0 && (
           <div className="flex gap-1.5 mt-2">
-            {hasTag(stop.order, "ADR") && (
-              <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase bg-amber-500/10 text-amber-700 border border-amber-200/60 rounded-md px-1.5 py-0.5">
-                <AlertTriangle className="h-2.5 w-2.5" />ADR
+            {getOperationalTags(stop.order).map((tag) => {
+              const Icon = tag.icon;
+              return (
+              <span key={tag.key} className={cn("inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-xs font-semibold uppercase", tag.className)}>
+                <Icon className="h-2.5 w-2.5" />{tag.label}
               </span>
-            )}
-            {hasTag(stop.order, "KOELING") && (
-              <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase bg-cyan-500/10 text-cyan-700 border border-cyan-200/60 rounded-md px-1.5 py-0.5">
-                <Snowflake className="h-2.5 w-2.5" />KOEL
-              </span>
-            )}
+              );
+            })}
           </div>
         )}
       </div>
@@ -447,7 +492,22 @@ const ChauffeursRit = ({ date }: ChauffeursRitProps = {}) => {
 
       const { data: orders, error: ordersError } = await supabase
         .from("orders")
-        .select("*")
+        .select(`
+          id,
+          order_number,
+          client_name,
+          delivery_address,
+          pickup_address,
+          quantity,
+          weight_kg,
+          requirements,
+          is_weight_per_unit,
+          status,
+          geocoded_pickup_lat,
+          geocoded_pickup_lng,
+          geocoded_delivery_lat,
+          geocoded_delivery_lng
+        `)
         .in("id", orderIds);
       if (ordersError) throw ordersError;
 

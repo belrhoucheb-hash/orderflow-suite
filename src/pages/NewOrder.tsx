@@ -96,6 +96,7 @@ type DraftSaveStatus = "idle" | "creating" | "saving" | "saved" | "error" | "con
 interface FreightLine {
   id: string;
   activiteit: "Laden" | "Lossen";
+  companyName?: string;
   locatie: string;
   datum: string;
   tijd: string;
@@ -103,6 +104,10 @@ interface FreightLine {
   referentie: string;
   contactLocatie: string;
   opmerkingen: string;
+  driverInstructions?: string;
+  requiresTailLift?: boolean;
+  temperatureControlled?: boolean;
+  photoRequired?: boolean;
   // Optionele coord-info per leg, voorbereidend voor hub-routing
   // op afstand en betere Webfleet-export per stop.
   lat?: number | null;
@@ -158,8 +163,13 @@ interface PlannerLocationOption {
   badge: string;
   value: AddressValue;
   addressString: string;
+  companyName?: string;
   contactHint?: string;
   notesHint?: string;
+  driverInstructions?: string;
+  requiresTailLift?: boolean;
+  temperatureControlled?: boolean;
+  photoRequired?: boolean;
   timeWindowStart?: string | null;
   timeWindowEnd?: string | null;
 }
@@ -733,7 +743,7 @@ const NewOrder = () => {
   const [intakeManualBack, setIntakeManualBack] = useState(false);
   const [routeActiveQuestion, setRouteActiveQuestion] = useState<1 | 2 | 3 | 4>(1);
   const [routeManualBack, setRouteManualBack] = useState(false);
-  const [cargoActiveQuestion, setCargoActiveQuestion] = useState<1 | 2 | 3>(1);
+  const [cargoActiveQuestion, setCargoActiveQuestion] = useState<1 | 2 | 3 | 4>(1);
   const [cargoManualBack, setCargoManualBack] = useState(false);
   const [reviewActiveQuestion, setReviewActiveQuestion] = useState<1 | 2 | 3>(1);
   const [smartInput, setSmartInput] = useState("");
@@ -949,8 +959,13 @@ const NewOrder = () => {
       if (primaryLadenId) {
         setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? {
           ...line,
+          companyName: option.companyName || option.label || line.companyName,
           contactLocatie: line.contactLocatie || option.contactHint || "",
           opmerkingen: line.opmerkingen || option.notesHint || "",
+          driverInstructions: option.driverInstructions || line.driverInstructions || "",
+          requiresTailLift: option.requiresTailLift ?? line.requiresTailLift,
+          temperatureControlled: option.temperatureControlled ?? line.temperatureControlled,
+          photoRequired: option.photoRequired ?? line.photoRequired,
           tijd: line.tijd || option.timeWindowStart || "",
           tijdTot: line.tijdTot || option.timeWindowEnd || "",
         } : line));
@@ -963,15 +978,20 @@ const NewOrder = () => {
     if (primaryLossenId) {
       setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? {
         ...line,
+        companyName: option.companyName || option.label || line.companyName,
         contactLocatie: line.contactLocatie || option.contactHint || "",
         opmerkingen: line.opmerkingen || option.notesHint || "",
+        driverInstructions: option.driverInstructions || line.driverInstructions || "",
+        requiresTailLift: option.requiresTailLift ?? line.requiresTailLift,
+        temperatureControlled: option.temperatureControlled ?? line.temperatureControlled,
+        photoRequired: option.photoRequired ?? line.photoRequired,
         tijd: line.tijd || option.timeWindowStart || "",
         tijdTot: line.tijdTot || option.timeWindowEnd || "",
       } : line));
     }
   }, [handleDeliveryAddrChange, handlePickupAddrChange, primaryLadenId, primaryLossenId]);
 
-  const updateFreightLine = (id: string, field: keyof FreightLine, value: string) => {
+  const updateFreightLine = <K extends keyof FreightLine>(id: string, field: K, value: FreightLine[K]) => {
     setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
     if (field === "datum" || field === "tijd" || field === "tijdTot") {
       setErrors(prev => {
@@ -1011,11 +1031,16 @@ const NewOrder = () => {
 
     setFreightLines(prev => prev.map(line => line.id === id ? {
       ...line,
+      companyName: option?.companyName || option?.label || line.companyName,
       locatie: composed,
       lat: value.lat,
       lng: value.lng,
       coords_manual: value.coords_manual,
       opmerkingen: option?.notesHint || line.opmerkingen,
+      driverInstructions: option?.driverInstructions || line.driverInstructions,
+      requiresTailLift: option?.requiresTailLift ?? line.requiresTailLift,
+      temperatureControlled: option?.temperatureControlled ?? line.temperatureControlled,
+      photoRequired: option?.photoRequired ?? line.photoRequired,
       tijd: option?.timeWindowStart || line.tijd,
       tijdTot: option?.timeWindowEnd || line.tijdTot,
     } : line));
@@ -1159,6 +1184,7 @@ const NewOrder = () => {
           badge: "Klantdefault",
           value: shippingAddress,
           addressString: shippingComposed,
+          companyName: selectedClient.name,
           contactHint: selectedClient.contact_person || undefined,
         });
       }
@@ -1173,6 +1199,7 @@ const NewOrder = () => {
           badge: "Klant",
           value: mainAddress,
           addressString: mainComposed,
+          companyName: selectedClient.name,
           contactHint: selectedClient.contact_person || undefined,
         });
       }
@@ -1188,7 +1215,9 @@ const NewOrder = () => {
         badge: location.location_type || "Locatie",
         value,
         addressString: composed,
+        companyName: selectedClient?.name || undefined,
         notesHint: location.notes || undefined,
+        driverInstructions: location.notes || undefined,
         timeWindowStart: location.time_window_start,
         timeWindowEnd: location.time_window_end,
       });
@@ -1202,6 +1231,7 @@ const NewOrder = () => {
         badge: "Recent",
         value: bestEffortAddressValue(suggestion.address),
         addressString: suggestion.address,
+        companyName: clientName || undefined,
       });
     });
 
@@ -1216,6 +1246,7 @@ const NewOrder = () => {
           badge: "Bedrijf",
           value: shipping,
           addressString: shippingComposed,
+          companyName: client.name,
           contactHint: client.contact_person || undefined,
         });
       }
@@ -1231,7 +1262,9 @@ const NewOrder = () => {
         badge: "Locatie",
         value,
         addressString: composed,
+        companyName: location.client_name || undefined,
         notesHint: location.notes || undefined,
+        driverInstructions: location.notes || undefined,
         timeWindowStart: location.time_window_start,
         timeWindowEnd: location.time_window_end,
       });
@@ -1247,7 +1280,12 @@ const NewOrder = () => {
         badge: "Adresboek",
         value,
         addressString: composed,
+        companyName: entry.company_name || entry.label,
         notesHint: entry.notes || undefined,
+        driverInstructions: entry.driver_instructions || entry.notes || undefined,
+        requiresTailLift: entry.requires_tail_lift,
+        temperatureControlled: entry.temperature_controlled,
+        photoRequired: entry.photo_required,
         timeWindowStart: entry.time_window_start,
         timeWindowEnd: entry.time_window_end,
       });
@@ -1260,7 +1298,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.pickup, clientLocations, pickupAddressBookMatches, pickupClientMatches, pickupLocationMatches, selectedClient]);
+  }, [addressSuggestions?.pickup, clientLocations, clientName, pickupAddressBookMatches, pickupClientMatches, pickupLocationMatches, selectedClient]);
 
   const deliveryQuickOptions = useMemo<PlannerLocationOption[]>(() => {
     const options: PlannerLocationOption[] = [];
@@ -1274,7 +1312,9 @@ const NewOrder = () => {
         badge: location.location_type || "Locatie",
         value,
         addressString: composed,
+        companyName: selectedClient?.name || undefined,
         notesHint: location.notes || undefined,
+        driverInstructions: location.notes || undefined,
         timeWindowStart: location.time_window_start,
         timeWindowEnd: location.time_window_end,
       });
@@ -1288,6 +1328,7 @@ const NewOrder = () => {
         badge: "Recent",
         value: bestEffortAddressValue(suggestion.address),
         addressString: suggestion.address,
+        companyName: clientName || undefined,
       });
     });
 
@@ -1302,6 +1343,7 @@ const NewOrder = () => {
           badge: "Bedrijf",
           value: shipping,
           addressString: shippingComposed,
+          companyName: client.name,
           contactHint: client.contact_person || undefined,
         });
       }
@@ -1317,7 +1359,9 @@ const NewOrder = () => {
         badge: "Locatie",
         value,
         addressString: composed,
+        companyName: location.client_name || undefined,
         notesHint: location.notes || undefined,
+        driverInstructions: location.notes || undefined,
         timeWindowStart: location.time_window_start,
         timeWindowEnd: location.time_window_end,
       });
@@ -1333,7 +1377,12 @@ const NewOrder = () => {
         badge: "Adresboek",
         value,
         addressString: composed,
+        companyName: entry.company_name || entry.label,
         notesHint: entry.notes || undefined,
+        driverInstructions: entry.driver_instructions || entry.notes || undefined,
+        requiresTailLift: entry.requires_tail_lift,
+        temperatureControlled: entry.temperature_controlled,
+        photoRequired: entry.photo_required,
         timeWindowStart: entry.time_window_start,
         timeWindowEnd: entry.time_window_end,
       });
@@ -1346,7 +1395,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.delivery, clientLocations, deliveryAddressBookMatches, deliveryClientMatches, deliveryLocationMatches]);
+  }, [addressSuggestions?.delivery, clientLocations, clientName, deliveryAddressBookMatches, deliveryClientMatches, deliveryLocationMatches, selectedClient?.name]);
 
   const addToFreightSummary = () => {
     const ladenLine = freightLines.find(f => f.activiteit === "Laden");
@@ -1385,18 +1434,42 @@ const NewOrder = () => {
   const [cargoRows, setCargoRows] = useState<CargoRow[]>([
     { id: "1", aantal: "", eenheid: "Pallets", gewicht: "", lengte: "", breedte: "", hoogte: "", stapelbaar: true, adr: "", omschrijving: "" },
   ]);
+  const [cargoSameDimensions, setCargoSameDimensions] = useState(true);
 
   const addCargoRow = () => {
-    setCargoRows(prev => [...prev, {
-      id: crypto.randomUUID(), aantal: "", eenheid: "Pallets", gewicht: "", lengte: "", breedte: "", hoogte: "", stapelbaar: true, adr: "", omschrijving: "",
-    }]);
+    setCargoRows(prev => {
+      const template = cargoSameDimensions ? prev[0] : null;
+      return [...prev, {
+        id: crypto.randomUUID(),
+        aantal: "",
+        eenheid: prev[0]?.eenheid || "Pallets",
+        gewicht: "",
+        lengte: template?.lengte || "",
+        breedte: template?.breedte || "",
+        hoogte: template?.hoogte || "",
+        stapelbaar: true,
+        adr: "",
+        omschrijving: "",
+      }];
+    });
   };
   const removeCargoRow = (id: string) => {
     if (cargoRows.length <= 1) return;
     setCargoRows(prev => prev.filter(r => r.id !== id));
   };
   const updateCargoRow = <K extends keyof CargoRow>(id: string, field: K, value: CargoRow[K]) => {
-    setCargoRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+    setCargoRows(prev => {
+      const next = prev.map(r => r.id === id ? { ...r, [field]: value } : r);
+      if (!cargoSameDimensions || !["lengte", "breedte", "hoogte"].includes(String(field))) return next;
+      const template = next.find(r => r.id === id);
+      if (!template) return next;
+      return next.map((row) => ({
+        ...row,
+        lengte: template.lengte,
+        breedte: template.breedte,
+        hoogte: template.hoogte,
+      }));
+    });
   };
 
   // Aggregated cargo totals (gebruikt door handleSave om de bestaande quantity/weight/unit state
@@ -1817,7 +1890,8 @@ const NewOrder = () => {
         : missingDeliveryTimeWindow
           ? 4
           : routeQuestionForIssue(routeRuleIssues[0]);
-  const cargoSuggestedQuestion = missingQuantity ? 1 : missingWeight ? 2 : 3;
+  const cargoHasDimensions = cargoRows.some((row) => row.lengte && row.breedte && row.hoogte);
+  const cargoSuggestedQuestion = missingQuantity ? 1 : !cargoHasDimensions ? 2 : missingWeight ? 3 : 4;
 
   useEffect(() => {
     if (!clientAnswered) {
@@ -1837,7 +1911,7 @@ const NewOrder = () => {
   useEffect(() => {
     if (cargoActiveQuestion > cargoSuggestedQuestion) {
       setCargoManualBack(false);
-      setCargoActiveQuestion(cargoSuggestedQuestion as 1 | 2 | 3);
+      setCargoActiveQuestion(cargoSuggestedQuestion as 1 | 2 | 3 | 4);
     }
   }, [cargoActiveQuestion, cargoSuggestedQuestion]);
 
@@ -1995,7 +2069,7 @@ const NewOrder = () => {
     }
     if (wizardStep === "cargo" && cargoActiveQuestion < cargoSuggestedQuestion) {
       setCargoManualBack(false);
-      setCargoActiveQuestion(cargoSuggestedQuestion as 1 | 2 | 3);
+      setCargoActiveQuestion(cargoSuggestedQuestion as 1 | 2 | 3 | 4);
       return;
     }
     setWizardStep((current) => {
@@ -2020,7 +2094,7 @@ const NewOrder = () => {
     }
     if (wizardStep === "cargo" && cargoActiveQuestion > 1) {
       setCargoManualBack(true);
-      setCargoActiveQuestion((cargoActiveQuestion - 1) as 1 | 2 | 3);
+      setCargoActiveQuestion((cargoActiveQuestion - 1) as 1 | 2 | 3 | 4);
       return;
     }
     if (wizardStep === "review" && reviewActiveQuestion > 1) {
@@ -2034,7 +2108,7 @@ const NewOrder = () => {
     if (wizardStep === "financial") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(3);
+      setCargoActiveQuestion(4);
       return;
     }
     if (wizardStep === "cargo") {
@@ -2202,15 +2276,21 @@ const NewOrder = () => {
       return;
     }
 
-    if (missingWeight) {
+    if (!cargoHasDimensions) {
       setWizardStep("cargo");
       setCargoActiveQuestion(2);
       return;
     }
 
-    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
+    if (missingWeight) {
       setWizardStep("cargo");
       setCargoActiveQuestion(3);
+      return;
+    }
+
+    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
+      setWizardStep("cargo");
+      setCargoActiveQuestion(4);
       return;
     }
 
@@ -2230,6 +2310,7 @@ const NewOrder = () => {
     missingPickupAddress,
     missingPickupTimeWindow,
     missingQuantity,
+    cargoHasDimensions,
     missingTimeWindow,
     missingWeight,
     pricingPayload.cents,
@@ -2266,15 +2347,21 @@ const NewOrder = () => {
       return;
     }
 
-    if (missingWeight) {
+    if (!cargoHasDimensions) {
       setWizardStep("cargo");
       setCargoActiveQuestion(2);
       return;
     }
 
-    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
+    if (missingWeight) {
       setWizardStep("cargo");
       setCargoActiveQuestion(3);
+      return;
+    }
+
+    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
+      setWizardStep("cargo");
+      setCargoActiveQuestion(4);
       return;
     }
 
@@ -2290,6 +2377,7 @@ const NewOrder = () => {
     clientAnswered,
     draftRestored,
     intakeManualBack,
+    cargoHasDimensions,
     missingDeliveryAddress,
     missingPickupAddress,
     missingPickupTimeWindow,
@@ -2342,7 +2430,7 @@ const NewOrder = () => {
     navigate("/orders");
   };
 
-  type WizardFocusTarget = "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "transport" | "security" | "pricing";
+  type WizardFocusTarget = "client" | "pickup" | "delivery" | "quantity" | "dimensions" | "weight" | "time" | "transport" | "security" | "pricing";
 
   const openWizardFocusTarget = (target: WizardFocusTarget) => {
     setMainTab("algemeen");
@@ -2381,12 +2469,17 @@ const NewOrder = () => {
     if (target === "weight") {
       setWizardStep("cargo");
       setCargoManualBack(true);
+      setCargoActiveQuestion(3);
+    }
+    if (target === "dimensions") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
       setCargoActiveQuestion(2);
     }
     if (target === "transport" || target === "security") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(3);
+      setCargoActiveQuestion(4);
     }
     if (target === "pricing") {
       setWizardStep("financial");
@@ -2977,7 +3070,12 @@ const NewOrder = () => {
 
       // Requirements array
       const reqs: string[] = [];
-      if (klepNodig) reqs.push("laadklep");
+      const routeRequiresTailLift = freightLines.some((line) => line.requiresTailLift);
+      const routeRequiresTemperature = freightLines.some((line) => line.temperatureControlled);
+      const routeRequiresPhotos = freightLines.some((line) => line.photoRequired);
+      if (klepNodig || routeRequiresTailLift) reqs.push("laadklep");
+      if (routeRequiresTemperature) reqs.push("temperatuur");
+      if (routeRequiresPhotos) reqs.push("fotos_verplicht");
       const distanceKm = totalRouteDistanceKm(routeMapStops);
 
       const booking: BookingInput = {
@@ -3076,7 +3174,7 @@ const NewOrder = () => {
       if (pickupLine?.locatie) {
         addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
           label: pickupAddressBookLabelValue || pickupLine.locatie,
-          company_name: pickupAddressBookLabelValue,
+          company_name: pickupLine.companyName || pickupAddressBookLabelValue || clientName || null,
           address: pickupLine.locatie,
           street: pickupAddr.street,
           house_number: pickupAddr.house_number,
@@ -3089,6 +3187,10 @@ const NewOrder = () => {
           coords_manual: pickupAddr.coords_manual,
           location_type: "pickup",
           notes: pickupLine.opmerkingen || null,
+          driver_instructions: pickupLine.driverInstructions || pickupLine.opmerkingen || null,
+          requires_tail_lift: Boolean(pickupLine.requiresTailLift),
+          temperature_controlled: Boolean(pickupLine.temperatureControlled),
+          photo_required: Boolean(pickupLine.photoRequired),
           time_window_start: pickupLine.tijd || null,
           time_window_end: pickupLine.tijdTot || null,
           source: "order",
@@ -3097,7 +3199,7 @@ const NewOrder = () => {
       if (deliveryLine?.locatie) {
         addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
           label: deliveryAddressBookLabelValue || deliveryLine.locatie,
-          company_name: deliveryAddressBookLabelValue,
+          company_name: deliveryLine.companyName || deliveryAddressBookLabelValue || clientName || null,
           address: deliveryLine.locatie,
           street: deliveryAddr.street,
           house_number: deliveryAddr.house_number,
@@ -3110,6 +3212,10 @@ const NewOrder = () => {
           coords_manual: deliveryAddr.coords_manual,
           location_type: "delivery",
           notes: deliveryLine.opmerkingen || null,
+          driver_instructions: deliveryLine.driverInstructions || deliveryLine.opmerkingen || null,
+          requires_tail_lift: Boolean(deliveryLine.requiresTailLift),
+          temperature_controlled: Boolean(deliveryLine.temperatureControlled),
+          photo_required: Boolean(deliveryLine.photoRequired),
           time_window_start: deliveryLine.tijd || null,
           time_window_end: deliveryLine.tijdTot || null,
           source: "order",
@@ -3119,7 +3225,8 @@ const NewOrder = () => {
         if (!line.locatie) continue;
         const value = addressValueFromFreightLine(line);
         addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
-          label: line.locatie,
+          label: line.companyName || line.locatie,
+          company_name: line.companyName || clientName || null,
           address: line.locatie,
           street: value.street,
           house_number: value.house_number,
@@ -3132,6 +3239,10 @@ const NewOrder = () => {
           coords_manual: value.coords_manual,
           location_type: "delivery",
           notes: line.opmerkingen || null,
+          driver_instructions: line.driverInstructions || line.opmerkingen || null,
+          requires_tail_lift: Boolean(line.requiresTailLift),
+          temperature_controlled: Boolean(line.temperatureControlled),
+          photo_required: Boolean(line.photoRequired),
           time_window_start: line.tijd || null,
           time_window_end: line.tijdTot || null,
           source: "order",
@@ -3512,12 +3623,14 @@ const NewOrder = () => {
               : routeActiveQuestion === 3
                 ? "Plan levermoment"
                 : "Plan lading"
-          : wizardStep === "cargo"
-            ? cargoActiveQuestion === 1
-              ? "Bevestig aantal"
+            : wizardStep === "cargo"
+              ? cargoActiveQuestion === 1
+                ? "Bevestig aantal"
               : cargoActiveQuestion === 2
-                ? "Bevestig gewicht"
-                : "Bereken tarief"
+                ? "Bevestig afmetingen"
+                : cargoActiveQuestion === 3
+                  ? "Bevestig gewicht"
+                  : "Bereken tarief"
             : wizardStep === "financial"
               ? "Ga naar controle"
             : "Controleer order";
@@ -3544,6 +3657,77 @@ const NewOrder = () => {
       <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{question.hint}</p>
     </div>
   );
+
+  const renderLocationOperationalDetails = (line: FreightLine | undefined, title: string) => {
+    if (!line) return null;
+    return (
+      <div className="mt-4 rounded-2xl border border-[hsl(var(--gold)_/_0.18)] bg-[hsl(var(--gold-soft)_/_0.14)] p-4">
+        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]">
+              Locatiegegevens
+            </div>
+            <div className="mt-1 text-sm font-semibold text-foreground">{title}</div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Wordt opgeslagen in adresboek en meegegeven aan planning/chauffeur.
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <label className={flowLabelClass}>Bedrijfsnaam op deze locatie</label>
+            <Input
+              value={line.companyName || ""}
+              onChange={(e) => updateFreightLine(line.id, "companyName", e.target.value)}
+              placeholder={clientName || "Bijv. warehouse, klant of terminal"}
+              className={flowInputClass}
+            />
+          </div>
+          <div>
+            <label className={flowLabelClass}>Adres zichtbaar voor planner</label>
+            <Input
+              value={line.locatie}
+              onChange={(e) => updateFreightLine(line.id, "locatie", e.target.value)}
+              placeholder="Straat, huisnummer, postcode, plaats"
+              className={flowInputClass}
+            />
+          </div>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          {[
+            ["requiresTailLift", "Laadklep nodig"],
+            ["temperatureControlled", "Temperatuurgevoelig"],
+            ["photoRequired", "Foto's verplicht"],
+          ].map(([field, label]) => (
+            <label
+              key={field}
+              className="flex min-h-12 items-center gap-3 rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white px-4 py-3 text-sm font-medium text-foreground shadow-[0_12px_30px_-28px_hsl(var(--gold-deep)_/_0.55)]"
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(line[field as keyof FreightLine])}
+                onChange={(e) => updateFreightLine(line.id, field as keyof FreightLine, e.target.checked as never)}
+                className="h-4 w-4 rounded border-[hsl(var(--gold)_/_0.35)] text-[hsl(var(--gold-deep))]"
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-4">
+          <label className={flowLabelClass}>Instructies voor chauffeur</label>
+          <Textarea
+            value={line.driverInstructions || line.opmerkingen || ""}
+            onChange={(e) => {
+              updateFreightLine(line.id, "driverInstructions", e.target.value);
+              updateFreightLine(line.id, "opmerkingen", e.target.value);
+            }}
+            placeholder="Bijv. melden bij dock 4, foto's maken van zending, temperatuur controleren..."
+            className="min-h-[88px] rounded-2xl border-[hsl(var(--gold)_/_0.22)] bg-white px-4 py-3 text-sm shadow-[inset_0_1px_0_hsl(var(--gold)_/_0.10)]"
+          />
+        </div>
+      </div>
+    );
+  };
 
   const conversationalCardClass = (level = 0) => cn(
     "relative animate-in fade-in slide-in-from-bottom-3 duration-500 rounded-[2rem] p-6 md:p-9",
@@ -3628,7 +3812,7 @@ const NewOrder = () => {
   const renderWizardFooter = () => {
     const showCreate = wizardStep === "review" && reviewActiveQuestion === 2;
     const showContinue = wizardStep !== "review";
-    const inlineTransportControls = wizardStep === "cargo" && cargoActiveQuestion >= 3 && !missingQuantity && !missingWeight;
+    const inlineTransportControls = wizardStep === "cargo" && cargoActiveQuestion >= 4 && !missingQuantity && !missingWeight;
     if (inlineTransportControls) return null;
     if (!canGoBackInUberflow && !showCreate && !showContinue) return null;
 
@@ -3690,7 +3874,7 @@ const NewOrder = () => {
     </Suspense>
   );
 
-  const focusWizardTarget = useCallback((target: "client" | "pickup" | "delivery" | "quantity" | "weight" | "time" | "security" | "pricing") => {
+  const focusWizardTarget = useCallback((target: "client" | "pickup" | "delivery" | "quantity" | "dimensions" | "weight" | "time" | "security" | "pricing") => {
     setMainTab("algemeen");
 
     if (target === "client") {
@@ -3727,12 +3911,17 @@ const NewOrder = () => {
     if (target === "weight") {
       setWizardStep("cargo");
       setCargoManualBack(true);
+      setCargoActiveQuestion(3);
+    }
+    if (target === "dimensions") {
+      setWizardStep("cargo");
+      setCargoManualBack(true);
       setCargoActiveQuestion(2);
     }
     if (target === "security") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(3);
+      setCargoActiveQuestion(4);
     }
     if (target === "pricing") {
       setWizardStep("financial");
@@ -3744,6 +3933,7 @@ const NewOrder = () => {
         pickup: "input[placeholder='Typ bedrijfsnaam, straat of dockadres']",
         delivery: "input[placeholder^='Typ warehouse']",
         quantity: "input[placeholder='Bijv. 6']",
+        dimensions: "input[placeholder='Lengte cm'], input[type='number']",
         weight: "input[placeholder='Bijv. 850']",
         time: "input[type='date'], input[type='time']",
         security: "button[role='switch']",
@@ -3770,7 +3960,7 @@ const NewOrder = () => {
     }
     if (step === "cargo") {
       setCargoManualBack(true);
-      setCargoActiveQuestion((cargoSuggestedQuestion || 1) as 1 | 2 | 3);
+      setCargoActiveQuestion((cargoSuggestedQuestion || 1) as 1 | 2 | 3 | 4);
       return;
     }
     setReviewActiveQuestion(1);
@@ -4877,6 +5067,12 @@ const NewOrder = () => {
                      }}
                      onResolvedSelection={(selection) => {
                        void maybeLearnClientAlias(selection);
+                       if (primaryLadenId) {
+                         setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? {
+                           ...line,
+                           companyName: selection.searchTerm || clientName || line.companyName,
+                         } : line));
+                       }
                        setPickupAddressBookLabel({
                          label: selection.searchTerm || composeAddressString(selection.value, { includeLocality: true }),
                          key: buildAddressBookKey(selection.value),
@@ -4885,6 +5081,7 @@ const NewOrder = () => {
                        setRouteActiveQuestion(2);
                     }}
                     />
+                    {renderLocationOperationalDetails(pickupLine, "Ophaal-/laadadres")}
                   </div>
                 )}
                   {routeActiveQuestion > 2 && renderCollapsedAnswer(
@@ -4938,6 +5135,12 @@ const NewOrder = () => {
                       }}
                       onResolvedSelection={(selection) => {
                         void maybeLearnClientAlias(selection);
+                        if (primaryLossenId) {
+                          setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? {
+                            ...line,
+                            companyName: selection.searchTerm || clientName || line.companyName,
+                          } : line));
+                        }
                         setDeliveryAddressBookLabel({
                           label: selection.searchTerm || composeAddressString(selection.value, { includeLocality: true }),
                           key: buildAddressBookKey(selection.value),
@@ -4954,6 +5157,7 @@ const NewOrder = () => {
                         setRouteActiveQuestion(3);
                       }}
                     />
+                    {renderLocationOperationalDetails(deliveryLine, isMultiLegRoute ? "Stop 1 / afleveradres" : "Afleveradres")}
                   </div>
                   )}
               {routeActiveQuestion > 3 && renderCollapsedAnswer(
@@ -5122,6 +5326,7 @@ const NewOrder = () => {
                               updateFreightLineAddress(line.id, selection.value);
                             }}
                           />
+                          {renderLocationOperationalDetails(line, getDeliveryStopLabel(index + 1))}
                         </div>
                         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                           <div className="min-w-0">
@@ -5342,11 +5547,21 @@ const NewOrder = () => {
                       },
                     },
                     ...(cargoActiveQuestion > 2 ? [{
+                      label: "Afmetingen",
+                      value: cargoSameDimensions
+                        ? `${cargoRows[0]?.lengte || "-"}x${cargoRows[0]?.breedte || "-"}x${cargoRows[0]?.hoogte || "-"} cm`
+                        : `${cargoRows.filter(row => row.lengte && row.breedte && row.hoogte).length} regels`,
+                      onEdit: () => {
+                        setCargoManualBack(true);
+                        setCargoActiveQuestion(2);
+                      },
+                    }] : []),
+                    ...(cargoActiveQuestion > 3 ? [{
                       label: "Gewicht",
                       value: `${cargoTotals.totGewicht || 0} kg`,
                       onEdit: () => {
                         setCargoManualBack(true);
-                        setCargoActiveQuestion(2);
+                        setCargoActiveQuestion(3);
                       },
                     }] : []),
                   ])}
@@ -5396,7 +5611,77 @@ const NewOrder = () => {
                 </div>
               ))}
 
-              {cargoActiveQuestion === 2 && cargoRows.slice(0, 1).map(row => (
+              {cargoActiveQuestion === 2 && (
+                <div className={cn(conversationalCardClass(0), "mb-4")}>
+                  {renderQuestionPrompt(
+                    {
+                      step: "Afmetingen",
+                      title: "Wat zijn de afmetingen per eenheid?",
+                      hint: "Vul lengte, breedte en hoogte in. Als alle eenheden hetzelfde zijn, gebruik je de schakelaar hieronder.",
+                    },
+                    cargoHasDimensions,
+                  )}
+                  <label className="mb-4 flex w-fit items-center gap-3 rounded-2xl border border-[hsl(var(--gold)_/_0.18)] bg-white px-4 py-3 text-sm font-medium text-foreground shadow-[0_12px_30px_-28px_hsl(var(--gold-deep)_/_0.55)]">
+                    <input
+                      type="checkbox"
+                      checked={cargoSameDimensions}
+                      onChange={(e) => setCargoSameDimensions(e.target.checked)}
+                      className="h-4 w-4 rounded border-[hsl(var(--gold)_/_0.35)] text-[hsl(var(--gold-deep))]"
+                    />
+                    <span>Alle eenheden hebben dezelfde afmetingen</span>
+                  </label>
+                  <div className="space-y-3">
+                    {(cargoSameDimensions ? cargoRows.slice(0, 1) : cargoRows).map((row, index) => (
+                      <div key={row.id} className="rounded-2xl border border-[hsl(var(--gold)_/_0.14)] bg-white p-4">
+                        <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                          {cargoSameDimensions ? "Afmetingen voor alle eenheden" : `Ladingregel ${index + 1}`}
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <div>
+                            <label className={flowLabelClass}>Lengte cm</label>
+                            <Input type="number" value={row.lengte} onChange={e => updateCargoRow(row.id, "lengte", e.target.value)} className={cn(flowInputClass, "tabular-nums")} />
+                          </div>
+                          <div>
+                            <label className={flowLabelClass}>Breedte cm</label>
+                            <Input type="number" value={row.breedte} onChange={e => updateCargoRow(row.id, "breedte", e.target.value)} className={cn(flowInputClass, "tabular-nums")} />
+                          </div>
+                          <div>
+                            <label className={flowLabelClass}>Hoogte cm</label>
+                            <Input
+                              type="number"
+                              value={row.hoogte}
+                              onChange={e => updateCargoRow(row.id, "hoogte", e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter" && (row.lengte || row.breedte || row.hoogte)) {
+                                  e.preventDefault();
+                                  setCargoManualBack(false);
+                                  setCargoActiveQuestion(3);
+                                }
+                              }}
+                              className={cn(flowInputClass, "tabular-nums")}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-5 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCargoManualBack(false);
+                        setCargoActiveQuestion(3);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_36px_-24px_hsl(var(--gold-deep)_/_0.85)] transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
+                    >
+                      Gewicht invullen
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {cargoActiveQuestion === 3 && cargoRows.slice(0, 1).map(row => (
                 <div key={row.id} className={cn(
                   conversationalCardClass(0),
                   "mb-4",
@@ -5415,7 +5700,7 @@ const NewOrder = () => {
                       if (e.key === "Enter" && Number(row.gewicht) > 0) {
                         e.preventDefault();
                         setCargoManualBack(false);
-                        setCargoActiveQuestion(3);
+                        setCargoActiveQuestion(4);
                       }
                     }}
                     placeholder="Bijv. 850"
@@ -5424,7 +5709,7 @@ const NewOrder = () => {
                 </div>
               ))}
 
-              {cargoActiveQuestion >= 3 && !missingQuantity && !missingWeight && (
+              {cargoActiveQuestion >= 4 && !missingQuantity && !missingWeight && (
                 <div className={cn(conversationalCardClass(0), "mb-4")}>
                   {renderQuestionPrompt(
                     {
@@ -5665,7 +5950,7 @@ const NewOrder = () => {
                       type="button"
                       onClick={() => {
                         setCargoManualBack(true);
-                        setCargoActiveQuestion(2);
+                        setCargoActiveQuestion(3);
                       }}
                       className="inline-flex items-center justify-center rounded-full border border-[hsl(var(--gold)_/_0.18)] bg-white px-4 py-2 text-sm font-medium text-muted-foreground transition hover:bg-[hsl(var(--gold-soft)_/_0.24)] hover:text-foreground"
                     >
@@ -6029,12 +6314,12 @@ const NewOrder = () => {
                   {renderCollapsedAnswer("Transport", `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || "eenheden"} · ${cargoTotals.totGewicht || 0} kg · ${transportType || suggestedTransportType || "transport volgt"}`, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(3);
+                    setCargoActiveQuestion(4);
                   })}
                   {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(3);
+                    setCargoActiveQuestion(4);
                   })}
                 </div>
 
@@ -6094,12 +6379,12 @@ const NewOrder = () => {
                   {renderCollapsedAnswer("Lading", `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || "eenheden"} · ${cargoTotals.totGewicht || 0} kg`, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(missingQuantity ? 1 : 2);
+                    setCargoActiveQuestion(missingQuantity ? 1 : !cargoHasDimensions ? 2 : missingWeight ? 3 : 4);
                   })}
                   {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(3);
+                    setCargoActiveQuestion(4);
                   })}
                   {renderCollapsedAnswer("Financieel", pricingLabel, () => setWizardStep("financial"))}
                 </div>
