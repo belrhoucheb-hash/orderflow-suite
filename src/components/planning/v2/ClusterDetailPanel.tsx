@@ -180,6 +180,7 @@ export function ClusterDetailPanel({
       const { error } = await (supabase.rpc as any)("confirm_consolidation_group", { p_group_id: groupId });
       if (error) throw error;
       toast.success("Cluster bevestigd", { description: "Trip en stops zijn aangemaakt." });
+      qc.invalidateQueries({ queryKey: ["planning_board"] });
       qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date"] });
       qc.invalidateQueries({ queryKey: ["open_orders_by_date"] });
       qc.invalidateQueries({ queryKey: ["trip-orders"] });
@@ -199,6 +200,7 @@ export function ClusterDetailPanel({
       const { error } = await (supabase.rpc as any)("reject_consolidation_group", { p_group_id: groupId, p_reason: null });
       if (error) throw error;
       toast.info("Cluster verworpen", { description: "Orders staan weer open te plannen." });
+      qc.invalidateQueries({ queryKey: ["planning_board"] });
       qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date"] });
       qc.invalidateQueries({ queryKey: ["open_orders_by_date"] });
       onClose();
@@ -225,6 +227,7 @@ export function ClusterDetailPanel({
       toast.success("Override vastgelegd", { description: "Reden is opgeslagen in audit-trail." });
       setReason("");
       qc.invalidateQueries({ queryKey: ["cluster_detail"] });
+      qc.invalidateQueries({ queryKey: ["planning_board"] });
       qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date"] });
       qc.invalidateQueries({ queryKey: ["open_orders_by_date"] });
     } catch (err) {

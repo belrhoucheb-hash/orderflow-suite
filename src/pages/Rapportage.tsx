@@ -179,7 +179,7 @@ function useAiUsage(enabled = true) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ai_usage_log" as any)
-        .select("*")
+        .select("model, cost, total_cost, created_at")
         .order("created_at", { ascending: false })
         .limit(500);
       // Table may not exist yet – return empty gracefully

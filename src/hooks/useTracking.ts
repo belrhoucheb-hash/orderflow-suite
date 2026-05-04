@@ -11,6 +11,15 @@ import type {
 import { parseRouteStops } from "@/lib/routeStops";
 import { resolveCoordinates } from "@/data/geoData";
 
+const VEHICLE_POSITION_COLUMNS =
+  "id, trip_id, vehicle_id, driver_id, lat, lng, heading, speed, accuracy, recorded_at";
+
+const ACTIVE_TRIP_COLUMNS =
+  "id, tenant_id, trip_number, vehicle_id, driver_id, dispatch_status, planned_date, planned_start_time, actual_start_time, actual_end_time, total_distance_km, total_duration_min, dispatcher_id, dispatched_at, received_at, accepted_at, started_at, completed_at, notes, created_at, updated_at, trip_stops(id, trip_id, order_id, stop_type, stop_sequence, stop_status, planned_address, planned_latitude, planned_longitude, planned_time, actual_arrival_time, actual_departure_time, contact_name, contact_phone, instructions, failure_reason, notes, created_at, updated_at, predicted_eta, predicted_eta_updated_at, proof_of_delivery(id, trip_stop_id, order_id, pod_status, recipient_name, received_at, validated_at, rejection_reason))";
+
+const TRACKING_ORDER_COLUMNS =
+  "id, tenant_id, order_number, vehicle_id, driver_id, status, created_at, updated_at, time_window_start, pickup_address, delivery_address, pickup_lat, pickup_lng, delivery_lat, delivery_lng, geocoded_pickup_lat, geocoded_pickup_lng, geocoded_delivery_lat, geocoded_delivery_lng, notification_preferences";
+
 export interface TrackingOrderContext {
   id: string;
   order_number: number | null;
@@ -363,7 +372,7 @@ export function useRealVehiclePositions(
       // 1. Try fetching by trip_id first
       const { data: tripData } = await supabase
         .from("vehicle_positions" as any)
-        .select("*")
+        .select(VEHICLE_POSITION_COLUMNS)
         .in("trip_id", tripIds)
         .order("recorded_at", { ascending: false })
         .limit(tripIds.length * 5);
@@ -396,7 +405,7 @@ export function useRealVehiclePositions(
         if (missingVehicleIds.length > 0) {
           const { data: vehData } = await supabase
             .from("vehicle_positions" as any)
-            .select("*")
+            .select(VEHICLE_POSITION_COLUMNS)
             .in("vehicle_id", missingVehicleIds)
             .order("recorded_at", { ascending: false })
             .limit(missingVehicleIds.length * 5);
@@ -443,7 +452,7 @@ export function useActiveTrips() {
       // 1. Try trips table first (dispatch workflow)
       const { data: tripData, error: tripError } = await supabase
         .from("trips")
-        .select("*, trip_stops(*, proof_of_delivery(*))")
+        .select(ACTIVE_TRIP_COLUMNS)
         .in("dispatch_status", ["VERZONDEN", "GEACCEPTEERD", "ACTIEF"])
         .order("planned_start_time", { ascending: true });
 
@@ -454,7 +463,7 @@ export function useActiveTrips() {
       // 2. Fallback: query orders with IN_TRANSIT status that have a vehicle assigned
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
-        .select("*")
+        .select(TRACKING_ORDER_COLUMNS)
         .eq("status", "IN_TRANSIT")
         .order("created_at", { ascending: true });
 

@@ -32,6 +32,11 @@ function isoWeekStart(d: Date): string {
   return format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd");
 }
 
+interface PlanningBoardPayload {
+  groups: ConsolidationGroup[];
+  openOrders: any[];
+}
+
 function PlanningV2() {
   const { tenant } = useTenantOptional();
   const queryClient = useQueryClient();
@@ -51,43 +56,26 @@ function PlanningV2() {
   } = usePlanningDaySupport(selectedDate, weekStart);
   const { driverAvailability, schedulesForDate, hoursRows } = planningSupport;
 
-  // Consolidation groups voor de datum
-  const { data: groups = [] } = useQuery<ConsolidationGroup[]>({
-    queryKey: ["consolidation_groups_by_date", selectedDate, tenant?.id],
+  // Bundled day payload: one RPC replaces separate cluster + open-order
+  // fetches, reducing round-trips, RLS checks and nested row reads.
+  const { data: board = { groups: [], openOrders: [] } } = useQuery<PlanningBoardPayload>({
+    queryKey: ["planning_board", selectedDate, tenant?.id],
     enabled: !!selectedDate && !!tenant?.id,
     staleTime: 10_000,
     queryFn: async () => {
-      const { data, error } = await (supabase
-        .from("consolidation_groups" as any) as any)
-        .select("*, vehicle:vehicles(name, plate, capacity_kg, capacity_pallets), consolidation_orders(order_id, stop_sequence, order:orders(id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, weight_kg, quantity, requirements))")
-        .eq("tenant_id", tenant!.id)
-        .eq("planned_date", selectedDate)
-        .neq("status", "VERWORPEN")
-        .order("created_at");
+      const { data, error } = await (supabase.rpc as any)("planning_board_v1", {
+        p_tenant_id: tenant!.id,
+        p_date: selectedDate,
+      });
       if (error) throw error;
-      return (data ?? []) as unknown as ConsolidationGroup[];
+      return {
+        groups: ((data?.groups ?? []) as unknown) as ConsolidationGroup[],
+        openOrders: ((data?.open_orders ?? []) as unknown) as any[],
+      };
     },
   });
-
-  // Orders die OPEN staan voor deze datum (PENDING, geen vehicle_id, niet in niet-verworpen cluster)
-  const { data: openOrders = [] } = useQuery({
-    queryKey: ["open_orders_by_date", selectedDate, tenant?.id, groups.length],
-    enabled: !!selectedDate && !!tenant?.id,
-    staleTime: 10_000,
-    queryFn: async () => {
-      const { data, error } = await (supabase
-        .from("orders") as any)
-        .select("id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, weight_kg, quantity, requirements")
-        .eq("tenant_id", tenant!.id)
-        .eq("delivery_date", selectedDate)
-        .eq("status", "PENDING")
-        .is("vehicle_id", null);
-      if (error) throw error;
-      const lockedIds = new Set<string>();
-      groups.forEach((g) => (g.consolidation_orders ?? []).forEach((co) => lockedIds.add(co.order_id)));
-      return (data ?? []).filter((o: any) => !lockedIds.has(o.id)) as any[];
-    },
-  });
+  const groups = board.groups;
+  const openOrders = board.openOrders;
 
   const plannedHoursByDriver = useMemo(() => {
     const m = new Map<string, number>();
@@ -253,6 +241,7 @@ function PlanningV2() {
       if (orderError) throw orderError;
 
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["planning_board", selectedDate] }),
         queryClient.invalidateQueries({ queryKey: ["consolidation_groups_by_date", selectedDate] }),
         queryClient.invalidateQueries({ queryKey: ["open_orders_by_date", selectedDate] }),
       ]);
@@ -282,6 +271,7 @@ function PlanningV2() {
       });
       if (error) throw error;
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["planning_board", selectedDate] }),
         queryClient.invalidateQueries({ queryKey: ["consolidation_groups_by_date", selectedDate] }),
         queryClient.invalidateQueries({ queryKey: ["open_orders_by_date", selectedDate] }),
       ]);
