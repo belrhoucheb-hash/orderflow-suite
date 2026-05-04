@@ -177,8 +177,86 @@ const Login = () => {
     }
 
     const normalizedEmail = loginEmail.trim().toLowerCase();
-    let loginPolicy: LoginPolicy | null = null;
 
+    // Server-side login flow: alle policy/lockout-checks en de auth call zelf
+    // gebeuren in de office-login edge function. De browser kent geen
+    // policy-shortcuts meer en kan dus ook geen lockout omzeilen.
+    const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
+    const anonKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
+
+    let loginPolicy: LoginPolicy | null = null;
+    let loginResponse: Response;
+    try {
+      loginResponse = await fetch(`${supabaseUrl}/functions/v1/office-login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: anonKey,
+        },
+        body: JSON.stringify({ email: normalizedEmail, password: loginPassword }),
+      });
+    } catch (networkError) {
+      setLoading(false);
+      setErrorText(networkError instanceof Error && networkError.message.includes("duurde langer")
+        ? "Inloggen duurt te lang. Controleer de verbinding met Supabase en probeer opnieuw."
+        : "Inloggen mislukt door een netwerkfout. Probeer opnieuw.");
+      return;
+    }
+
+    let loginBody: Record<string, unknown> = {};
+    try {
+      loginBody = await loginResponse.json();
+    } catch {
+      loginBody = {};
+    }
+
+    if (loginResponse.status === 423) {
+      setLoading(false);
+      const unlockAt = typeof loginBody.unlock_at === "string" ? loginBody.unlock_at : null;
+      const formatted = unlockAt
+        ? new Date(unlockAt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })
+        : null;
+      setErrorText(formatted
+        ? `Account tijdelijk vergrendeld tot ${formatted}.`
+        : "Account tijdelijk vergrendeld. Probeer het later opnieuw.");
+      return;
+    }
+
+    if (loginResponse.status === 429) {
+      setLoading(false);
+      setErrorText("Te veel pogingen in korte tijd. Wacht een minuut en probeer opnieuw.");
+      return;
+    }
+
+    if (!loginResponse.ok) {
+      setLoading(false);
+      setErrorText("Ongeldig e-mailadres of wachtwoord");
+      return;
+    }
+
+    const accessToken = typeof loginBody.access_token === "string" ? loginBody.access_token : "";
+    const refreshToken = typeof loginBody.refresh_token === "string" ? loginBody.refresh_token : "";
+    if (!accessToken || !refreshToken) {
+      setLoading(false);
+      setErrorText("Onverwachte respons van de login service. Probeer opnieuw.");
+      return;
+    }
+
+    const { error: setSessionError } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (setSessionError) {
+      setLoading(false);
+      setErrorText(setSessionError.message.includes("duurde langer")
+        ? "Inloggen duurt te lang. Controleer de verbinding met Supabase en probeer opnieuw."
+        : "Sessie kon niet worden geopend. Probeer opnieuw.");
+      return;
+    }
+
+    // Policy nu pas opvragen voor de 2FA-beslissing. Lockout/protection
+    // hebben we al server-side afgehandeld; deze call mag falen zonder de
+    // login te blokkeren.
     try {
       const { data: policyRows } = typeof supabase.rpc === "function"
         ? await supabase.rpc("office_login_policy" as any, { p_email: normalizedEmail })
@@ -186,54 +264,6 @@ const Login = () => {
       loginPolicy = (Array.isArray(policyRows) ? policyRows[0] : null) as LoginPolicy | null;
     } catch (policyError) {
       console.warn("Login policy kon niet worden opgehaald", policyError);
-    }
-
-    if (loginPolicy?.locked_until && new Date(loginPolicy.locked_until).getTime() > Date.now()) {
-      setLoading(false);
-      setErrorText(`Te veel mislukte pogingen. Probeer opnieuw na ${new Date(loginPolicy.locked_until).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.`);
-      return;
-    }
-
-    let signInError: Error | null = null;
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: loginPassword,
-      });
-      signInError = error;
-    } catch (error) {
-      signInError = error instanceof Error ? error : new Error("Inloggen mislukt");
-    }
-
-    if (signInError) {
-      setLoading(false);
-      if (loginPolicy?.login_protection_enabled !== false) {
-        try {
-          await supabase.rpc?.("record_office_login_attempt" as any, {
-            p_email: normalizedEmail,
-            p_success: false,
-            p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
-            p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
-          });
-        } catch (attemptError) {
-          console.warn("Login poging kon niet worden vastgelegd", attemptError);
-        }
-      }
-      setErrorText(signInError.message.includes("duurde langer")
-        ? "Inloggen duurt te lang. Controleer de verbinding met Supabase en probeer opnieuw."
-        : "Ongeldig e-mailadres of wachtwoord");
-      return;
-    }
-
-    try {
-      await supabase.rpc?.("record_office_login_attempt" as any, {
-        p_email: normalizedEmail,
-        p_success: true,
-        p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
-        p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
-      });
-    } catch (attemptError) {
-      console.warn("Login poging kon niet worden vastgelegd", attemptError);
     }
 
     if (loginPolicy?.requires_2fa && loginPolicy.verification_method !== "email") {

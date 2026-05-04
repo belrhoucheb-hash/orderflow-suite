@@ -15,6 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsFor, handleOptions } from "../_shared/cors.ts";
+import { checkRateLimit, clientIp, rateLimitResponse } from "../_shared/rate-limit.ts";
 
 const BASE = "https://overheid.io/api/v0/hr";
 
@@ -109,6 +110,11 @@ serve(async (req) => {
   const cors = corsFor(req);
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: cors });
+  }
+
+  const limit = checkRateLimit(`kvk-lookup:${clientIp(req)}`);
+  if (!limit.allowed) {
+    return rateLimitResponse(limit.retryAfterSeconds, cors);
   }
 
   try {

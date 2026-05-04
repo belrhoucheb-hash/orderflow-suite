@@ -2,7 +2,7 @@
 
 **Bestand-doel**: aan het begin van elke sessie weet Claude waar we zijn gebleven, en aan het einde van elke sessie wordt dit bestand bijgewerkt zodat de volgende sessie ook weet waar we staan. Bron van waarheid voor harde feiten blijft `git log` en het Supabase-dashboard; dit bestand vult de zachte context aan (waarom, blokkers, openstaande beslissingen).
 
-**Laatste update**: 2026-05-04 (origin/main bijgewerkt t/m `6d6efd6`; chauffeursportaal Uber-flow uplift gemerged via PR #20)
+**Laatste update**: 2026-05-04 (Chauffeursportaal batch 2 gemerged via PR #23, commit `dfdf76d`)
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Laag           | Bron                          | Status                                                  |
 | -------------- | ----------------------------- | ------------------------------------------------------- |
-| `origin/main`  | github.com/belrhoucheb-hash   | Tot commit `6d6efd6` (chauffeursportaal Uber-flow uplift, PR #20). |
+| `origin/main`  | github.com/belrhoucheb-hash   | Tot commit `dfdf76d` (chauffeursportaal batch 2 + warehouse-flow + secure tenant_membership). |
 | Frontend prod  | Vercel/Netlify (door gebruiker) | **Onbekend, gebruiker moet checken**. Vermoeden: nog op een oudere commit, want gebruiker zag connector-platform niet. |
 | Supabase prod  | Supabase Dashboard            | Onbekend, gebruiker moet checken. Migraties tot `20260429010000` staan klaar in repo, niet bevestigd of toegepast. |
 | Edge functions | Supabase Edge Functions       | Onbekend. Nieuw te deployen: `connector-snelstart`, `connector-exact_online`, `oauth-callback-exact`, `connector-dispatcher`, `eta-watcher`. |
@@ -58,7 +58,35 @@
 
 ---
 
+## Sprint 9 security-fixes (in progress, 2026-05-04)
+
+Pentest in deze sessie afgerond, 12 deelchecks. Resultaat: 1 CRITICAL, 2 HIGH, 1 MEDIUM, 2 LOW (geaccepteerd). Vier subagents werken parallel aan de remediatie. NewOrder/warehouse-flow zit los, codex-PR #22 staat al op `main` (commit `3022874`).
+
+| Finding | Status | Fix-doc |
+| ------- | ------ | ------- |
+| **CRITICAL-1**, signup tenant-injection via `data.tenant_id` in `/auth/v1/signup`, attacker kan zich aan elke tenant koppelen | fix-in-progress (subagent A) | [`docs/sprint-9/security-critical-1.md`](sprint-9/security-critical-1.md) |
+| **HIGH-1**, edge functions `office-login`/`google-places`/`google-places-business`/`kvk-lookup` accepteren anonieme calls zonder JWT/rate-limit | fix-in-progress (subagent B) | [`docs/sprint-9/security-high-1.md`](sprint-9/security-high-1.md) |
+| **HIGH-2**, login-lockout is client-side, te omzeilen met andere browser/device | fix-in-progress (subagent C) | [`docs/sprint-9/security-high-2.md`](sprint-9/security-high-2.md) |
+| **MEDIUM-1**, PostgREST PATCH op `user_roles`/`tenant_members` geeft `200 []` ipv `403` bij geblokkeerde UPDATE | fix-aanbeveling klaar (subagent D) | [`docs/sprint-9/security-medium-1.md`](sprint-9/security-medium-1.md) |
+
+Sprint-changelog: [`docs/sprint-9/03-changelog.md`](sprint-9/03-changelog.md). Deploy-checklist met smoke-tests: [`docs/sprint-9/deploy-checklist.md`](sprint-9/deploy-checklist.md). Klant-testpunten zijn aan [`docs/klant-testplan.md`](klant-testplan.md) toegevoegd onder "Sprint 9 security en warehouse-flow".
+
+LOW-bevindingen geaccepteerd zonder actie: Google Maps publishable key in client bundle (by design), DOMPurify gebruik beperkt tot 1 file.
+
+---
+
 ## Recente sessies-samenvatting
+
+### 2026-05-04 (chauffeursportaal batch 2 gemerged via PR #23, commit `dfdf76d`)
+
+- Drie parallelle subagents (worktrees) uitgerold op de pentest- en feature-lijst.
+- **Group A** (backend hygiene): AANGEKOMEN dubbel-fire fix via `trip_stops.last_notified_status` kolom + early-return in `notify-customer-stop-status` Edge Function. DB-trigger `trg_notify_driver_arrived` blijft veilig actief. `tenant_id` expliciet doorgegeven aan `usePositionReporter`. `src/lib/logger.ts` (debug no-op buiten dev). Voertuigcheck-baseline gelocked achter planner/admin-rol. Generated Supabase types aangevuld met `messages`, `stop_incidents`, `trip_stops.extra/last_notified_status`.
+- **Group B** (Uber-flow productie): `ChauffeurApp.tsx` rewrite naar full-bleed Leaflet map + glass header + draggable bottom-sheet + hamburger drawer met alle items (voertuigcheck, rooster week+maand, beschikbaarheid, chat, documenten, cijfers, bonnetjes, tachograaf, instellingen, SOS). Geofence-toast met stop-naam + 5s undo + dedup-id. GPS-spaarmodus (`gpsPreferences.ts`). Dark-modus (`usePreferences`-hook). Tachograaf-import stub (NFC-mock + .DDD upload). `ChauffeurDemo.tsx` blijft naast productie-route als auth-loze visuele showcase op `/chauffeur-demo`.
+- **Group C** (POD/CMR/perf): foto-sync parallel via `Promise.allSettled` met partial-success-semantiek. CMR-PDF on-device via `jspdf` (`src/lib/cmrPdf.ts`), upload als `kind: "cmr"`, gepatcht naar `proof_of_delivery.cmr_pdf_url`. Hook-input memoization in MijnWeekView en ChauffeurApp.
+- **Migratie-collision** opgelost: `20260504120000_warehouse_flow_references.sql` (van PR #22) en `20260504120000_trip_stops_extra_field.sql` (van PR #20) hadden hetzelfde prefix. Eerste run van `supabase db push` viel om met PK-violation. Warehouse hernoemd naar `20260504120030_warehouse_flow_references.sql`. `trip_stops_extra_field` was al toegepast voordat de fout optrad; alleen warehouse + de overige 5 wachten nog op tweede `db push`.
+- **Te deployen na merge**: nog niet uitgevoerd:
+  - `supabase db push` (6 migraties: warehouse, stop_incidents, driver_planner_messages, trip_stops_last_notified, proof_of_delivery_cmr_pdf, secure_tenant_membership).
+  - `supabase functions deploy notify-customer-stop-status` (nieuwe dedup-logica).
 
 ### 2026-05-04 (chauffeursportaal Uber-flow uplift, gemerged in `6d6efd6`)
 

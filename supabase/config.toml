@@ -30,14 +30,16 @@ verify_jwt = false
 [functions.create-order]
 verify_jwt = false
 
+# JWT verplicht: deze proxies verbruiken externe API-quota (KvK / Google).
+# Anonieme aanroepen werden gebruikt voor quota-uitputting (HIGH-1).
 [functions.kvk-lookup]
-verify_jwt = false
+verify_jwt = true
 
 [functions.google-places-business]
-verify_jwt = false
+verify_jwt = true
 
 [functions.google-places]
-verify_jwt = false
+verify_jwt = true
 
 # OAuth-callback komt vanuit Exact (3rd-party redirect, geen Supabase JWT).
 # CSRF-bescherming gebeurt via HMAC-signed state-parameter.
@@ -47,4 +49,10 @@ verify_jwt = false
 # WhatsApp-webhook komt vanuit Twilio (geen Supabase JWT).
 # Auth gebeurt via Twilio HMAC-signature in de function.
 [functions.whatsapp-webhook]
+verify_jwt = false
+
+# Pre-auth login wrapper: er is per definitie nog geen JWT. De function doet
+# zelf de policy/lockout-check en throttle, en delegeert daarna naar
+# /auth/v1/token. Zie supabase/functions/office-login/index.ts.
+[functions.office-login]
 verify_jwt = false
