@@ -9,12 +9,28 @@ export interface Warehouse {
   name: string;
   address: string;
   warehouse_type: "OPS" | "EXPORT" | "IMPORT";
+  transport_flow: "import" | "export" | "both";
+  default_stop_role: "pickup" | "delivery";
+  warehouse_reference_mode: "manual" | "order_number";
+  warehouse_reference_prefix: string | null;
+  manual_reference: string | null;
   is_default: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export type WarehouseInput = Pick<Warehouse, "name" | "address" | "warehouse_type" | "is_default">;
+export type WarehouseInput = Pick<
+  Warehouse,
+  | "name"
+  | "address"
+  | "warehouse_type"
+  | "transport_flow"
+  | "default_stop_role"
+  | "warehouse_reference_mode"
+  | "warehouse_reference_prefix"
+  | "manual_reference"
+  | "is_default"
+>;
 
 export function useWarehouses() {
   const { tenant } = useTenantOptional();

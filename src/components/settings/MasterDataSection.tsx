@@ -458,12 +458,23 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
   const createMut = useCreateWarehouse();
   const updateMut = useUpdateWarehouse();
 
+  const emptyWarehouseForm: WarehouseInput = {
+    name: '',
+    address: '',
+    warehouse_type: 'OPS',
+    transport_flow: 'both',
+    default_stop_role: 'pickup',
+    warehouse_reference_mode: 'manual',
+    warehouse_reference_prefix: '',
+    manual_reference: '',
+    is_default: false,
+  };
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<WarehouseInput>({ name: '', address: '', warehouse_type: 'OPS', is_default: false });
+  const [form, setForm] = useState<WarehouseInput>(emptyWarehouseForm);
 
   const resetForm = () => {
-    setForm({ name: '', address: '', warehouse_type: 'OPS', is_default: false });
+    setForm(emptyWarehouseForm);
     setIsAdding(false);
     setEditingId(null);
   };
@@ -480,9 +491,28 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
 
   const startEdit = (wh: WarehouseType) => {
     setEditingId(wh.id);
-    setForm({ name: wh.name, address: wh.address, warehouse_type: wh.warehouse_type, is_default: wh.is_default });
+    setForm({
+      name: wh.name,
+      address: wh.address,
+      warehouse_type: wh.warehouse_type,
+      transport_flow: wh.transport_flow ?? 'both',
+      default_stop_role: wh.default_stop_role ?? 'pickup',
+      warehouse_reference_mode: wh.warehouse_reference_mode ?? 'manual',
+      warehouse_reference_prefix: wh.warehouse_reference_prefix ?? '',
+      manual_reference: wh.manual_reference ?? '',
+      is_default: wh.is_default,
+    });
     setIsAdding(true);
   };
+
+  const flowLabel = (flow: WarehouseType["transport_flow"] | undefined) =>
+    flow === "import" ? "Import" : flow === "export" ? "Export" : "Beide";
+  const roleLabel = (role: WarehouseType["default_stop_role"] | undefined) =>
+    role === "delivery" ? "Losadres" : "Laadadres";
+  const referenceLabel = (wh: WarehouseType) =>
+    wh.warehouse_reference_mode === "order_number"
+      ? `${wh.warehouse_reference_prefix || ""}ordernummer`
+      : wh.manual_reference || "Handmatig";
 
   return (
     <section className="space-y-4">
@@ -520,10 +550,13 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
           <Table>
             <TableHeader className="bg-[hsl(var(--gold-soft)/0.3)]">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[200px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
+                <TableHead className="w-[180px] text-xs uppercase tracking-wider font-semibold">Naam</TableHead>
                 <TableHead className="text-xs uppercase tracking-wider font-semibold">Adres</TableHead>
-                <TableHead className="w-[120px] text-xs uppercase tracking-wider font-semibold">Type</TableHead>
-                <TableHead className="w-[100px] text-xs uppercase tracking-wider font-semibold">Standaard</TableHead>
+                <TableHead className="w-[105px] text-xs uppercase tracking-wider font-semibold">Type</TableHead>
+                <TableHead className="w-[105px] text-xs uppercase tracking-wider font-semibold">Flow</TableHead>
+                <TableHead className="w-[115px] text-xs uppercase tracking-wider font-semibold">Rol</TableHead>
+                <TableHead className="w-[150px] text-xs uppercase tracking-wider font-semibold">Referentie</TableHead>
+                <TableHead className="w-[80px] text-xs uppercase tracking-wider font-semibold">Std.</TableHead>
                 <TableHead className="w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -541,6 +574,44 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
                         <SelectItem value="IMPORT">IMPORT</SelectItem>
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Select value={form.transport_flow} onValueChange={v => setForm({ ...form, transport_flow: v as WarehouseInput["transport_flow"] })}>
+                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="export">Export</SelectItem>
+                        <SelectItem value="import">Import</SelectItem>
+                        <SelectItem value="both">Beide</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Select value={form.default_stop_role} onValueChange={v => setForm({ ...form, default_stop_role: v as WarehouseInput["default_stop_role"] })}>
+                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pickup">Laadadres</SelectItem>
+                        <SelectItem value="delivery">Losadres</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <div className="grid gap-1">
+                      <Select value={form.warehouse_reference_mode} onValueChange={v => setForm({ ...form, warehouse_reference_mode: v as WarehouseInput["warehouse_reference_mode"] })}>
+                        <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="manual">Handmatig</SelectItem>
+                          <SelectItem value="order_number">Ordernummer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        className="h-7 text-[11px] bg-background"
+                        placeholder={form.warehouse_reference_mode === "order_number" ? "Prefix optioneel" : "Referentie"}
+                        value={form.warehouse_reference_mode === "order_number" ? form.warehouse_reference_prefix ?? "" : form.manual_reference ?? ""}
+                        onChange={e => setForm(form.warehouse_reference_mode === "order_number"
+                          ? { ...form, warehouse_reference_prefix: e.target.value }
+                          : { ...form, manual_reference: e.target.value })}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     <input type="checkbox" checked={form.is_default} onChange={e => setForm({ ...form, is_default: e.target.checked })} />
@@ -562,6 +633,9 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
                   <TableCell className="font-medium text-xs">{wh.name}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{wh.address}</TableCell>
                   <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{wh.warehouse_type}</code></TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{flowLabel(wh.transport_flow)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{roleLabel(wh.default_stop_role)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{referenceLabel(wh)}</TableCell>
                   <TableCell className="text-xs text-center text-muted-foreground">{wh.is_default ? 'Ja' : ''}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -577,7 +651,7 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
               ))}
               {!isLoading && warehouses.length === 0 && !isAdding && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-8">
                     Nog geen warehouses. Voeg er een toe om afdeling-detectie in te schakelen.
                   </TableCell>
                 </TableRow>

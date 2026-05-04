@@ -82,6 +82,8 @@ export interface BookingInput {
   delivery_lng?: number | null;
   delivery_coords_manual?: boolean;
   manual_overrides?: Record<string, unknown> | null;
+  contact_snapshot?: Record<string, unknown> | null;
+  stop_references?: Record<string, unknown>[] | null;
   [key: string]: unknown;
 }
 
@@ -503,6 +505,8 @@ export async function createShipmentWithLegs(
       attachments: {
         readiness_status: bookingStatus,
         manual_overrides: booking.manual_overrides ?? null,
+        contact_snapshot: booking.contact_snapshot ?? null,
+        stop_references: booking.stop_references ?? null,
       },
     };
 
