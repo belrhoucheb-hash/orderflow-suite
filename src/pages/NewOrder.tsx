@@ -4148,7 +4148,7 @@ const NewOrder = () => {
   );
 
   const renderWizardFooter = () => {
-    const showCreate = wizardStep === "review" && reviewActiveQuestion === 2;
+    const showCreate = wizardStep === "review";
     const showContinue = wizardStep !== "review";
     const inlineTransportControls = wizardStep === "cargo" && cargoActiveQuestion >= 4 && !missingQuantity && !missingWeight;
     if (inlineTransportControls) return null;
@@ -5321,9 +5321,9 @@ const NewOrder = () => {
                               : "border-[hsl(var(--gold)_/_0.16)] bg-white",
                           )}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="text-base font-semibold">{option.title}</span>
-                            <span className="rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--gold-deep))]">
+                          <div className="flex min-w-0 flex-col items-start gap-2">
+                            <span className="text-base font-semibold leading-snug">{option.title}</span>
+                            <span className="max-w-full whitespace-normal rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-2 py-0.5 text-left text-[10px] font-semibold uppercase leading-tight tracking-[0.10em] text-[hsl(var(--gold-deep))]">
                               {option.badge}
                             </span>
                           </div>
@@ -6921,44 +6921,7 @@ const NewOrder = () => {
                   () => setReviewActiveQuestion(2),
                 )}
 
-                {reviewActiveQuestion === 1 && (
-                  <div className={cn(conversationalCardClass(0), "mb-4")}>
-                    {renderQuestionPrompt(
-                      {
-                        step: "Referentie",
-                        title: "Welke referentie hoort bij deze order?",
-                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
-                      },
-                      Boolean(klantReferentie.trim()),
-                      true,
-                    )}
-                    <label className={flowLabelClass}>Klant-referentie</label>
-                    <Input
-                      value={klantReferentie}
-                      onChange={e => setKlantReferentie(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          setReviewActiveQuestion(2);
-                        }
-                      }}
-                      placeholder="PO-nummer of bestelreferentie"
-                      className={flowInputClass}
-                    />
-                    <div className="mt-4 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setReviewActiveQuestion(2)}
-                        className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
-                      >
-                        {klantReferentie.trim() ? "Gebruik referentie" : "Geen referentie"}
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {reviewActiveQuestion === 2 && (
+                {(reviewActiveQuestion === 1 || reviewActiveQuestion === 2) && (
                   <div className={cn(conversationalCardClass(0), "mb-4")}>
                     {renderQuestionPrompt(
                       {
@@ -7233,25 +7196,33 @@ const NewOrder = () => {
         open={showUnsavedDialog}
         onOpenChange={(o) => !o && setShowUnsavedDialog(false)}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Concept afsluiten?</AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent className="max-w-[640px] overflow-hidden rounded-3xl border border-[hsl(var(--gold)_/_0.22)] bg-[linear-gradient(135deg,#fffdf8_0%,#f8f1e6_100%)] p-0 shadow-[0_30px_90px_-55px_hsl(var(--gold-deep)_/_0.72)]">
+          <AlertDialogHeader className="space-y-3 px-6 pb-3 pt-6 text-left">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+              Conceptbeheer
+            </div>
+            <AlertDialogTitle className="text-2xl font-semibold tracking-normal" style={{ fontFamily: "var(--font-display)" }}>
+              Concept afsluiten?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="max-w-[520px] text-sm leading-6 text-muted-foreground">
               Deze order wordt automatisch als concept bewaard. Kies of je het concept wilt bewaren
-              voor later, of helemaal wilt weggooien.
+              voor later, of helemaal wilt verwijderen.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Doorgaan met bewerken</AlertDialogCancel>
+          <AlertDialogFooter className="grid gap-3 border-t border-[hsl(var(--gold)_/_0.16)] bg-white/70 px-6 py-5 sm:grid-cols-3 sm:space-x-0">
+            <AlertDialogCancel className="mt-0 h-11 rounded-full border-[hsl(var(--gold)_/_0.22)] bg-white px-4 text-sm font-semibold text-foreground shadow-[0_12px_30px_-26px_hsl(var(--foreground)_/_0.45)] transition hover:bg-[hsl(var(--gold-soft)_/_0.24)]">
+              Doorgaan met bewerken
+            </AlertDialogCancel>
             <button
               type="button"
               onClick={() => void discardDraftAndLeave()}
-              className="inline-flex h-10 items-center justify-center rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
+              className="inline-flex h-11 min-w-0 items-center justify-center rounded-full border border-red-200 bg-red-50 px-4 text-center text-sm font-semibold text-red-700 shadow-[0_12px_30px_-26px_rgba(185,28,28,0.55)] transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200/70"
             >
-              Concept weggooien
+              Concept verwijderen
             </button>
             <AlertDialogAction
               onClick={keepDraftAndLeave}
+              className="h-11 rounded-full bg-[hsl(var(--gold-deep))] px-4 text-sm font-semibold text-white shadow-[0_16px_38px_-28px_hsl(var(--gold-deep)_/_0.85)] transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
             >
               Concept bewaren
             </AlertDialogAction>
