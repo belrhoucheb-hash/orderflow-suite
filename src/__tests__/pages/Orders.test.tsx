@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
-const { mockUseOrders, mockSupabase, mockNavigate } = vi.hoisted(() => {
+const { mockUseOrders, mockSupabase, mockNavigate, mockDeleteOrder } = vi.hoisted(() => {
   const mockOrders = [
     { id: "o1", orderNumber: "ORD-001", customer: "Acme BV", status: "DELIVERED", priority: "normaal", totalWeight: 500, pickupAddress: "Amsterdam", deliveryAddress: "Rotterdam", createdAt: "2025-01-10T10:00:00Z" },
     { id: "o2", orderNumber: "ORD-002", customer: "Widget NL", status: "IN_TRANSIT", priority: "spoed", totalWeight: 1200, pickupAddress: "Utrecht", deliveryAddress: "Den Haag", createdAt: "2025-01-11T10:00:00Z" },
@@ -30,6 +30,7 @@ const { mockUseOrders, mockSupabase, mockNavigate } = vi.hoisted(() => {
       },
     },
     mockNavigate: vi.fn(),
+    mockDeleteOrder: vi.fn().mockResolvedValue("o1"),
   };
 });
 
@@ -40,6 +41,10 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("@/hooks/useOrders", () => ({
   useOrders: (...args: any[]) => mockUseOrders(...args),
+  useDeleteOrder: () => ({
+    mutateAsync: mockDeleteOrder,
+    isPending: false,
+  }),
   useOrdersListMeta: () => ({
     data: {
       totalCount: 3,
@@ -65,6 +70,16 @@ vi.mock("@/integrations/supabase/client", () => ({
 
 vi.mock("@/components/orders/BulkImportDialog", () => ({
   BulkImportDialog: ({ open, onOpenChange }: any) => open ? <div data-testid="import-dialog"><button data-testid="close-import" onClick={() => onOpenChange(false)}>Close</button></div> : null,
+}));
+vi.mock("@/components/ui/alert-dialog", () => ({
+  AlertDialog: ({ open, children }: any) => open ? <div role="alertdialog">{children}</div> : null,
+  AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+  AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+  AlertDialogTitle: ({ children }: any) => <h2>{children}</h2>,
+  AlertDialogDescription: ({ children }: any) => <p>{children}</p>,
+  AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+  AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  AlertDialogAction: ({ children, ...props }: any) => <button {...props}>{children}</button>,
 }));
 vi.mock("@/components/orders/SmartLabel", () => ({ default: () => <div data-testid="smart-label" /> }));
 const stripMotionProps = ({ children, layout, initial, animate, exit, transition, whileHover, whileTap, ...props }: any) => ({ children, props });
@@ -104,6 +119,7 @@ function renderOrders() {
 describe("Orders", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDeleteOrder.mockResolvedValue("o1");
     mockUseOrders.mockReturnValue({
       data: { orders: defaultOrders, totalCount: 3 },
       isLoading: false, isError: false, refetch: vi.fn(),
@@ -168,6 +184,15 @@ describe("Orders", () => {
     renderOrders();
     await user.click(screen.getByText("Import"));
     expect(screen.getByTestId("import-dialog")).toBeInTheDocument();
+  });
+
+  it("opens delete confirmation for selected orders", async () => {
+    const user = userEvent.setup();
+    renderOrders();
+    await user.click(screen.getByLabelText("Alles selecteren"));
+    fireEvent.click(screen.getByTitle("Geselecteerde orders verwijderen"));
+    expect(await screen.findByText(/Geselecteerde orders? verwijderen\?/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Verwijderen$/i })).toBeInTheDocument();
   });
 
   it("shows pagination info", () => {

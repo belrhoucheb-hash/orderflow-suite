@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
-import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy } from "lucide-react";
+import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
 import { INFO_STATUS_LABEL, priorityDotColors } from "@/lib/orderDisplay";
-import { useOrders, useOrdersListMeta, type OrderListCursor } from "@/hooks/useOrders";
+import { useOrders, useOrdersListMeta, useDeleteOrder, type OrderListCursor } from "@/hooks/useOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUnreadNoteOrderIds } from "@/hooks/useOrderNotesRead";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +33,16 @@ import { IncompleteBadge } from "@/components/orders/IncompleteBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { OrderStatus } from "@/components/ui/StatusBadge";
 import { BulkImportDialog } from "@/components/orders/BulkImportDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ORDER_TYPE_LABELS, type OrderType } from "@/types/packaging";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { formatDistanceToNow, format, differenceInDays, isValid } from "date-fns";
@@ -99,6 +109,8 @@ const Orders = () => {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteSelectionOpen, setDeleteSelectionOpen] = useState(false);
+  const deleteOrderMutation = useDeleteOrder();
 
   const { attachRef: attachColWidthRef } = useColumnWidths("orderflow:orders:col-widths:v1");
 
@@ -208,6 +220,40 @@ const Orders = () => {
   // info- en stale-filter toe te passen. Client-side resort was vroeger
   // misleidend omdat het alleen binnen de huidige 25-pagina werkte.
   const orders = filteredByInfo;
+  const selectedOrders = useMemo(() => orders.filter((order) => selectedIds.has(order.id)), [orders, selectedIds]);
+  const selectedDeletableOrders = useMemo(
+    () => selectedOrders.filter((order) => order.sourceKind !== "draft"),
+    [selectedOrders],
+  );
+  const selectedDraftCount = selectedOrders.length - selectedDeletableOrders.length;
+
+  const handleDeleteSelectedOrders = async () => {
+    if (selectedDeletableOrders.length === 0) {
+      toast.info("Geen definitieve orders geselecteerd", {
+        description: "Concepten open je opnieuw vanuit de lijst; definitieve orders kun je hier verwijderen.",
+      });
+      setDeleteSelectionOpen(false);
+      return;
+    }
+
+    try {
+      for (const order of selectedDeletableOrders) {
+        await deleteOrderMutation.mutateAsync(order.id);
+      }
+      toast.success(
+        selectedDeletableOrders.length === 1 ? "Order verwijderd" : "Orders verwijderd",
+        {
+          description: `${selectedDeletableOrders.length} ${selectedDeletableOrders.length === 1 ? "order is" : "orders zijn"} uit de orderlijst gehaald.`,
+        },
+      );
+      clearSelection();
+      setDeleteSelectionOpen(false);
+    } catch (error) {
+      toast.error("Verwijderen mislukt", {
+        description: error instanceof Error ? error.message : "Probeer opnieuw.",
+      });
+    }
+  };
 
   const handleQuickPrint = async (orderId: string) => {
     setPrintLoading(orderId);
@@ -659,6 +705,15 @@ const Orders = () => {
               <Download className="h-4 w-4" /> Exporteer selectie
             </button>
             <button
+              className="btn-luxe text-destructive hover:text-destructive"
+              onClick={() => setDeleteSelectionOpen(true)}
+              disabled={deleteOrderMutation.isPending}
+              title="Geselecteerde orders verwijderen"
+            >
+              {deleteOrderMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Verwijder selectie
+            </button>
+            <button
               onClick={clearSelection}
               className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70 hover:text-[hsl(var(--gold-deep))] transition-colors px-2"
               title="Selectie wissen"
@@ -1071,6 +1126,36 @@ const Orders = () => {
 
       {/* Bulk Import Dialog */}
       <BulkImportDialog open={importOpen} onOpenChange={setImportOpen} />
+
+      <AlertDialog open={deleteSelectionOpen} onOpenChange={setDeleteSelectionOpen}>
+        <AlertDialogContent className="border-[hsl(var(--gold)/0.22)] bg-[hsl(var(--card))]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {selectedDeletableOrders.length === 1 ? "Geselecteerde order verwijderen?" : "Geselecteerde orders verwijderen?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedDeletableOrders.length > 0
+                ? `${selectedDeletableOrders.length} ${selectedDeletableOrders.length === 1 ? "order wordt" : "orders worden"} definitief verwijderd.`
+                : "Er zijn geen definitieve orders geselecteerd om te verwijderen."}
+              {selectedDraftCount > 0 ? ` ${selectedDraftCount} ${selectedDraftCount === 1 ? "concept wordt" : "concepten worden"} overgeslagen.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteOrderMutation.isPending}>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteOrderMutation.isPending || selectedDeletableOrders.length === 0}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteSelectedOrders();
+              }}
+            >
+              {deleteOrderMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

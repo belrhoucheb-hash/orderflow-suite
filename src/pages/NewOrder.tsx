@@ -443,13 +443,40 @@ function addressLooksIncompleteWarning(address: AddressValue, composed: string |
   return null;
 }
 
+function parseLocalizedNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+  const raw = String(value ?? "").trim();
+  if (!raw) return NaN;
+  const normalized = raw
+    .replace(/\s/g, "")
+    .replace(/\.(?=\d{3}(\D|$))/g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function parsePositiveNumber(value: unknown): number {
+  const parsed = parseLocalizedNumber(value);
+  return parsed > 0 ? parsed : 0;
+}
+
+function parsePositiveInteger(value: unknown): number {
+  const parsed = parseLocalizedNumber(value);
+  return parsed > 0 ? Math.trunc(parsed) : 0;
+}
+
+function parseNullablePositiveNumber(value: unknown): number | null {
+  const parsed = parseLocalizedNumber(value);
+  return parsed > 0 ? parsed : null;
+}
+
 function cargoRowIssue(row: CargoRow, index: number): string | null {
   const hasAnyValue = Boolean(row.aantal || row.gewicht || row.omschrijving || row.adr || row.lengte || row.breedte || row.hoogte);
   if (!hasAnyValue) return null;
   const label = `Ladingregel ${index + 1}`;
   if (!row.eenheid) return `${label}: eenheid is verplicht.`;
-  if ((parseInt(row.aantal) || 0) <= 0) return `${label}: aantal moet groter zijn dan 0.`;
-  if ((parseFloat(row.gewicht) || 0) <= 0) return `${label}: gewicht moet groter zijn dan 0.`;
+  if (parsePositiveInteger(row.aantal) <= 0) return `${label}: aantal moet groter zijn dan 0.`;
+  if (parsePositiveNumber(row.gewicht) <= 0) return `${label}: gewicht moet groter zijn dan 0.`;
   return null;
 }
 
@@ -1743,8 +1770,8 @@ const NewOrder = () => {
   // Aggregated cargo totals (gebruikt door handleSave om de bestaande quantity/weight/unit state
   // te voeden zonder de Supabase-integratie te breken).
   const cargoTotals = useMemo(() => {
-    const totAantal = cargoRows.reduce((s, r) => s + (parseInt(r.aantal) || 0), 0);
-    const totGewicht = cargoRows.reduce((s, r) => s + (parseFloat(r.gewicht) || 0), 0);
+    const totAantal = cargoRows.reduce((s, r) => s + parsePositiveInteger(r.aantal), 0);
+    const totGewicht = cargoRows.reduce((s, r) => s + parsePositiveNumber(r.gewicht), 0);
     const primaryUnit = cargoRows.find(r => r.aantal && r.eenheid)?.eenheid || cargoRows[0]?.eenheid || "";
     return { totAantal, totGewicht, primaryUnit };
   }, [cargoRows]);
@@ -1762,9 +1789,9 @@ const NewOrder = () => {
     totalQuantity: cargoTotals.totAantal,
     unit: cargoTotals.primaryUnit || transportEenheid,
     totalWeightKg: cargoTotals.totGewicht,
-    maxLengthCm: Math.max(0, ...cargoRows.map(r => parseFloat(r.lengte) || 0)),
-    maxWidthCm: Math.max(0, ...cargoRows.map(r => parseFloat(r.breedte) || 0)),
-    maxHeightCm: Math.max(0, ...cargoRows.map(r => parseFloat(r.hoogte) || 0)),
+    maxLengthCm: Math.max(0, ...cargoRows.map(r => parsePositiveNumber(r.lengte))),
+    maxWidthCm: Math.max(0, ...cargoRows.map(r => parsePositiveNumber(r.breedte))),
+    maxHeightCm: Math.max(0, ...cargoRows.map(r => parsePositiveNumber(r.hoogte))),
     requiresTailgate: klepNodig,
   }), [cargoRows, cargoTotals.primaryUnit, cargoTotals.totAantal, cargoTotals.totGewicht, klepNodig, transportEenheid]);
 
@@ -1825,12 +1852,12 @@ const NewOrder = () => {
       .filter((row) => row.aantal || row.gewicht || row.eenheid || row.omschrijving || row.lengte || row.breedte || row.hoogte)
       .map((row) => ({
         id: row.id,
-        quantity: parseInt(row.aantal) || 0,
+        quantity: parsePositiveInteger(row.aantal),
         unit: row.eenheid || "",
-        weightKg: parseFloat(row.gewicht) || 0,
-        lengthCm: parseFloat(row.lengte) || 0,
-        widthCm: parseFloat(row.breedte) || 0,
-        heightCm: parseFloat(row.hoogte) || 0,
+        weightKg: parsePositiveNumber(row.gewicht),
+        lengthCm: parsePositiveNumber(row.lengte),
+        widthCm: parsePositiveNumber(row.breedte),
+        heightCm: parsePositiveNumber(row.hoogte),
       }));
 
     return {
@@ -3326,8 +3353,8 @@ const NewOrder = () => {
     // gestructureerde adres-checks (street/zipcode/city plus de "is geen losse
     // plaatsnaam"-regel) via superRefine, dus elke ZodError vertaalt direct
     // naar een UI-veldfout zonder parallelle if/else-ketens.
-    const quantityNum = cargoTotals.totAantal || (quantity ? parseInt(quantity) : NaN);
-    const weightNum = cargoTotals.totGewicht || (weightKg ? parseFloat(weightKg) : NaN);
+    const quantityNum = cargoTotals.totAantal || parsePositiveInteger(quantity) || NaN;
+    const weightNum = cargoTotals.totGewicht || parseLocalizedNumber(weightKg);
     if (!contactAnswered) {
       setWizardStep("intake");
       setIntakeActiveQuestion(3);
@@ -3461,12 +3488,12 @@ const NewOrder = () => {
       const cargoPayload = cargoRows
         .filter(r => r.aantal || r.gewicht)
         .map(r => ({
-          aantal: parseInt(r.aantal) || 0,
+          aantal: parsePositiveInteger(r.aantal),
           eenheid: r.eenheid || null,
-          gewicht: parseFloat(r.gewicht) || 0,
-          lengte: parseFloat(r.lengte) || null,
-          breedte: parseFloat(r.breedte) || null,
-          hoogte: parseFloat(r.hoogte) || null,
+          gewicht: parsePositiveNumber(r.gewicht),
+          lengte: parseNullablePositiveNumber(r.lengte),
+          breedte: parseNullablePositiveNumber(r.breedte),
+          hoogte: parseNullablePositiveNumber(r.hoogte),
           stapelbaar: r.stapelbaar,
           adr: r.adr || null,
           omschrijving: r.omschrijving || null,
@@ -3539,9 +3566,9 @@ const NewOrder = () => {
         transport_type: resolvedTransportType,
         afdeling: afdeling || null,
         distance_km: distanceKm,
-        weight_kg: weightKg ? parseInt(weightKg) : null,
-        quantity: quantity ? parseInt(quantity) : null,
-        unit: transportEenheid || null,
+        weight_kg: Number.isFinite(weightNum) && weightNum > 0 ? weightNum : null,
+        quantity: Number.isFinite(quantityNum) && quantityNum > 0 ? Math.trunc(quantityNum) : null,
+        unit: cargoTotals.primaryUnit || transportEenheid || null,
         priority: prioriteit || null,
         requirements: reqs.length > 0 ? reqs : null,
         pickup_time_window_start: pickupLine?.tijd || pickupTimeFrom || null,
