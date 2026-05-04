@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { TripStop, StopStatus } from "@/types/dispatch";
+import { geolocationOptionsForMode, getGpsMode, type GpsMode } from "@/lib/gpsPreferences";
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface GPSPosition {
@@ -30,7 +31,7 @@ interface TimeEntry {
 }
 
 // ─── Hook 1: useGPSTracking ─────────────────────────────────────────
-export function useGPSTracking(driverId: string | null) {
+export function useGPSTracking(driverId: string | null, mode?: GpsMode) {
   const [isTracking, setIsTracking] = useState(false);
   const [currentPosition, setCurrentPosition] = useState<GPSPosition | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +39,12 @@ export function useGPSTracking(driverId: string | null) {
   const watchIdRef = useRef<number | null>(null);
   const bufferRef = useRef<GPSPosition[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Houd de meest recente mode in een ref zodat startTracking niet ge-rerendered
+  // hoeft te worden zodra de chauffeur de spaarmodus omzet.
+  const modeRef = useRef<GpsMode>(mode ?? getGpsMode());
+  useEffect(() => {
+    if (mode) modeRef.current = mode;
+  }, [mode]);
 
   // Flush buffered positions to supabase
   const flushBuffer = useCallback(async () => {
@@ -91,7 +98,7 @@ export function useGPSTracking(driverId: string | null) {
         setError(err.message);
         console.error("[GPS] watchPosition error:", err);
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      geolocationOptionsForMode(modeRef.current),
     );
 
     watchIdRef.current = id;
@@ -342,6 +349,7 @@ export function useGeofenceCheck(
         const address = stop.planned_address || `Stop #${stop.stop_sequence}`;
 
         toast(`U bent bij ${address}. Aankomst registreren?`, {
+          id: `geofence-prompt-${stop.id}`,
           duration: 15_000,
           action: {
             label: "Bevestig aankomst",
