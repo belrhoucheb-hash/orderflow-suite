@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ExternalLink, RefreshCw, CheckCircle2, XCircle, Clock,
-  Sparkles, ShieldCheck, Zap, Activity, BookOpen, Settings as SettingsIcon,
+  Sparkles, Zap, Activity, BookOpen, Settings as SettingsIcon,
   ArrowLeftRight, ScrollText, Lock, KeyRound, Webhook, Radio, Globe2,
-  ChevronRight, AlertTriangle, Filter, ChevronDown, Copy, Check,
+  AlertTriangle, Filter, ChevronDown, Copy, Check, GripVertical, X,
+  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { findConnector, CATEGORY_LABELS } from "@/lib/connectors/catalog";
+import { getSourceFields, type ConnectorSourceField } from "@/lib/connectors/sourceFields";
+import { getMappingTemplates } from "@/lib/connectors/mappingTemplates";
 import {
   useConnectorList,
   useConnectorMapping,
@@ -27,8 +30,11 @@ import {
 import {
   useIntegrationCredentials,
   useSaveIntegrationCredentials,
+  type IntegrationEnvironment,
   type IntegrationProvider,
 } from "@/hooks/useIntegrationCredentials";
+import { SyncPoliciesPanel } from "@/components/settings/connectors/SyncPoliciesPanel";
+import { TokenExpiryBanner } from "@/components/settings/connectors/TokenExpiryBanner";
 import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +86,16 @@ export function ConnectorDetail({ slug, onBack }: Props) {
   const test = useTestConnector(slug);
   const pull = usePullConnector(slug);
   const [activeTab, setActiveTab] = useState<TabKey>("overzicht");
+  const [environment, setEnvironment] = useState<IntegrationEnvironment>("live");
+  // Voor de OAuth-token-banner halen we de live-credentials op zodat we
+  // expires_at, client_id en redirect_uri kunnen tonen zonder dat de
+  // gebruiker eerst de Configuratie-tab moet openen. Andere environments
+  // hebben hun eigen credentials-set.
+  const liveCreds = useIntegrationCredentials(
+    slug as IntegrationProvider,
+    environment,
+    { enabled: connector?.authType === "oauth2" },
+  );
 
   const lastSync = log.data?.[0];
   const stats = useMemo(() => {
@@ -129,6 +145,15 @@ export function ConnectorDetail({ slug, onBack }: Props) {
         pulling={pull.isPending}
       />
 
+      {!isSoon && connector.authType === "oauth2" && (
+        <TokenExpiryBanner
+          provider={slug}
+          expiresAt={liveCreds.data?.expiresAt ?? null}
+          clientId={(liveCreds.data?.credentials as Record<string, unknown> | undefined)?.clientId as string | undefined}
+          redirectUri={(liveCreds.data?.credentials as Record<string, unknown> | undefined)?.redirectUri as string | undefined}
+        />
+      )}
+
       {isSoon ? (
         <RoadmapBody connector={connector} />
       ) : (
@@ -165,7 +190,13 @@ export function ConnectorDetail({ slug, onBack }: Props) {
                 transition={{ duration: 0.18 }}
               >
                 {activeTab === "overzicht" && <OverviewTab slug={slug} />}
-                {activeTab === "configuratie" && <ConnectionTab slug={slug as IntegrationProvider} />}
+                {activeTab === "configuratie" && (
+                  <ConnectionTab
+                    slug={slug as IntegrationProvider}
+                    environment={environment}
+                    onEnvironmentChange={setEnvironment}
+                  />
+                )}
                 {activeTab === "mapping" && <MappingTab slug={slug} />}
                 {activeTab === "log" && <LogTab slug={slug} />}
               </motion.div>
@@ -499,14 +530,23 @@ function checklistItems(connector: NonNullable<ReturnType<typeof findConnector>>
 
 // ─── Configuratie tab (bestaande connection forms) ──────────────────
 
-function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
+function ConnectionTab({
+  slug,
+  environment,
+  onEnvironmentChange,
+}: {
+  slug: IntegrationProvider;
+  environment: IntegrationEnvironment;
+  onEnvironmentChange: (env: IntegrationEnvironment) => void;
+}) {
   const connector = findConnector(slug)!;
-  const creds = useIntegrationCredentials(slug);
-  const save = useSaveIntegrationCredentials(slug);
+  const creds = useIntegrationCredentials(slug, environment);
+  const save = useSaveIntegrationCredentials(slug, environment);
   const test = useTestConnector(slug);
 
+  let form: ReactNode;
   if (slug === "exact_online") {
-    return (
+    form = (
       <ExactConnectionForm
         setupHint={connector.setupHint}
         creds={creds.data?.credentials ?? {}}
@@ -517,11 +557,20 @@ function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
         testing={test.isPending}
       />
     );
-  }
-
-  if (slug === "nostradamus") {
-    return (
+  } else if (slug === "nostradamus") {
+    form = (
       <NostradamusConnectionForm
+        creds={creds.data?.credentials ?? {}}
+        enabled={creds.data?.enabled ?? false}
+        onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
+        onTest={() => test.mutate()}
+        saving={save.isPending}
+        testing={test.isPending}
+      />
+    );
+  } else {
+    form = (
+      <SnelstartConnectionForm
         creds={creds.data?.credentials ?? {}}
         enabled={creds.data?.enabled ?? false}
         onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
@@ -533,14 +582,64 @@ function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
   }
 
   return (
-    <SnelstartConnectionForm
-      creds={creds.data?.credentials ?? {}}
-      enabled={creds.data?.enabled ?? false}
-      onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
-      onTest={() => test.mutate()}
-      saving={save.isPending}
-      testing={test.isPending}
-    />
+    <div className="space-y-5">
+      <EnvironmentToggle value={environment} onChange={onEnvironmentChange} />
+      {form}
+      <SyncPoliciesPanel slug={slug} />
+    </div>
+  );
+}
+
+function EnvironmentToggle({
+  value,
+  onChange,
+}: {
+  value: IntegrationEnvironment;
+  onChange: (env: IntegrationEnvironment) => void;
+}) {
+  const options: Array<{ key: IntegrationEnvironment; label: string; hint: string }> = [
+    { key: "test", label: "Test", hint: "Sandbox-credentials, geen invloed op productie" },
+    { key: "live", label: "Live", hint: "Echte productie-koppeling met klantdata" },
+  ];
+  return (
+    <div className="card--luxe p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <p className="text-[11px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">
+          Omgeving
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Test- en Live-credentials worden apart bewaard. Wisselen wijzigt
+          uitsluitend wat je hieronder ziet, niet wat actief is.
+        </p>
+      </div>
+      <div
+        role="tablist"
+        aria-label="Omgeving"
+        className="inline-flex p-1 rounded-2xl border border-[hsl(var(--gold)/0.25)] bg-white shrink-0"
+      >
+        {options.map((opt) => {
+          const active = value === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onChange(opt.key)}
+              title={opt.hint}
+              className={cn(
+                "h-8 px-4 rounded-xl text-xs font-display font-semibold transition-all",
+                active
+                  ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -934,6 +1033,10 @@ function MappingTab({ slug }: { slug: string }) {
   const save = useSaveConnectorMapping(slug);
   const [values, setValues] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
+
+  const sourceFields = useMemo(() => getSourceFields(slug), [slug]);
+  const templates = useMemo(() => getMappingTemplates(slug), [slug]);
 
   useEffect(() => {
     if (mapping.data && !initialized) {
@@ -954,27 +1057,264 @@ function MappingTab({ slug }: { slug: string }) {
     );
   }
 
+  const applyTemplate = (templateId: string) => {
+    const template = templates.find((t) => t.id === templateId);
+    if (!template) return;
+    setValues((prev) => ({ ...prev, ...template.values }));
+    toast.success("Template toegepast", { description: template.label });
+  };
+
+  const handleDrop = (targetKey: string, sourceKey: string) => {
+    setValues((prev) => ({ ...prev, [targetKey]: sourceKey }));
+    setHoverKey(null);
+  };
+
+  const clearTarget = (targetKey: string) => {
+    setValues((prev) => ({ ...prev, [targetKey]: "" }));
+  };
+
   return (
-    <div className="card--luxe p-5 space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Mapping bepaalt hoe OrderFlow-velden vertaald worden naar de provider. Lege velden gebruiken de default uit de connector-definitie.
-      </p>
-      <div className="space-y-3">
-        {connector.mappingKeys.map((m) => (
-          <Field
-            key={m.key}
-            label={m.label}
-            id={`map-${m.key}`}
-            value={values[m.key] ?? ""}
-            placeholder={m.placeholder}
-            onChange={(v) => setValues((prev) => ({ ...prev, [m.key]: v }))}
-          />
-        ))}
+    <div className="space-y-4">
+      {templates.length > 0 && (
+        <div className="card--luxe p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Wand2 className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+            <p className="text-[11px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">
+              Templates
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {templates.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => applyTemplate(tpl.id)}
+                title={tpl.description}
+                className="h-8 px-3 rounded-full text-[11px] font-display font-semibold border border-[hsl(var(--gold)/0.3)] bg-white text-foreground hover:bg-[hsl(var(--gold-soft)/0.5)] hover:border-[hsl(var(--gold)/0.55)] transition-all"
+              >
+                {tpl.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card--luxe p-5 space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Sleep een bron-veld naar het juiste doel-veld. Of typ een waarde in
+          het tekstveld als de bron niet in de lijst staat. Lege velden
+          gebruiken de default uit de connector-definitie.
+        </p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
+          {/* BRON-VELDEN */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Bron, OrderFlow
+            </p>
+            {sourceFields.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Voor deze connector zijn geen voorgedefinieerde bron-velden,
+                gebruik de tekstvelden rechts.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {sourceFields.map((field) => (
+                  <SourcePill key={field.key} field={field} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* DOEL-VELDEN */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Doel, {connector.name}
+            </p>
+            <div className="space-y-2">
+              {connector.mappingKeys.map((m) => (
+                <TargetRow
+                  key={m.key}
+                  mappingKey={m.key}
+                  label={m.label}
+                  placeholder={m.placeholder}
+                  value={values[m.key] ?? ""}
+                  hover={hoverKey === m.key}
+                  onChange={(v) =>
+                    setValues((prev) => ({ ...prev, [m.key]: v }))
+                  }
+                  onClear={() => clearTarget(m.key)}
+                  onDragEnter={() => setHoverKey(m.key)}
+                  onDragLeave={() => setHoverKey((curr) => (curr === m.key ? null : curr))}
+                  onDrop={(sourceKey) => handleDrop(m.key, sourceKey)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <MappingPreview
+          values={values}
+          mappingKeys={connector.mappingKeys}
+          sourceFields={sourceFields}
+        />
+
+        <Button
+          onClick={() => save.mutate(values)}
+          disabled={save.isPending}
+          className="gap-1.5"
+        >
+          {save.isPending ? (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
+          {save.isPending ? "Opslaan..." : "Mapping opslaan"}
+        </Button>
       </div>
-      <Button onClick={() => save.mutate(values)} disabled={save.isPending} className="gap-1.5">
-        {save.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-        {save.isPending ? "Opslaan..." : "Mapping opslaan"}
-      </Button>
+    </div>
+  );
+}
+
+function SourcePill({ field }: { field: ConnectorSourceField }) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", field.key);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+      title={field.hint}
+      className="group inline-flex items-center gap-2 w-full h-9 px-3 rounded-xl bg-[hsl(var(--gold-soft)/0.6)] border border-[hsl(var(--gold)/0.25)] text-xs font-display font-semibold text-[hsl(var(--gold-deep))] cursor-grab active:cursor-grabbing hover:bg-[hsl(var(--gold-soft))] hover:border-[hsl(var(--gold)/0.5)] transition-all"
+    >
+      <GripVertical className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 shrink-0" />
+      <span className="truncate">{field.label}</span>
+      <code className="ml-auto text-[10px] font-mono opacity-70 shrink-0">
+        {field.key}
+      </code>
+    </div>
+  );
+}
+
+function TargetRow({
+  mappingKey,
+  label,
+  placeholder,
+  value,
+  hover,
+  onChange,
+  onClear,
+  onDragEnter,
+  onDragLeave,
+  onDrop,
+}: {
+  mappingKey: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  hover: boolean;
+  onChange: (v: string) => void;
+  onClear: () => void;
+  onDragEnter: () => void;
+  onDragLeave: () => void;
+  onDrop: (sourceKey: string) => void;
+}) {
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (sourceKey) onDrop(sourceKey);
+  };
+
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        "rounded-xl border-2 border-dashed bg-white p-3 transition-all",
+        hover
+          ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold-soft)/0.4)] shadow-[0_0_0_4px_hsl(var(--gold)/0.15)]"
+          : value
+            ? "border-[hsl(var(--gold)/0.4)] border-solid"
+            : "border-[hsl(var(--gold)/0.2)]",
+      )}
+    >
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <Label
+          htmlFor={`map-${mappingKey}`}
+          className="text-[11px] font-display font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+        >
+          {label}
+        </Label>
+        {value && (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="Wis veld"
+            className="h-5 w-5 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--gold-soft)/0.6)] transition-colors"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      <Input
+        id={`map-${mappingKey}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={hover ? "Laat hier los..." : placeholder}
+        className={cn(
+          "h-9 text-sm",
+          hover && "border-[hsl(var(--gold))] bg-white",
+        )}
+      />
+    </div>
+  );
+}
+
+function MappingPreview({
+  values,
+  mappingKeys,
+  sourceFields,
+}: {
+  values: Record<string, string>;
+  mappingKeys: Array<{ key: string; label: string; placeholder: string }>;
+  sourceFields: ConnectorSourceField[];
+}) {
+  const exampleByKey = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const f of sourceFields) {
+      map[f.key] = f.example ?? f.label;
+    }
+    return map;
+  }, [sourceFields]);
+
+  const preview = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const m of mappingKeys) {
+      const v = values[m.key];
+      if (!v) {
+        out[m.key] = `(default: ${m.placeholder})`;
+      } else if (exampleByKey[v] !== undefined) {
+        out[m.key] = exampleByKey[v];
+      } else {
+        out[m.key] = v;
+      }
+    }
+    return out;
+  }, [mappingKeys, values, exampleByKey]);
+
+  return (
+    <div className="rounded-xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold-soft)/0.18)] p-4 space-y-2">
+      <p className="text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">
+        Live preview
+      </p>
+      <pre className="text-[11px] font-mono text-foreground/90 whitespace-pre-wrap break-all leading-relaxed">
+        {JSON.stringify(preview, null, 2)}
+      </pre>
     </div>
   );
 }
