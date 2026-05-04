@@ -41,7 +41,11 @@ export function ConnectorCatalog({ onSelect }: Props) {
       if (c.status === "beta") return 2;
       return 3;
     };
-    return [...all].sort((a, b) => order(a) - order(b)).slice(0, 4);
+    // Eerst hand-gecureerde featured-connectors, daarna eventueel aangevuld op status.
+    const curated = all.filter((c) => c.featured).sort((a, b) => order(a) - order(b));
+    if (curated.length >= 4) return curated.slice(0, 4);
+    const fallback = all.filter((c) => !c.featured).sort((a, b) => order(a) - order(b));
+    return [...curated, ...fallback].slice(0, 4);
   }, [all]);
 
   if (list.isLoading) {
@@ -219,12 +223,12 @@ export function ConnectorCatalog({ onSelect }: Props) {
           <p className="text-sm font-display font-semibold text-foreground">Mis je een koppeling?</p>
           <p className="text-xs text-muted-foreground">Stuur een verzoek, dan stemmen we 'm in op de roadmap. Je hoort terug van het productteam.</p>
         </div>
-        <button
-          type="button"
-          className="h-10 px-4 rounded-xl text-xs font-display font-semibold bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm hover:opacity-95 transition-opacity"
+        <a
+          href={"mailto:product@orderflow.nl?subject=" + encodeURIComponent("Verzoek nieuwe koppeling") + "&body=" + encodeURIComponent("Ik mis de volgende koppeling in OrderFlow:\n\nNaam:\nWebsite:\nWaarom belangrijk:\n\nDank!")}
+          className="h-10 px-4 rounded-xl text-xs font-display font-semibold bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm hover:opacity-95 transition-opacity flex items-center justify-center"
         >
           Vraag aan
-        </button>
+        </a>
       </div>
     </div>
   );

@@ -44,6 +44,8 @@ export interface ConnectorDefinition {
   capabilities?: string[];
   /** Optioneel marketplace-badge. */
   badge?: "officieel" | "populair" | "nieuw" | "aanbevolen";
+  /** Curatie-flag, marketplace zet 'featured' connectors bovenaan in de Aanbevolen-rij. */
+  featured?: boolean;
 }
 
 const SOON_STUB: Pick<ConnectorDefinition, "mappingKeys" | "supportedEvents" | "setupHint"> = {
@@ -67,6 +69,7 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     supportedEvents: ["invoice.sent"],
     capabilities: ["API key", "Push-sync", "NL"],
     badge: "populair",
+    featured: true,
     mappingKeys: [
       { key: "default_grootboek", label: "Standaard grootboek (verkoop)", placeholder: "8000" },
       { key: "btw_grootboek", label: "BTW grootboek", placeholder: "1500" },
@@ -89,6 +92,7 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     supportedEvents: ["invoice.sent"],
     capabilities: ["OAuth 2.0", "Bidirectioneel", "NL/BE"],
     badge: "officieel",
+    featured: true,
     mappingKeys: [
       { key: "default_grootboek", label: "Verkoop grootboek-rekening", placeholder: "8000" },
       { key: "btw_grootboek", label: "BTW grootboek-rekening", placeholder: "1500" },
@@ -191,6 +195,7 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     supportedEvents: [],
     capabilities: ["API key", "Tijdregistratie"],
     badge: "nieuw",
+    featured: true,
     mappingKeys: [
       { key: "response_array_path", label: "Array-pad in response", placeholder: "data.records" },
       { key: "personnel_number_field", label: "Veld personeelsnummer", placeholder: "employeeNumber" },
@@ -285,6 +290,7 @@ export const CONNECTOR_CATALOG: ConnectorDefinition[] = [
     authType: "oauth2",
     capabilities: ["OAuth 2.0", "Webhooks"],
     badge: "aanbevolen",
+    featured: true,
     ...SOON_STUB,
   },
   {
