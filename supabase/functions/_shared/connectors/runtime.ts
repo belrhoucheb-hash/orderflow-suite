@@ -64,7 +64,15 @@ export interface Connector {
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MS = [1000, 3000, 9000];
 
-/** Laad credentials + mapping voor (tenant, provider). Throws als niet gevonden of disabled. */
+/**
+ * Laad credentials + mapping voor (tenant, provider). Throws als niet gevonden of disabled.
+ *
+ * NB: deze RPC leest uit `integration_credentials.credentials` (jsonb) en
+ * resolvet geheime velden uit Vault. De optionele kolom
+ * `credentials_encrypted` (bytea, sinds 20260504230100) wordt door de RPC
+ * automatisch gebruikt zodra die in een toekomstige migratie de jsonb-kolom
+ * vervangt. Edge functions hoeven daarom zelf niets te decoderen.
+ */
 export async function loadConfig(
   supabase: SupabaseClient,
   tenantId: string,

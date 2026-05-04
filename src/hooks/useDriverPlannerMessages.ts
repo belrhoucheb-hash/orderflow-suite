@@ -158,13 +158,13 @@ export function usePlannerDriverThreads() {
       // Pak alle drivers van deze tenant met linked user_id zodat we threads kunnen
       // tonen, ook als er nog geen bericht is.
       const { data: drivers, error: driversErr } = await supabase
-        .from("drivers" as any)
+        .from("drivers")
         .select("id, name, user_id")
         .eq("tenant_id", tenant.id)
         .eq("is_active", true);
       if (driversErr) throw driversErr;
 
-      const driverList = ((drivers ?? []) as unknown) as Array<{ id: string; name: string | null; user_id: string | null }>;
+      const driverList = (drivers ?? []) as Array<{ id: string; name: string | null; user_id: string | null }>;
 
       // Voor elke driver: laatste bericht + unread count.
       const enriched = await Promise.all(
