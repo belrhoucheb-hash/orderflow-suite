@@ -22,6 +22,25 @@ import type { OrderStatus } from "@/lib/statusTransitions";
 
 import { normalizeStatus } from "@/lib/orderDisplay";
 
+function addressToDisplay(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.display === "string" && record.display.trim()) {
+    return record.display.trim();
+  }
+
+  return [
+    [record.street, record.house_number, record.house_number_suffix].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    [record.zipcode, record.city].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    typeof record.country === "string" ? record.country : "",
+  ]
+    .filter((part) => part.trim())
+    .join(", ")
+    .trim();
+}
+
 export type OrderListSortField = "customer" | "totalWeight" | "status" | "createdAt";
 export type OrderListSortDirection = "asc" | "desc";
 
@@ -177,8 +196,8 @@ function draftStopValue(draft: OrderDraftRow, activity: "Laden" | "Lossen", key:
 
 function orderFromDraft(draft: OrderDraftRow): Order {
   const clientName = draftPayloadValue(draft, "clientName") || draft.payload?.orderDraft?.client?.name || "Concept zonder klant";
-  const pickupAddress = draftStopValue(draft, "Laden", "locatie") || draftStopValue(draft, "Laden", "address") || "";
-  const deliveryAddress = draftStopValue(draft, "Lossen", "locatie") || draftStopValue(draft, "Lossen", "address") || "";
+  const pickupAddress = addressToDisplay(draftStopValue(draft, "Laden", "locatie") || draftStopValue(draft, "Laden", "address"));
+  const deliveryAddress = addressToDisplay(draftStopValue(draft, "Lossen", "locatie") || draftStopValue(draft, "Lossen", "address"));
   const cargoRows = Array.isArray(draft.payload?.form?.cargoRows) ? draft.payload.form.cargoRows : [];
   const totalWeight = cargoRows.reduce((sum: number, row: any) => sum + (Number(row?.gewicht) || 0), 0)
     || Number(draftPayloadValue(draft, "weightKg"))
@@ -403,8 +422,8 @@ export function useOrders(options: UseOrdersOptions = {}) {
           clientId: (o as any).client_id ?? null,
           email: o.source_email_from || "",
           phone: "",
-          pickupAddress: o.pickup_address || "",
-          deliveryAddress: o.delivery_address || "",
+          pickupAddress: addressToDisplay(o.pickup_address),
+          deliveryAddress: addressToDisplay(o.delivery_address),
           status: normalizeStatus(o.status),
           priority: (o.priority as Order["priority"]) || "normaal",
           items: [],
@@ -705,8 +724,8 @@ export function useOrder(id: string) {
         clientId: (data as any).client_id ?? null,
         email: data.source_email_from || "",
         phone: "",
-        pickupAddress: data.pickup_address || "",
-        deliveryAddress: data.delivery_address || "",
+        pickupAddress: addressToDisplay(data.pickup_address),
+        deliveryAddress: addressToDisplay(data.delivery_address),
         status: normalizeStatus(data.status),
         priority: (data.priority as Order["priority"]) || "normaal",
         items: [],
