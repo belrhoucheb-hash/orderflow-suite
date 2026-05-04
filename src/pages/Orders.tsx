@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy, Trash2, FileClock } from "lucide-react";
+import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
@@ -62,6 +62,14 @@ function formatOrderDate(value: string | null | undefined): { label: string; too
 const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED"] as const;
 
 const isDraftOrder = (order: any) => order.sourceKind === "draft" || order.status === "DRAFT";
+
+const getOrderNumberLabel = (order: any) => {
+  if (!isDraftOrder(order)) return order.orderNumber;
+  const draftReference = String(order.orderNumber || order.draftId || "")
+    .replace(/^concept[-\s#]*/i, "")
+    .trim();
+  return draftReference ? `Concept #${draftReference}` : "Concept";
+};
 
 function exportOrders(orders: Array<any>, baseName: string): number {
   if (orders.length === 0) return 0;
@@ -784,14 +792,11 @@ const Orders = () => {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <IncompleteBadge order={order} size="dot" />
-                            {isDraftOrder(order) && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--gold)/0.24)] bg-[hsl(var(--gold-soft)/0.7)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]">
-                                <FileClock className="h-3 w-3" />
-                                Concept
-                              </span>
-                            )}
-                            <span className="truncate text-sm font-semibold tabular-nums text-foreground">
-                              {order.orderNumber}
+                            <span className={cn(
+                              "truncate text-sm font-semibold tabular-nums",
+                              isDraftOrder(order) ? "text-[hsl(var(--gold-deep))]" : "text-foreground",
+                            )}>
+                              {getOrderNumberLabel(order)}
                             </span>
                           </div>
                           <p className="mt-1 truncate text-xs font-medium text-foreground/82">{order.customer}</p>
@@ -948,19 +953,16 @@ const Orders = () => {
                     <td className="table-cell">
                       <div className="flex items-center gap-2">
                         <IncompleteBadge order={order} size="dot" />
-                        {isDraftOrder(order) && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--gold)/0.24)] bg-[hsl(var(--gold-soft)/0.7)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
-                            <FileClock className="h-3 w-3" />
-                            Concept
-                          </span>
-                        )}
                         <Link
                           to={openOrderPath(order)}
-                          className="text-[14px] font-semibold text-foreground hover:text-[hsl(var(--gold-deep))] transition-colors tabular-nums tracking-[0.02em] whitespace-nowrap"
+                          className={cn(
+                            "text-[14px] font-semibold hover:text-[hsl(var(--gold-deep))] transition-colors tabular-nums tracking-[0.02em] whitespace-nowrap",
+                            isDraftOrder(order) ? "text-[hsl(var(--gold-deep))]" : "text-foreground",
+                          )}
                           style={{ fontFamily: "var(--font-display)" }}
                           title={order.notes?.trim() || undefined}
                         >
-                          {order.orderNumber}
+                          {getOrderNumberLabel(order)}
                         </Link>
                       </div>
                     </td>

@@ -204,8 +204,7 @@ describe("Orders", () => {
 
   it("visually marks draft rows as concept", () => {
     renderOrders();
-    expect(screen.getAllByText("Concept").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("CONCEPT-D1").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Concept #D1").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows pagination info", () => {
