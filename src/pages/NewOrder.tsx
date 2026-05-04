@@ -41,6 +41,7 @@ import {
 } from "@/hooks/useClients";
 import { useClientContacts, useCreateClientContact } from "@/hooks/useClientContacts";
 import { useWarehouses, type Warehouse } from "@/hooks/useWarehouses";
+import { useVehicleTypes } from "@/hooks/useVehicleTypes";
 import { commitOrderDraftWithLegs, createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
@@ -111,6 +112,8 @@ interface FreightLine {
   requiresTailLift?: boolean;
   temperatureControlled?: boolean;
   photoRequired?: boolean;
+  vehicleTypeId?: string | null;
+  vehicleTypeLabel?: string | null;
   warehouseId?: string;
   warehouseReferenceMode?: "manual" | "order_number";
   warehouseReferencePrefix?: string | null;
@@ -669,9 +672,13 @@ function bestEffortAddressValue(address: unknown, fallbackCountry = "NL"): Addre
 }
 
 function sanitizeFreightLine(line: FreightLine): FreightLine {
+  const vehicleTypeLabel = typeof line.vehicleTypeLabel === "string" ? line.vehicleTypeLabel : null;
+  const vehicleTypeId = typeof line.vehicleTypeId === "string" ? line.vehicleTypeId : null;
   return {
     ...line,
     locatie: addressTextFromUnknown(line.locatie),
+    vehicleTypeId,
+    vehicleTypeLabel,
   };
 }
 
@@ -814,6 +821,7 @@ const NewOrder = () => {
   const { data: clientContacts = [] } = useClientContacts(clientId);
   const createClientContact = useCreateClientContact();
   const { data: warehouses = [] } = useWarehouses();
+  const { data: vehicleTypes = [] } = useVehicleTypes();
   const activeClientContacts = useMemo(() => clientContacts.filter((contact) => contact.is_active), [clientContacts]);
   const [contactpersoon, setContactpersoon] = useState("");
   const [contactChoiceMode, setContactChoiceMode] = useState<ContactChoiceMode>("existing");
@@ -921,6 +929,24 @@ const NewOrder = () => {
   const { data: pickupAddressBookMatches = [] } = useAddressBookSearch(pickupLookup);
   const { data: deliveryAddressBookMatches = [] } = useAddressBookSearch(deliveryLookup);
   const upsertAddressBookEntry = useUpsertAddressBookEntry();
+  const vehicleTypeOptions = useMemo(
+    () => vehicleTypes
+      .filter((type) => type.is_active !== false)
+      .map((type) => ({
+        id: type.id,
+        label: type.name,
+        code: type.code,
+        hasCooling: type.has_cooling,
+        adrCapable: type.adr_capable,
+        hasTailgate: type.has_tailgate,
+      })),
+    [vehicleTypes],
+  );
+  const stopVehicleTypeLabels = useMemo(
+    () => Array.from(new Set(freightLines.map((line) => line.vehicleTypeLabel).filter(Boolean) as string[])),
+    [freightLines],
+  );
+  const primaryStopVehicleType = stopVehicleTypeLabels[0] ?? null;
   const draftStorageKey = useMemo(() => {
     if (!tenant?.id || initialClientId || fromOrderId || draftIdParam) return null;
     return `new-order-draft:${tenant.id}`;
@@ -950,9 +976,21 @@ const NewOrder = () => {
   const addFreightLine = () => {
     setFreightLines(prev => [...prev, {
       id: crypto.randomUUID(), activiteit: "Lossen", locatie: "", datum: "", tijd: "", tijdTot: "", referentie: "", contactLocatie: "", opmerkingen: "",
-      lat: null, lng: null, coords_manual: false,
+      vehicleTypeId: null, vehicleTypeLabel: null, lat: null, lng: null, coords_manual: false,
     }]);
   };
+
+  const updateFreightLineVehicleType = useCallback((lineId: string, value: string) => {
+    const selected = vehicleTypeOptions.find((option) => option.id === value);
+    setFreightLines(prev => prev.map(line => line.id === lineId
+      ? {
+          ...line,
+          vehicleTypeId: selected?.id ?? null,
+          vehicleTypeLabel: selected?.label ?? null,
+        }
+      : line,
+    ));
+  }, [vehicleTypeOptions]);
 
   const removeFreightLine = (id: string) => {
     if (freightLines.length <= 1) return;
@@ -1779,6 +1817,8 @@ const NewOrder = () => {
           date: line.datum || null,
           timeFrom: line.tijd || null,
           timeTo: line.tijdTot || null,
+          vehicleTypeId: line.vehicleTypeId ?? null,
+          vehicleTypeLabel: line.vehicleTypeLabel ?? null,
         };
       })
       .sort((a, b) => a.sequence - b.sequence);
@@ -1804,7 +1844,7 @@ const NewOrder = () => {
       transport: {
         type: transportType || null,
         department: afdeling || null,
-        vehicleType: voertuigtype || null,
+        vehicleType: voertuigtype || primaryStopVehicleType || null,
         secure: shipmentSecure,
         pmtMethod: pmtMethode || null,
         manualOverrides: {
@@ -1824,6 +1864,7 @@ const NewOrder = () => {
     contactpersoon,
     freightLines,
     pmtMethode,
+    primaryStopVehicleType,
     pricingPayload.cents,
     shipmentSecure,
     transportType,
@@ -1876,11 +1917,12 @@ const NewOrder = () => {
       { label: "Klant", value: clientName || "Nog niet gekozen" },
       { label: "Route", value: [pickupLine?.locatie, deliveryLine?.locatie].filter(Boolean).join(" → ") || "Nog geen route" },
       { label: "Lading", value: cargoTotals.totAantal > 0 || cargoTotals.totGewicht > 0 ? `${cargoTotals.totAantal || 0} ${transportEenheid || "eenheden"} · ${cargoTotals.totGewicht || 0} kg` : "Nog leeg" },
-      { label: "Transport", value: [transportType || suggestedTransportType, voertuigtype || suggestedVehicleType].filter(Boolean).join(" · ") || "Wordt voorgesteld" },
+      { label: "Transport", value: [transportType || suggestedTransportType, voertuigtype || primaryStopVehicleType || suggestedVehicleType].filter(Boolean).join(" · ") || "Wordt voorgesteld" },
+      { label: "Stop-eisen", value: stopVehicleTypeLabels.length ? stopVehicleTypeLabels.join(" · ") : "Geen voorkeur" },
       { label: "Afdeling", value: afdeling || inferredAfdeling || "Nog onbekend" },
       { label: "Prijs", value: pricingPayload.cents != null ? `€ ${(pricingPayload.cents / 100).toFixed(2)}` : "Nog geen prijs" },
     ];
-  }, [afdeling, clientName, cargoTotals.totAantal, cargoTotals.totGewicht, freightLines, inferredAfdeling, pricingPayload.cents, suggestedTransportType, suggestedVehicleType, transportEenheid, transportType, voertuigtype]);
+  }, [afdeling, clientName, cargoTotals.totAantal, cargoTotals.totGewicht, freightLines, inferredAfdeling, primaryStopVehicleType, pricingPayload.cents, stopVehicleTypeLabels, suggestedTransportType, suggestedVehicleType, transportEenheid, transportType, voertuigtype]);
 
   // ─── Unsaved-changes-bewaking ────────────────────────────────────────
   // Baseline wordt gezet zodra prefill klaar is (of meteen als er geen
@@ -1898,11 +1940,12 @@ const NewOrder = () => {
   );
 
   const vehicleMatchScore = useMemo(() => {
-    if (!suggestedVehicleType && !voertuigtype) return 0;
-    if (voertuigtype && suggestedVehicleType && voertuigtype === suggestedVehicleType) return 92;
-    if (voertuigtype && suggestedVehicleType && voertuigtype !== suggestedVehicleType) return 76;
+    const selectedVehicleType = voertuigtype || primaryStopVehicleType;
+    if (!suggestedVehicleType && !selectedVehicleType) return 0;
+    if (selectedVehicleType && suggestedVehicleType && selectedVehicleType === suggestedVehicleType) return 92;
+    if (selectedVehicleType && suggestedVehicleType && selectedVehicleType !== suggestedVehicleType) return 76;
     return suggestedVehicleType ? 88 : 0;
-  }, [suggestedVehicleType, voertuigtype]);
+  }, [primaryStopVehicleType, suggestedVehicleType, voertuigtype]);
 
   const wizardStepIndex = WIZARD_STEPS.findIndex((step) => step.key === wizardStep);
   const wizardProgress = Math.round(((wizardStepIndex + 1) / WIZARD_STEPS.length) * 100);
@@ -2032,7 +2075,7 @@ const NewOrder = () => {
     : routeMapMissingGpsCount > 0
       ? `${routeMapPlottedCount}/${routeMapStops.length} GPS-punten`
       : "Kaart op GPS-punten";
-  const routeLegInsights = buildRouteLegInsights(routeMapStops, voertuigtype || suggestedVehicleType || "");
+  const routeLegInsights = buildRouteLegInsights(routeMapStops, voertuigtype || primaryStopVehicleType || suggestedVehicleType || "");
   useEffect(() => {
     if (!supabase.functions?.invoke) return;
     const missingGpsStops = routeMapStops.filter((stop) => {
@@ -3453,12 +3496,15 @@ const NewOrder = () => {
       const routeRequiresTailLift = freightLines.some((line) => line.requiresTailLift);
       const routeRequiresTemperature = freightLines.some((line) => line.temperatureControlled);
       const routeRequiresPhotos = freightLines.some((line) => line.photoRequired);
+      const stopRequiresTemperature = stopVehicleTypeLabels.some((label) => /koel|graden/.test(label.toLowerCase()));
+      const stopRequiresAdr = stopVehicleTypeLabels.some((label) => label.toLowerCase().includes("adr"));
       if (klepNodig || routeRequiresTailLift) reqs.push("laadklep");
-      if (routeRequiresTemperature) reqs.push("temperatuur");
+      if (routeRequiresTemperature || stopRequiresTemperature) reqs.push("temperatuur");
+      if (stopRequiresAdr) reqs.push("adr");
       if (routeRequiresPhotos) reqs.push("fotos_verplicht");
       const distanceKm = totalRouteDistanceKm(routeMapStops);
       const resolvedTransportType = transportType || suggestedTransportType || null;
-      const resolvedVehicleType = voertuigtype || suggestedVehicleType || null;
+      const resolvedVehicleType = voertuigtype || primaryStopVehicleType || suggestedVehicleType || null;
       const contactSnapshot = contactpersoon
         ? {
             id: selectedContactId,
@@ -3477,6 +3523,8 @@ const NewOrder = () => {
           company_name: line.companyName || null,
           address: line.locatie || null,
           reference: line.referentie || null,
+          vehicle_type_id: line.vehicleTypeId || null,
+          vehicle_type_label: line.vehicleTypeLabel || null,
           warehouse_id: line.warehouseId || null,
           reference_mode: line.warehouseReferenceMode || null,
         }));
@@ -4165,14 +4213,38 @@ const NewOrder = () => {
               Hoort bij deze orderstop, niet bij het adresboek.
             </div>
           </div>
-          <div>
-            <label className={flowLabelClass}>Referentie voor planner/chauffeur</label>
-            <Input
-              value={line.referentie || ""}
-              onChange={(e) => updateFreightLine(line.id, "referentie", e.target.value)}
-              placeholder="Bijv. laadnummer, losreferentie, dock-ref of warehouse-ref"
-              className={flowInputClass}
-            />
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.74fr)]">
+            <div>
+              <label className={flowLabelClass}>Referentie voor planner/chauffeur</label>
+              <Input
+                value={line.referentie || ""}
+                onChange={(e) => updateFreightLine(line.id, "referentie", e.target.value)}
+                placeholder="Bijv. laadnummer, losreferentie, dock-ref of warehouse-ref"
+                className={flowInputClass}
+              />
+            </div>
+            <div>
+              <label className={flowLabelClass}>Voertuigtype / toegangseis</label>
+              <Select
+                value={line.vehicleTypeId || "none"}
+                onValueChange={(value) => updateFreightLineVehicleType(line.id, value === "none" ? "" : value)}
+              >
+                <SelectTrigger className={flowInputClass}>
+                  <SelectValue placeholder="Geen voorkeur" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Geen voorkeur</SelectItem>
+                  {vehicleTypeOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="mt-1 block text-[10px] leading-4 tracking-wide text-muted-foreground">
+                Per stop opgeslagen; planning kan dit later overschrijven.
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -4678,6 +4750,9 @@ const NewOrder = () => {
                     <div className="mt-1 text-xs font-medium text-red-600">{stop.issue.message}</div>
                   )}
                   <div className={cn("mt-1 text-xs", stop.missingDate ? "text-muted-foreground" : "text-foreground")}>{[stop.line?.datum, stop.line?.tijd, stop.line?.tijdTot].filter(Boolean).join(" · ") || "Tijdvenster volgt"}</div>
+                  {stop.line?.vehicleTypeLabel && (
+                    <div className="mt-1 text-xs font-medium text-[hsl(var(--gold-deep))]">{stop.line.vehicleTypeLabel}</div>
+                  )}
                 </button>
               ))}
             </div>
@@ -4691,7 +4766,7 @@ const NewOrder = () => {
             </div>
             <div className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.20)] p-3">
               <div className="text-[11px] font-medium text-muted-foreground">Voertuig</div>
-              <div className="mt-1 text-sm font-semibold">{voertuigtype || suggestedVehicleType || "Volgt"}</div>
+              <div className="mt-1 text-sm font-semibold">{voertuigtype || primaryStopVehicleType || suggestedVehicleType || "Volgt"}</div>
               <div className="text-xs text-muted-foreground">{vehicleMatchScore ? `${vehicleMatchScore}% match` : "Nog geen match"}</div>
             </div>
           </div>
@@ -5035,7 +5110,7 @@ const NewOrder = () => {
                     <Truck className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
                     Voertuigmatch
                   </div>
-                  <div className="mt-3 text-2xl font-semibold">{voertuigtype || suggestedVehicleType || "Nog geen voorstel"}</div>
+                  <div className="mt-3 text-2xl font-semibold">{voertuigtype || primaryStopVehicleType || suggestedVehicleType || "Nog geen voorstel"}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {vehicleMatchScore > 0 ? `${vehicleMatchScore}% match op basis van gewicht, lengte, laadklep en prioriteit.` : "Vul route of lading in voor een voertuigsuggestie."}
                   </div>
@@ -5676,7 +5751,10 @@ const NewOrder = () => {
                 {routeActiveQuestion > 1 && renderCollapsedAnswer(
                   "Ophalen",
                   pickupLine?.locatie
-                    ? `${locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").company}\n${locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").address}`
+                    ? `${locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").company}\n${[
+                        locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").address,
+                        pickupLine.vehicleTypeLabel,
+                      ].filter(Boolean).join(" · ")}`
                     : "",
                   () => {
                     setRouteManualBack(true);
@@ -5734,7 +5812,10 @@ const NewOrder = () => {
                   {routeActiveQuestion > 2 && renderCollapsedAnswer(
                     getDeliveryStopLabel(0),
                     deliveryLine?.locatie
-                      ? `${locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").company}\n${locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").address}`
+                      ? `${locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").company}\n${[
+                          locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").address,
+                          deliveryLine.vehicleTypeLabel,
+                        ].filter(Boolean).join(" · ")}`
                       : "",
                     () => {
                       setRouteManualBack(true);
@@ -7149,7 +7230,7 @@ const NewOrder = () => {
                         <div>
                           <div className="text-sm font-semibold">Lading & planning</div>
                           <div className="mt-1 text-xs text-muted-foreground">
-                            {cargoTotals.totAantal || 0} {cargoTotals.primaryUnit || "eenheden"} · {cargoTotals.totGewicht || 0} kg · {voertuigtype || suggestedVehicleType || "voertuig volgt"}
+                            {cargoTotals.totAantal || 0} {cargoTotals.primaryUnit || "eenheden"} · {cargoTotals.totGewicht || 0} kg · {voertuigtype || primaryStopVehicleType || suggestedVehicleType || "voertuig volgt"}
                           </div>
                         </div>
                         <button
