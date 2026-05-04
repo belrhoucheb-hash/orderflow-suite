@@ -116,12 +116,25 @@ Deno.serve(async (req) => {
 function htmlPage(message: string, success: boolean): Response {
   const color = success ? "#0f766e" : "#b91c1c";
   const appOrigin = (Deno.env.get("APP_ORIGIN") ?? "").trim();
-  const postScript = appOrigin
-    ? `<script>
-    if (window.opener) {
-      window.opener.postMessage({ type: 'orderflow-exact-callback', success: ${success} }, ${JSON.stringify(appOrigin)});
-    }
-  </script>`
+  const postMessageScript = appOrigin
+    ? `try {
+      if (window.opener) {
+        window.opener.postMessage({ type: 'orderflow-exact-callback', success: ${success} }, ${JSON.stringify(appOrigin)});
+      }
+    } catch (_) { /* postMessage onbereikbaar */ }`
+    : "";
+  // BroadcastChannel werkt cross-tab/cross-window binnen dezelfde origin.
+  // Edge Function draait op supabase.co, UI op andere origin: deze broadcast komt aan
+  // wanneer beide tabs van dezelfde supabase.co-origin geopend zijn (vooral handig bij
+  // popup-redirect met auth-flow op supabase.co), en dient als secundair signaal naast
+  // postMessage. UI-zijde combineert dit met polling-fallback.
+  const broadcastScript = `try {
+      var bc = new BroadcastChannel('orderflow-oauth');
+      bc.postMessage({ ok: ${success}, provider: 'exact_online' });
+      bc.close();
+    } catch (_) { /* BroadcastChannel onbereikbaar */ }`;
+  const autoCloseScript = success
+    ? `setTimeout(function () { try { window.close(); } catch (_) {} }, 1500);`
     : "";
   const html = `<!doctype html>
 <html lang="nl"><head><meta charset="utf-8"><title>OrderFlow Exact-koppeling</title>
@@ -135,7 +148,11 @@ function htmlPage(message: string, success: boolean): Response {
   <h1>${success ? "Gelukt" : "Mislukt"}</h1>
   <p>${escapeHtml(message)}</p>
   <button onclick="window.close()">Tabblad sluiten</button>
-  ${postScript}
+  <script>
+    ${broadcastScript}
+    ${postMessageScript}
+    ${autoCloseScript}
+  </script>
 </body></html>`;
   return new Response(html, {
     status: 200,
