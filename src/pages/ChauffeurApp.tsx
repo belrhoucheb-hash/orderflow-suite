@@ -14,6 +14,7 @@ import { TripFlow } from "@/components/chauffeur/TripFlow";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
 import { MijnWeekView } from "@/components/chauffeur/MijnWeekView";
 import { SwipeToConfirm } from "@/components/chauffeur/SwipeToConfirm";
+import { DriverChatPanel } from "@/components/chauffeur/DriverChatPanel";
 import { useVehicleCheckGate } from "@/hooks/useVehicleCheck";
 import { useDriverTrips, useUpdateStopStatus, useSavePOD } from "@/hooks/useTrips";
 import { useDriverSchedulesRealtime } from "@/hooks/useDriverSchedulesRealtime";
@@ -339,9 +340,10 @@ export default function ChauffeurApp() {
     }
   };
 
-  // Tabs in het hoofd-dashboard: "vandaag" toont ritten, "week" toont
-  // het persoonlijke weekrooster (read-only). Geen routing, alleen lokaal.
-  const [activeTab, setActiveTab] = useState<"vandaag" | "week">("vandaag");
+  // Tabs in het hoofd-dashboard: "vandaag" toont ritten, "week" toont het
+  // persoonlijke weekrooster, "chat" een 1-op-1 thread met de planner.
+  // Geen routing, alleen lokaal.
+  const [activeTab, setActiveTab] = useState<"vandaag" | "week" | "chat">("vandaag");
 
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [isSigning, setIsSigning] = useState(false);
@@ -1247,11 +1249,32 @@ export default function ChauffeurApp() {
           <CalendarIcon className="h-4 w-4" />
           Mijn week
         </button>
+        <button
+          onClick={() => setActiveTab("chat")}
+          className={cn(
+            "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
+            activeTab === "chat"
+              ? "bg-primary text-white shadow-sm"
+              : "bg-slate-50 text-slate-600 hover:bg-slate-100",
+          )}
+        >
+          <MessageSquare className="h-4 w-4" />
+          Chat
+        </button>
       </div>
 
       {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
-        {activeTab === "week" ? (
+      <div className={cn(
+        "flex-1 overflow-y-auto pb-24",
+        activeTab === "chat" ? "" : "p-4 space-y-4",
+      )}>
+        {activeTab === "chat" ? (
+          activeDriverId ? (
+            <div className="h-[calc(100vh-12rem)]">
+              <DriverChatPanel driverId={activeDriverId} active={activeTab === "chat"} />
+            </div>
+          ) : null
+        ) : activeTab === "week" ? (
           activeDriverId ? (
             <MijnWeekView driverId={activeDriverId} />
           ) : null

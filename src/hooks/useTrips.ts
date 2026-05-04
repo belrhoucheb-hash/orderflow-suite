@@ -294,6 +294,38 @@ export function useUpdateTripStatus() {
   });
 }
 
+// Statuses die een klant-broadcast triggeren. OVERGESLAGEN behandelen we
+// als variant van MISLUKT en sturen mee zodat de klant ook bij geweigerd-zonder-
+// nieuwe-poging een melding krijgt.
+const BROADCAST_STATUSES: ReadonlyArray<StopStatus> = [
+  "ONDERWEG",
+  "AANGEKOMEN",
+  "AFGELEVERD",
+  "MISLUKT",
+  "OVERGESLAGEN",
+];
+
+async function broadcastStopStatusToCustomer(input: {
+  stopId: string;
+  status: StopStatus;
+  reason?: string;
+  podUrl?: string | null;
+}) {
+  // Fail-soft: een mislukte broadcast mag de mutation niet breken.
+  try {
+    await supabase.functions.invoke("notify-customer-stop-status", {
+      body: {
+        trip_stop_id: input.stopId,
+        status: input.status,
+        reason: input.reason ?? null,
+        pod_url: input.podUrl ?? null,
+      },
+    });
+  } catch (err) {
+    console.warn("Klant-broadcast mislukt (genegeerd):", err);
+  }
+}
+
 // ─── Update stop status ─────────────────────────────────────
 export function useUpdateStopStatus() {
   const queryClient = useQueryClient();
@@ -315,6 +347,12 @@ export function useUpdateStopStatus() {
         .select("trip_id")
         .eq("id", stopId)
         .single();
+
+      if (BROADCAST_STATUSES.includes(status)) {
+        const reason = (extra?.failure_reason as string | undefined) ?? undefined;
+        const podUrl = (extra?.pod_url as string | undefined) ?? null;
+        await broadcastStopStatusToCustomer({ stopId, status, reason, podUrl });
+      }
 
       return { tripId: stop?.trip_id ?? null };
     },

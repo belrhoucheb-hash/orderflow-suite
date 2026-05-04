@@ -15,6 +15,11 @@ import {
   type EtaNotificationSettings as EtaNotificationSettingsType,
 } from "@/types/notifications";
 import { useLoadEtaSettings, useSaveEtaSettings } from "@/hooks/useEtaSettings";
+import { useLoadSettings, useSaveSettings } from "@/hooks/useSettings";
+
+interface GeneralSettings {
+  broadcast_stop_updates?: boolean;
+}
 
 const SEVERITY_OPTIONS: Array<{ value: EtaNotificationSettingsType["predicted_delay_severity"]; label: string }> = [
   { value: "LOW", label: "Laag" },
@@ -33,22 +38,37 @@ function clampInt(value: string, fallback: number, min = 0, max = 720): number {
 export function EtaNotificationSettings() {
   const { data: loaded, isLoading } = useLoadEtaSettings();
   const save = useSaveEtaSettings();
+  const { data: generalSettings } = useLoadSettings<GeneralSettings>("general");
+  const saveGeneral = useSaveSettings("general");
 
   const [form, setForm] = useState<EtaNotificationSettingsType>(DEFAULT_ETA_NOTIFICATION_SETTINGS);
+  const [broadcastStopUpdates, setBroadcastStopUpdates] = useState<boolean>(true);
   const [baseline, setBaseline] = useState<string>("");
 
   useEffect(() => {
     if (isLoading) return;
     setForm(loaded);
-    setBaseline(JSON.stringify(loaded));
-  }, [isLoading, loaded]);
+    setBroadcastStopUpdates(generalSettings?.broadcast_stop_updates ?? true);
+    setBaseline(
+      JSON.stringify({
+        eta: loaded,
+        broadcast: generalSettings?.broadcast_stop_updates ?? true,
+      }),
+    );
+  }, [isLoading, loaded, generalSettings]);
 
-  const dirty = baseline !== "" && JSON.stringify(form) !== baseline;
+  const dirty =
+    baseline !== "" &&
+    JSON.stringify({ eta: form, broadcast: broadcastStopUpdates }) !== baseline;
 
   async function handleSave() {
     try {
       await save.mutateAsync(form as unknown as Record<string, unknown>);
-      setBaseline(JSON.stringify(form));
+      await saveGeneral.mutateAsync({
+        ...(generalSettings ?? {}),
+        broadcast_stop_updates: broadcastStopUpdates,
+      });
+      setBaseline(JSON.stringify({ eta: form, broadcast: broadcastStopUpdates }));
       toast.success("ETA-instellingen opgeslagen");
     } catch {
       toast.error("Fout bij opslaan", { description: "Probeer het opnieuw." });
@@ -71,6 +91,19 @@ export function EtaNotificationSettings() {
         <p className="mt-1 text-xs text-muted-foreground">
           Bepaal wanneer klanten een aankomstmelding krijgen en wanneer de planner een waarschuwing ziet bij een voorspelde vertraging.
         </p>
+      </div>
+
+      <div className="flex items-center justify-between py-3 border-t border-[hsl(var(--gold)/0.12)]">
+        <div className="space-y-0.5 pr-4">
+          <Label className="text-sm font-medium">Stuur klanten automatisch een statusupdate</Label>
+          <p className="text-xs text-muted-foreground">
+            Verstuurt portal-notificatie en e-mail bij stop-overgang naar onderweg, aangekomen of afgeleverd. Mislukte bezorgingen versturen ook altijd een melding.
+          </p>
+        </div>
+        <Switch
+          checked={broadcastStopUpdates}
+          onCheckedChange={(v) => setBroadcastStopUpdates(v)}
+        />
       </div>
 
       <div className="flex items-center justify-between py-3 border-t border-[hsl(var(--gold)/0.12)]">
@@ -207,10 +240,10 @@ export function EtaNotificationSettings() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={!dirty || save.isPending}
+          disabled={!dirty || save.isPending || saveGeneral.isPending}
           className="btn-luxe btn-luxe--primary !h-9"
         >
-          {save.isPending ? "Opslaan..." : "Opslaan"}
+          {(save.isPending || saveGeneral.isPending) ? "Opslaan..." : "Opslaan"}
         </button>
       </div>
     </div>
