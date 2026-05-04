@@ -1,0 +1,10 @@
+<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Visma">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1F36C7"/>
+      <stop offset="100%" stop-color="#0F1B7A"/>
+    </linearGradient>
+  </defs>
+  <rect width="80" height="80" rx="16" fill="url(#g)"/>
+  <path d="M22 28 L40 56 L58 28" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

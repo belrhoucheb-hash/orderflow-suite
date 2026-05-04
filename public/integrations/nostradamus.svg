@@ -1,0 +1,11 @@
+<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Nostradamus">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1B5BA5"/>
+      <stop offset="100%" stop-color="#0E3B70"/>
+    </linearGradient>
+  </defs>
+  <rect width="80" height="80" rx="16" fill="url(#g)"/>
+  <circle cx="40" cy="40" r="20" stroke="#fff" stroke-width="3" fill="none"/>
+  <path d="M40 26 V40 L50 46" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/>
+</svg>
