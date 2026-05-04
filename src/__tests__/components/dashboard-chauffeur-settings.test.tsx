@@ -96,33 +96,33 @@ describe("FinancialKPIWidget", () => {
 
   it("renders heading", async () => {
     const { FinancialKPIWidget } = await import("@/components/dashboard/FinancialKPIWidget");
-    render(<Wrapper><FinancialKPIWidget orders={mockOrders as any} vehicles={mockVehicles as any} /></Wrapper>);
+    render(<Wrapper><FinancialKPIWidget vehicles={mockVehicles as any} /></Wrapper>);
     expect(screen.getByText("Financieel")).toBeInTheDocument();
   });
 
   it("shows estimated revenue", async () => {
     const { FinancialKPIWidget } = await import("@/components/dashboard/FinancialKPIWidget");
-    render(<Wrapper><FinancialKPIWidget orders={mockOrders as any} vehicles={mockVehicles as any} /></Wrapper>);
+    render(<Wrapper><FinancialKPIWidget vehicles={mockVehicles as any} /></Wrapper>);
     // 2 in-transit trips * 485 = 970
     expect(screen.getByText("Geraamde Omzet")).toBeInTheDocument();
   });
 
   it("shows cost per km", async () => {
     const { FinancialKPIWidget } = await import("@/components/dashboard/FinancialKPIWidget");
-    render(<Wrapper><FinancialKPIWidget orders={mockOrders as any} vehicles={mockVehicles as any} /></Wrapper>);
+    render(<Wrapper><FinancialKPIWidget vehicles={mockVehicles as any} /></Wrapper>);
     expect(screen.getByText("Kosten per KM")).toBeInTheDocument();
   });
 
   it("shows beladingsgraad", async () => {
     const { FinancialKPIWidget } = await import("@/components/dashboard/FinancialKPIWidget");
-    render(<Wrapper><FinancialKPIWidget orders={mockOrders as any} vehicles={mockVehicles as any} /></Wrapper>);
+    render(<Wrapper><FinancialKPIWidget vehicles={mockVehicles as any} /></Wrapper>);
     expect(screen.getByText("Beladingsgraad")).toBeInTheDocument();
     expect(screen.getByText("0%")).toBeInTheDocument();
   });
 
   it("handles zero capacity", async () => {
     const { FinancialKPIWidget } = await import("@/components/dashboard/FinancialKPIWidget");
-    render(<Wrapper><FinancialKPIWidget orders={[]} vehicles={[]} /></Wrapper>);
+    render(<Wrapper><FinancialKPIWidget vehicles={[]} /></Wrapper>);
     expect(screen.getByText("0%")).toBeInTheDocument();
   });
 });
@@ -140,13 +140,13 @@ describe("OperationalForecastWidget", () => {
 
   it("renders heading", async () => {
     const { OperationalForecastWidget } = await import("@/components/dashboard/OperationalForecastWidget");
-    render(<Wrapper><OperationalForecastWidget vehicles={mockVehicles as any} orders={mockOrders as any} /></Wrapper>);
+    render(<Wrapper><OperationalForecastWidget vehicles={mockVehicles as any} /></Wrapper>);
     expect(screen.getByText("Operationeel")).toBeInTheDocument();
   });
 
   it("shows capacity stats", async () => {
     const { OperationalForecastWidget } = await import("@/components/dashboard/OperationalForecastWidget");
-    render(<Wrapper><OperationalForecastWidget vehicles={mockVehicles as any} orders={mockOrders as any} /></Wrapper>);
+    render(<Wrapper><OperationalForecastWidget vehicles={mockVehicles as any} /></Wrapper>);
     expect(screen.getByText("Capaciteit")).toBeInTheDocument();
     expect(screen.getByText("Vrij")).toBeInTheDocument();
     expect(screen.getByText("Gepland")).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe("OperationalForecastWidget", () => {
 
   it("shows total weight", async () => {
     const { OperationalForecastWidget } = await import("@/components/dashboard/OperationalForecastWidget");
-    render(<Wrapper><OperationalForecastWidget vehicles={mockVehicles as any} orders={mockOrders as any} /></Wrapper>);
+    render(<Wrapper><OperationalForecastWidget vehicles={mockVehicles as any} /></Wrapper>);
     expect(screen.getByText("Totaal gewicht actief")).toBeInTheDocument();
     expect(screen.getByText(/0 kg/)).toBeInTheDocument();
   });
