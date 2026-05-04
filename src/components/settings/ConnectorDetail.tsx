@@ -1,18 +1,20 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ExternalLink, RefreshCw, CheckCircle2, XCircle, Clock,
   Sparkles, Zap, Activity, BookOpen, Settings as SettingsIcon,
   ArrowLeftRight, ScrollText, Lock, KeyRound, Webhook, Radio, Globe2,
   ChevronRight, AlertTriangle, Filter, ChevronDown, Copy, Check, GripVertical, X,
-  Wand2, ShieldAlert, ShieldCheck, RotateCcw,
+  Wand2, ShieldAlert, ShieldCheck, RotateCcw, Info,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { findConnector, CATEGORY_LABELS } from "@/lib/connectors/catalog";
 import { getSourceFields, type ConnectorSourceField } from "@/lib/connectors/sourceFields";
@@ -45,6 +47,18 @@ import { AuditTab } from "@/components/settings/connectors/AuditTab";
 import { WebhookReplayDialog } from "@/components/settings/connectors/WebhookReplayDialog";
 import { useReplaySyncEventsBulk } from "@/hooks/useReplaySyncEvent";
 import { Checkbox } from "@/components/ui/checkbox";
+
+function defaultExactRedirectUri(): string {
+  const raw = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    // Ondersteun zowel <ref>.supabase.co als zelf-gehoste varianten.
+    return `${u.protocol}//${u.host}/functions/v1/oauth-callback-exact`;
+  } catch {
+    return "";
+  }
+}
 
 interface Props {
   slug: string;
@@ -580,6 +594,7 @@ function ConnectionTab({
   } else if (slug === "nostradamus") {
     form = (
       <NostradamusConnectionForm
+        setupHint={connector.setupHint}
         creds={creds.data?.credentials ?? {}}
         enabled={creds.data?.enabled ?? false}
         onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
@@ -591,6 +606,7 @@ function ConnectionTab({
   } else {
     form = (
       <SnelstartConnectionForm
+        setupHint={connector.setupHint}
         creds={creds.data?.credentials ?? {}}
         enabled={creds.data?.enabled ?? false}
         onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
@@ -681,28 +697,98 @@ function ExactConnectionForm({
   testing: boolean;
 }) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+  const defaultRedirect = useMemo(() => defaultExactRedirectUri(), []);
   const [clientId, setClientId] = useState((creds.clientId as string) ?? "");
   const [clientSecret, setClientSecret] = useState("");
-  const [redirectUri, setRedirectUri] = useState((creds.redirectUri as string) ?? "");
+  const [redirectUri, setRedirectUri] = useState(
+    (creds.redirectUri as string) ?? defaultRedirect ?? "",
+  );
   const [divisionId, setDivisionId] = useState((creds.divisionId as string) ?? "");
   const [active, setActive] = useState(enabled);
   const [oauthOpen, setOauthOpen] = useState(false);
   const [oauthStep, setOauthStep] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [oauthSuccess, setOauthSuccess] = useState(false);
+  // Snapshot van hasStoredSecrets bij modal-open, zodat polling kan zien dat er
+  // nieuw werd opgeslagen na de OAuth-flow (transition false -> true).
+  const storedAtOpenRef = useRef<boolean>(false);
 
   useEffect(() => {
     setClientId((creds.clientId as string) ?? "");
-    setRedirectUri((creds.redirectUri as string) ?? "");
+    setRedirectUri(
+      (creds.redirectUri as string) || defaultRedirect || "",
+    );
     setDivisionId((creds.divisionId as string) ?? "");
     setActive(enabled);
-  }, [creds, enabled]);
+  }, [creds, enabled, defaultRedirect]);
 
   const hasStoredSecrets = creds.__hasStoredSecrets === true;
   const hasCreds = Boolean(enabled || hasStoredSecrets);
   const canStartOAuth = Boolean(tenant && clientId.trim() && redirectUri.trim());
 
+  // Detect OAuth-callback success via BroadcastChannel (primair).
+  useEffect(() => {
+    if (!oauthOpen) return;
+    if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return;
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("orderflow-oauth");
+    } catch {
+      return;
+    }
+    const onMessage = (ev: MessageEvent) => {
+      const data = ev.data as { ok?: boolean; provider?: string } | null;
+      if (!data || data.provider !== "exact_online") return;
+      if (data.ok) {
+        markSuccess();
+      }
+    };
+    bc.addEventListener("message", onMessage);
+    return () => {
+      bc?.removeEventListener("message", onMessage);
+      bc?.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oauthOpen]);
+
+  // Polling-fallback wanneer BroadcastChannel niet beschikbaar of cross-origin niet aankomt.
+  useEffect(() => {
+    if (!oauthOpen || oauthSuccess) return;
+    const interval = window.setInterval(() => {
+      // Vraag de credentials-query opnieuw, en kijk of hasStoredSecrets sinds open
+      // van false naar true is gegaan.
+      queryClient
+        .invalidateQueries({ queryKey: ["integration_credentials", tenant?.id, "exact_online"] })
+        .catch(() => {});
+    }, 2000);
+    return () => window.clearInterval(interval);
+  }, [oauthOpen, oauthSuccess, queryClient, tenant?.id]);
+
+  // Detect transition false -> true via creds-prop (na invalidate refetcht parent).
+  useEffect(() => {
+    if (!oauthOpen || oauthSuccess) return;
+    if (!storedAtOpenRef.current && hasStoredSecrets) {
+      markSuccess();
+    }
+  }, [oauthOpen, oauthSuccess, hasStoredSecrets]);
+
+  function markSuccess() {
+    setOauthSuccess(true);
+    setOauthStep(2);
+    queryClient.invalidateQueries({
+      queryKey: ["integration_credentials", tenant?.id, "exact_online"],
+    });
+    // Modal blijft 2s open met "Verbonden"-bevestiging, dan automatisch sluiten.
+    window.setTimeout(() => {
+      setOauthOpen(false);
+    }, 2000);
+  }
+
   const handleStartOAuth = async () => {
     if (!tenant) return;
+    storedAtOpenRef.current = hasStoredSecrets;
+    setOauthSuccess(false);
     setOauthOpen(true);
     setOauthStep(0);
     try {
@@ -766,7 +852,26 @@ function ExactConnectionForm({
         <Field label="Client ID" id="exact-client-id" value={clientId} onChange={setClientId} />
         <Field label="Client Secret" id="exact-client-secret" type="password" value={clientSecret} onChange={setClientSecret} placeholder={hasStoredSecrets ? "Leeg laten behoudt huidige secret" : ""} />
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="exact-redirect-uri" className="text-xs font-display font-semibold uppercase tracking-[0.16em] text-muted-foreground">Redirect URI</Label>
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="exact-redirect-uri" className="text-xs font-display font-semibold uppercase tracking-[0.16em] text-muted-foreground">Redirect URI</Label>
+            {defaultRedirect && redirectUri === defaultRedirect && (
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))] cursor-help"
+                      aria-label="Auto-gegenereerd voor jouw Supabase-project"
+                    >
+                      <Info className="h-2.5 w-2.5" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-[11px]">
+                    Auto-gegenereerd voor jouw Supabase-project
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <div className="relative">
             <Input
               id="exact-redirect-uri"
@@ -816,9 +921,24 @@ function ExactConnectionForm({
             <DialogDescription>Verbind je Exact Online-account met OrderFlow in 3 stappen.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Stepper steps={["Inloggen bij Exact", "Toegang verlenen", "Klaar"]} active={oauthStep} />
-            <div className="rounded-xl border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.3)] p-3 text-xs text-foreground/80 leading-relaxed">
-              {oauthStep < 2 ? (
+            <Stepper
+              steps={["Inloggen bij Exact", "Toegang verlenen", "Klaar"]}
+              active={oauthSuccess ? 2 : oauthStep}
+            />
+            <div
+              className={cn(
+                "rounded-xl border p-3 text-xs leading-relaxed",
+                oauthSuccess
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.3)] text-foreground/80",
+              )}
+            >
+              {oauthSuccess ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Verbonden met Exact Online. Dit venster sluit automatisch.
+                </span>
+              ) : oauthStep < 2 ? (
                 <>Het Exact Online inlog-venster is geopend in een nieuw tabblad. Log in en bevestig dat OrderFlow toegang krijgt tot je administratie. Daarna word je terug gestuurd, en wordt deze melding automatisch gesloten.</>
               ) : (
                 <>Je Exact Online-koppeling is actief. Test 'm via de Test verbinding-knop in deze tab.</>
@@ -835,6 +955,7 @@ function ExactConnectionForm({
 }
 
 function NostradamusConnectionForm({
+  setupHint,
   creds,
   enabled,
   onSave,
@@ -842,6 +963,7 @@ function NostradamusConnectionForm({
   saving,
   testing,
 }: {
+  setupHint?: string;
   creds: Record<string, unknown>;
   enabled: boolean;
   onSave: (c: Record<string, unknown>, en: boolean) => Promise<void>;
@@ -875,6 +997,12 @@ function NostradamusConnectionForm({
 
   return (
     <div className="card--luxe p-5 space-y-5">
+      {setupHint && (
+        <div className="rounded-xl border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.3)] p-3 text-xs text-foreground/80 leading-relaxed">
+          {setupHint}
+        </div>
+      )}
+
       <div className="flex items-center justify-between p-3 rounded-xl border border-[hsl(var(--gold)/0.18)] bg-white">
         <div>
           <Label className="text-sm font-display font-semibold">Connector actief</Label>
@@ -901,10 +1029,10 @@ function NostradamusConnectionForm({
         <Switch checked={mockMode} onCheckedChange={setMockMode} />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={save} disabled={saving} className="gap-1.5">
           {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-          {saving ? "Opslaan..." : "Opslaan"}
+          {saving ? "Opslaan..." : "Configuratie opslaan"}
         </Button>
         <Button variant="outline" onClick={onTest} disabled={testing} className="gap-1.5">
           <Activity className="h-3.5 w-3.5" />
@@ -916,6 +1044,7 @@ function NostradamusConnectionForm({
 }
 
 function SnelstartConnectionForm({
+  setupHint,
   creds,
   enabled,
   onSave,
@@ -923,6 +1052,7 @@ function SnelstartConnectionForm({
   saving,
   testing,
 }: {
+  setupHint?: string;
   creds: Record<string, unknown>;
   enabled: boolean;
   onSave: (c: Record<string, unknown>, en: boolean) => Promise<void>;
@@ -952,6 +1082,12 @@ function SnelstartConnectionForm({
 
   return (
     <div className="card--luxe p-5 space-y-5">
+      {setupHint && (
+        <div className="rounded-xl border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.3)] p-3 text-xs text-foreground/80 leading-relaxed">
+          {setupHint}
+        </div>
+      )}
+
       <div className="flex items-center justify-between p-3 rounded-xl border border-[hsl(var(--gold)/0.18)] bg-white">
         <div>
           <Label className="text-sm font-display font-semibold">Connector actief</Label>
@@ -974,10 +1110,10 @@ function SnelstartConnectionForm({
         <Switch checked={mockMode} onCheckedChange={setMockMode} />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={save} disabled={saving} className="gap-1.5">
           {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-          {saving ? "Opslaan..." : "Opslaan"}
+          {saving ? "Opslaan..." : "Configuratie opslaan"}
         </Button>
         <Button variant="outline" onClick={onTest} disabled={testing} className="gap-1.5">
           <Activity className="h-3.5 w-3.5" />

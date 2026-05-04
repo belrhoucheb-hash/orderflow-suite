@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CheckCircle2, Clock, Search, Sparkles, Zap, ArrowRight, Activity,
-  Lock, Radio, ArrowLeftRight, Webhook, KeyRound, Globe2, MapPin, Package, ChevronUp,
+  CheckCircle2, Clock, Search, Sparkles, Zap, AlertCircle, ArrowRight, Activity,
+  Lock, Radio, ArrowLeftRight, Webhook, KeyRound, Globe2, MapPin, Package, ChevronUp, X,
   Info, Users, TrendingUp, Rocket,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -90,10 +90,12 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
   // Initial state uit URL leiden, daarna twee-richtingen sync.
   const initialCat = searchParams.get("cat");
   const initialQuery = searchParams.get("q") ?? "";
+  const initialCapability = searchParams.get("cap");
   const [filter, setFilter] = useState<FilterChip>(
     isValidChip(initialCat) ? initialCat : "alle",
   );
   const [query, setQuery] = useState(initialQuery);
+  const [capabilityFilter, setCapabilityFilter] = useState<string | null>(initialCapability);
 
   const [autocompleteOpen, setAutocompleteOpen] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(0);
@@ -199,14 +201,15 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
 
   const filtered = all.filter((c) => {
     if (filter !== "alle" && c.category !== filter) return false;
+    if (capabilityFilter && !(c.capabilities ?? []).includes(capabilityFilter)) return false;
     if (!queryLower) return true;
     return matchedSlugs.has(c.slug);
   });
 
   const liveAndBeta = filtered.filter((c) => c.status !== "soon");
   const roadmap = filtered.filter((c) => c.status === "soon");
-  const showBundles = filter === "alle" && !queryLower;
-  const showFeatured = filter === "alle" && !queryLower;
+  const showBundles = filter === "alle" && !queryLower && !capabilityFilter;
+  const showFeatured = filter === "alle" && !queryLower && !capabilityFilter;
   const stripStats = buildStripStats(all);
 
   const handleSelectSuggestion = (slug: string) => {
@@ -458,9 +461,21 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
             </button>
           );
         })}
-        {(query || filter !== "alle") && (
+        {capabilityFilter && (
           <button
-            onClick={() => { setFilter("alle"); setQuery(""); }}
+            type="button"
+            onClick={() => setCapabilityFilter(null)}
+            aria-label={`Wis capability-filter ${capabilityFilter}`}
+            className="h-9 px-3 rounded-full text-xs font-display font-semibold inline-flex items-center gap-1.5 border border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold-soft)/0.6)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft))] transition-colors"
+          >
+            {capabilityIcon(capabilityFilter)}
+            {capabilityFilter}
+            <X className="h-3 w-3" />
+          </button>
+        )}
+        {(query || filter !== "alle" || capabilityFilter) && (
+          <button
+            onClick={() => { setFilter("alle"); setQuery(""); setCapabilityFilter(null); }}
             className="h-9 px-3 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             Wis filter
@@ -486,7 +501,16 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <AnimatePresence>
                   {liveAndBeta.map((c, i) => (
-                    <ConnectorCard key={c.slug} connector={c} delay={i * 0.04} onSelect={() => onSelect(c.slug)} />
+                    <ConnectorCard
+                      key={c.slug}
+                      connector={c}
+                      delay={i * 0.04}
+                      onSelect={() => onSelect(c.slug)}
+                      activeCapability={capabilityFilter}
+                      onCapabilityClick={(cap) =>
+                        setCapabilityFilter((current) => (current === cap ? null : cap))
+                      }
+                    />
                   ))}
                 </AnimatePresence>
               </div>
@@ -700,23 +724,34 @@ function ConnectorCard({
   connector,
   delay,
   onSelect,
+  activeCapability,
+  onCapabilityClick,
 }: {
   connector: ConnectorWithStatus;
   delay: number;
   onSelect: () => void;
+  activeCapability?: string | null;
+  onCapabilityClick?: (cap: string) => void;
 }) {
   const isLive = connector.enabled && connector.hasCredentials;
   const tint = withAlpha(connector.brandColor, 0.04);
   return (
-    <motion.button
-      type="button"
+    <motion.div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
       transition={{ duration: 0.3, delay }}
       whileHover={{ y: -2 }}
-      className="group relative rounded-2xl border border-[hsl(var(--gold)/0.18)] p-5 text-left overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.05)] hover:border-[hsl(var(--gold)/0.45)] hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.22)] transition-shadow"
+      className="group relative rounded-2xl border border-[hsl(var(--gold)/0.18)] p-5 text-left overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.05)] hover:border-[hsl(var(--gold)/0.45)] hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.22)] transition-shadow cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gold)/0.5)]"
       style={{
         background: `linear-gradient(180deg, white 0%, ${tint} 100%)`,
       }}
@@ -756,15 +791,35 @@ function ConnectorCard({
 
       {(connector.capabilities ?? []).length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {(connector.capabilities ?? []).map((cap) => (
-            <span
-              key={cap}
-              className="inline-flex h-6 items-center gap-1 px-2 rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] text-[10px] font-display font-semibold tracking-wide"
-            >
-              {capabilityIcon(cap)}
-              {cap}
-            </span>
-          ))}
+          {(connector.capabilities ?? []).map((cap) => {
+            const active = activeCapability === cap;
+            const clickable = Boolean(onCapabilityClick);
+            return (
+              <button
+                key={cap}
+                type="button"
+                disabled={!clickable}
+                onClick={(e) => {
+                  if (!clickable) return;
+                  e.stopPropagation();
+                  onCapabilityClick?.(cap);
+                }}
+                aria-pressed={active}
+                title={clickable ? `Filter op ${cap}` : cap}
+                className={cn(
+                  "inline-flex h-6 items-center gap-1 px-2 rounded-full text-[10px] font-display font-semibold tracking-wide transition-all",
+                  active
+                    ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm"
+                    : "bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))]",
+                  clickable && !active && "hover:bg-[hsl(var(--gold-soft))] hover:ring-1 hover:ring-[hsl(var(--gold)/0.4)]",
+                  !clickable && "cursor-default",
+                )}
+              >
+                {capabilityIcon(cap)}
+                {cap}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -787,7 +842,7 @@ function ConnectorCard({
           <ArrowRight className="h-3 w-3" />
         </span>
       </div>
-    </motion.button>
+    </motion.div>
   );
 }
 
