@@ -14,6 +14,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsFor, handleOptions } from "../_shared/cors.ts";
+import { checkRateLimit, clientIp, rateLimitResponse } from "../_shared/rate-limit.ts";
 
 interface AddressComponent {
   long_name: string;
@@ -66,6 +67,11 @@ serve(async (req) => {
   const cors = corsFor(req);
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405, headers: cors });
+  }
+
+  const limit = checkRateLimit(`google-places-business:${clientIp(req)}`);
+  if (!limit.allowed) {
+    return rateLimitResponse(limit.retryAfterSeconds, cors);
   }
 
   const key = Deno.env.get("GOOGLE_MAPS_API_KEY");

@@ -2,7 +2,92 @@
 
 Dit is het levende testdocument. Wordt bijgewerkt zodra er nieuwe functionaliteit wordt opgeleverd. De meest recente toevoegingen staan bovenaan per sectie, en in "Wat is er nieuw sinds de vorige test" hieronder.
 
-**Laatste update**: 2026-04-28, Connector-platform beschikbaar (nieuwe Integraties-pagina met Snelstart en Exact Online live)
+**Laatste update**: 2026-05-04, Sprint 9, security-update inloggen + uitnodigen nieuwe collega's
+
+---
+
+### Scenario: Sprint 9 security en warehouse-flow (nieuw, 2026-05-04)
+
+#### S9-1. Login wordt na 5 mislukte pogingen 15 minuten vergrendeld
+
+**Wat is er veranderd**: als iemand 5 keer achter elkaar het verkeerde wachtwoord intoetst, wordt het account voor 15 minuten op slot gezet. Eerder kon je daaromheen door een ander apparaat of een andere browser te gebruiken, dat helpt nu niet meer.
+
+**Stappen**:
+1. Open een privé-/incognito-venster zodat je niet automatisch ingelogd bent.
+2. Ga naar de inlog-pagina van het kantoorportaal.
+3. Vul jouw eigen e-mailadres in, en een **fout** wachtwoord.
+4. Druk op **Inloggen**. Je krijgt "ongeldig wachtwoord" terug.
+5. Herhaal stap 3 en 4 nog vier keer (totaal 5 mislukte pogingen).
+6. Probeer de zesde keer in te loggen, ook met een fout wachtwoord.
+
+**Verwacht**:
+- Bij de zesde poging zie je geen "ongeldig wachtwoord" meer, maar de melding "Account is tijdelijk geblokkeerd, probeer over 15 minuten opnieuw" (of vergelijkbare tekst).
+- Open nu een **andere browser** (bijvoorbeeld Edge naast Chrome) of een telefoon, en probeer met **het juiste wachtwoord** in te loggen op hetzelfde account.
+- Verwacht: ook op de andere browser zit het account op slot. De blokkade volgt het account, niet het apparaat.
+- Wacht 15 minuten of vraag de beheerder om de blokkade te resetten. Daarna lukt inloggen met het juiste wachtwoord weer.
+
+- [ ] Werkt zoals verwacht
+- [ ] Werkt deels (wel blokkade, maar de andere browser kon nog wel)
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+#### S9-2. Nieuwe collega wordt uitgenodigd via een uitnodigingslink
+
+**Wat is er veranderd**: nieuwe collega's kunnen niet meer zelfstandig een account aanmaken via de inlog-pagina. Een beheerder maakt een uitnodiging aan, de collega krijgt een link, klikt daarop, kiest een wachtwoord, en is daarna direct gekoppeld aan jouw bedrijf met de juiste rol (planner, medewerker of admin).
+
+**Voorbereiding**: zorg dat je inlogt als admin/owner van de tenant. Vraag een collega die nog geen account heeft om mee te testen, of gebruik een persoonlijk e-mailadres dat nog niet in het systeem zit.
+
+**Stappen voor de admin**:
+1. Ga naar **Instellingen > Gebruikers** (of vraag Badr om de uitnodiging via de SQL Editor aan te maken als de UI-tab nog niet beschikbaar is, dat komt in sprint 10).
+2. Klik op **Nodig nieuwe gebruiker uit**.
+3. Vul het e-mailadres van de nieuwe collega in en kies de rol (bijvoorbeeld "planner").
+4. Klik op **Verstuur uitnodiging**.
+
+**Verwacht**:
+- Er verschijnt een melding "Uitnodiging verstuurd". De uitnodiging is 7 dagen geldig.
+- Optioneel: kopieer de uitnodigingslink en stuur die zelf door (bijvoorbeeld via WhatsApp).
+
+**Stappen voor de uitgenodigde collega**:
+5. De collega opent de e-mail (of de link die jij hebt doorgestuurd) en klikt op **Accepteer uitnodiging**.
+6. Hij komt op een pagina waar hij een wachtwoord kiest.
+7. Na opslaan is hij ingelogd en ziet hij meteen het kantoorportaal van jouw bedrijf, met de rol "planner" (of de rol die jij hebt gekozen).
+
+**Tegen-test (belangrijk)**:
+8. Probeer als willekeurig persoon naar de oude inlog-pagina te gaan en daar zelf een account aan te maken zonder uitnodiging.
+9. Verwacht: de "Account aanmaken"-knop is verdwenen, of geeft een foutmelding "Aanmelden via uitnodiging vereist". Het kan niet meer dat iemand van buitenaf zelf bij jouw bedrijf "binnenwandelt".
+
+- [ ] Werkt zoals verwacht
+- [ ] Werkt deels (uitnodigen lukt, maar tegen-test faalt: de signup-pagina is nog open)
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+#### S9-3. Nieuwe order met expliciete keuze van pickup- en delivery-warehouse
+
+**Wat is er veranderd**: bij een nieuwe order kies je nu zelf welk warehouse als ophaal-locatie en welk warehouse als afleverlocatie geldt. Eerder werd dit door het systeem afgeleid uit het adres, met soms verrassende uitkomsten bij export-orders.
+
+**Stappen**:
+1. Ga naar **Orders > Nieuwe order**.
+2. Vul de klant en het zendingsnummer in.
+3. Bij "Ophalen" zie je nu een keuzeveld **Pickup-warehouse**. Kies bijvoorbeeld "RCS Schiphol Hub".
+4. Bij "Afleveren" zie je een keuzeveld **Delivery-warehouse**. Kies bijvoorbeeld "RCS Export Schiphol".
+5. Sla de order op.
+
+**Verwacht**:
+- De order wordt aangemaakt met de gekozen warehouses zichtbaar in het detailpaneel.
+- Bij een export-traject (Schiphol Hub naar Export Schiphol) wordt de order automatisch in twee rijen gesplitst: eerst een operations-rit naar de hub, daarna een export-rit vanuit de hub.
+- De gold-hint onder het afdelings-veld bevestigt of het automatisch op Operations of Export staat, en je kunt nog altijd handmatig overschrijven.
+
+- [ ] Werkt zoals verwacht
+- [ ] Werkt deels
+- [ ] Werkt niet
+
+Opmerking: _______________________
+
+---
+
+**Eerdere update**: 2026-04-28, Connector-platform beschikbaar (nieuwe Integraties-pagina met Snelstart en Exact Online live)
 
 **Hoe dit document te gebruiken**:
 - Kijk eerst naar "Wat is er nieuw sinds de vorige test" voor een snelle samenvatting.

@@ -11,6 +11,7 @@ const { mockNavigate, mockSupabase } = vi.hoisted(() => {
       getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
       onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
       signInWithPassword: vi.fn(),
+      setSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
       signUp: vi.fn(),
       signInWithOAuth: vi.fn(),
       signOut: vi.fn(),
@@ -60,11 +61,23 @@ function renderLogin() {
   );
 }
 
+function mockOfficeLogin(status: number, body: unknown): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 describe("Login", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     mockSupabase.rpc.mockResolvedValue({ data: null, error: null });
+    mockSupabase.auth.setSession.mockResolvedValue({ data: { session: null }, error: null });
     mockSupabase.auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
       data: { currentLevel: "aal1", nextLevel: "aal1" },
       error: null,
@@ -81,6 +94,7 @@ describe("Login", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("renders without crashing", () => {
@@ -109,8 +123,12 @@ describe("Login", () => {
     expect(passwordInput).toHaveAttribute("type", "text");
   });
 
-  it("handles successful login and navigates", async () => {
-    mockSupabase.auth.signInWithPassword.mockResolvedValueOnce({ error: null });
+  it("handles successful login via office-login edge and navigates", async () => {
+    const fetchMock = mockOfficeLogin(200, {
+      access_token: "at-1",
+      refresh_token: "rt-1",
+      user: { id: "u1", email: "test@test.nl" },
+    });
     const user = userEvent.setup();
     renderLogin();
 
@@ -120,14 +138,41 @@ describe("Login", () => {
     await user.click(submitBtn);
 
     await waitFor(() => {
-      expect(mockSupabase.auth.signInWithPassword).toHaveBeenCalledWith({
-        email: "test@test.nl",
-        password: "password123",
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const [calledUrl, calledInit] = fetchMock.mock.calls[0];
+    expect(String(calledUrl)).toMatch(/\/functions\/v1\/office-login$/);
+    expect(JSON.parse((calledInit as RequestInit).body as string)).toEqual({
+      email: "test@test.nl",
+      password: "password123",
+    });
+    await waitFor(() => {
+      expect(mockSupabase.auth.setSession).toHaveBeenCalledWith({
+        access_token: "at-1",
+        refresh_token: "rt-1",
       });
     });
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith("/");
     });
+    expect(mockSupabase.auth.signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("shows lockout banner on 423 from office-login", async () => {
+    const unlockAt = new Date(Date.now() + 15 * 60_000).toISOString();
+    mockOfficeLogin(423, { error: "locked", unlock_at: unlockAt });
+    const user = userEvent.setup();
+    renderLogin();
+
+    await user.type(screen.getByLabelText("E-mailadres"), "victim@test.nl");
+    await user.type(screen.getByLabelText("Wachtwoord"), "guess");
+    const submitBtn = document.querySelector("form button[type='submit']") as HTMLElement;
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Account tijdelijk vergrendeld tot/)).toBeInTheDocument();
+    });
+    expect(mockSupabase.auth.setSession).not.toHaveBeenCalled();
   });
 
   it("requires authenticator verification when 2FA is enabled", async () => {
@@ -146,7 +191,11 @@ describe("Login", () => {
       }
       return { data: null, error: null };
     });
-    mockSupabase.auth.signInWithPassword.mockResolvedValueOnce({ error: null });
+    mockOfficeLogin(200, {
+      access_token: "at-2",
+      refresh_token: "rt-2",
+      user: { id: "u2", email: "secure@test.nl" },
+    });
     mockSupabase.auth.mfa.listFactors.mockResolvedValueOnce({
       data: { totp: [{ id: "factor-1", status: "verified" }] },
       error: null,
@@ -180,7 +229,7 @@ describe("Login", () => {
   });
 
   it("shows error on failed login", async () => {
-    mockSupabase.auth.signInWithPassword.mockResolvedValueOnce({ error: { message: "Invalid login" } });
+    mockOfficeLogin(401, { error: "invalid_credentials" });
     const user = userEvent.setup();
     renderLogin();
 
