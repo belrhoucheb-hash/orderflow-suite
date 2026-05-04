@@ -35,6 +35,16 @@ import { compressImage, compressImageToDataUrl } from "@/lib/imageCompress";
 import { generateCmrPdf } from "@/lib/cmrPdf";
 import { useVehiclesRaw } from "@/hooks/useVehiclesRaw";
 import { usePreferences, type ThemePref } from "@/hooks/usePreferences";
+import {
+  useDriverSelfAvailabilityRange,
+  useSaveDriverSelfAvailability,
+  plannerToSelf,
+  type DriverSelfStatus,
+} from "@/hooks/useDriverSelfAvailability";
+import { useDriverStats } from "@/hooks/useDriverStats";
+import { useDriverReceipts, useCreateDriverReceipt, type ReceiptType } from "@/hooks/useDriverReceipts";
+import { useDriverCertificateRecords } from "@/hooks/useDriverCertificateRecords";
+import { useDriverCertifications } from "@/hooks/useDriverCertifications";
 
 /**
  * Hash a PIN using PBKDF2 (100k iteraties, SHA-256) met een per-driver salt.
@@ -1785,14 +1795,14 @@ export default function ChauffeurApp() {
       {/* CIJFERS */}
       {menu === "cijfers" && (
         <BottomDrawer title="Mijn cijfers" onClose={() => setMenu(null)}>
-          <StatsPanel completed={completedTripStops} totalStops={totalTripStops} hoursToday={totalHoursToday} />
+          <StatsPanel driverId={activeDriverId} completed={completedTripStops} totalStops={totalTripStops} hoursToday={totalHoursToday} />
         </BottomDrawer>
       )}
 
       {/* BONNETJES */}
       {menu === "bonnetjes" && (
         <BottomDrawer title="Bonnetjes & tank" onClose={() => setMenu(null)}>
-          <ReceiptsPanel />
+          <ReceiptsPanel driverId={activeDriverId} />
         </BottomDrawer>
       )}
 
@@ -1988,26 +1998,68 @@ function BottomDrawer({ title, onClose, large, children }: { title: string; onCl
   );
 }
 
-// TODO: persist availability in `driver_availability` (nieuwe tabel) of als
-// kolom op `driver_schedules`. Voor nu UI-only met localStorage als best-effort.
+// Beschikbaarheid persisteert in `driver_availability` met de driver-eigen
+// statusset (beschikbaar / niet_beschikbaar / liever_niet). Planner-statussen
+// (werkt/verlof/ziek/...) worden gemapped naar de driver-set zodat de UI
+// altijd één van drie waardes laat zien.
 function AvailabilityPanel({ driverId, isClocked }: { driverId: string; isClocked: boolean }) {
-  const storageKey = `orderflow_avail_${driverId}`;
-  const [available, setAvailable] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(`${storageKey}_today`) !== "false";
-    } catch {
-      return true;
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const monday = useMemo(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [todayKey]);
+  const sunday = useMemo(() => {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + 6);
+    return d;
+  }, [monday]);
+  const fromKey = monday.toISOString().slice(0, 10);
+  const toKey = sunday.toISOString().slice(0, 10);
+
+  const range = useDriverSelfAvailabilityRange(driverId, fromKey, toKey);
+  const save = useSaveDriverSelfAvailability(driverId);
+
+  const statusByDate = useMemo(() => {
+    const map = new Map<string, DriverSelfStatus>();
+    for (const row of range.data ?? []) {
+      map.set(row.date, plannerToSelf(row.status));
     }
-  });
-  const updateToday = (next: boolean) => {
-    setAvailable(next);
-    try { localStorage.setItem(`${storageKey}_today`, String(next)); } catch { /* ignore */ }
-  };
+    return map;
+  }, [range.data]);
+
+  const todayStatus: DriverSelfStatus = statusByDate.get(todayKey) ?? "beschikbaar";
+  const available = todayStatus === "beschikbaar";
 
   const days = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
-  const today = new Date();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + 7);
+
+  const handleToday = (next: boolean) => {
+    save.mutate(
+      { date: todayKey, status: next ? "beschikbaar" : "niet_beschikbaar" },
+      {
+        onError: (err) => {
+          toast.error("Beschikbaarheid niet opgeslagen", {
+            description: err instanceof Error ? err.message : undefined,
+          });
+        },
+      },
+    );
+  };
+
+  const handleDay = (date: string, status: DriverSelfStatus) => {
+    save.mutate(
+      { date, status },
+      {
+        onError: (err) => {
+          toast.error("Beschikbaarheid niet opgeslagen", {
+            description: err instanceof Error ? err.message : undefined,
+          });
+        },
+      },
+    );
+  };
 
   return (
     <div>
@@ -2015,35 +2067,40 @@ function AvailabilityPanel({ driverId, isClocked }: { driverId: string; isClocke
         <div className="flex items-center gap-3">
           <IconBubble icon={<Check className="h-4 w-4" strokeWidth={2.5} />} size={40} variant={available ? "success" : "muted"} />
           <div>
-            <p className="font-display font-semibold text-sm">Vandaag {available ? "beschikbaar" : "niet beschikbaar"}</p>
+            <p className="font-display font-semibold text-sm">Vandaag {available ? "beschikbaar" : todayStatus === "liever_niet" ? "liever niet" : "niet beschikbaar"}</p>
             <p className="text-[11px] text-muted-foreground">
               {isClocked ? "Je bent ingeklokt" : "Planner kan je inplannen"}
             </p>
           </div>
         </div>
         <button
-          onClick={() => updateToday(!available)}
+          onClick={() => handleToday(!available)}
+          disabled={save.isPending}
           className={cn("h-7 w-12 rounded-full transition-colors", available ? "bg-emerald-500" : "bg-muted")}
         >
           <span className={cn("block h-5 w-5 rounded-full bg-white shadow transition-transform mx-1", available && "translate-x-5")} />
         </button>
       </div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))] mb-2">Komende week</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))] mb-2">Deze week</p>
       <div className="space-y-2">
         {days.map((d, i) => {
           const date = new Date(monday);
           date.setDate(monday.getDate() + i);
+          const dateKey = date.toISOString().slice(0, 10);
           const label = `${d} ${date.getDate()} ${MAANDEN[date.getMonth()].toLowerCase().slice(0, 3)}`;
+          const dayStatus: DriverSelfStatus = statusByDate.get(dateKey) ?? (i < 5 ? "beschikbaar" : "niet_beschikbaar");
           return (
             <div key={d} className="rounded-2xl border border-[hsl(var(--gold)/0.14)] p-3 flex items-center justify-between bg-card">
               <p className="text-sm font-semibold font-display">{label}</p>
               <select
-                defaultValue={i < 5 ? "Beschikbaar" : "Niet beschikbaar"}
+                value={dayStatus}
+                onChange={(e) => handleDay(dateKey, e.target.value as DriverSelfStatus)}
+                disabled={save.isPending}
                 className="text-xs font-semibold bg-[hsl(var(--gold-soft)/0.4)] rounded-full px-3 py-1.5 border-0 cursor-pointer text-foreground"
               >
-                <option>Beschikbaar</option>
-                <option>Liever niet</option>
-                <option>Niet beschikbaar</option>
+                <option value="beschikbaar">Beschikbaar</option>
+                <option value="liever_niet">Liever niet</option>
+                <option value="niet_beschikbaar">Niet beschikbaar</option>
               </select>
             </div>
           );
@@ -2053,10 +2110,60 @@ function AvailabilityPanel({ driverId, isClocked }: { driverId: string; isClocke
   );
 }
 
-// TODO: vervang door echte query op `driver_certifications` of vergelijkbare
-// tabel zodra die beschikbaar is. Voor nu een lege staat zodat de UI compleet is.
-function DocumentsPanel({ driverId: _driverId }: { driverId: string }) {
-  const docs: Array<{ l: string; date: string; status: "ok" | "warn" | "err" }> = [];
+// Documenten tonen de driver_certification_expiry-rijen voor deze chauffeur
+// uit de bestaande tabel (gevuld door planner). Vervaldatum-warnings:
+// rood < 30 dagen, amber < 90 dagen, groen voor de rest.
+function DocumentsPanel({ driverId }: { driverId: string }) {
+  const records = useDriverCertificateRecords(driverId);
+  const types = useDriverCertifications();
+
+  const typeName = (code: string) =>
+    types.data?.find((t) => t.code.toLowerCase() === code.toLowerCase())?.name ?? code.toUpperCase();
+
+  const docs = (records.data ?? []).map((rec) => {
+    const expiry = rec.expiry_date ? new Date(rec.expiry_date) : null;
+    const now = new Date();
+    let status: "ok" | "warn" | "err" = "ok";
+    let dateLabel = "Geen vervaldatum bekend";
+    if (expiry) {
+      const days = Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const formatted = expiry.toLocaleDateString("nl-NL", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+      if (days < 0) {
+        status = "err";
+        dateLabel = `Verlopen op ${formatted}`;
+      } else if (days < 30) {
+        status = "err";
+        dateLabel = `Verloopt over ${days} dagen (${formatted})`;
+      } else if (days < 90) {
+        status = "warn";
+        dateLabel = `Verloopt over ${days} dagen (${formatted})`;
+      } else {
+        dateLabel = `Geldig tot ${formatted}`;
+      }
+    }
+    return {
+      id: rec.id,
+      label: typeName(rec.certification_code),
+      dateLabel,
+      status,
+    };
+  });
+
+  if (records.isLoading) {
+    return <p className="text-xs text-muted-foreground">Bezig met ophalen...</p>;
+  }
+
+  if (records.isError) {
+    return (
+      <p className="text-xs text-red-600">
+        Documenten konden niet worden opgehaald. Probeer het later opnieuw.
+      </p>
+    );
+  }
 
   if (docs.length === 0) {
     return (
@@ -2073,15 +2180,15 @@ function DocumentsPanel({ driverId: _driverId }: { driverId: string }) {
   return (
     <div className="space-y-2">
       {docs.map((d) => (
-        <div key={d.l} className="rounded-2xl border border-[hsl(var(--gold)/0.18)] p-3 flex items-center gap-3 bg-card">
+        <div key={d.id} className="rounded-2xl border border-[hsl(var(--gold)/0.18)] p-3 flex items-center gap-3 bg-card">
           <IconBubble
             icon={<FileText className="h-4 w-4" strokeWidth={2.25} />}
             size={40}
             variant={d.status === "err" ? "danger" : d.status === "warn" ? "warn" : "success"}
           />
           <div className="flex-1">
-            <p className="text-sm font-semibold font-display">{d.l}</p>
-            <p className={cn("text-[11px]", d.status === "err" ? "text-red-700 font-semibold" : d.status === "warn" ? "text-amber-700 font-semibold" : "text-muted-foreground")}>{d.date}</p>
+            <p className="text-sm font-semibold font-display">{d.label}</p>
+            <p className={cn("text-[11px]", d.status === "err" ? "text-red-700 font-semibold" : d.status === "warn" ? "text-amber-700 font-semibold" : "text-muted-foreground")}>{d.dateLabel}</p>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         </div>
@@ -2090,20 +2197,33 @@ function DocumentsPanel({ driverId: _driverId }: { driverId: string }) {
   );
 }
 
-// TODO: vervang mock-cijfers door echte tellers (driver_time_entries-aggregaties,
-// trips-tellers, on-time percentage uit trip_stops actual_arrival_time vs planned).
-function StatsPanel({ completed, totalStops, hoursToday }: { completed: number; totalStops: number; hoursToday: number }) {
-  const stats = [
-    { l: "Vandaag gewerkt", v: `${Math.floor(hoursToday)}u ${Math.round((hoursToday % 1) * 60)}m`, s: "uren" },
+// Mijn cijfers, geaggregeerd uit driver_time_entries, trips en trip_stops.
+// Vandaag-tellers (gewerkt + stops) komen nog uit de live ChauffeurApp-state
+// omdat die al per tick wordt herrekend; week/maand-cijfers komen uit
+// useDriverStats.
+function StatsPanel({ driverId, completed, totalStops, hoursToday }: { driverId: string; completed: number; totalStops: number; hoursToday: number }) {
+  const stats = useDriverStats(driverId);
+  const data = stats.data;
+
+  const fmtHours = (h: number) => `${Math.floor(h)}u ${Math.round((h % 1) * 60)}m`;
+  const fmtPct = (n: number | null | undefined) =>
+    typeof n === "number" ? `${Math.round(n * 100)}%` : "—";
+  const fmtKm = (km: number | null | undefined) =>
+    typeof km === "number" ? `${Math.round(km)} km` : "—";
+
+  const items = [
+    { l: "Vandaag gewerkt", v: fmtHours(hoursToday), s: "uren" },
     { l: "Stops vandaag", v: `${completed}/${totalStops || 0}`, s: "voltooid" },
-    { l: "Deze week", v: "—", s: "uren" },
-    { l: "Ritten", v: "—", s: "deze maand" },
-    { l: "On-time", v: "—", s: "stops op tijd" },
-    { l: "Km gereden", v: "—", s: "deze maand" },
+    { l: "Deze week", v: data ? fmtHours(data.hoursThisWeek) : "…", s: "uren" },
+    { l: "Ritten", v: data ? String(data.tripsThisMonth) : "…", s: "deze maand" },
+    { l: "On-time", v: data ? fmtPct(data.onTimeRate) : "…", s: "stops op tijd" },
+    { l: "Km gereden", v: data ? fmtKm(data.kmThisMonth) : "…", s: "deze maand" },
+    { l: "Stops afgeleverd", v: data ? String(data.stopsDeliveredThisMonth) : "…", s: "deze maand" },
+    { l: "Pauze", v: data ? fmtPct(data.breakComplianceRate) : "…", s: "compliant" },
   ];
   return (
     <div className="grid grid-cols-2 gap-3">
-      {stats.map((m) => (
+      {items.map((m) => (
         <div key={m.l} className="rounded-2xl border border-[hsl(var(--gold)/0.18)] p-3.5 bg-gradient-to-br from-card to-[hsl(var(--gold-soft)/0.2)] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{m.l}</p>
           <p className="font-display text-2xl font-bold tabular-nums text-foreground mt-1">{m.v}</p>
@@ -2114,16 +2234,149 @@ function StatsPanel({ completed, totalStops, hoursToday }: { completed: number; 
   );
 }
 
-// TODO: vervang mock-bonnetjes door echte query op driver_receipts of vergelijkbare
-// tabel zodra die beschikbaar is.
-function ReceiptsPanel() {
+// Bonnetjes uit driver_receipts. Bon-scan upload naar bucket `receipts`
+// onder {tenant_id}/{driver_id}/{timestamp}.{ext} en insert met status
+// pending_ocr. OCR-extractie (bedrag, locatie) volgt asynchroon.
+function ReceiptsPanel({ driverId }: { driverId: string }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [scanType, setScanType] = useState<ReceiptType>("diesel");
+  const list = useDriverReceipts(driverId);
+  const create = useCreateDriverReceipt();
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Bestand te groot, max 10 MB");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    try {
+      await create.mutateAsync({ driver_id: driverId, file, type: scanType });
+      toast.success("Bon ontvangen, planner verwerkt 'm");
+    } catch (err) {
+      toast.error("Bon uploaden mislukt", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const typeOptions: { value: ReceiptType; label: string }[] = [
+    { value: "diesel", label: "Diesel" },
+    { value: "parking", label: "Parkeren" },
+    { value: "tol", label: "Tol" },
+    { value: "overig", label: "Overig" },
+  ];
+
+  const formatScannedAt = (iso: string) =>
+    new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+
+  const formatAmount = (amount: number | null, currency: string) =>
+    typeof amount === "number"
+      ? new Intl.NumberFormat("nl-NL", { style: "currency", currency }).format(amount)
+      : "Bedrag wordt verwerkt";
+
+  const statusChip = (status: string) => {
+    switch (status) {
+      case "approved":
+        return { label: "goedgekeurd", className: "bg-emerald-100 text-emerald-700" };
+      case "rejected":
+        return { label: "afgekeurd", className: "bg-red-100 text-red-700" };
+      case "ocr_done":
+        return { label: "klaar voor controle", className: "bg-amber-100 text-amber-700" };
+      case "pending_ocr":
+      default:
+        return { label: "wordt verwerkt", className: "bg-muted text-muted-foreground" };
+    }
+  };
+
+  const receipts = list.data ?? [];
+
   return (
-    <div className="py-6 text-center">
-      <IconBubble icon={<Receipt className="h-5 w-5" />} size={48} className="mx-auto" />
-      <p className="font-display font-semibold mt-3">Nog geen bonnetjes</p>
-      <p className="text-xs text-muted-foreground mt-1">
-        Scan je eerste bon zodra je tankt of parkeert.
-      </p>
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-[hsl(var(--gold)/0.18)] bg-card p-4 space-y-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">
+          Bon scannen
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {typeOptions.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setScanType(opt.value)}
+              className={cn(
+                "h-10 rounded-xl text-xs font-semibold font-display transition-colors",
+                scanType === opt.value
+                  ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm"
+                  : "bg-[hsl(var(--gold-soft)/0.4)] text-foreground hover:bg-[hsl(var(--gold-soft)/0.6)]",
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <Button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={create.isPending}
+          className="w-full h-12 rounded-2xl bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white font-display font-semibold shadow-md"
+        >
+          <Receipt className="h-4 w-4 mr-2" strokeWidth={2.25} />
+          {create.isPending ? "Bezig met uploaden..." : "Bon scannen"}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          capture="environment"
+          className="hidden"
+          onChange={handleFile}
+        />
+      </div>
+
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))] mb-2">
+          Recente bonnen
+        </p>
+        {list.isLoading ? (
+          <p className="text-xs text-muted-foreground">Bezig met ophalen...</p>
+        ) : receipts.length === 0 ? (
+          <div className="py-6 text-center">
+            <IconBubble icon={<Receipt className="h-5 w-5" />} size={48} className="mx-auto" />
+            <p className="font-display font-semibold mt-3">Nog geen bonnetjes</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Scan je eerste bon zodra je tankt of parkeert.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {receipts.map((r) => {
+              const chip = statusChip(r.status);
+              const typeLabel = typeOptions.find((t) => t.value === r.type)?.label ?? r.type;
+              return (
+                <div
+                  key={r.id}
+                  className="rounded-2xl border border-[hsl(var(--gold)/0.18)] p-3 flex items-center gap-3 bg-card"
+                >
+                  <IconBubble icon={<Receipt className="h-4 w-4" strokeWidth={2.25} />} size={36} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold font-display truncate">
+                      {typeLabel} · {formatAmount(r.total_amount, r.currency)}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatScannedAt(r.scanned_at)}
+                      {r.location ? ` · ${r.location}` : ""}
+                    </p>
+                  </div>
+                  <span className={cn("text-[10px] font-semibold rounded-full px-2 py-0.5", chip.className)}>
+                    {chip.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

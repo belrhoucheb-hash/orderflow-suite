@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Radio, MapPin, Package, Lock, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Radio, MapPin, Package, Lock, Zap, SkipForward, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { findBundle, type ConnectorBundle } from "@/lib/connectors/bundles";
 import { useConnectorList, type ConnectorWithStatus } from "@/hooks/useConnectors";
@@ -11,6 +11,32 @@ interface Props {
   bundleId: string;
   onBack: () => void;
   onSelectConnector: (slug: string) => void;
+}
+
+function skipKey(bundleId: string, slug: string): string {
+  return `orderflow_bundle_skipped_${bundleId}_${slug}`;
+}
+
+function readSkipped(bundleId: string, slug: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(skipKey(bundleId, slug)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeSkipped(bundleId: string, slug: string, skipped: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (skipped) {
+      window.localStorage.setItem(skipKey(bundleId, slug), "1");
+    } else {
+      window.localStorage.removeItem(skipKey(bundleId, slug));
+    }
+  } catch {
+    // localStorage onbeschikbaar, valt stil terug
+  }
 }
 
 const ICONS = {
@@ -31,6 +57,27 @@ export function BundleDetail({ bundleId, onBack, onSelectConnector }: Props) {
       .filter((c): c is ConnectorWithStatus => Boolean(c));
   }, [bundle, list.data]);
 
+  const [skipped, setSkipped] = useState<Record<string, boolean>>({});
+
+  // Lees skip-state per slug uit localStorage zodra de bundel + slugs bekend zijn.
+  useEffect(() => {
+    if (!bundle) return;
+    const next: Record<string, boolean> = {};
+    for (const slug of bundle.slugs) {
+      next[slug] = readSkipped(bundle.id, slug);
+    }
+    setSkipped(next);
+  }, [bundle]);
+
+  const toggleSkip = useCallback(
+    (slug: string, value: boolean) => {
+      if (!bundle) return;
+      writeSkipped(bundle.id, slug, value);
+      setSkipped((prev) => ({ ...prev, [slug]: value }));
+    },
+    [bundle],
+  );
+
   if (!bundle) {
     return (
       <div className="card--luxe p-6">
@@ -43,9 +90,15 @@ export function BundleDetail({ bundleId, onBack, onSelectConnector }: Props) {
   }
 
   const Icon = ICONS[bundle.icon];
-  const connectedCount = connectors.filter((c) => c.enabled && c.hasCredentials).length;
+  const isLive = (c: ConnectorWithStatus) => c.enabled && c.hasCredentials;
+  const liveCount = connectors.filter(isLive).length;
+  // Skipped telt alleen als de connector niet al actief is, anders dubbeltelling.
+  const skippedCount = connectors.filter((c) => !isLive(c) && skipped[c.slug]).length;
+  const plannedCount = connectors.length - liveCount - skippedCount;
   const totalCount = connectors.length;
-  const progress = totalCount === 0 ? 0 : Math.round((connectedCount / totalCount) * 100);
+  // Voortgangsbalk: skipped telt als "voltooid" voor de %.
+  const completedForBar = liveCount + skippedCount;
+  const progress = totalCount === 0 ? 0 : Math.round((completedForBar / totalCount) * 100);
 
   return (
     <div className="space-y-5">
@@ -59,7 +112,15 @@ export function BundleDetail({ bundleId, onBack, onSelectConnector }: Props) {
       </button>
 
       {/* HERO */}
-      <BundleHero bundle={bundle} icon={Icon} progress={progress} connectedCount={connectedCount} totalCount={totalCount} />
+      <BundleHero
+        bundle={bundle}
+        icon={Icon}
+        progress={progress}
+        liveCount={liveCount}
+        skippedCount={skippedCount}
+        plannedCount={plannedCount}
+        totalCount={totalCount}
+      />
 
       {/* WIZARD */}
       <div className="space-y-3">
@@ -68,7 +129,7 @@ export function BundleDetail({ bundleId, onBack, onSelectConnector }: Props) {
             Onboarding-stappen
           </h3>
           <span className="text-[11px] text-muted-foreground tabular-nums">
-            {connectedCount} van {totalCount} koppelingen actief
+            {liveCount} van {totalCount} koppelingen actief
           </span>
         </div>
 
@@ -79,7 +140,10 @@ export function BundleDetail({ bundleId, onBack, onSelectConnector }: Props) {
               index={i}
               total={totalCount}
               connector={connector}
+              skipped={Boolean(skipped[connector.slug])}
               onConnect={() => onSelectConnector(connector.slug)}
+              onSkip={() => toggleSkip(connector.slug, true)}
+              onUnskip={() => toggleSkip(connector.slug, false)}
             />
           ))}
         </div>
@@ -107,13 +171,17 @@ function BundleHero({
   bundle,
   icon: Icon,
   progress,
-  connectedCount,
+  liveCount,
+  skippedCount,
+  plannedCount,
   totalCount,
 }: {
   bundle: ConnectorBundle;
   icon: typeof Sparkles;
   progress: number;
-  connectedCount: number;
+  liveCount: number;
+  skippedCount: number;
+  plannedCount: number;
   totalCount: number;
 }) {
   return (
@@ -155,7 +223,7 @@ function BundleHero({
         <div className="mt-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-[hsl(var(--gold)/0.18)] p-4">
           <div className="flex items-center justify-between text-[11px] font-display font-semibold mb-2">
             <span className="uppercase tracking-[0.2em] text-[hsl(var(--gold-deep))]">Voortgang</span>
-            <span className="tabular-nums text-foreground">{connectedCount} / {totalCount} actief · {progress}%</span>
+            <span className="tabular-nums text-foreground">{liveCount} / {totalCount} actief · {progress}%</span>
           </div>
           <div className="h-2 rounded-full bg-[hsl(var(--gold-soft))] overflow-hidden">
             <motion.div
@@ -164,6 +232,11 @@ function BundleHero({
               transition={{ duration: 0.6, ease: "easeOut" }}
               className="h-full bg-gradient-to-r from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] rounded-full"
             />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] tabular-nums text-muted-foreground">
+            <span>gepland: <strong className="text-foreground font-display">{plannedCount}</strong></span>
+            <span>overgeslagen: <strong className="text-foreground font-display">{skippedCount}</strong></span>
+            <span>actief: <strong className="text-foreground font-display">{liveCount}</strong></span>
           </div>
         </div>
       </div>
@@ -175,15 +248,22 @@ function BundleStep({
   index,
   total,
   connector,
+  skipped,
   onConnect,
+  onSkip,
+  onUnskip,
 }: {
   index: number;
   total: number;
   connector: ConnectorWithStatus;
+  skipped: boolean;
   onConnect: () => void;
+  onSkip: () => void;
+  onUnskip: () => void;
 }) {
   const isLive = connector.enabled && connector.hasCredentials;
   const isLast = index === total - 1;
+  const isSkipped = !isLive && skipped;
 
   return (
     <motion.div
@@ -195,7 +275,11 @@ function BundleStep({
       <div
         className={cn(
           "flex items-center gap-4 rounded-2xl border bg-white p-4 transition-all hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)]",
-          isLive ? "border-emerald-300 bg-gradient-to-br from-emerald-50/40 to-white" : "border-[hsl(var(--gold)/0.18)]",
+          isLive
+            ? "border-emerald-300 bg-gradient-to-br from-emerald-50/40 to-white"
+            : isSkipped
+              ? "border-slate-200 bg-slate-50/60"
+              : "border-[hsl(var(--gold)/0.18)]",
         )}
       >
         {/* Step number */}
@@ -204,10 +288,12 @@ function BundleStep({
             "h-10 w-10 rounded-xl flex items-center justify-center text-sm font-display font-bold shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]",
             isLive
               ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white"
-              : "bg-gradient-to-br from-[hsl(var(--gold-soft))] to-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))] border border-[hsl(var(--gold)/0.25)]",
+              : isSkipped
+                ? "bg-slate-200 text-slate-500 border border-slate-300"
+                : "bg-gradient-to-br from-[hsl(var(--gold-soft))] to-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))] border border-[hsl(var(--gold)/0.25)]",
           )}
         >
-          {isLive ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
+          {isLive ? <CheckCircle2 className="h-5 w-5" /> : isSkipped ? <SkipForward className="h-4 w-4" /> : index + 1}
         </span>
 
         {/* Logo */}
@@ -215,7 +301,10 @@ function BundleStep({
 
         {/* Name + status */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-display font-semibold text-foreground tracking-tight truncate">{connector.name}</p>
+          <p className={cn(
+            "text-sm font-display font-semibold tracking-tight truncate",
+            isSkipped ? "text-muted-foreground" : "text-foreground",
+          )}>{connector.name}</p>
           <p className="text-[11px] text-muted-foreground truncate">
             {CATEGORY_LABELS[connector.category]}
             {connector.status === "soon" && " · Roadmap"}
@@ -223,30 +312,56 @@ function BundleStep({
           </p>
         </div>
 
-        {/* Status pill */}
-        {isLive ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-display font-semibold text-emerald-700 shrink-0">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+        {/* Right cluster: status + skip-action */}
+        <div className="flex items-center gap-2 shrink-0">
+          {isLive ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-display font-semibold text-emerald-700">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              Actief
             </span>
-            Actief
-          </span>
-        ) : connector.status === "soon" ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-display font-semibold text-slate-600 shrink-0">
-            Roadmap
-          </span>
-        ) : (
-          <Button
-            onClick={onConnect}
-            size="sm"
-            className="h-9 px-3 rounded-xl text-xs font-display font-semibold bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-md hover:opacity-95 gap-1.5 shrink-0"
-          >
-            <Lock className="h-3 w-3" />
-            Verbinden
-            <ArrowRight className="h-3 w-3" />
-          </Button>
-        )}
+          ) : connector.status === "soon" ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-display font-semibold text-slate-600">
+              Roadmap
+            </span>
+          ) : isSkipped ? (
+            <>
+              <span className="inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full bg-slate-100 border border-slate-300 text-[11px] font-display font-semibold text-slate-600">
+                <SkipForward className="h-3 w-3" />
+                Overgeslagen
+              </span>
+              <button
+                type="button"
+                onClick={onUnskip}
+                className="inline-flex items-center gap-1 text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] hover:underline"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Toch verbinden
+              </button>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={onConnect}
+                size="sm"
+                className="h-9 px-3 rounded-xl text-xs font-display font-semibold bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-md hover:opacity-95 gap-1.5"
+              >
+                <Lock className="h-3 w-3" />
+                Verbinden
+                <ArrowRight className="h-3 w-3" />
+              </Button>
+              <button
+                type="button"
+                onClick={onSkip}
+                className="text-[11px] font-display font-semibold text-muted-foreground hover:text-foreground transition-colors px-1.5"
+              >
+                Sla over
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Connector line between steps */}

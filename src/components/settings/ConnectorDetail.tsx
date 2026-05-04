@@ -1,19 +1,24 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ExternalLink, RefreshCw, CheckCircle2, XCircle, Clock,
-  Sparkles, ShieldCheck, Zap, Activity, BookOpen, Settings as SettingsIcon,
+  Sparkles, Zap, Activity, BookOpen, Settings as SettingsIcon,
   ArrowLeftRight, ScrollText, Lock, KeyRound, Webhook, Radio, Globe2,
-  ChevronRight, AlertTriangle, Filter, ChevronDown, Copy, Check,
+  ChevronRight, AlertTriangle, Filter, ChevronDown, Copy, Check, GripVertical, X,
+  Wand2, ShieldAlert, ShieldCheck, RotateCcw, Info,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { findConnector, CATEGORY_LABELS } from "@/lib/connectors/catalog";
+import { getSourceFields, type ConnectorSourceField } from "@/lib/connectors/sourceFields";
+import { getMappingTemplates } from "@/lib/connectors/mappingTemplates";
 import {
   useConnectorList,
   useConnectorMapping,
@@ -27,23 +32,51 @@ import {
 import {
   useIntegrationCredentials,
   useSaveIntegrationCredentials,
+  type IntegrationEnvironment,
   type IntegrationProvider,
 } from "@/hooks/useIntegrationCredentials";
+import { SyncPoliciesPanel } from "@/components/settings/connectors/SyncPoliciesPanel";
+import { TokenExpiryBanner } from "@/components/settings/connectors/TokenExpiryBanner";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+// Marketplace fase 4 toevoegingen, additief.
+import { SyncGraphs } from "@/components/settings/connectors/SyncGraphs";
+import { ThresholdTab } from "@/components/settings/connectors/ThresholdTab";
+import { AuditTab } from "@/components/settings/connectors/AuditTab";
+import { WebhookReplayDialog } from "@/components/settings/connectors/WebhookReplayDialog";
+import { useReplaySyncEventsBulk } from "@/hooks/useReplaySyncEvent";
+import { Checkbox } from "@/components/ui/checkbox";
+
+function defaultExactRedirectUri(): string {
+  const raw = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    // Ondersteun zowel <ref>.supabase.co als zelf-gehoste varianten.
+    return `${u.protocol}//${u.host}/functions/v1/oauth-callback-exact`;
+  } catch {
+    return "";
+  }
+}
 
 interface Props {
   slug: string;
   onBack: () => void;
 }
 
-type TabKey = "overzicht" | "configuratie" | "mapping" | "log";
+type TabKey = "overzicht" | "configuratie" | "mapping" | "log" | "thresholds" | "audit";
 
-const TABS: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
+const BASE_TABS: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
   { key: "overzicht", label: "Overzicht", icon: <BookOpen className="h-3.5 w-3.5" /> },
   { key: "configuratie", label: "Configuratie", icon: <SettingsIcon className="h-3.5 w-3.5" /> },
   { key: "mapping", label: "Mapping", icon: <ArrowLeftRight className="h-3.5 w-3.5" /> },
   { key: "log", label: "Sync-log", icon: <ScrollText className="h-3.5 w-3.5" /> },
+  { key: "thresholds", label: "Drempels", icon: <ShieldAlert className="h-3.5 w-3.5" /> },
+];
+
+const ADMIN_TABS: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
+  { key: "audit", label: "Audit", icon: <ShieldCheck className="h-3.5 w-3.5" /> },
 ];
 
 const CAPABILITY_ICON: Array<{ test: (cap: string) => boolean; icon: ReactNode }> = [
@@ -79,7 +112,22 @@ export function ConnectorDetail({ slug, onBack }: Props) {
   const log = useConnectorSyncLog(slug);
   const test = useTestConnector(slug);
   const pull = usePullConnector(slug);
+  const auth = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>("overzicht");
+  const [environment, setEnvironment] = useState<IntegrationEnvironment>("live");
+  // Voor de OAuth-token-banner halen we de live-credentials op zodat we
+  // expires_at, client_id en redirect_uri kunnen tonen zonder dat de
+  // gebruiker eerst de Configuratie-tab moet openen. Andere environments
+  // hebben hun eigen credentials-set.
+  const liveCreds = useIntegrationCredentials(
+    slug as IntegrationProvider,
+    environment,
+    { enabled: connector?.authType === "oauth2" },
+  );
+
+  const tabs = useMemo(() => {
+    return auth.isAdmin ? [...BASE_TABS, ...ADMIN_TABS] : BASE_TABS;
+  }, [auth.isAdmin]);
 
   const lastSync = log.data?.[0];
   const stats = useMemo(() => {
@@ -129,6 +177,15 @@ export function ConnectorDetail({ slug, onBack }: Props) {
         pulling={pull.isPending}
       />
 
+      {!isSoon && connector.authType === "oauth2" && (
+        <TokenExpiryBanner
+          provider={slug}
+          expiresAt={liveCreds.data?.expiresAt ?? null}
+          clientId={(liveCreds.data?.credentials as Record<string, unknown> | undefined)?.clientId as string | undefined}
+          redirectUri={(liveCreds.data?.credentials as Record<string, unknown> | undefined)?.redirectUri as string | undefined}
+        />
+      )}
+
       {isSoon ? (
         <RoadmapBody connector={connector} />
       ) : (
@@ -136,7 +193,7 @@ export function ConnectorDetail({ slug, onBack }: Props) {
           <div className="space-y-4">
             {/* TABS */}
             <div className="flex flex-wrap gap-1.5 border-b border-[hsl(var(--gold)/0.18)]">
-              {TABS.map((t) => {
+              {tabs.map((t) => {
                 const active = activeTab === t.key;
                 return (
                   <button
@@ -165,9 +222,17 @@ export function ConnectorDetail({ slug, onBack }: Props) {
                 transition={{ duration: 0.18 }}
               >
                 {activeTab === "overzicht" && <OverviewTab slug={slug} />}
-                {activeTab === "configuratie" && <ConnectionTab slug={slug as IntegrationProvider} />}
+                {activeTab === "configuratie" && (
+                  <ConnectionTab
+                    slug={slug as IntegrationProvider}
+                    environment={environment}
+                    onEnvironmentChange={setEnvironment}
+                  />
+                )}
                 {activeTab === "mapping" && <MappingTab slug={slug} />}
                 {activeTab === "log" && <LogTab slug={slug} />}
+                {activeTab === "thresholds" && <ThresholdTab slug={slug} />}
+                {activeTab === "audit" && auth.isAdmin && <AuditTab slug={slug} />}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -499,15 +564,48 @@ function checklistItems(connector: NonNullable<ReturnType<typeof findConnector>>
 
 // ─── Configuratie tab (bestaande connection forms) ──────────────────
 
-function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
+function ConnectionTab({
+  slug,
+  environment,
+  onEnvironmentChange,
+}: {
+  slug: IntegrationProvider;
+  environment: IntegrationEnvironment;
+  onEnvironmentChange: (env: IntegrationEnvironment) => void;
+}) {
   const connector = findConnector(slug)!;
-  const creds = useIntegrationCredentials(slug);
-  const save = useSaveIntegrationCredentials(slug);
+  const creds = useIntegrationCredentials(slug, environment);
+  const save = useSaveIntegrationCredentials(slug, environment);
   const test = useTestConnector(slug);
 
+  let form: ReactNode;
   if (slug === "exact_online") {
-    return (
+    form = (
       <ExactConnectionForm
+        setupHint={connector.setupHint}
+        creds={creds.data?.credentials ?? {}}
+        enabled={creds.data?.enabled ?? false}
+        onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
+        onTest={() => test.mutate()}
+        saving={save.isPending}
+        testing={test.isPending}
+      />
+    );
+  } else if (slug === "nostradamus") {
+    form = (
+      <NostradamusConnectionForm
+        setupHint={connector.setupHint}
+        creds={creds.data?.credentials ?? {}}
+        enabled={creds.data?.enabled ?? false}
+        onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
+        onTest={() => test.mutate()}
+        saving={save.isPending}
+        testing={test.isPending}
+      />
+    );
+  } else {
+    form = (
+      <SnelstartConnectionForm
         setupHint={connector.setupHint}
         creds={creds.data?.credentials ?? {}}
         enabled={creds.data?.enabled ?? false}
@@ -519,28 +617,65 @@ function ConnectionTab({ slug }: { slug: IntegrationProvider }) {
     );
   }
 
-  if (slug === "nostradamus") {
-    return (
-      <NostradamusConnectionForm
-        creds={creds.data?.credentials ?? {}}
-        enabled={creds.data?.enabled ?? false}
-        onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
-        onTest={() => test.mutate()}
-        saving={save.isPending}
-        testing={test.isPending}
-      />
-    );
-  }
-
   return (
-    <SnelstartConnectionForm
-      creds={creds.data?.credentials ?? {}}
-      enabled={creds.data?.enabled ?? false}
-      onSave={(c, en) => save.mutateAsync({ enabled: en, credentials: c })}
-      onTest={() => test.mutate()}
-      saving={save.isPending}
-      testing={test.isPending}
-    />
+    <div className="space-y-5">
+      <EnvironmentToggle value={environment} onChange={onEnvironmentChange} />
+      {form}
+      <SyncPoliciesPanel slug={slug} />
+    </div>
+  );
+}
+
+function EnvironmentToggle({
+  value,
+  onChange,
+}: {
+  value: IntegrationEnvironment;
+  onChange: (env: IntegrationEnvironment) => void;
+}) {
+  const options: Array<{ key: IntegrationEnvironment; label: string; hint: string }> = [
+    { key: "test", label: "Test", hint: "Sandbox-credentials, geen invloed op productie" },
+    { key: "live", label: "Live", hint: "Echte productie-koppeling met klantdata" },
+  ];
+  return (
+    <div className="card--luxe p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <p className="text-[11px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">
+          Omgeving
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Test- en Live-credentials worden apart bewaard. Wisselen wijzigt
+          uitsluitend wat je hieronder ziet, niet wat actief is.
+        </p>
+      </div>
+      <div
+        role="tablist"
+        aria-label="Omgeving"
+        className="inline-flex p-1 rounded-2xl border border-[hsl(var(--gold)/0.25)] bg-white shrink-0"
+      >
+        {options.map((opt) => {
+          const active = value === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onChange(opt.key)}
+              title={opt.hint}
+              className={cn(
+                "h-8 px-4 rounded-xl text-xs font-display font-semibold transition-all",
+                active
+                  ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -562,28 +697,98 @@ function ExactConnectionForm({
   testing: boolean;
 }) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
+  const defaultRedirect = useMemo(() => defaultExactRedirectUri(), []);
   const [clientId, setClientId] = useState((creds.clientId as string) ?? "");
   const [clientSecret, setClientSecret] = useState("");
-  const [redirectUri, setRedirectUri] = useState((creds.redirectUri as string) ?? "");
+  const [redirectUri, setRedirectUri] = useState(
+    (creds.redirectUri as string) ?? defaultRedirect ?? "",
+  );
   const [divisionId, setDivisionId] = useState((creds.divisionId as string) ?? "");
   const [active, setActive] = useState(enabled);
   const [oauthOpen, setOauthOpen] = useState(false);
   const [oauthStep, setOauthStep] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [oauthSuccess, setOauthSuccess] = useState(false);
+  // Snapshot van hasStoredSecrets bij modal-open, zodat polling kan zien dat er
+  // nieuw werd opgeslagen na de OAuth-flow (transition false -> true).
+  const storedAtOpenRef = useRef<boolean>(false);
 
   useEffect(() => {
     setClientId((creds.clientId as string) ?? "");
-    setRedirectUri((creds.redirectUri as string) ?? "");
+    setRedirectUri(
+      (creds.redirectUri as string) || defaultRedirect || "",
+    );
     setDivisionId((creds.divisionId as string) ?? "");
     setActive(enabled);
-  }, [creds, enabled]);
+  }, [creds, enabled, defaultRedirect]);
 
   const hasStoredSecrets = creds.__hasStoredSecrets === true;
   const hasCreds = Boolean(enabled || hasStoredSecrets);
   const canStartOAuth = Boolean(tenant && clientId.trim() && redirectUri.trim());
 
+  // Detect OAuth-callback success via BroadcastChannel (primair).
+  useEffect(() => {
+    if (!oauthOpen) return;
+    if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return;
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("orderflow-oauth");
+    } catch {
+      return;
+    }
+    const onMessage = (ev: MessageEvent) => {
+      const data = ev.data as { ok?: boolean; provider?: string } | null;
+      if (!data || data.provider !== "exact_online") return;
+      if (data.ok) {
+        markSuccess();
+      }
+    };
+    bc.addEventListener("message", onMessage);
+    return () => {
+      bc?.removeEventListener("message", onMessage);
+      bc?.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oauthOpen]);
+
+  // Polling-fallback wanneer BroadcastChannel niet beschikbaar of cross-origin niet aankomt.
+  useEffect(() => {
+    if (!oauthOpen || oauthSuccess) return;
+    const interval = window.setInterval(() => {
+      // Vraag de credentials-query opnieuw, en kijk of hasStoredSecrets sinds open
+      // van false naar true is gegaan.
+      queryClient
+        .invalidateQueries({ queryKey: ["integration_credentials", tenant?.id, "exact_online"] })
+        .catch(() => {});
+    }, 2000);
+    return () => window.clearInterval(interval);
+  }, [oauthOpen, oauthSuccess, queryClient, tenant?.id]);
+
+  // Detect transition false -> true via creds-prop (na invalidate refetcht parent).
+  useEffect(() => {
+    if (!oauthOpen || oauthSuccess) return;
+    if (!storedAtOpenRef.current && hasStoredSecrets) {
+      markSuccess();
+    }
+  }, [oauthOpen, oauthSuccess, hasStoredSecrets]);
+
+  function markSuccess() {
+    setOauthSuccess(true);
+    setOauthStep(2);
+    queryClient.invalidateQueries({
+      queryKey: ["integration_credentials", tenant?.id, "exact_online"],
+    });
+    // Modal blijft 2s open met "Verbonden"-bevestiging, dan automatisch sluiten.
+    window.setTimeout(() => {
+      setOauthOpen(false);
+    }, 2000);
+  }
+
   const handleStartOAuth = async () => {
     if (!tenant) return;
+    storedAtOpenRef.current = hasStoredSecrets;
+    setOauthSuccess(false);
     setOauthOpen(true);
     setOauthStep(0);
     try {
@@ -647,7 +852,26 @@ function ExactConnectionForm({
         <Field label="Client ID" id="exact-client-id" value={clientId} onChange={setClientId} />
         <Field label="Client Secret" id="exact-client-secret" type="password" value={clientSecret} onChange={setClientSecret} placeholder={hasStoredSecrets ? "Leeg laten behoudt huidige secret" : ""} />
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="exact-redirect-uri" className="text-xs font-display font-semibold uppercase tracking-[0.16em] text-muted-foreground">Redirect URI</Label>
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="exact-redirect-uri" className="text-xs font-display font-semibold uppercase tracking-[0.16em] text-muted-foreground">Redirect URI</Label>
+            {defaultRedirect && redirectUri === defaultRedirect && (
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))] cursor-help"
+                      aria-label="Auto-gegenereerd voor jouw Supabase-project"
+                    >
+                      <Info className="h-2.5 w-2.5" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-[11px]">
+                    Auto-gegenereerd voor jouw Supabase-project
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <div className="relative">
             <Input
               id="exact-redirect-uri"
@@ -697,9 +921,24 @@ function ExactConnectionForm({
             <DialogDescription>Verbind je Exact Online-account met OrderFlow in 3 stappen.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Stepper steps={["Inloggen bij Exact", "Toegang verlenen", "Klaar"]} active={oauthStep} />
-            <div className="rounded-xl border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.3)] p-3 text-xs text-foreground/80 leading-relaxed">
-              {oauthStep < 2 ? (
+            <Stepper
+              steps={["Inloggen bij Exact", "Toegang verlenen", "Klaar"]}
+              active={oauthSuccess ? 2 : oauthStep}
+            />
+            <div
+              className={cn(
+                "rounded-xl border p-3 text-xs leading-relaxed",
+                oauthSuccess
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.3)] text-foreground/80",
+              )}
+            >
+              {oauthSuccess ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Verbonden met Exact Online. Dit venster sluit automatisch.
+                </span>
+              ) : oauthStep < 2 ? (
                 <>Het Exact Online inlog-venster is geopend in een nieuw tabblad. Log in en bevestig dat OrderFlow toegang krijgt tot je administratie. Daarna word je terug gestuurd, en wordt deze melding automatisch gesloten.</>
               ) : (
                 <>Je Exact Online-koppeling is actief. Test 'm via de Test verbinding-knop in deze tab.</>
@@ -716,6 +955,7 @@ function ExactConnectionForm({
 }
 
 function NostradamusConnectionForm({
+  setupHint,
   creds,
   enabled,
   onSave,
@@ -723,6 +963,7 @@ function NostradamusConnectionForm({
   saving,
   testing,
 }: {
+  setupHint?: string;
   creds: Record<string, unknown>;
   enabled: boolean;
   onSave: (c: Record<string, unknown>, en: boolean) => Promise<void>;
@@ -756,6 +997,12 @@ function NostradamusConnectionForm({
 
   return (
     <div className="card--luxe p-5 space-y-5">
+      {setupHint && (
+        <div className="rounded-xl border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.3)] p-3 text-xs text-foreground/80 leading-relaxed">
+          {setupHint}
+        </div>
+      )}
+
       <div className="flex items-center justify-between p-3 rounded-xl border border-[hsl(var(--gold)/0.18)] bg-white">
         <div>
           <Label className="text-sm font-display font-semibold">Connector actief</Label>
@@ -782,10 +1029,10 @@ function NostradamusConnectionForm({
         <Switch checked={mockMode} onCheckedChange={setMockMode} />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={save} disabled={saving} className="gap-1.5">
           {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-          {saving ? "Opslaan..." : "Opslaan"}
+          {saving ? "Opslaan..." : "Configuratie opslaan"}
         </Button>
         <Button variant="outline" onClick={onTest} disabled={testing} className="gap-1.5">
           <Activity className="h-3.5 w-3.5" />
@@ -797,6 +1044,7 @@ function NostradamusConnectionForm({
 }
 
 function SnelstartConnectionForm({
+  setupHint,
   creds,
   enabled,
   onSave,
@@ -804,6 +1052,7 @@ function SnelstartConnectionForm({
   saving,
   testing,
 }: {
+  setupHint?: string;
   creds: Record<string, unknown>;
   enabled: boolean;
   onSave: (c: Record<string, unknown>, en: boolean) => Promise<void>;
@@ -833,6 +1082,12 @@ function SnelstartConnectionForm({
 
   return (
     <div className="card--luxe p-5 space-y-5">
+      {setupHint && (
+        <div className="rounded-xl border border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.3)] p-3 text-xs text-foreground/80 leading-relaxed">
+          {setupHint}
+        </div>
+      )}
+
       <div className="flex items-center justify-between p-3 rounded-xl border border-[hsl(var(--gold)/0.18)] bg-white">
         <div>
           <Label className="text-sm font-display font-semibold">Connector actief</Label>
@@ -855,10 +1110,10 @@ function SnelstartConnectionForm({
         <Switch checked={mockMode} onCheckedChange={setMockMode} />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button onClick={save} disabled={saving} className="gap-1.5">
           {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-          {saving ? "Opslaan..." : "Opslaan"}
+          {saving ? "Opslaan..." : "Configuratie opslaan"}
         </Button>
         <Button variant="outline" onClick={onTest} disabled={testing} className="gap-1.5">
           <Activity className="h-3.5 w-3.5" />
@@ -934,6 +1189,10 @@ function MappingTab({ slug }: { slug: string }) {
   const save = useSaveConnectorMapping(slug);
   const [values, setValues] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
+
+  const sourceFields = useMemo(() => getSourceFields(slug), [slug]);
+  const templates = useMemo(() => getMappingTemplates(slug), [slug]);
 
   useEffect(() => {
     if (mapping.data && !initialized) {
@@ -954,27 +1213,264 @@ function MappingTab({ slug }: { slug: string }) {
     );
   }
 
+  const applyTemplate = (templateId: string) => {
+    const template = templates.find((t) => t.id === templateId);
+    if (!template) return;
+    setValues((prev) => ({ ...prev, ...template.values }));
+    toast.success("Template toegepast", { description: template.label });
+  };
+
+  const handleDrop = (targetKey: string, sourceKey: string) => {
+    setValues((prev) => ({ ...prev, [targetKey]: sourceKey }));
+    setHoverKey(null);
+  };
+
+  const clearTarget = (targetKey: string) => {
+    setValues((prev) => ({ ...prev, [targetKey]: "" }));
+  };
+
   return (
-    <div className="card--luxe p-5 space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Mapping bepaalt hoe OrderFlow-velden vertaald worden naar de provider. Lege velden gebruiken de default uit de connector-definitie.
-      </p>
-      <div className="space-y-3">
-        {connector.mappingKeys.map((m) => (
-          <Field
-            key={m.key}
-            label={m.label}
-            id={`map-${m.key}`}
-            value={values[m.key] ?? ""}
-            placeholder={m.placeholder}
-            onChange={(v) => setValues((prev) => ({ ...prev, [m.key]: v }))}
-          />
-        ))}
+    <div className="space-y-4">
+      {templates.length > 0 && (
+        <div className="card--luxe p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Wand2 className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+            <p className="text-[11px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">
+              Templates
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {templates.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => applyTemplate(tpl.id)}
+                title={tpl.description}
+                className="h-8 px-3 rounded-full text-[11px] font-display font-semibold border border-[hsl(var(--gold)/0.3)] bg-white text-foreground hover:bg-[hsl(var(--gold-soft)/0.5)] hover:border-[hsl(var(--gold)/0.55)] transition-all"
+              >
+                {tpl.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card--luxe p-5 space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Sleep een bron-veld naar het juiste doel-veld. Of typ een waarde in
+          het tekstveld als de bron niet in de lijst staat. Lege velden
+          gebruiken de default uit de connector-definitie.
+        </p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
+          {/* BRON-VELDEN */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Bron, OrderFlow
+            </p>
+            {sourceFields.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Voor deze connector zijn geen voorgedefinieerde bron-velden,
+                gebruik de tekstvelden rechts.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {sourceFields.map((field) => (
+                  <SourcePill key={field.key} field={field} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* DOEL-VELDEN */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Doel, {connector.name}
+            </p>
+            <div className="space-y-2">
+              {connector.mappingKeys.map((m) => (
+                <TargetRow
+                  key={m.key}
+                  mappingKey={m.key}
+                  label={m.label}
+                  placeholder={m.placeholder}
+                  value={values[m.key] ?? ""}
+                  hover={hoverKey === m.key}
+                  onChange={(v) =>
+                    setValues((prev) => ({ ...prev, [m.key]: v }))
+                  }
+                  onClear={() => clearTarget(m.key)}
+                  onDragEnter={() => setHoverKey(m.key)}
+                  onDragLeave={() => setHoverKey((curr) => (curr === m.key ? null : curr))}
+                  onDrop={(sourceKey) => handleDrop(m.key, sourceKey)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <MappingPreview
+          values={values}
+          mappingKeys={connector.mappingKeys}
+          sourceFields={sourceFields}
+        />
+
+        <Button
+          onClick={() => save.mutate(values)}
+          disabled={save.isPending}
+          className="gap-1.5"
+        >
+          {save.isPending ? (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
+          {save.isPending ? "Opslaan..." : "Mapping opslaan"}
+        </Button>
       </div>
-      <Button onClick={() => save.mutate(values)} disabled={save.isPending} className="gap-1.5">
-        {save.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-        {save.isPending ? "Opslaan..." : "Mapping opslaan"}
-      </Button>
+    </div>
+  );
+}
+
+function SourcePill({ field }: { field: ConnectorSourceField }) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", field.key);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+      title={field.hint}
+      className="group inline-flex items-center gap-2 w-full h-9 px-3 rounded-xl bg-[hsl(var(--gold-soft)/0.6)] border border-[hsl(var(--gold)/0.25)] text-xs font-display font-semibold text-[hsl(var(--gold-deep))] cursor-grab active:cursor-grabbing hover:bg-[hsl(var(--gold-soft))] hover:border-[hsl(var(--gold)/0.5)] transition-all"
+    >
+      <GripVertical className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 shrink-0" />
+      <span className="truncate">{field.label}</span>
+      <code className="ml-auto text-[10px] font-mono opacity-70 shrink-0">
+        {field.key}
+      </code>
+    </div>
+  );
+}
+
+function TargetRow({
+  mappingKey,
+  label,
+  placeholder,
+  value,
+  hover,
+  onChange,
+  onClear,
+  onDragEnter,
+  onDragLeave,
+  onDrop,
+}: {
+  mappingKey: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  hover: boolean;
+  onChange: (v: string) => void;
+  onClear: () => void;
+  onDragEnter: () => void;
+  onDragLeave: () => void;
+  onDrop: (sourceKey: string) => void;
+}) {
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const sourceKey = e.dataTransfer.getData("text/plain");
+    if (sourceKey) onDrop(sourceKey);
+  };
+
+  return (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        "rounded-xl border-2 border-dashed bg-white p-3 transition-all",
+        hover
+          ? "border-[hsl(var(--gold))] bg-[hsl(var(--gold-soft)/0.4)] shadow-[0_0_0_4px_hsl(var(--gold)/0.15)]"
+          : value
+            ? "border-[hsl(var(--gold)/0.4)] border-solid"
+            : "border-[hsl(var(--gold)/0.2)]",
+      )}
+    >
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <Label
+          htmlFor={`map-${mappingKey}`}
+          className="text-[11px] font-display font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+        >
+          {label}
+        </Label>
+        {value && (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="Wis veld"
+            className="h-5 w-5 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--gold-soft)/0.6)] transition-colors"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      <Input
+        id={`map-${mappingKey}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={hover ? "Laat hier los..." : placeholder}
+        className={cn(
+          "h-9 text-sm",
+          hover && "border-[hsl(var(--gold))] bg-white",
+        )}
+      />
+    </div>
+  );
+}
+
+function MappingPreview({
+  values,
+  mappingKeys,
+  sourceFields,
+}: {
+  values: Record<string, string>;
+  mappingKeys: Array<{ key: string; label: string; placeholder: string }>;
+  sourceFields: ConnectorSourceField[];
+}) {
+  const exampleByKey = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const f of sourceFields) {
+      map[f.key] = f.example ?? f.label;
+    }
+    return map;
+  }, [sourceFields]);
+
+  const preview = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const m of mappingKeys) {
+      const v = values[m.key];
+      if (!v) {
+        out[m.key] = `(default: ${m.placeholder})`;
+      } else if (exampleByKey[v] !== undefined) {
+        out[m.key] = exampleByKey[v];
+      } else {
+        out[m.key] = v;
+      }
+    }
+    return out;
+  }, [mappingKeys, values, exampleByKey]);
+
+  return (
+    <div className="rounded-xl border border-[hsl(var(--gold)/0.2)] bg-[hsl(var(--gold-soft)/0.18)] p-4 space-y-2">
+      <p className="text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">
+        Live preview
+      </p>
+      <pre className="text-[11px] font-mono text-foreground/90 whitespace-pre-wrap break-all leading-relaxed">
+        {JSON.stringify(preview, null, 2)}
+      </pre>
     </div>
   );
 }
@@ -985,11 +1481,53 @@ function LogTab({ slug }: { slug: string }) {
   const log = useConnectorSyncLog(slug);
   const [statusFilter, setStatusFilter] = useState<"all" | "SUCCESS" | "FAILED" | "SKIPPED">("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Marketplace fase 4: replay-multi-select.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [replayRow, setReplayRow] = useState<SyncLogRow | null>(null);
+  const bulkReplay = useReplaySyncEventsBulk(slug);
 
   const filtered = (log.data ?? []).filter((r) => statusFilter === "all" || r.status === statusFilter);
 
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkReplay = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    try {
+      await bulkReplay.mutateAsync(ids);
+      toast.success(`${ids.length} events opnieuw verstuurd`);
+      setSelected(new Set());
+    } catch (e) {
+      toast.error("Bulk-replay mislukt", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
   return (
     <div className="card--luxe p-5 space-y-4">
+      {selected.size > 0 && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--gold-soft)/0.4)] p-2">
+          <span className="text-xs font-display font-semibold text-[hsl(var(--gold-deep))]">
+            {selected.size} {selected.size === 1 ? "event" : "events"} geselecteerd
+          </span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setSelected(new Set())}>Wis selectie</Button>
+            <Button size="sm" onClick={handleBulkReplay} disabled={bulkReplay.isPending} className="gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5" />
+              Opnieuw proberen ({selected.size})
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <Filter className="h-3.5 w-3.5 text-muted-foreground" />
         {(["all", "SUCCESS", "FAILED", "SKIPPED"] as const).map((s) => {
@@ -1025,44 +1563,96 @@ function LogTab({ slug }: { slug: string }) {
       )}
       <div className="space-y-2">
         {filtered.map((row) => (
-          <LogRow key={row.id} row={row} expanded={expanded === row.id} onToggle={() => setExpanded((prev) => prev === row.id ? null : row.id)} />
+          <LogRow
+            key={row.id}
+            row={row}
+            expanded={expanded === row.id}
+            onToggle={() => setExpanded((prev) => prev === row.id ? null : row.id)}
+            selected={selected.has(row.id)}
+            onSelectChange={() => toggleSelect(row.id)}
+            onReplay={() => setReplayRow(row)}
+          />
         ))}
       </div>
+
+      <WebhookReplayDialog row={replayRow} open={!!replayRow} onClose={() => setReplayRow(null)} />
     </div>
   );
 }
 
-function LogRow({ row, expanded, onToggle }: { row: SyncLogRow; expanded: boolean; onToggle: () => void }) {
+function LogRow({
+  row,
+  expanded,
+  onToggle,
+  selected,
+  onSelectChange,
+  onReplay,
+}: {
+  row: SyncLogRow;
+  expanded: boolean;
+  onToggle: () => void;
+  selected: boolean;
+  onSelectChange: () => void;
+  onReplay: () => void;
+}) {
   const Icon = row.status === "SUCCESS" ? CheckCircle2 : row.status === "FAILED" ? XCircle : Clock;
   const tone = row.status === "SUCCESS" ? "text-emerald-600" : row.status === "FAILED" ? "text-destructive" : "text-amber-500";
+  const isFailed = row.status === "FAILED";
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--gold)/0.16)] bg-white">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-start gap-3 p-3 text-left hover:bg-[hsl(var(--gold-soft)/0.25)] rounded-xl transition-colors"
-      >
-        <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", tone)} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-display font-bold uppercase tracking-[0.16em] text-muted-foreground">{row.direction}</span>
-            {row.event_type && <code className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))]">{row.event_type}</code>}
-            <span className="text-[11px] text-muted-foreground ml-auto tabular-nums">
-              {new Date(row.started_at).toLocaleString("nl-NL")}
-            </span>
+    <div className={cn("rounded-xl border bg-white", selected ? "border-[hsl(var(--gold)/0.5)] ring-1 ring-[hsl(var(--gold)/0.2)]" : "border-[hsl(var(--gold)/0.16)]")}>
+      <div className="flex items-start gap-2 p-3">
+        {isFailed && (
+          <div className="pt-0.5">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={onSelectChange}
+              aria-label="Selecteer voor bulk-replay"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
-          {row.error_message && (
-            <p className="text-xs text-destructive mt-1 line-clamp-1">{row.error_message}</p>
-          )}
-          <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-            {row.records_count > 0 && <span>{row.records_count} record{row.records_count === 1 ? "" : "s"}</span>}
-            {row.duration_ms != null && <span className="tabular-nums">{row.duration_ms}ms</span>}
-            {row.external_id && <span className="font-mono text-[10px]">ID {row.external_id}</span>}
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex-1 flex items-start gap-3 text-left hover:bg-[hsl(var(--gold-soft)/0.25)] -m-1 p-1 rounded-lg transition-colors"
+        >
+          <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", tone)} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-display font-bold uppercase tracking-[0.16em] text-muted-foreground">{row.direction}</span>
+              {row.event_type && <code className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))]">{row.event_type}</code>}
+              <span className="text-[11px] text-muted-foreground ml-auto tabular-nums">
+                {new Date(row.started_at).toLocaleString("nl-NL")}
+              </span>
+            </div>
+            {row.error_message && (
+              <p className="text-xs text-destructive mt-1 line-clamp-1">{row.error_message}</p>
+            )}
+            <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+              {row.records_count > 0 && <span>{row.records_count} record{row.records_count === 1 ? "" : "s"}</span>}
+              {row.duration_ms != null && <span className="tabular-nums">{row.duration_ms}ms</span>}
+              {row.external_id && <span className="font-mono text-[10px]">ID {row.external_id}</span>}
+            </div>
           </div>
-        </div>
-        <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 mt-1", expanded && "rotate-180")} />
-      </button>
+          <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 mt-1", expanded && "rotate-180")} />
+        </button>
+        {isFailed && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReplay();
+            }}
+            className="h-7 px-2 gap-1 text-[10px] font-display font-semibold border-[hsl(var(--gold)/0.3)]"
+          >
+            <RotateCcw className="h-3 w-3" />
+            Opnieuw
+          </Button>
+        )}
+      </div>
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -1107,6 +1697,9 @@ function Sidebar({
 
   return (
     <aside className="space-y-4">
+      {/* Marketplace fase 4: Sync-graphs bovenaan de sidebar. */}
+      <SyncGraphs slug={slug} log={log} />
+
       <div className="card--luxe p-4 space-y-3">
         <p className="text-[11px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">Stats laatste 50 events</p>
         <div className="grid grid-cols-2 gap-2">

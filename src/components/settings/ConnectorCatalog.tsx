@@ -1,8 +1,10 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Clock, Search, Sparkles, Zap, AlertCircle, ArrowRight, Activity,
-  Lock, Radio, ArrowLeftRight, Webhook, KeyRound, Globe2, MapPin, Package, ChevronUp,
+  Lock, Radio, ArrowLeftRight, Webhook, KeyRound, Globe2, MapPin, Package, ChevronUp, X,
+  Info, Users, TrendingUp, Rocket,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,6 +15,17 @@ import { CONNECTOR_BUNDLES, type ConnectorBundle } from "@/lib/connectors/bundle
 import { useConnectorList, type ConnectorWithStatus } from "@/hooks/useConnectors";
 import { useConnectorVotes } from "@/hooks/useConnectorVotes";
 import { cn } from "@/lib/utils";
+import { fuzzySearch, highlightSegments, type FuzzyMatch } from "@/lib/fuzzy";
+import { EmptyStateIllustration } from "@/components/settings/connectors/EmptyStateIllustration";
+import {
+  MarketplaceTour,
+  shouldAutoStartTour,
+} from "@/components/settings/connectors/MarketplaceTour";
+import { buildStripStats } from "@/lib/connectors/marketplaceStats";
+// Marketplace fase 4 toevoegingen, additief.
+import { BulkActionsBar } from "@/components/settings/connectors/BulkActionsBar";
+import { HealthBanner } from "@/components/settings/connectors/HealthBanner";
+import { HealthDot } from "@/components/settings/connectors/HealthDot";
 
 interface Props {
   onSelect: (slug: string) => void;
@@ -63,11 +76,32 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+const VALID_CATEGORIES: FilterChip[] = CHIP_ORDER;
+
+function isValidChip(value: string | null): value is FilterChip {
+  return !!value && (VALID_CATEGORIES as string[]).includes(value);
+}
+
 export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
   const list = useConnectorList();
   const votes = useConnectorVotes();
-  const [filter, setFilter] = useState<FilterChip>("alle");
-  const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initial state uit URL leiden, daarna twee-richtingen sync.
+  const initialCat = searchParams.get("cat");
+  const initialQuery = searchParams.get("q") ?? "";
+  const initialCapability = searchParams.get("cap");
+  const [filter, setFilter] = useState<FilterChip>(
+    isValidChip(initialCat) ? initialCat : "alle",
+  );
+  const [query, setQuery] = useState(initialQuery);
+  const [capabilityFilter, setCapabilityFilter] = useState<string | null>(initialCapability);
+
+  const [autocompleteOpen, setAutocompleteOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(0);
+  const searchWrapperRef = useRef<HTMLDivElement | null>(null);
+
+  const [tourOpen, setTourOpen] = useState(false);
 
   const all = useMemo(() => list.data ?? [], [list.data]);
 
@@ -85,32 +119,125 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
     return [...curated, ...fallback].slice(0, 4);
   }, [all]);
 
+  // URL sync: chip + query <-> ?cat=&q=
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    if (filter === "alle") params.delete("cat");
+    else params.set("cat", filter);
+    if (!query.trim()) params.delete("q");
+    else params.set("q", query.trim());
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next !== current) {
+      setSearchParams(params, { replace: true });
+    }
+    // We willen niet reageren op iedere searchParams-mutatie van buitenaf,
+    // alleen op lokale filter/query-wijzigingen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, query]);
+
+  // Autostart tour voor first-time users (als er items zijn).
+  useEffect(() => {
+    if (!list.isLoading && all.length > 0 && shouldAutoStartTour()) {
+      const t = window.setTimeout(() => setTourOpen(true), 600);
+      return () => window.clearTimeout(t);
+    }
+  }, [list.isLoading, all.length]);
+
+  // Click-buiten + ESC sluit autocomplete.
+  useEffect(() => {
+    if (!autocompleteOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (!searchWrapperRef.current) return;
+      if (!searchWrapperRef.current.contains(e.target as Node)) {
+        setAutocompleteOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAutocompleteOpen(false);
+    };
+    window.addEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [autocompleteOpen]);
+
   if (list.isLoading) {
     return <CatalogSkeleton />;
   }
 
   const liveCount = all.filter((c) => c.enabled && c.hasCredentials).length;
+  const liveAvailableCount = all.filter((c) => c.enabled && c.hasCredentials && c.status !== "soon").length;
+  const allEnabledLive = all.filter((c) => c.hasCredentials && c.status !== "soon");
+  const allPaused = allEnabledLive.length > 0 && allEnabledLive.every((c) => !c.enabled);
   const availableCount = all.filter((c) => c.status !== "soon").length;
   const totalCount = all.length;
 
-  const queryLower = query.trim().toLowerCase();
+  const queryTrim = query.trim();
+  const queryLower = queryTrim.toLowerCase();
+
+  // Fuzzy autocomplete: top-5 suggesties op basis van naam/capabilities.
+  const fuzzyMatches: Array<FuzzyMatch<ConnectorWithStatus>> = queryTrim
+    ? fuzzySearch(all, queryTrim, {
+        fields: [
+          { name: "name", get: (c) => c.name, weight: 2 },
+          { name: "description", get: (c) => c.description },
+          {
+            name: "capabilities",
+            get: (c) => (c.capabilities ?? []).join(" "),
+          },
+          {
+            name: "category",
+            get: (c) => CATEGORY_LABELS[c.category],
+          },
+        ],
+        limit: 50,
+      })
+    : [];
+  const matchedSlugs = new Set(fuzzyMatches.map((m) => m.item.slug));
+  const suggestions = fuzzyMatches.slice(0, 5);
+
   const filtered = all.filter((c) => {
     if (filter !== "alle" && c.category !== filter) return false;
+    if (capabilityFilter && !(c.capabilities ?? []).includes(capabilityFilter)) return false;
     if (!queryLower) return true;
-    return (
-      c.name.toLowerCase().includes(queryLower) ||
-      c.description.toLowerCase().includes(queryLower) ||
-      (c.capabilities ?? []).some((cap) => cap.toLowerCase().includes(queryLower))
-    );
+    return matchedSlugs.has(c.slug);
   });
 
   const liveAndBeta = filtered.filter((c) => c.status !== "soon");
   const roadmap = filtered.filter((c) => c.status === "soon");
-  const showBundles = filter === "alle" && !queryLower;
-  const showFeatured = filter === "alle" && !queryLower;
+  const showBundles = filter === "alle" && !queryLower && !capabilityFilter;
+  const showFeatured = filter === "alle" && !queryLower && !capabilityFilter;
+  const stripStats = buildStripStats(all);
+
+  const handleSelectSuggestion = (slug: string) => {
+    setAutocompleteOpen(false);
+    setQuery("");
+    onSelect(slug);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!autocompleteOpen || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveSuggestion((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveSuggestion((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const pick = suggestions[activeSuggestion];
+      if (pick) handleSelectSuggestion(pick.item.slug);
+    }
+  };
 
   return (
     <div className="space-y-8">
+      {/* Marketplace fase 4: globale storingsbanner. */}
+      <HealthBanner onSelect={onSelect} />
+
       {/* HERO */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -137,7 +264,32 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
               <Sparkles className="h-3 w-3 mr-1" />
               {totalCount} koppelingen
             </span>
+            <button
+              type="button"
+              onClick={() => setTourOpen(true)}
+              aria-label="Start marketplace-rondleiding"
+              className="inline-flex h-7 items-center gap-1 rounded-full border border-[hsl(var(--gold)/0.3)] bg-white/70 backdrop-blur-sm px-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] hover:bg-white hover:border-[hsl(var(--gold)/0.5)] transition-colors"
+            >
+              <Info className="h-3 w-3" />
+              Tour
+            </button>
           </div>
+
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <StatPill icon={<Users className="h-3 w-3" />}>
+              <span className="tabular-nums font-semibold">{stripStats.topConnector.tenants}</span>
+              <span className="ml-1 text-muted-foreground">tenants gebruiken {stripStats.topConnector.name} deze maand</span>
+            </StatPill>
+            <StatPill icon={<TrendingUp className="h-3 w-3" />}>
+              <span className="tabular-nums font-semibold">{stripStats.newSinceLastMonth}</span>
+              <span className="ml-1 text-muted-foreground">nieuwe koppelingen sinds vorige maand</span>
+            </StatPill>
+            <StatPill icon={<Rocket className="h-3 w-3" />}>
+              <span className="tabular-nums font-semibold">{stripStats.bundlesSpeedup}%</span>
+              <span className="ml-1 text-muted-foreground">sneller live met bundels</span>
+            </StatPill>
+          </div>
+
           <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-foreground leading-tight">
             Koppel OrderFlow aan je stack.
             <span className="block text-[hsl(var(--gold-deep))]">In een paar klikken live.</span>
@@ -146,18 +298,87 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
             Boekhouding, telematica, communicatie of webshop. Beheer alle koppelingen op een plek met sync-log, mapping, en audit. Officiele partners, OAuth-flows en realtime events ingebouwd.
           </p>
 
-          <div className="relative mt-6 max-w-2xl">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--gold-deep))]" />
+          <div ref={searchWrapperRef} className="relative mt-6 max-w-2xl" data-tour="search">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--gold-deep))] pointer-events-none" />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActiveSuggestion(0);
+                setAutocompleteOpen(e.target.value.trim().length > 0);
+              }}
+              onFocus={() => {
+                if (query.trim().length > 0) setAutocompleteOpen(true);
+              }}
+              onKeyDown={handleSearchKeyDown}
+              role="combobox"
+              aria-expanded={autocompleteOpen && suggestions.length > 0}
+              aria-controls="connector-autocomplete"
+              aria-autocomplete="list"
               placeholder="Zoek op naam, capability of categorie..."
               className="w-full h-12 pl-11 pr-4 rounded-2xl border border-[hsl(var(--gold)/0.3)] bg-white text-sm font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_4px_12px_-4px_rgba(0,0,0,0.08)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)/0.4)] focus:border-[hsl(var(--gold)/0.5)] transition-all"
             />
-            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:inline-flex h-6 items-center rounded-md border border-[hsl(var(--gold)/0.25)] bg-white/80 px-2 text-[10px] font-mono text-muted-foreground">
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:inline-flex h-6 items-center rounded-md border border-[hsl(var(--gold)/0.25)] bg-white/80 px-2 text-[10px] font-mono text-muted-foreground pointer-events-none">
               /
             </kbd>
+
+            {autocompleteOpen && suggestions.length > 0 && (
+              <div
+                id="connector-autocomplete"
+                role="listbox"
+                className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.25)] bg-white shadow-[0_24px_60px_-20px_rgba(0,0,0,0.25)]"
+              >
+                {suggestions.map((s, i) => {
+                  const segments = highlightSegments(s.item.name, s.matchedField === "name" ? s.matchedIndices : []);
+                  const active = i === activeSuggestion;
+                  return (
+                    <button
+                      key={s.item.slug}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onMouseEnter={() => setActiveSuggestion(i)}
+                      onClick={() => handleSelectSuggestion(s.item.slug)}
+                      className={cn(
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                        active ? "bg-[hsl(var(--gold-soft)/0.55)]" : "hover:bg-[hsl(var(--gold-soft)/0.3)]",
+                      )}
+                    >
+                      <BrandTile connector={s.item} size={32} muted />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-display font-semibold tracking-tight text-foreground truncate">
+                          {segments.map((seg, idx) =>
+                            seg.match ? (
+                              <mark
+                                key={idx}
+                                className="bg-transparent text-[hsl(var(--gold-deep))] font-bold"
+                              >
+                                {seg.text}
+                              </mark>
+                            ) : (
+                              <span key={idx}>{seg.text}</span>
+                            ),
+                          )}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {CATEGORY_LABELS[s.item.category]}
+                          {s.item.status === "soon" ? " , Roadmap" : ""}
+                        </div>
+                      </div>
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
+          {/* Marketplace fase 4: bulk-acties onder de zoekbar. */}
+          {liveCount > 0 && (
+            <div className="mt-4">
+              <BulkActionsBar liveCount={liveAvailableCount} paused={allPaused} />
+            </div>
+          )}
 
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <HealthCell
@@ -186,7 +407,7 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
       </motion.div>
 
       {showFeatured && (
-        <section>
+        <section data-tour="featured">
           <SectionHeader eyebrow="Aanbevolen" subtitle="Onze pick voor 2026" icon={<Sparkles className="h-3.5 w-3.5" />} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
             <AnimatePresence>
@@ -199,7 +420,7 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
       )}
 
       {showBundles && (
-        <section>
+        <section data-tour="bundles">
           <SectionHeader eyebrow="Bundels" subtitle="Klaar-voor-gebruik combinaties met onboarding-wizard" icon={<Zap className="h-3.5 w-3.5" />} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
             {CONNECTOR_BUNDLES.map((bundle, i) => (
@@ -215,7 +436,7 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
         </section>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 sticky top-0 z-10 -mx-1 px-1 py-2 bg-gradient-to-b from-background via-background/95 to-transparent">
+      <div data-tour="chips" className="flex flex-wrap items-center gap-2 sticky top-0 z-10 -mx-1 px-1 py-2 bg-gradient-to-b from-background via-background/95 to-transparent">
         {CHIP_ORDER.map((chip) => {
           const active = filter === chip;
           const count = chip === "alle" ? all.length : all.filter((c) => c.category === chip).length;
@@ -240,9 +461,21 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
             </button>
           );
         })}
-        {(query || filter !== "alle") && (
+        {capabilityFilter && (
           <button
-            onClick={() => { setFilter("alle"); setQuery(""); }}
+            type="button"
+            onClick={() => setCapabilityFilter(null)}
+            aria-label={`Wis capability-filter ${capabilityFilter}`}
+            className="h-9 px-3 rounded-full text-xs font-display font-semibold inline-flex items-center gap-1.5 border border-[hsl(var(--gold)/0.4)] bg-[hsl(var(--gold-soft)/0.6)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft))] transition-colors"
+          >
+            {capabilityIcon(capabilityFilter)}
+            {capabilityFilter}
+            <X className="h-3 w-3" />
+          </button>
+        )}
+        {(query || filter !== "alle" || capabilityFilter) && (
+          <button
+            onClick={() => { setFilter("alle"); setQuery(""); setCapabilityFilter(null); }}
             className="h-9 px-3 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             Wis filter
@@ -251,13 +484,15 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
       </div>
 
       {liveAndBeta.length === 0 && roadmap.length === 0 ? (
-        <div className="rounded-2xl border border-[hsl(var(--gold)/0.18)] bg-gradient-to-br from-white to-[hsl(var(--gold-soft)/0.2)] p-12 text-center">
-          <div className="mx-auto h-12 w-12 rounded-2xl bg-[hsl(var(--gold-soft))] flex items-center justify-center text-[hsl(var(--gold-deep))] mb-3">
-            <AlertCircle className="h-5 w-5" />
-          </div>
-          <p className="text-base font-display font-semibold text-foreground">Geen koppelingen gevonden</p>
-          <p className="text-sm text-muted-foreground mt-1">Probeer een andere zoekterm of filter.</p>
-        </div>
+        <EmptyStateIllustration
+          category={filter}
+          query={queryTrim || undefined}
+          onClear={() => {
+            setFilter("alle");
+            setQuery("");
+            setAutocompleteOpen(false);
+          }}
+        />
       ) : (
         <>
           {liveAndBeta.length > 0 && (
@@ -266,7 +501,16 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <AnimatePresence>
                   {liveAndBeta.map((c, i) => (
-                    <ConnectorCard key={c.slug} connector={c} delay={i * 0.04} onSelect={() => onSelect(c.slug)} />
+                    <ConnectorCard
+                      key={c.slug}
+                      connector={c}
+                      delay={i * 0.04}
+                      onSelect={() => onSelect(c.slug)}
+                      activeCapability={capabilityFilter}
+                      onCapabilityClick={(cap) =>
+                        setCapabilityFilter((current) => (current === cap ? null : cap))
+                      }
+                    />
                   ))}
                 </AnimatePresence>
               </div>
@@ -322,7 +566,18 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
           </a>
         </div>
       </div>
+
+      <MarketplaceTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </div>
+  );
+}
+
+function StatPill({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.5)] px-3 text-[11px] font-medium text-foreground/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+      <span className="text-[hsl(var(--gold-deep))]">{icon}</span>
+      {children}
+    </span>
   );
 }
 
@@ -469,23 +724,34 @@ function ConnectorCard({
   connector,
   delay,
   onSelect,
+  activeCapability,
+  onCapabilityClick,
 }: {
   connector: ConnectorWithStatus;
   delay: number;
   onSelect: () => void;
+  activeCapability?: string | null;
+  onCapabilityClick?: (cap: string) => void;
 }) {
   const isLive = connector.enabled && connector.hasCredentials;
   const tint = withAlpha(connector.brandColor, 0.04);
   return (
-    <motion.button
-      type="button"
+    <motion.div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
       transition={{ duration: 0.3, delay }}
       whileHover={{ y: -2 }}
-      className="group relative rounded-2xl border border-[hsl(var(--gold)/0.18)] p-5 text-left overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.05)] hover:border-[hsl(var(--gold)/0.45)] hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.22)] transition-shadow"
+      className="group relative rounded-2xl border border-[hsl(var(--gold)/0.18)] p-5 text-left overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.05)] hover:border-[hsl(var(--gold)/0.45)] hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.22)] transition-shadow cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gold)/0.5)]"
       style={{
         background: `linear-gradient(180deg, white 0%, ${tint} 100%)`,
       }}
@@ -504,6 +770,7 @@ function ConnectorCard({
         <BrandTile connector={connector} size={52} />
         <div className="flex flex-col items-end gap-1.5">
           <StatusBadge connector={connector} live={isLive} />
+          {isLive && <HealthDot slug={connector.slug} />}
           {connector.badge && (
             <Badge
               variant="outline"
@@ -524,15 +791,35 @@ function ConnectorCard({
 
       {(connector.capabilities ?? []).length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {(connector.capabilities ?? []).map((cap) => (
-            <span
-              key={cap}
-              className="inline-flex h-6 items-center gap-1 px-2 rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] text-[10px] font-display font-semibold tracking-wide"
-            >
-              {capabilityIcon(cap)}
-              {cap}
-            </span>
-          ))}
+          {(connector.capabilities ?? []).map((cap) => {
+            const active = activeCapability === cap;
+            const clickable = Boolean(onCapabilityClick);
+            return (
+              <button
+                key={cap}
+                type="button"
+                disabled={!clickable}
+                onClick={(e) => {
+                  if (!clickable) return;
+                  e.stopPropagation();
+                  onCapabilityClick?.(cap);
+                }}
+                aria-pressed={active}
+                title={clickable ? `Filter op ${cap}` : cap}
+                className={cn(
+                  "inline-flex h-6 items-center gap-1 px-2 rounded-full text-[10px] font-display font-semibold tracking-wide transition-all",
+                  active
+                    ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm"
+                    : "bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))]",
+                  clickable && !active && "hover:bg-[hsl(var(--gold-soft))] hover:ring-1 hover:ring-[hsl(var(--gold)/0.4)]",
+                  !clickable && "cursor-default",
+                )}
+              >
+                {capabilityIcon(cap)}
+                {cap}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -555,7 +842,7 @@ function ConnectorCard({
           <ArrowRight className="h-3 w-3" />
         </span>
       </div>
-    </motion.button>
+    </motion.div>
   );
 }
 
