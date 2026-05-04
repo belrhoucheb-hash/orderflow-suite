@@ -16,9 +16,20 @@ const supabaseGlobal = globalThis as typeof globalThis & {
 const timeoutFetch: typeof fetch = async (input, init = {}) => {
   let timeout: ReturnType<typeof window.setTimeout> | null = null;
 
-  const timeoutPromise = new Promise<Response>((_, reject) => {
+  const timeoutPromise = new Promise<Response>((resolve) => {
     timeout = window.setTimeout(() => {
-      reject(new Error(`Supabase request duurde langer dan ${SUPABASE_FETCH_TIMEOUT_MS}ms`));
+      resolve(
+        new Response(
+          JSON.stringify({
+            message: `Supabase request duurde langer dan ${SUPABASE_FETCH_TIMEOUT_MS}ms`,
+          }),
+          {
+            status: 504,
+            statusText: "Gateway Timeout",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
     }, SUPABASE_FETCH_TIMEOUT_MS);
   });
 

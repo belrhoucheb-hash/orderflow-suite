@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
-import { addDays, format } from "date-fns";
+import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
@@ -53,7 +52,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { fetchTripsForDate, useDispatchTrip, useTrips, useTripsRealtime, useUpdateTripStatus } from "@/hooks/useTrips";
+import { useDispatchTrip, useTrips, useTripsRealtime, useUpdateTripStatus } from "@/hooks/useTrips";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useVehicles } from "@/hooks/useVehicles";
 import {
@@ -175,9 +174,9 @@ const Dispatch = () => {
   const [confirmStatus, setConfirmStatus] = useState<{ tripId: string; tripNumber: number; newStatus: TripStatus } | null>(null);
   const [dragLaneMap, setDragLaneMap] = useState<Record<string, string>>({});
   const [laneOrders, setLaneOrders] = useState<Record<string, string[]>>({});
+  const [loadStalled, setLoadStalled] = useState(false);
 
   const { data: trips = [], isLoading, isError, refetch } = useTrips(selectedDate);
-  const queryClient = useQueryClient();
   useTripsRealtime();
   const { data: drivers = [] } = useDrivers();
   const { data: vehicles = [] } = useVehicles();
@@ -186,16 +185,14 @@ const Dispatch = () => {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   useEffect(() => {
-    const selected = new Date(`${selectedDate}T00:00:00`);
-    for (const offset of [-1, 1]) {
-      const adjacentDate = format(addDays(selected, offset), "yyyy-MM-dd");
-      queryClient.prefetchQuery({
-        queryKey: ["trips", adjacentDate],
-        queryFn: () => fetchTripsForDate(adjacentDate),
-        staleTime: 60_000,
-      });
+    if (!isLoading) {
+      setLoadStalled(false);
+      return;
     }
-  }, [queryClient, selectedDate]);
+
+    const timer = window.setTimeout(() => setLoadStalled(true), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [isLoading, selectedDate]);
 
   const driverMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -656,8 +653,18 @@ const Dispatch = () => {
     );
   };
 
-  if (isLoading) return <LoadingState message="Dispatch laden..." />;
-  if (isError) return <QueryError message="Kan ritten niet laden. Probeer het opnieuw." onRetry={() => refetch()} />;
+  if (isLoading && !loadStalled) return <LoadingState message="Dispatch laden..." />;
+  if (isError || loadStalled) {
+    return (
+      <QueryError
+        message="Dispatchgegevens laden duurt te lang. De pagina is beschermd tegen eindeloos laden; probeer opnieuw of kies een andere datum."
+        onRetry={() => {
+          setLoadStalled(false);
+          refetch();
+        }}
+      />
+    );
+  }
 
   const selectedStops = selectedTrip ? (((selectedTrip as any).trip_stops || []) as TripStop[]) : [];
   const selectedCounts = selectedTrip ? getStopCounts(selectedTrip) : null;
