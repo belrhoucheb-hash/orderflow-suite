@@ -58,7 +58,10 @@ export function MijnWeekView({ driverId }: Props) {
 
   const { schedules, isLoading } = useDriverSchedules(weekStartStr, weekEndStr);
   const { data: templates = [] } = useShiftTemplates();
-  const { data: vehicles = [] } = useVehiclesRaw({ includeInactive: true });
+  // Stabiele referentie zodat useVehiclesRaw geen nieuwe optie-objecten ziet bij
+  // elke render van de week-view.
+  const vehiclesOptions = useMemo(() => ({ includeInactive: true }), []);
+  const { data: vehicles = [] } = useVehiclesRaw(vehiclesOptions);
 
   const myDays: DayInfo[] = useMemo(() => {
     const mySchedules = schedules.filter((s) => s.driver_id === driverId);

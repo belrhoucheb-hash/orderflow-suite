@@ -1008,9 +1008,20 @@ describe("useDispatchTrip", () => {
 describe("useSavePOD", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  // Helper voor het mocken van de chain `insert(...).select("id").single()`.
+  const mockInsertChain = (response: { data?: any; error: any }) =>
+    vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: response.data ?? { id: "pod-123" },
+          error: response.error,
+        }),
+      }),
+    });
+
   it("saves proof of delivery", async () => {
     mockFrom.mockImplementation(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
+      insert: mockInsertChain({ error: null }),
     }));
 
     const { result } = renderHook(() => useSavePOD(), { wrapper: createWrapper() });
@@ -1028,7 +1039,7 @@ describe("useSavePOD", () => {
 
   it("saves POD with all optional fields", async () => {
     mockFrom.mockImplementation(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
+      insert: mockInsertChain({ error: null }),
     }));
 
     const { result } = renderHook(() => useSavePOD(), { wrapper: createWrapper() });
@@ -1049,7 +1060,7 @@ describe("useSavePOD", () => {
 
   it("handles POD insert error", async () => {
     mockFrom.mockImplementation(() => ({
-      insert: vi.fn().mockResolvedValue({ error: { message: "insert failed" } }),
+      insert: mockInsertChain({ error: { message: "insert failed" } }),
     }));
 
     const { result } = renderHook(() => useSavePOD(), { wrapper: createWrapper() });

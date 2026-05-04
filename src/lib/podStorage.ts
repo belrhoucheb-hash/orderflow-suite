@@ -2,13 +2,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const POD_BUCKET = "pod-files";
 
-type PodFileKind = "signature" | "photo";
+type PodFileKind = "signature" | "photo" | "cmr";
 
 interface UploadPodBlobOptions {
   orderId: string;
   kind: PodFileKind;
   contentType: string;
-  extension: "png" | "jpg" | "jpeg";
+  extension: "png" | "jpg" | "jpeg" | "pdf";
 }
 
 interface PodSignedUrlOptions {
@@ -40,10 +40,10 @@ async function getTenantId(): Promise<string> {
 export async function createPodStoragePath(
   orderId: string,
   kind: PodFileKind,
-  extension: "png" | "jpg" | "jpeg",
+  extension: "png" | "jpg" | "jpeg" | "pdf",
 ): Promise<string> {
   const tenantId = await getTenantId();
-  const folder = kind === "signature" ? "signatures" : "photos";
+  const folder = kind === "signature" ? "signatures" : kind === "cmr" ? "cmr" : "photos";
   const id = typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
