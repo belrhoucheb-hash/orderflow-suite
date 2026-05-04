@@ -20,6 +20,12 @@ import {
   type WarehouseInput,
   type Warehouse as WarehouseType,
 } from "@/hooks/useWarehouses";
+import {
+  AddressAutocomplete,
+  EMPTY_ADDRESS,
+  type AddressValue,
+} from "@/components/clients/AddressAutocomplete";
+import { composeAddressString } from "@/lib/validation/clientSchema";
 import { AddressBookSettings } from "./AddressBookSettings";
 import { LoadingUnitDialog, type LoadingUnitFormValues } from "./LoadingUnitDialog";
 import { RequirementTypeDialog, type RequirementTypeFormValues } from "./RequirementTypeDialog";
@@ -76,6 +82,13 @@ type DeleteTarget =
   | { table: "tenant_warehouses"; id: string; label: string };
 
 const STALE_FIVE_MIN = 5 * 60_000;
+
+function warehouseAddressValue(address: string): AddressValue {
+  return {
+    ...EMPTY_ADDRESS,
+    street: address,
+  };
+}
 
 export function MasterDataSection() {
   const queryClient = useQueryClient();
@@ -513,6 +526,7 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
     wh.warehouse_reference_mode === "order_number"
       ? `${wh.warehouse_reference_prefix || ""}ordernummer`
       : wh.manual_reference || "Handmatig";
+  const addressFormValue = warehouseAddressValue(form.address);
 
   return (
     <section className="space-y-4">
@@ -564,7 +578,19 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
               {isAdding && (
                 <TableRow className="bg-[hsl(var(--gold-soft)/0.25)] hover:bg-[hsl(var(--gold-soft)/0.25)] border-b-[hsl(var(--gold)/0.25)]">
                   <TableCell><Input className="h-8 text-xs bg-background" placeholder="RCS Export Hub" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></TableCell>
-                  <TableCell><Input className="h-8 text-xs bg-background" placeholder="Volledig adres" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></TableCell>
+                  <TableCell className="min-w-[320px] align-top">
+                    <AddressAutocomplete
+                      value={addressFormValue}
+                      onChange={(address) => {
+                        const composed = composeAddressString(address, { includeLocality: true });
+                        setForm((current) => ({ ...current, address: composed || address.street }));
+                      }}
+                      onSearchInputChange={(value) => setForm((current) => ({ ...current, address: value }))}
+                      searchLabel="Adres"
+                      searchPlaceholder="Typ bedrijfsnaam, straat of plaats"
+                      compactFlow
+                    />
+                  </TableCell>
                   <TableCell>
                     <Select value={form.warehouse_type} onValueChange={v => setForm({ ...form, warehouse_type: v as WarehouseInput["warehouse_type"] })}>
                       <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>

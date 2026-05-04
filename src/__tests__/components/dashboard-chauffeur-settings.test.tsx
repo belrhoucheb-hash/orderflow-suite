@@ -510,6 +510,18 @@ describe("MasterDataSection", () => {
     expect(screen.getByPlaceholderText("ADR...")).toBeInTheDocument();
   });
 
+  it("uses address autocomplete when adding a warehouse", async () => {
+    const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
+    render(<Wrapper><MasterDataSection /></Wrapper>);
+    await waitFor(() => {
+      expect(screen.getAllByText("Toevoegen").length).toBeGreaterThanOrEqual(3);
+    });
+    fireEvent.click(screen.getAllByText("Toevoegen")[2]);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Typ bedrijfsnaam, straat of plaats")).toBeInTheDocument();
+    });
+  });
+
   it("cancels loading units dialog with Annuleren button", async () => {
     const { MasterDataSection } = await import("@/components/settings/MasterDataSection");
     render(<Wrapper><MasterDataSection /></Wrapper>);
