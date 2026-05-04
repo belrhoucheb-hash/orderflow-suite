@@ -314,17 +314,12 @@ describe("NewOrder", () => {
     expect(document.body.textContent).toBeTruthy();
   });
 
-  it("moves from client question to transport and then route", async () => {
+  it("moves from client question to contact, reference and then route", async () => {
     const user = userEvent.setup();
     renderNewOrder();
 
     const clientInput = screen.getByPlaceholderText(/Typ klantnaam of kies uit lijst/i);
     await user.type(clientInput, "FreightNed Air{enter}");
-
-    await waitFor(() => {
-      expect(screen.getByText(/Welke referentie hoort bij deze order/i)).toBeInTheDocument();
-    });
-    await user.click(screen.getAllByRole("button", { name: /Geen referentie/i })[0]);
 
     await waitFor(() => {
       expect(screen.getByText(/Welke contactpersoon hoort bij deze order/i)).toBeInTheDocument();
@@ -333,9 +328,9 @@ describe("NewOrder", () => {
     await user.click(screen.getByRole("button", { name: /Bevestig contactpersoon/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Welk transport hoort hierbij/i)).toBeInTheDocument();
+      expect(screen.getByText(/Welke referentie hoort bij deze order/i)).toBeInTheDocument();
     });
-    await user.click(screen.getByRole("button", { name: /Binnenland \/ direct/i }));
+    await user.click(screen.getAllByRole("button", { name: /Geen referentie/i })[0]);
 
     await waitFor(() => {
       expect(screen.getByText(/Waar wordt de lading opgehaald/i)).toBeInTheDocument();
