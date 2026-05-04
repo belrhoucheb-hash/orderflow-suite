@@ -176,10 +176,16 @@ const Login = () => {
     }
 
     const normalizedEmail = loginEmail.trim().toLowerCase();
-    const { data: policyRows } = typeof supabase.rpc === "function"
-      ? await supabase.rpc("office_login_policy" as any, { p_email: normalizedEmail })
-      : { data: null };
-    const loginPolicy = (Array.isArray(policyRows) ? policyRows[0] : null) as LoginPolicy | null;
+    let loginPolicy: LoginPolicy | null = null;
+
+    try {
+      const { data: policyRows } = typeof supabase.rpc === "function"
+        ? await supabase.rpc("office_login_policy" as any, { p_email: normalizedEmail })
+        : { data: null };
+      loginPolicy = (Array.isArray(policyRows) ? policyRows[0] : null) as LoginPolicy | null;
+    } catch (policyError) {
+      console.warn("Login policy kon niet worden opgehaald", policyError);
+    }
 
     if (loginPolicy?.locked_until && new Date(loginPolicy.locked_until).getTime() > Date.now()) {
       setLoading(false);
@@ -187,31 +193,47 @@ const Login = () => {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password: loginPassword,
-    });
+    let signInError: Error | null = null;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: loginPassword,
+      });
+      signInError = error;
+    } catch (error) {
+      signInError = error instanceof Error ? error : new Error("Inloggen mislukt");
+    }
 
-    if (error) {
+    if (signInError) {
       setLoading(false);
       if (loginPolicy?.login_protection_enabled !== false) {
-        await supabase.rpc?.("record_office_login_attempt" as any, {
-          p_email: normalizedEmail,
-          p_success: false,
-          p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
-          p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
-        });
+        try {
+          await supabase.rpc?.("record_office_login_attempt" as any, {
+            p_email: normalizedEmail,
+            p_success: false,
+            p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
+            p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
+          });
+        } catch (attemptError) {
+          console.warn("Login poging kon niet worden vastgelegd", attemptError);
+        }
       }
-      setErrorText("Ongeldig e-mailadres of wachtwoord");
+      setErrorText(signInError.message.includes("duurde langer")
+        ? "Inloggen duurt te lang. Controleer de verbinding met Supabase en probeer opnieuw."
+        : "Ongeldig e-mailadres of wachtwoord");
       return;
     }
 
-    await supabase.rpc?.("record_office_login_attempt" as any, {
-      p_email: normalizedEmail,
-      p_success: true,
-      p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
-      p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
-    });
+    try {
+      await supabase.rpc?.("record_office_login_attempt" as any, {
+        p_email: normalizedEmail,
+        p_success: true,
+        p_max_attempts: loginPolicy?.max_login_attempts ?? 5,
+        p_lockout_minutes: loginPolicy?.lockout_minutes ?? 15,
+      });
+    } catch (attemptError) {
+      console.warn("Login poging kon niet worden vastgelegd", attemptError);
+    }
 
     if (loginPolicy?.requires_2fa && loginPolicy.verification_method !== "email") {
       try {

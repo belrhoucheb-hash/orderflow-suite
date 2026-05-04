@@ -5,6 +5,7 @@ import type { Database } from './types';
 const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
 const SUPABASE_PUBLISHABLE_KEY = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
 const SUPABASE_FETCH_TIMEOUT_MS = 3_500;
+const SUPABASE_AUTH_FETCH_TIMEOUT_MS = 10_000;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -13,15 +14,23 @@ const supabaseGlobal = globalThis as typeof globalThis & {
   __orderflowSupabaseClient?: SupabaseClient<Database>;
 };
 
+function requestUrl(input: Parameters<typeof fetch>[0]) {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
 const timeoutFetch: typeof fetch = async (input, init = {}) => {
   let timeout: ReturnType<typeof window.setTimeout> | null = null;
+  const url = requestUrl(input);
+  const timeoutMs = url.includes("/auth/v1/") ? SUPABASE_AUTH_FETCH_TIMEOUT_MS : SUPABASE_FETCH_TIMEOUT_MS;
 
   const timeoutPromise = new Promise<Response>((resolve) => {
     timeout = window.setTimeout(() => {
       resolve(
         new Response(
           JSON.stringify({
-            message: `Supabase request duurde langer dan ${SUPABASE_FETCH_TIMEOUT_MS}ms`,
+            message: `Supabase request duurde langer dan ${timeoutMs}ms`,
           }),
           {
             status: 504,
@@ -30,7 +39,7 @@ const timeoutFetch: typeof fetch = async (input, init = {}) => {
           },
         ),
       );
-    }, SUPABASE_FETCH_TIMEOUT_MS);
+    }, timeoutMs);
   });
 
   try {
