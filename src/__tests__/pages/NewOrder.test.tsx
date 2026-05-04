@@ -41,6 +41,11 @@ vi.mock("@/hooks/useAddressBook", () => ({
 
 vi.mock("@/hooks/useClientContacts", () => ({
   useClientContacts: () => ({ data: [] }),
+  useCreateClientContact: () => ({ mutateAsync: vi.fn().mockResolvedValue({ id: "contact-1" }) }),
+}));
+
+vi.mock("@/hooks/useWarehouses", () => ({
+  useWarehouses: () => ({ data: [] }),
 }));
 
 vi.mock("@/lib/trajectRouter", () => ({
@@ -309,12 +314,28 @@ describe("NewOrder", () => {
     expect(document.body.textContent).toBeTruthy();
   });
 
-  it("moves from client question to route on Enter", async () => {
+  it("moves from client question to transport and then route", async () => {
     const user = userEvent.setup();
     renderNewOrder();
 
     const clientInput = screen.getByPlaceholderText(/Typ klantnaam of kies uit lijst/i);
     await user.type(clientInput, "FreightNed Air{enter}");
+
+    await waitFor(() => {
+      expect(screen.getByText(/Welke referentie hoort bij deze order/i)).toBeInTheDocument();
+    });
+    await user.click(screen.getAllByRole("button", { name: /Geen referentie/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Welke contactpersoon hoort bij deze order/i)).toBeInTheDocument();
+    });
+    await user.type(screen.getByPlaceholderText(/Naam contactpersoon/i), "Planner Contact");
+    await user.click(screen.getByRole("button", { name: /Bevestig contactpersoon/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Welk transport hoort hierbij/i)).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Binnenland \/ direct/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Waar wordt de lading opgehaald/i)).toBeInTheDocument();
@@ -338,7 +359,8 @@ describe("NewOrder", () => {
 
     const clientInput = screen.getByPlaceholderText(/Typ klantnaam of kies uit lijst/i);
     await user.type(clientInput, "A{enter}");
-    expect(screen.getByText(/Typ minimaal 2 tekens of kies een klant/i)).toBeInTheDocument();
+    expect(screen.getByText(/Voor welke klant is deze order/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Welk transport hoort hierbij/i)).not.toBeInTheDocument();
   });
 
   it("types in referentie field (setReferentie)", async () => {

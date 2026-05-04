@@ -39,7 +39,8 @@ import {
   type Client,
   type ClientLocation,
 } from "@/hooks/useClients";
-import { useClientContacts } from "@/hooks/useClientContacts";
+import { useClientContacts, useCreateClientContact } from "@/hooks/useClientContacts";
+import { useWarehouses, type Warehouse } from "@/hooks/useWarehouses";
 import { commitOrderDraftWithLegs, createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,6 +91,8 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 type MainTab = "algemeen" | "financieel" | "vrachtdossier";
 type BottomTab = "vrachmeen" | "additionele_diensten" | "overige_referenties";
 type WizardStep = "intake" | "route" | "cargo" | "financial" | "review";
+type TransportFlowChoice = "import" | "export" | "direct";
+type ContactChoiceMode = "existing" | "manual";
 type ServerDraftLifecycleStatus = "DRAFT" | "PENDING" | "NEEDS_REVIEW" | "PLANNED" | "CANCELLED" | "ON_HOLD" | "ABANDONED";
 type DraftSaveStatus = "idle" | "creating" | "saving" | "saved" | "error" | "conflict";
 
@@ -108,6 +111,9 @@ interface FreightLine {
   requiresTailLift?: boolean;
   temperatureControlled?: boolean;
   photoRequired?: boolean;
+  warehouseId?: string;
+  warehouseReferenceMode?: "manual" | "order_number";
+  warehouseReferencePrefix?: string | null;
   // Optionele coord-info per leg, voorbereidend voor hub-routing
   // op afstand en betere Webfleet-export per stop.
   lat?: number | null;
@@ -739,7 +745,7 @@ const NewOrder = () => {
   const [mainTab, setMainTab] = useState<MainTab>("algemeen");
   const [bottomTab, setBottomTab] = useState<BottomTab>("vrachmeen");
   const [wizardStep, setWizardStep] = useState<WizardStep>("intake");
-  const [intakeActiveQuestion, setIntakeActiveQuestion] = useState<1 | 2>(1);
+  const [intakeActiveQuestion, setIntakeActiveQuestion] = useState<1 | 2 | 3 | 4>(1);
   const [intakeManualBack, setIntakeManualBack] = useState(false);
   const [routeActiveQuestion, setRouteActiveQuestion] = useState<1 | 2 | 3 | 4>(1);
   const [routeManualBack, setRouteManualBack] = useState(false);
@@ -775,9 +781,18 @@ const NewOrder = () => {
   const { data: clientLocations = [] } = useClientLocations(clientId);
   const { data: addressSuggestions } = useAddressSuggestions(clientName.trim() || null, clientId || null);
   const { data: clientContacts = [] } = useClientContacts(clientId);
+  const createClientContact = useCreateClientContact();
+  const { data: warehouses = [] } = useWarehouses();
+  const activeClientContacts = useMemo(() => clientContacts.filter((contact) => contact.is_active), [clientContacts]);
   const [contactpersoon, setContactpersoon] = useState("");
+  const [contactChoiceMode, setContactChoiceMode] = useState<ContactChoiceMode>("existing");
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [manualContactName, setManualContactName] = useState("");
+  const [manualContactEmail, setManualContactEmail] = useState("");
+  const [manualContactPhone, setManualContactPhone] = useState("");
   const [prioriteit, setPrioriteit] = useState("Standaard");
   const [klantReferentie, setKlantReferentie] = useState("");
+  const [transportFlowChoice, setTransportFlowChoice] = useState<TransportFlowChoice | "">("");
   const [transportType, setTransportType] = useState("");
   const [transportTypeManual, setTransportTypeManual] = useState(false);
   const [afdeling, setAfdeling] = useState("");
@@ -815,6 +830,7 @@ const NewOrder = () => {
   const [pickupTimeTo, setPickupTimeTo] = useState("");
   const [deliveryTimeFrom, setDeliveryTimeFrom] = useState("");
   const [deliveryTimeTo, setDeliveryTimeTo] = useState("");
+  const [allowOutsideBusinessHours, setAllowOutsideBusinessHours] = useState(false);
 
   // Freight summary (items added via "Toevoegen aan Vrachtlijst")
   const [freightSummary, setFreightSummary] = useState<FreightSummaryItem[]>([]);
@@ -841,6 +857,14 @@ const NewOrder = () => {
   const [pmtSeal, setPmtSeal] = useState("");
   const [pmtByCustomer, setPmtByCustomer] = useState(true);
   const showPmt = transportType === "Luchtvracht";
+
+  const contactRoleLabel = useCallback((role?: string | null) => {
+    if (role === "primary") return "Primair";
+    if (role === "finance") return "Financieel";
+    if (role === "operations") return "Operatie";
+    if (role === "backup") return "Backup";
+    return "Contact";
+  }, []);
 
   // Financieel state, gevuld door FinancialTab via onPricingChange.
   const [pricingPayload, setPricingPayload] = useState<FinancialTabPayload>({ cents: null, details: null });
@@ -992,7 +1016,20 @@ const NewOrder = () => {
   }, [handleDeliveryAddrChange, handlePickupAddrChange, primaryLadenId, primaryLossenId]);
 
   const updateFreightLine = <K extends keyof FreightLine>(id: string, field: K, value: FreightLine[K]) => {
-    setFreightLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+    setFreightLines(prev => prev.map(l => {
+      if (l.id === id) {
+        const next = { ...l, [field]: value };
+        if (field === "datum" && value && !next.tijd && !next.tijdTot) {
+          next.tijd = "08:00";
+          next.tijdTot = "17:00";
+        }
+        return next;
+      }
+      if (id === primaryLadenId && field === "datum" && value && l.activiteit === "Lossen" && !l.datum) {
+        return { ...l, datum: value as string, tijd: l.tijd || "08:00", tijdTot: l.tijdTot || "17:00" };
+      }
+      return l;
+    }));
     if (field === "datum" || field === "tijd" || field === "tijdTot") {
       setErrors(prev => {
         if (!prev.pickup_time_window && !prev.delivery_time_window && !prev.route_sequence) return prev;
@@ -1052,6 +1089,86 @@ const NewOrder = () => {
       return next;
     });
   }, []);
+
+  const warehouseReferencePreview = useCallback((warehouse: Warehouse) => {
+    if ((warehouse.warehouse_reference_mode ?? "manual") === "order_number") {
+      return `${warehouse.warehouse_reference_prefix ?? ""}ordernummer`;
+    }
+    return warehouse.manual_reference?.trim() || "";
+  }, []);
+
+  const findWarehouseForFlow = useCallback((flow: TransportFlowChoice) => {
+    if (flow === "direct") return null;
+    const matches = warehouses.filter((warehouse) => {
+      const configuredFlow = warehouse.transport_flow ?? "both";
+      if (configuredFlow !== "both" && configuredFlow !== flow) return false;
+      const typeMatch = flow === "export" ? warehouse.warehouse_type === "EXPORT" : warehouse.warehouse_type === "IMPORT";
+      return typeMatch || configuredFlow === flow;
+    });
+    return matches.find((warehouse) => warehouse.is_default) ?? matches[0] ?? null;
+  }, [warehouses]);
+
+  const applyWarehouseToRoute = useCallback((warehouse: Warehouse, flow: TransportFlowChoice) => {
+    const role = flow === "export" ? "pickup" : (warehouse.default_stop_role ?? "delivery");
+    const value = bestEffortAddressValue(warehouse.address);
+    const reference = warehouseReferencePreview(warehouse);
+    const patchLine = (line: FreightLine): FreightLine => ({
+      ...line,
+      companyName: warehouse.name || line.companyName,
+      locatie: composeAddressString(value, { includeLocality: true }) || warehouse.address,
+      lat: value.lat,
+      lng: value.lng,
+      coords_manual: value.coords_manual,
+      referentie: reference || line.referentie,
+      warehouseId: warehouse.id,
+      warehouseReferenceMode: warehouse.warehouse_reference_mode ?? "manual",
+      warehouseReferencePrefix: warehouse.warehouse_reference_prefix ?? null,
+    });
+
+    if (role === "pickup") {
+      handlePickupAddrChange(value);
+      setPickupLookup(warehouse.name);
+      if (primaryLadenId) {
+        setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? patchLine(line) : line));
+      }
+      setPickupAddressBookLabel({ label: warehouse.name, key: buildAddressBookKey(value) });
+      return;
+    }
+
+    handleDeliveryAddrChange(value);
+    setDeliveryLookup(warehouse.name);
+    if (primaryLossenId) {
+      setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? patchLine(line) : line));
+    }
+    setDeliveryAddressBookLabel({ label: warehouse.name, key: buildAddressBookKey(value) });
+  }, [handleDeliveryAddrChange, handlePickupAddrChange, primaryLadenId, primaryLossenId, warehouseReferencePreview]);
+
+  const chooseTransportFlow = useCallback((flow: TransportFlowChoice) => {
+    setTransportFlowChoice(flow);
+    setAfdeling(flow === "export" ? "EXPORT" : flow === "import" ? "IMPORT" : "OPS");
+    setAfdelingManual(true);
+    const warehouse = findWarehouseForFlow(flow);
+    if (warehouse) {
+      applyWarehouseToRoute(warehouse, flow);
+      toast.success("Warehouse ingevuld", {
+        description: `${warehouse.name} is als ${flow === "export" ? "laadadres" : warehouse.default_stop_role === "pickup" ? "laadadres" : "losadres"} toegepast.`,
+      });
+    }
+  }, [applyWarehouseToRoute, findWarehouseForFlow]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    if (activeClientContacts.length === 0) {
+      setContactChoiceMode("manual");
+      setSelectedContactId(null);
+      if (!contactpersoon.trim()) setContactpersoon(manualContactName.trim());
+      return;
+    }
+    if (contactChoiceMode !== "existing" || selectedContactId) return;
+    const preferredContact = activeClientContacts.find((contact) => contact.role === "primary") ?? activeClientContacts[0];
+    setSelectedContactId(preferredContact.id);
+    setContactpersoon(preferredContact.name);
+  }, [activeClientContacts, clientId, contactChoiceMode, contactpersoon, manualContactName, selectedContactId]);
 
   const maybeLearnClientAlias = useCallback(async (selection: AddressResolvedSelection) => {
     if (!tenant?.id || !clientId) return;
@@ -1231,7 +1348,7 @@ const NewOrder = () => {
         badge: "Recent",
         value: bestEffortAddressValue(suggestion.address),
         addressString: suggestion.address,
-        companyName: clientName || undefined,
+        companyName: undefined,
       });
     });
 
@@ -1328,7 +1445,7 @@ const NewOrder = () => {
         badge: "Recent",
         value: bestEffortAddressValue(suggestion.address),
         addressString: suggestion.address,
-        companyName: clientName || undefined,
+        companyName: undefined,
       });
     });
 
@@ -1636,7 +1753,29 @@ const NewOrder = () => {
   ]);
   const debouncedOrderDraft = useDebouncedValue(orderDraft, 300);
   const orderReadiness = useMemo(() => validateOrderDraft(debouncedOrderDraft), [debouncedOrderDraft]);
-  const routeRuleIssues = useMemo(() => getOrderRouteRuleIssues(freightLines), [freightLines]);
+  const routeRuleIssues = useMemo(() => {
+    const issues = [...getOrderRouteRuleIssues(freightLines)];
+    if (allowOutsideBusinessHours) return issues;
+
+    const toMinutes = (value: string | null | undefined) => {
+      const match = (value ?? "").match(/^(\d{1,2}):(\d{2})/);
+      if (!match) return null;
+      return Number(match[1]) * 60 + Number(match[2]);
+    };
+    for (const line of freightLines) {
+      const from = toMinutes(line.tijd);
+      const to = toMinutes(line.tijdTot);
+      if ((from != null && from < 8 * 60) || (to != null && to > 17 * 60)) {
+        issues.push({
+          key: line.activiteit === "Laden" ? "pickup_time_window" : "delivery_time_window",
+          lineId: line.id,
+          label: line.activiteit === "Laden" ? "Laadmoment" : "Levermoment",
+          message: "Tijdvenster valt buiten 08:00 - 17:00. Zet bewust toestaan aan als dit klopt.",
+        });
+      }
+    }
+    return issues;
+  }, [allowOutsideBusinessHours, freightLines]);
   const cargoRuleIssues = useMemo(
     () => cargoRows.map(cargoRowIssue).filter(Boolean) as string[],
     [cargoRows],
@@ -1739,7 +1878,7 @@ const NewOrder = () => {
   }, [freightLines]);
   const locationDisplay = (line: FreightLine | undefined, fallbackLabel: string, fallbackAddress: string) => {
     const address = line?.locatie?.trim() || fallbackAddress;
-    const company = line?.companyName?.trim() || (line?.locatie ? clientName.trim() : "") || fallbackLabel;
+    const company = line?.companyName?.trim() || fallbackLabel;
     return { company, address };
   };
   const pickupRouteIssue = routeRuleIssues.find((issue) => issue.lineId === pickupLine?.id);
@@ -1755,6 +1894,11 @@ const NewOrder = () => {
   ].filter(Boolean).join(" -> ");
   const clientInputReady = clientName.trim().length >= 2;
   const clientAnswered = Boolean(clientId || (clientQuestionConfirmed && clientInputReady));
+  const contactAnswered = contactChoiceMode === "manual"
+    ? manualContactName.trim().length > 0
+    : Boolean(selectedContactId || contactpersoon.trim());
+  const transportFlowAnswered = Boolean(transportFlowChoice);
+  const intakeReady = clientAnswered && contactAnswered && transportFlowAnswered;
   const cargoReady = cargoTotals.totAantal > 0 && cargoTotals.totGewicht > 0;
   const missingClient = !clientAnswered;
   const missingPickupAddress = !pickupLine?.locatie;
@@ -1770,7 +1914,7 @@ const NewOrder = () => {
   const missingDeliveryTimeWindow = !deliveryLine?.datum;
   const missingTimeWindow = missingPickupTimeWindow || missingDeliveryTimeWindow;
   const routeReady = Boolean(
-    clientAnswered &&
+    intakeReady &&
     pickupLine?.locatie &&
     deliveryLine?.locatie &&
     !pickupAndDeliverySame &&
@@ -1908,7 +2052,7 @@ const NewOrder = () => {
   const clientNeedsConfirmation = clientInputReady && !clientAnswered;
   const intakeQuestion = missingClient
     ? { step: "Klant", title: "Voor welke klant is deze order?", hint: "Typ minimaal 2 tekens en bevestig met Enter of Volgende stap." }
-    : { step: "Referentie", title: "Welke referentie en instructies horen erbij?", hint: "Vul alleen aan wat de planner straks nodig heeft." };
+    : { step: "Transport", title: "Welk transport hoort hierbij?", hint: "Kies import, export of direct. Daarna vult Orderflow het juiste warehouse alvast in." };
   const routeQuestion = missingPickupAddress
     ? { step: "Ophaaladres", title: "Waar wordt de lading opgehaald?", hint: "Begin met het laadadres. De loslocatie komt daarna." }
     : missingDeliveryAddress
@@ -1958,12 +2102,17 @@ const NewOrder = () => {
   }, [cargoActiveQuestion, cargoSuggestedQuestion]);
 
   const wizardStepStatus = useCallback((key: WizardStep) => {
-    if (key === "intake") return clientAnswered ? "Compleet" : "Nog invullen";
+    if (key === "intake") {
+      if (intakeReady) return "Compleet";
+      if (!clientAnswered) return "Nog invullen";
+      if (!contactAnswered) return "Contact kiezen";
+      return "Transport kiezen";
+    }
     if (key === "route") return routeReady ? "Compleet" : "Nog invullen";
     if (key === "cargo") return cargoReady ? "Compleet" : "Nog invullen";
     if (key === "financial") return pricingPayload.cents != null ? "Tarief klaar" : "Controleren";
     return wizardMissing.length === 0 ? "Klaar voor aanmaken" : `${wizardMissing.length} open`;
-  }, [cargoReady, clientAnswered, pricingPayload.cents, routeReady, wizardMissing.length]);
+  }, [cargoReady, clientAnswered, contactAnswered, intakeReady, pricingPayload.cents, routeReady, wizardMissing.length]);
 
   const applySmartDraft = useCallback(() => {
     if (!smartInput.trim()) {
@@ -2051,8 +2200,7 @@ const NewOrder = () => {
       if (clientInputReady) {
         setClientQuestionConfirmed(true);
         setIntakeManualBack(false);
-        setWizardStep("route");
-        setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+        setIntakeActiveQuestion(2);
       } else {
         setErrors(prev => ({ ...prev, client_name: "Typ minimaal 2 tekens of kies een klant uit de lijst." }));
       }
@@ -2060,6 +2208,35 @@ const NewOrder = () => {
     }
     if (wizardStep === "intake" && intakeActiveQuestion === 1 && clientAnswered) {
       setIntakeManualBack(false);
+      setIntakeActiveQuestion(2);
+      return;
+    }
+    if (wizardStep === "intake" && intakeActiveQuestion === 2) {
+      setIntakeManualBack(false);
+      setIntakeActiveQuestion(3);
+      return;
+    }
+    if (wizardStep === "intake" && intakeActiveQuestion === 3) {
+      const manualName = manualContactName.trim();
+      if (contactChoiceMode === "manual") {
+        if (!manualName) {
+          toast.error("Contactpersoon ontbreekt", { description: "Vul een contactpersoon in voor deze klant." });
+          return;
+        }
+        setContactpersoon(manualName);
+      } else if (!selectedContactId && !contactpersoon.trim()) {
+        toast.error("Contactpersoon ontbreekt", { description: "Kies een bestaande contactpersoon of voeg er een toe." });
+        return;
+      }
+      setIntakeManualBack(false);
+      setIntakeActiveQuestion(4);
+      return;
+    }
+    if (wizardStep === "intake" && intakeActiveQuestion === 4) {
+      if (!transportFlowChoice) {
+        toast.error("Transportkeuze ontbreekt", { description: "Kies eerst import, export of direct/binnenland." });
+        return;
+      }
       setWizardStep("route");
       setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
       return;
@@ -2121,12 +2298,12 @@ const NewOrder = () => {
       if (current === "financial") return "review";
       return "review";
     });
-  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, intakeActiveQuestion, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, wizardStep]);
+  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, selectedContactId, transportFlowChoice, wizardStep]);
 
   const goToPreviousWizardStep = useCallback(() => {
-    if (wizardStep === "intake" && intakeActiveQuestion === 2) {
+    if (wizardStep === "intake" && intakeActiveQuestion > 1) {
       setIntakeManualBack(true);
-      setIntakeActiveQuestion(1);
+      setIntakeActiveQuestion((intakeActiveQuestion - 1) as 1 | 2 | 3 | 4);
       return;
     }
     if (wizardStep === "route" && routeActiveQuestion > 1) {
@@ -2139,7 +2316,7 @@ const NewOrder = () => {
       setCargoActiveQuestion((cargoActiveQuestion - 1) as 1 | 2 | 3 | 4);
       return;
     }
-    if (wizardStep === "review" && reviewActiveQuestion > 1) {
+    if (wizardStep === "review" && reviewActiveQuestion > 2) {
       setReviewActiveQuestion((reviewActiveQuestion - 1) as 1 | 2 | 3);
       return;
     }
@@ -2174,7 +2351,7 @@ const NewOrder = () => {
   const flowHydratedRef = useRef(false);
 
   const formSignature = useMemo(() => JSON.stringify({
-    clientName, clientId, contactpersoon, prioriteit, klantReferentie,
+    clientName, clientId, contactpersoon, contactChoiceMode, selectedContactId, manualContactName, manualContactEmail, manualContactPhone, prioriteit, klantReferentie, transportFlowChoice,
     transportType, afdeling, afdelingManual, voertuigtype, chauffeur, mrnDoc, referentie,
     quantity, transportEenheid, weightKg, afstand, totaleDuur, afmetingen,
     pickupTimeFrom, pickupTimeTo, deliveryTimeFrom, deliveryTimeTo,
@@ -2183,7 +2360,7 @@ const NewOrder = () => {
     pmtDatum, pmtLocatie, pmtSeal, pmtByCustomer,
     infoFollows, infoContactName, infoContactEmail, pricingPayload,
   }), [
-    clientName, clientId, contactpersoon, prioriteit, klantReferentie,
+    clientName, clientId, contactpersoon, contactChoiceMode, selectedContactId, manualContactName, manualContactEmail, manualContactPhone, prioriteit, klantReferentie, transportFlowChoice,
     transportType, afdeling, afdelingManual, voertuigtype, chauffeur, mrnDoc, referentie,
     quantity, transportEenheid, weightKg, afstand, totaleDuur, afmetingen,
     pickupTimeFrom, pickupTimeTo, deliveryTimeFrom, deliveryTimeTo,
@@ -2197,8 +2374,14 @@ const NewOrder = () => {
     clientName,
     clientId,
     contactpersoon,
+    contactChoiceMode,
+    selectedContactId,
+    manualContactName,
+    manualContactEmail,
+    manualContactPhone,
     prioriteit,
     klantReferentie,
+    transportFlowChoice,
     transportType,
     transportTypeManual,
     afdeling,
@@ -2222,16 +2405,22 @@ const NewOrder = () => {
     clientId,
     clientName,
     contactpersoon,
+    contactChoiceMode,
     deliveryAddr,
     freightLines,
     klantReferentie,
     klepNodig,
+    manualContactEmail,
+    manualContactName,
+    manualContactPhone,
     pickupAddr,
     prioriteit,
     quantity,
     referentie,
+    selectedContactId,
     shipmentSecure,
     transportEenheid,
+    transportFlowChoice,
     transportType,
     transportTypeManual,
     voertuigtype,
@@ -2254,8 +2443,14 @@ const NewOrder = () => {
       }
       if (parsed.clientId) setClientId(parsed.clientId);
       if (parsed.contactpersoon) setContactpersoon(parsed.contactpersoon);
+      if (parsed.contactChoiceMode) setContactChoiceMode(parsed.contactChoiceMode);
+      if (parsed.selectedContactId) setSelectedContactId(parsed.selectedContactId);
+      if (parsed.manualContactName) setManualContactName(parsed.manualContactName);
+      if (parsed.manualContactEmail) setManualContactEmail(parsed.manualContactEmail);
+      if (parsed.manualContactPhone) setManualContactPhone(parsed.manualContactPhone);
       if (parsed.prioriteit) setPrioriteit(parsed.prioriteit);
       if (parsed.klantReferentie) setKlantReferentie(parsed.klantReferentie);
+      if (parsed.transportFlowChoice) setTransportFlowChoice(parsed.transportFlowChoice);
       if (parsed.transportType) setTransportType(parsed.transportType);
       if (typeof parsed.transportTypeManual === "boolean") setTransportTypeManual(parsed.transportTypeManual);
       if (parsed.afdeling) setAfdeling(parsed.afdeling);
@@ -2294,6 +2489,12 @@ const NewOrder = () => {
       return;
     }
 
+    if (!transportFlowChoice) {
+      setWizardStep("intake");
+      setIntakeActiveQuestion(4);
+      return;
+    }
+
     if (missingPickupAddress) {
       setWizardStep("route");
       setRouteActiveQuestion(1);
@@ -2342,7 +2543,7 @@ const NewOrder = () => {
     }
 
     setWizardStep("review");
-    setReviewActiveQuestion(1);
+    setReviewActiveQuestion(2);
   }, [
     afdeling,
     clientAnswered,
@@ -2358,12 +2559,13 @@ const NewOrder = () => {
     pricingPayload.cents,
     suggestedTransportType,
     suggestedVehicleType,
+    transportFlowChoice,
     transportType,
     voertuigtype,
   ]);
 
   useEffect(() => {
-    if (!draftRestored || intakeManualBack || wizardStep !== "intake" || !clientAnswered) return;
+    if (!draftRestored || intakeManualBack || wizardStep !== "intake" || !clientAnswered || !transportFlowChoice) return;
 
     if (missingPickupAddress) {
       setWizardStep("route");
@@ -2413,7 +2615,7 @@ const NewOrder = () => {
     }
 
     setWizardStep("review");
-    setReviewActiveQuestion(1);
+    setReviewActiveQuestion(2);
   }, [
     afdeling,
     clientAnswered,
@@ -2429,6 +2631,7 @@ const NewOrder = () => {
     pricingPayload.cents,
     suggestedTransportType,
     suggestedVehicleType,
+    transportFlowChoice,
     transportType,
     voertuigtype,
     wizardStep,
@@ -2464,8 +2667,41 @@ const NewOrder = () => {
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
+  const discardDraftAndLeave = async () => {
+    skipDirtyGuardRef.current = true;
+    setShowUnsavedDialog(false);
+    if (draftStorageKey) window.localStorage.removeItem(draftStorageKey);
+    if (serverDraftStorageKey) window.localStorage.removeItem(serverDraftStorageKey);
+    if (serverDraftId && tenant?.id) {
+      try {
+        await (supabase as any)
+          .from("order_drafts")
+          .update({
+            status: "ABANDONED",
+            last_activity_at: new Date().toISOString(),
+            updated_by: user?.id ?? null,
+          })
+          .eq("id", serverDraftId)
+          .eq("tenant_id", tenant.id)
+          .is("committed_shipment_id", null);
+      } catch (error) {
+        console.warn("[NewOrder] concept weggooien faalde:", error);
+        toast.warning("Concept lokaal verwijderd, maar serverconcept kon niet volledig worden gemarkeerd");
+      }
+    }
+    setDirty(false);
+    navigate("/orders");
+  };
+
+  const keepDraftAndLeave = () => {
+    skipDirtyGuardRef.current = true;
+    setShowUnsavedDialog(false);
+    setDirty(false);
+    navigate("/orders");
+  };
+
   const attemptCancel = () => {
-    if (dirty && !skipDirtyGuardRef.current) {
+    if ((dirty || serverDraftId) && !skipDirtyGuardRef.current) {
       setShowUnsavedDialog(true);
       return;
     }
@@ -2954,6 +3190,12 @@ const NewOrder = () => {
     // naar een UI-veldfout zonder parallelle if/else-ketens.
     const quantityNum = cargoTotals.totAantal || (quantity ? parseInt(quantity) : NaN);
     const weightNum = cargoTotals.totGewicht || (weightKg ? parseFloat(weightKg) : NaN);
+    if (!contactAnswered) {
+      setWizardStep("intake");
+      setIntakeActiveQuestion(3);
+      toast.error("Contactpersoon ontbreekt", { description: "Kies of voeg een contactpersoon toe voordat je de order aanmaakt." });
+      return;
+    }
     try {
       orderFormSchema.parse({
         client_name: clientName,
@@ -3121,6 +3363,27 @@ const NewOrder = () => {
       const distanceKm = totalRouteDistanceKm(routeMapStops);
       const resolvedTransportType = transportType || suggestedTransportType || null;
       const resolvedVehicleType = voertuigtype || suggestedVehicleType || null;
+      const contactSnapshot = contactpersoon
+        ? {
+            id: selectedContactId,
+            name: contactpersoon,
+            email: contactChoiceMode === "manual" ? manualContactEmail.trim() || null : clientContacts.find((ct) => ct.id === selectedContactId)?.email ?? null,
+            phone: contactChoiceMode === "manual" ? manualContactPhone.trim() || null : clientContacts.find((ct) => ct.id === selectedContactId)?.phone ?? null,
+            source: contactChoiceMode,
+          }
+        : null;
+      const stopReferencePayload = freightLines
+        .filter((line) => line.locatie || line.referentie || line.warehouseId)
+        .map((line, index) => ({
+          line_id: line.id,
+          sequence: index + 1,
+          role: line.activiteit === "Laden" ? "pickup" : "delivery",
+          company_name: line.companyName || null,
+          address: line.locatie || null,
+          reference: line.referentie || null,
+          warehouse_id: line.warehouseId || null,
+          reference_mode: line.warehouseReferenceMode || null,
+        }));
 
       const booking: BookingInput = {
         pickup_address: pickupLine?.locatie || null,
@@ -3192,6 +3455,8 @@ const NewOrder = () => {
             ? { value: afdeling, reason: "Handmatig ingesteld door planner" }
             : null,
         },
+        contact_snapshot: contactSnapshot,
+        stop_references: stopReferencePayload,
       };
 
       const { shipment, legs, idempotent } = serverDraftId
@@ -3206,6 +3471,46 @@ const NewOrder = () => {
             commitKey: `draft:${serverDraftId}`,
           })
         : await createShipmentWithLegs(booking, tenant.id);
+
+      const orderNumberReferenceUpdates = legs
+        .map((leg: any) => {
+          const isPickupLeg = leg.leg_number === 1 || leg.leg_role === "SINGLE" || leg.leg_role === "OPS_PICKUP";
+          const sourceLine = isPickupLeg ? pickupLine : deliveryLine;
+          if (sourceLine?.warehouseReferenceMode !== "order_number") return null;
+          const orderNumber = leg.order_number ? `RCS-2026-${String(leg.order_number).padStart(4, "0")}` : leg.id;
+          return (supabase as any)
+            .from("orders")
+            .update({ reference: `${sourceLine.warehouseReferencePrefix ?? ""}${orderNumber}` })
+            .eq("id", leg.id)
+            .eq("tenant_id", tenant.id);
+        })
+        .filter(Boolean) as Array<PromiseLike<unknown>>;
+      if (orderNumberReferenceUpdates.length > 0) {
+        await Promise.all(orderNumberReferenceUpdates).catch((error) => {
+          console.warn("[NewOrder] warehouse ordernummer-referentie bijwerken faalde:", error);
+          toast.warning("Order opgeslagen, maar warehouse-referentie kon niet volledig worden bijgewerkt");
+        });
+      }
+
+      if (
+        contactChoiceMode === "manual" &&
+        clientId &&
+        manualContactName.trim() &&
+        !clientContacts.some((contact) => contact.name.trim().toLowerCase() === manualContactName.trim().toLowerCase())
+      ) {
+        await createClientContact.mutateAsync({
+          client_id: clientId,
+          name: manualContactName.trim(),
+          email: manualContactEmail.trim() || null,
+          phone: manualContactPhone.trim() || null,
+          role: "other",
+          is_active: true,
+          notes: null,
+        }).catch((error) => {
+          console.warn("[NewOrder] klantcontact opslaan faalde:", error);
+          toast.warning("Order opgeslagen, maar nieuwe contactpersoon kon niet worden toegevoegd");
+        });
+      }
       const addressBookWrites: Array<Promise<unknown>> = [];
       const pickupAddressBookLabelValue =
         pickupAddressBookLabel?.key === buildAddressBookKey(pickupAddr)
@@ -3218,7 +3523,7 @@ const NewOrder = () => {
       if (pickupLine?.locatie) {
         addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
           label: pickupAddressBookLabelValue || pickupLine.locatie,
-          company_name: pickupLine.companyName || pickupAddressBookLabelValue || clientName || null,
+          company_name: pickupLine.companyName || pickupAddressBookLabelValue || null,
           address: pickupLine.locatie,
           street: pickupAddr.street,
           house_number: pickupAddr.house_number,
@@ -3243,7 +3548,7 @@ const NewOrder = () => {
       if (deliveryLine?.locatie) {
         addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
           label: deliveryAddressBookLabelValue || deliveryLine.locatie,
-          company_name: deliveryLine.companyName || deliveryAddressBookLabelValue || clientName || null,
+          company_name: deliveryLine.companyName || deliveryAddressBookLabelValue || null,
           address: deliveryLine.locatie,
           street: deliveryAddr.street,
           house_number: deliveryAddr.house_number,
@@ -3270,7 +3575,7 @@ const NewOrder = () => {
         const value = addressValueFromFreightLine(line);
         addressBookWrites.push(upsertAddressBookEntry.mutateAsync({
           label: line.companyName || line.locatie,
-          company_name: line.companyName || clientName || null,
+          company_name: line.companyName || null,
           address: line.locatie,
           street: value.street,
           house_number: value.house_number,
@@ -3657,8 +3962,14 @@ const NewOrder = () => {
       ? clientNeedsConfirmation
         ? "Bevestig klant"
         : "Volgende stap"
+      : wizardStep === "intake" && intakeActiveQuestion === 2
+        ? klantReferentie.trim()
+          ? "Gebruik referentie"
+          : "Geen referentie"
+      : wizardStep === "intake" && intakeActiveQuestion === 3
+        ? "Bevestig contactpersoon"
       : wizardStep === "intake"
-        ? "Voeg route toe"
+        ? "Plan route"
         : wizardStep === "route"
           ? routeActiveQuestion === 1
             ? "Bevestig ophaaladres"
@@ -3733,6 +4044,15 @@ const NewOrder = () => {
               value={line.locatie}
               onChange={(e) => updateFreightLine(line.id, "locatie", e.target.value)}
               placeholder="Straat, huisnummer, postcode, plaats"
+              className={flowInputClass}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className={flowLabelClass}>{line.activiteit === "Laden" ? "Laadreferentie" : "Losreferentie"}</label>
+            <Input
+              value={line.referentie || ""}
+              onChange={(e) => updateFreightLine(line.id, "referentie", e.target.value)}
+              placeholder="Wordt automatisch gevuld bij warehouse, of vul handmatig"
               className={flowInputClass}
             />
           </div>
@@ -3981,7 +4301,7 @@ const NewOrder = () => {
       setCargoActiveQuestion((cargoSuggestedQuestion || 1) as 1 | 2 | 3 | 4);
       return;
     }
-    setReviewActiveQuestion(1);
+    setReviewActiveQuestion(2);
   }, [cargoSuggestedQuestion, routeSuggestedQuestion]);
 
   const renderFlowModules = (variant: "side" | "top" = "side") => {
@@ -4741,6 +5061,10 @@ const NewOrder = () => {
                             setClientQuestionConfirmed(false);
                             if (clientId) setClientId(null);
                             setContactpersoon("");
+                            setSelectedContactId(null);
+                            setManualContactName("");
+                            setManualContactEmail("");
+                            setManualContactPhone("");
                             setClientOpen(true);
                             clearError("client_name");
                           }}
@@ -4750,8 +5074,7 @@ const NewOrder = () => {
                               if (clientInputReady) {
                                 setClientQuestionConfirmed(true);
                                 setIntakeManualBack(false);
-                                setWizardStep("route");
-                                setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+                                setIntakeActiveQuestion(2);
                                 setClientOpen(false);
                                 clearError("client_name");
                               } else {
@@ -4812,11 +5135,12 @@ const NewOrder = () => {
                             setClientId(c.id);
                             setClientQuestionConfirmed(true);
                             setContactpersoon(c.contact_person ?? "");
+                            setSelectedContactId(null);
+                            setContactChoiceMode("existing");
                             setClientOpen(false);
                             clearError("client_name");
                             setIntakeManualBack(false);
-                            setWizardStep("route");
-                            setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+                            setIntakeActiveQuestion(2);
                           }}
                           className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-accent focus:bg-accent focus:outline-none"
                         >
@@ -4840,13 +5164,174 @@ const NewOrder = () => {
                 </div>
                 )}
 
-                {false && intakeActiveQuestion === 2 && clientAnswered && renderCollapsedAnswer(
+                {intakeActiveQuestion >= 2 && clientAnswered && renderCollapsedAnswer(
                   "Klant",
                   clientName,
                   () => {
                     setIntakeManualBack(true);
                     setIntakeActiveQuestion(1);
                   },
+                )}
+
+                {intakeActiveQuestion === 2 && (
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Referentie",
+                        title: "Welke referentie hoort bij deze order?",
+                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
+                      },
+                      Boolean(klantReferentie.trim()),
+                      true,
+                    )}
+                    <div className="max-w-xl">
+                      <label className={flowLabelClass}>Klant-referentie</label>
+                      <Input
+                        value={klantReferentie}
+                        onChange={e => setKlantReferentie(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            setIntakeActiveQuestion(3);
+                          }
+                        }}
+                        placeholder="PO-nummer of bestelreferentie"
+                        className={flowInputClass}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIntakeActiveQuestion(3)}
+                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
+                      >
+                        {klantReferentie.trim() ? "Gebruik referentie" : "Geen referentie"}
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {intakeActiveQuestion >= 3 && renderCollapsedAnswer(
+                  "Referentie",
+                  klantReferentie.trim() || "Geen referentie",
+                  () => {
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(2);
+                  },
+                )}
+
+                {intakeActiveQuestion === 3 && (
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Contactpersoon",
+                        title: "Welke contactpersoon hoort bij deze order?",
+                        hint: "Kies de juiste contactpersoon van de klant, of voeg direct een nieuwe toe.",
+                      },
+                      contactAnswered,
+                      true,
+                    )}
+                    <div className="grid max-w-3xl gap-5">
+                      {activeClientContacts.length > 0 && (
+                        <div>
+                          <label className={flowLabelClass}>Contactpersoon van {clientName || "klant"}</label>
+                          <Select
+                            value={selectedContactId ?? ""}
+                            onValueChange={(id) => {
+                              const contact = activeClientContacts.find((ct) => ct.id === id);
+                              setSelectedContactId(id);
+                              setContactChoiceMode("existing");
+                              setContactpersoon(contact?.name ?? "");
+                            }}
+                          >
+                            <SelectTrigger className={cn(flowInputClass, "justify-between")}>
+                              <SelectValue placeholder="Kies contactpersoon" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {activeClientContacts.map(ct => (
+                                <SelectItem key={ct.id} value={ct.id}>
+                                  {[ct.name, contactRoleLabel(ct.role), ct.email].filter(Boolean).join(" - ")}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white/80 p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                              Nieuwe contactpersoon
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">Wordt na aanmaken bij de klantcontacten opgeslagen.</p>
+                          </div>
+                          {activeClientContacts.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setContactChoiceMode("manual");
+                                setSelectedContactId(null);
+                              }}
+                              className="rounded-full border border-[hsl(var(--gold)_/_0.24)] bg-white px-3 py-1.5 text-xs font-semibold text-[hsl(var(--gold-deep))] transition hover:bg-[hsl(var(--gold-soft)_/_0.32)]"
+                            >
+                              Handmatig invullen
+                            </button>
+                          )}
+                        </div>
+                        {(contactChoiceMode === "manual" || activeClientContacts.length === 0) && (
+                          <div className="grid gap-3">
+                            <Input value={manualContactName} onChange={e => { setManualContactName(e.target.value); setContactpersoon(e.target.value); }} placeholder="Naam contactpersoon" className={flowInputClass} />
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <Input value={manualContactEmail} onChange={e => setManualContactEmail(e.target.value)} placeholder="E-mail" className="h-12 rounded-2xl text-sm" />
+                              <Input value={manualContactPhone} onChange={e => setManualContactPhone(e.target.value)} placeholder="Telefoon" className="h-12 rounded-2xl text-sm" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {intakeActiveQuestion >= 4 && renderCollapsedAnswer(
+                  "Contactpersoon",
+                  contactpersoon.trim() || manualContactName.trim(),
+                  () => {
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(3);
+                  },
+                )}
+
+                {intakeActiveQuestion === 4 && (
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(intakeQuestion, transportFlowAnswered)}
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {([
+                        { value: "export", title: "Export", hint: "Laad via export-warehouse", badge: "Warehouse laadadres" },
+                        { value: "import", title: "Import", hint: "Warehouse volgens instelling", badge: "Warehouse route" },
+                        { value: "direct", title: "Binnenland / direct", hint: "Van laadadres naar losadres", badge: "Zonder warehouse" },
+                      ] as Array<{ value: TransportFlowChoice; title: string; hint: string; badge: string }>).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => chooseTransportFlow(option.value)}
+                          className={cn(
+                            "group min-h-[126px] rounded-2xl border p-4 text-left transition hover:-translate-y-px hover:border-[hsl(var(--gold)_/_0.44)] hover:bg-[hsl(var(--gold-soft)_/_0.18)]",
+                            transportFlowChoice === option.value
+                              ? "border-[hsl(var(--gold)_/_0.58)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)_/_0.34),white_58%)] shadow-[0_20px_48px_-38px_hsl(var(--gold-deep)_/_0.70)]"
+                              : "border-[hsl(var(--gold)_/_0.16)] bg-white",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-base font-semibold">{option.title}</span>
+                            <span className="rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--gold-deep))]">
+                              {option.badge}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-sm text-muted-foreground">{option.hint}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {false && intakeActiveQuestion === 2 && (
@@ -5090,7 +5575,7 @@ const NewOrder = () => {
                        if (primaryLadenId) {
                          setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? {
                            ...line,
-                           companyName: line.companyName || clientName,
+                          companyName: line.companyName,
                          } : line));
                        }
                        setPickupAddressBookLabel({
@@ -5158,7 +5643,7 @@ const NewOrder = () => {
                         if (primaryLossenId) {
                           setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? {
                             ...line,
-                            companyName: line.companyName || clientName,
+                            companyName: line.companyName,
                           } : line));
                         }
                         setDeliveryAddressBookLabel({
@@ -5229,6 +5714,14 @@ const NewOrder = () => {
                   </div>
                 </div>
               )}
+              <label className="mt-3 inline-flex items-center gap-2 rounded-full border border-[hsl(var(--gold)_/_0.18)] bg-white px-3 py-1.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={allowOutsideBusinessHours}
+                  onChange={(e) => setAllowOutsideBusinessHours(e.target.checked)}
+                />
+                Tijd buiten 08:00 - 17:00 bewust toestaan
+              </label>
               {(errors.pickup_time_window || pickupRouteIssue?.message) && (
                 <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
                   {errors.pickup_time_window || pickupRouteIssue?.message}
@@ -5277,6 +5770,14 @@ const NewOrder = () => {
                   </div>
                 </div>
               )}
+              <label className="mt-3 inline-flex items-center gap-2 rounded-full border border-[hsl(var(--gold)_/_0.18)] bg-white px-3 py-1.5 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={allowOutsideBusinessHours}
+                  onChange={(e) => setAllowOutsideBusinessHours(e.target.checked)}
+                />
+                Tijd buiten 08:00 - 17:00 bewust toestaan
+              </label>
               {(errors.delivery_time_window || errors.route_sequence || primaryDeliveryRouteIssue?.message) && (
                 <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
                   {errors.delivery_time_window || errors.route_sequence || primaryDeliveryRouteIssue?.message}
@@ -6408,7 +6909,7 @@ const NewOrder = () => {
                   {renderCollapsedAnswer("Financieel", pricingLabel, () => setWizardStep("financial"))}
                 </div>
 
-                {reviewActiveQuestion > 1 && renderCollapsedAnswer(
+                {false && reviewActiveQuestion > 1 && renderCollapsedAnswer(
                   "Referentie",
                   klantReferentie.trim() || "Geen klantreferentie",
                   () => setReviewActiveQuestion(1),
@@ -6734,22 +7235,25 @@ const NewOrder = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Wijzigingen weggooien?</AlertDialogTitle>
+            <AlertDialogTitle>Concept afsluiten?</AlertDialogTitle>
             <AlertDialogDescription>
-              Je hebt wijzigingen die nog niet zijn opgeslagen. Verlaat je de pagina nu,
-              dan gaan ze verloren.
+              Deze order wordt automatisch als concept bewaard. Kies of je het concept wilt bewaren
+              voor later, of helemaal wilt weggooien.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Doorgaan met bewerken</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                skipDirtyGuardRef.current = true;
-                setShowUnsavedDialog(false);
-                navigate("/orders");
-              }}
+            <button
+              type="button"
+              onClick={() => void discardDraftAndLeave()}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
             >
-              Wijzigingen weggooien
+              Concept weggooien
+            </button>
+            <AlertDialogAction
+              onClick={keepDraftAndLeave}
+            >
+              Concept bewaren
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
