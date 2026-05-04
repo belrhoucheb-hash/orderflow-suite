@@ -1160,6 +1160,7 @@ const NewOrder = () => {
     setTransportFlowChoice(flow);
     setAfdeling(flow === "export" ? "EXPORT" : flow === "import" ? "IMPORT" : "OPS");
     setAfdelingManual(true);
+    clearError("afdeling");
     const warehouse = findWarehouseForFlow(flow);
     if (warehouse) {
       applyWarehouseToRoute(warehouse, flow);
@@ -1167,7 +1168,7 @@ const NewOrder = () => {
         description: `${warehouse.name} is als ${flow === "export" ? "laadadres" : warehouse.default_stop_role === "pickup" ? "laadadres" : "losadres"} toegepast.`,
       });
     }
-  }, [applyWarehouseToRoute, findWarehouseForFlow]);
+  }, [applyWarehouseToRoute, clearError, findWarehouseForFlow]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -1950,7 +1951,8 @@ const NewOrder = () => {
   const contactAnswered = contactChoiceMode === "manual"
     ? manualContactName.trim().length > 0
     : Boolean(selectedContactId || contactpersoon.trim());
-  const intakeReady = clientAnswered && contactAnswered;
+  const flowAnswered = Boolean(transportFlowChoice);
+  const intakeReady = clientAnswered && contactAnswered && flowAnswered;
   const cargoReady = cargoTotals.totAantal > 0 && cargoTotals.totGewicht > 0;
   const missingClient = !clientAnswered;
   const missingPickupAddress = !pickupLine?.locatie;
@@ -2113,7 +2115,7 @@ const NewOrder = () => {
     ? { step: "Aantal", title: "Hoeveel eenheden vervoer je?", hint: "Start met het aantal pallets, colli of boxen." }
     : missingWeight
       ? { step: "Gewicht", title: "Wat is het totale gewicht?", hint: "Daarmee kunnen voertuig en planning meteen worden ingeschat." }
-      : { step: "Klaar", title: "Lading staat goed genoeg voor planning", hint: "Je kunt nu details zoals afmetingen, ADR of voertuig aanvullen." };
+      : { step: "Klaar", title: "Lading staat goed genoeg voor planning", hint: "Je kunt nu door naar financieel." };
   const routeSuggestedQuestion = missingPickupAddress
     ? 1
     : missingDeliveryAddress
@@ -2126,7 +2128,7 @@ const NewOrder = () => {
   const cargoHasDimensions = cargoSameDimensions
     ? Boolean(cargoRows[0]?.lengte && cargoRows[0]?.breedte && cargoRows[0]?.hoogte)
     : cargoRows.length > 0 && cargoRows.every((row) => row.lengte && row.breedte && row.hoogte);
-  const cargoSuggestedQuestion = missingQuantity ? 1 : !cargoHasDimensions ? 2 : missingWeight ? 3 : 4;
+  const cargoSuggestedQuestion = missingQuantity ? 1 : !cargoHasDimensions ? 2 : 3;
 
   useEffect(() => {
     if (!clientAnswered) {
@@ -2155,13 +2157,14 @@ const NewOrder = () => {
       if (intakeReady) return "Compleet";
       if (!clientAnswered) return "Nog invullen";
       if (!contactAnswered) return "Contact kiezen";
+      if (!flowAnswered) return "Routekeuze";
       return "Referentie";
     }
     if (key === "route") return routeReady ? "Compleet" : "Nog invullen";
     if (key === "cargo") return cargoReady ? "Compleet" : "Nog invullen";
     if (key === "financial") return pricingPayload.cents != null ? "Tarief klaar" : "Controleren";
     return wizardMissing.length === 0 ? "Klaar voor aanmaken" : `${wizardMissing.length} open`;
-  }, [cargoReady, clientAnswered, contactAnswered, intakeReady, pricingPayload.cents, routeReady, wizardMissing.length]);
+  }, [cargoReady, clientAnswered, contactAnswered, flowAnswered, intakeReady, pricingPayload.cents, routeReady, wizardMissing.length]);
 
   const applySmartDraft = useCallback(() => {
     if (!smartInput.trim()) {
@@ -2277,6 +2280,15 @@ const NewOrder = () => {
       return;
     }
     if (wizardStep === "intake" && intakeActiveQuestion === 3) {
+      setIntakeManualBack(false);
+      setIntakeActiveQuestion(4);
+      return;
+    }
+    if (wizardStep === "intake" && intakeActiveQuestion === 4) {
+      if (!transportFlowChoice) {
+        toast.error("Kies eerst de routeflow", { description: "Selecteer Export, Import of Direct A-B voordat je adressen invult." });
+        return;
+      }
       setWizardStep("route");
       setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
       return;
@@ -2338,7 +2350,7 @@ const NewOrder = () => {
       if (current === "financial") return "review";
       return "review";
     });
-  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, selectedContactId, wizardStep]);
+  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, selectedContactId, transportFlowChoice, wizardStep]);
 
   const goToPreviousWizardStep = useCallback(() => {
     if (wizardStep === "intake" && intakeActiveQuestion > 1) {
@@ -2367,7 +2379,7 @@ const NewOrder = () => {
     if (wizardStep === "financial") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(4);
+      setCargoActiveQuestion(3);
       return;
     }
     if (wizardStep === "cargo") {
@@ -2379,7 +2391,7 @@ const NewOrder = () => {
     if (wizardStep === "route") {
       setWizardStep("intake");
       setIntakeManualBack(true);
-      setIntakeActiveQuestion(3);
+      setIntakeActiveQuestion(4);
     }
   }, [cargoActiveQuestion, intakeActiveQuestion, missingPickupTimeWindow, reviewActiveQuestion, routeActiveQuestion, wizardStep]);
 
@@ -2624,6 +2636,12 @@ const NewOrder = () => {
       return;
     }
 
+    if (!transportFlowChoice) {
+      setWizardStep("intake");
+      setIntakeActiveQuestion(4);
+      return;
+    }
+
     if (missingPickupAddress) {
       setWizardStep("route");
       setRouteActiveQuestion(1);
@@ -2660,12 +2678,6 @@ const NewOrder = () => {
       return;
     }
 
-    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(4);
-      return;
-    }
-
     if (pricingPayload.cents == null) {
       setWizardStep("financial");
       return;
@@ -2689,6 +2701,7 @@ const NewOrder = () => {
     pricingPayload.cents,
     suggestedTransportType,
     suggestedVehicleType,
+    transportFlowChoice,
     transportType,
     voertuigtype,
   ]);
@@ -2813,7 +2826,7 @@ const NewOrder = () => {
     if (target === "transport" || target === "security") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(4);
+      setCargoActiveQuestion(3);
     }
     if (target === "pricing") {
       setWizardStep("financial");
@@ -4025,6 +4038,8 @@ const NewOrder = () => {
         ? klantReferentie.trim()
           ? "Gebruik referentie"
           : "Geen referentie"
+      : wizardStep === "intake" && intakeActiveQuestion === 4
+        ? "Plan route"
       : wizardStep === "intake"
         ? "Plan route"
         : wizardStep === "route"
@@ -4040,9 +4055,7 @@ const NewOrder = () => {
                 ? "Bevestig aantal"
               : cargoActiveQuestion === 2
                 ? "Bevestig afmetingen"
-                : cargoActiveQuestion === 3
-                  ? "Bevestig gewicht"
-                  : "Bereken tarief"
+                : "Bereken tarief"
             : wizardStep === "financial"
               ? "Ga naar controle"
             : "Controleer order";
@@ -4225,8 +4238,6 @@ const NewOrder = () => {
   const renderWizardFooter = () => {
     const showCreate = wizardStep === "review";
     const showContinue = wizardStep !== "review";
-    const inlineTransportControls = wizardStep === "cargo" && cargoActiveQuestion >= 4 && !missingQuantity && !missingWeight;
-    if (inlineTransportControls) return null;
     if (!canGoBackInUberflow && !showCreate && !showContinue) return null;
 
     return (
@@ -4334,7 +4345,7 @@ const NewOrder = () => {
     if (target === "security") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(4);
+      setCargoActiveQuestion(3);
     }
     if (target === "pricing") {
       setWizardStep("financial");
@@ -5349,14 +5360,88 @@ const NewOrder = () => {
                         onKeyDown={e => {
                           if (e.key === "Enter") {
                             e.preventDefault();
-                            setWizardStep("route");
-                            setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+                            setIntakeManualBack(false);
+                            setIntakeActiveQuestion(4);
                           }
                         }}
                         placeholder="PO-nummer of bestelreferentie"
                         className={flowInputClass}
                       />
                     </div>
+                  </div>
+                )}
+
+                {intakeActiveQuestion >= 4 && renderCollapsedAnswer(
+                  "Referentie",
+                  klantReferentie.trim() || "Geen referentie",
+                  () => {
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(3);
+                  },
+                )}
+
+                {intakeActiveQuestion === 4 && (
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Routeflow",
+                        title: "Is dit export, import of direct A-B?",
+                        hint: "Deze keuze vult alvast de afdeling en, waar ingesteld, het juiste warehouse als laad- of losadres.",
+                      },
+                      Boolean(transportFlowChoice),
+                      true,
+                    )}
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {([
+                        {
+                          value: "export" as const,
+                          title: "Export",
+                          label: "Warehouse als laadadres",
+                          description: "Gebruik het exportwarehouse uit instellingen en zet de afdeling op Export.",
+                        },
+                        {
+                          value: "import" as const,
+                          title: "Import",
+                          label: "Warehouse als losadres",
+                          description: "Gebruik het importwarehouse uit instellingen en zet de afdeling op Import.",
+                        },
+                        {
+                          value: "direct" as const,
+                          title: "Direct A-B",
+                          label: "Geen warehouse ertussen",
+                          description: "Plan rechtstreeks van ophaaladres naar eindbestemming via Operations.",
+                        },
+                      ]).map((option) => {
+                        const active = transportFlowChoice === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => chooseTransportFlow(option.value)}
+                            className={cn(
+                              "min-h-[150px] rounded-2xl border bg-white p-4 text-left shadow-[0_14px_34px_-30px_hsl(var(--gold-deep)_/_0.65)] transition hover:border-[hsl(var(--gold)_/_0.46)] hover:bg-[hsl(var(--gold-soft)_/_0.20)]",
+                              active
+                                ? "border-[hsl(var(--gold)_/_0.68)] bg-[hsl(var(--gold-soft)_/_0.26)] shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.20)]"
+                                : "border-[hsl(var(--gold)_/_0.16)]",
+                            )}
+                          >
+                            <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[hsl(var(--gold-soft))] px-3 text-xs font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]">
+                              {option.title}
+                            </span>
+                            <span className="mt-4 block text-base font-semibold text-foreground">{option.label}</span>
+                            <span className="mt-2 block text-sm leading-6 text-muted-foreground">{option.description}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {transportFlowChoice && (
+                      <div className="mt-4 rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-[hsl(var(--gold-soft)_/_0.18)] px-4 py-3 text-sm text-muted-foreground">
+                        Afdeling staat op <span className="font-semibold text-foreground">{afdeling || "Operations"}</span>.
+                        {transportFlowChoice === "direct"
+                          ? " Je vult laad- en losadres zelf in."
+                          : " Het passende warehouse is alvast toegepast wanneer het in instellingen beschikbaar is."}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -6236,7 +6321,7 @@ const NewOrder = () => {
                   missingWeight ? "border-red-200 bg-red-50/40" : "border-border/60 bg-white",
                 )}>
                   {renderQuestionPrompt(
-                    { step: "Gewicht", title: "Wat is het totale gewicht?", hint: "Na een geldig gewicht verschijnen de detailvelden en voertuigkeuzes." },
+                    { step: "Gewicht", title: "Wat is het totale gewicht?", hint: "Na een geldig gewicht ga je door naar financieel." },
                     !missingWeight,
                   )}
                   <label className={cn(flowLabelClass, requiredTextClass(missingWeight))}>Gewicht totaal in kg</label>
@@ -6248,7 +6333,7 @@ const NewOrder = () => {
                       if (e.key === "Enter" && Number(row.gewicht) > 0) {
                         e.preventDefault();
                         setCargoManualBack(false);
-                        setCargoActiveQuestion(4);
+                        setWizardStep("financial");
                       }
                     }}
                     placeholder="Bijv. 850"
@@ -6257,12 +6342,12 @@ const NewOrder = () => {
                 </div>
               ))}
 
-              {cargoActiveQuestion >= 4 && !missingQuantity && !missingWeight && (
+              {false && !missingQuantity && !missingWeight && (
                 <div className={cn(conversationalCardClass(0), "mb-4")}>
                   {renderQuestionPrompt(
                     {
                       step: "Transport",
-                      title: "Controleer uitvoering en voertuig",
+                      title: "Transportdetails",
                       hint: "Orderflow doet alvast een voorstel op basis van lading en route. Pas alleen aan als de planner bewust wil afwijken.",
                     },
                     Boolean((transportType || suggestedTransportType) && (voertuigtype || suggestedVehicleType) && afdeling),
@@ -6862,12 +6947,12 @@ const NewOrder = () => {
                   {renderCollapsedAnswer("Transport", `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || "eenheden"} · ${cargoTotals.totGewicht || 0} kg · ${transportType || suggestedTransportType || "transport volgt"}`, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(4);
+                    setCargoActiveQuestion(3);
                   })}
                   {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(4);
+                    setCargoActiveQuestion(3);
                   })}
                 </div>
 
@@ -6932,7 +7017,7 @@ const NewOrder = () => {
                   {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(4);
+                    setCargoActiveQuestion(3);
                   })}
                   {renderCollapsedAnswer("Financieel", pricingLabel, () => setWizardStep("financial"))}
                 </div>
