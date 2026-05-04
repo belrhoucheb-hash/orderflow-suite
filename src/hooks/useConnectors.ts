@@ -24,20 +24,17 @@ export function useConnectorList(options?: { enabled?: boolean }) {
     staleTime: 30_000,
     queryFn: async (): Promise<ConnectorWithStatus[]> => {
       const { data, error } = await supabase
-        .from("integration_credentials" as any)
+        .from("integration_credentials")
         .select("provider, enabled, credentials")
         .eq("tenant_id", tenant!.id);
       if (error) throw error;
 
       const byProvider = new Map<string, { enabled: boolean; hasCreds: boolean }>();
-      for (const row of (data ?? []) as Array<{
-        provider: string;
-        enabled: boolean;
-        credentials: Record<string, unknown>;
-      }>) {
+      for (const row of data ?? []) {
+        const creds = (row.credentials ?? {}) as Record<string, unknown>;
         byProvider.set(row.provider, {
           enabled: row.enabled,
-          hasCreds: Object.keys(row.credentials ?? {}).length > 0,
+          hasCreds: Object.keys(creds).length > 0,
         });
       }
 
@@ -76,13 +73,13 @@ export function useConnectorMapping(provider: string) {
     staleTime: 30_000,
     queryFn: async (): Promise<Record<string, string>> => {
       const { data, error } = await supabase
-        .from("integration_mapping" as any)
+        .from("integration_mapping")
         .select("key, value")
         .eq("tenant_id", tenant!.id)
         .eq("provider", provider);
       if (error) throw error;
       const out: Record<string, string> = {};
-      for (const row of (data ?? []) as MappingRow[]) out[row.key] = row.value;
+      for (const row of data ?? []) out[row.key] = row.value;
       return out;
     },
   });
@@ -104,7 +101,7 @@ export function useSaveConnectorMapping(provider: string) {
         }));
       if (rows.length === 0) return;
       const { error } = await supabase
-        .from("integration_mapping" as any)
+        .from("integration_mapping")
         .upsert(rows, { onConflict: "tenant_id,provider,key" });
       if (error) throw error;
     },
@@ -145,14 +142,14 @@ export function useConnectorSyncLog(provider: string) {
     staleTime: 10_000,
     queryFn: async (): Promise<SyncLogRow[]> => {
       const { data, error } = await supabase
-        .from("integration_sync_log" as any)
+        .from("integration_sync_log")
         .select("*")
         .eq("tenant_id", tenant!.id)
         .eq("provider", provider)
         .order("started_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []) as unknown as SyncLogRow[];
+      return ((data ?? []) as unknown) as SyncLogRow[];
     },
   });
 }
