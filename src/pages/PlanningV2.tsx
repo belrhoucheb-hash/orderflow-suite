@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { nl } from "date-fns/locale";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Calendar as CalendarIcon, Settings2 } from "lucide-react";
@@ -25,6 +25,8 @@ import { cn } from "@/lib/utils";
 import { useAllDriverCountryRestrictions } from "@/hooks/useDriverCountryRestrictions";
 import { getDriverCountryRestrictionIssue } from "@/lib/driverCountryRestrictions";
 import { DeferredMount } from "@/components/performance/DeferredMount";
+import { getPostcodeRegion, getRegionLabel } from "@/data/geoData";
+import { toast } from "sonner";
 
 function isoWeekStart(d: Date): string {
   return format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -32,6 +34,7 @@ function isoWeekStart(d: Date): string {
 
 function PlanningV2() {
   const { tenant } = useTenantOptional();
+  const queryClient = useQueryClient();
 
   const [selectedDate, setSelectedDate] = useState<string>(format(addDays(new Date(), 1), "yyyy-MM-dd"));
   const [daySetupOpen, setDaySetupOpen] = useState(false);
@@ -56,7 +59,7 @@ function PlanningV2() {
     queryFn: async () => {
       const { data, error } = await (supabase
         .from("consolidation_groups" as any) as any)
-        .select("*, consolidation_orders(order_id, stop_sequence, order:orders(id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, weight_kg, quantity, requirements))")
+        .select("*, vehicle:vehicles(name, plate, capacity_kg, capacity_pallets), consolidation_orders(order_id, stop_sequence, order:orders(id, order_number, client_name, pickup_address, delivery_address, pickup_country, delivery_country, weight_kg, quantity, requirements))")
         .eq("tenant_id", tenant!.id)
         .eq("planned_date", selectedDate)
         .neq("status", "VERWORPEN")
@@ -116,6 +119,12 @@ function PlanningV2() {
     return m;
   }, [vehiclesRaw]);
 
+  const vehicleById = useMemo(() => {
+    const m = new Map<string, (typeof vehiclesRaw)[number]>();
+    vehiclesRaw.forEach((v) => m.set(v.id, v));
+    return m;
+  }, [vehiclesRaw]);
+
   const groupsByDriver = useMemo(() => {
     const m = new Map<string, ConsolidationGroup[]>();
     for (const g of groups) {
@@ -159,6 +168,132 @@ function PlanningV2() {
   useEffect(() => setUnplacedHints([]), [selectedDate]);
 
   const prettyDate = format(new Date(selectedDate + "T00:00:00"), "EEEE d MMMM yyyy", { locale: nl });
+  const selectedCluster = useMemo(
+    () => groups.find((group) => group.id === selectedClusterId) ?? null,
+    [groups, selectedClusterId],
+  );
+  const selectedClusterDriver = useMemo(
+    () => drivers.find((driver: any) => driver.id === selectedCluster?.driver_id) ?? null,
+    [drivers, selectedCluster?.driver_id],
+  );
+  const selectedClusterVehicle = useMemo(
+    () => (selectedCluster?.vehicle_id ? vehicleById.get(selectedCluster.vehicle_id) ?? null : null),
+    [selectedCluster?.vehicle_id, vehicleById],
+  );
+
+  function pickVehicleForOrder(order: any, preferredVehicleId?: string | null) {
+    if (preferredVehicleId) return vehicleById.get(preferredVehicleId) ?? null;
+    const weight = Number(order.weight_kg ?? 0);
+    const pallets = Number(order.quantity ?? 0);
+    const fitting = vehiclesRaw
+      .filter((vehicle) => vehicle.is_active !== false)
+      .filter((vehicle) => {
+        const weightCap = Number(vehicle.capacity_kg ?? 0);
+        const palletCap = Number(vehicle.capacity_pallets ?? 0);
+        return (!weightCap || weight <= weightCap) && (!palletCap || pallets <= palletCap);
+      })
+      .sort((a, b) => {
+        const aCap = Number(a.capacity_pallets ?? 999) * 1000 + Number(a.capacity_kg ?? 99999);
+        const bCap = Number(b.capacity_pallets ?? 999) * 1000 + Number(b.capacity_kg ?? 99999);
+        return aCap - bCap;
+      });
+    return fitting[0] ?? null;
+  }
+
+  function calculateUtilization(order: any, vehicle: any | null): number | null {
+    if (!vehicle) return null;
+    const weightCap = Number(vehicle.capacity_kg ?? 0);
+    const palletCap = Number(vehicle.capacity_pallets ?? 0);
+    const weightPct = weightCap > 0 ? (Number(order.weight_kg ?? 0) / weightCap) * 100 : 0;
+    const palletPct = palletCap > 0 ? (Number(order.quantity ?? 0) / palletCap) * 100 : 0;
+    const pct = Math.max(weightPct, palletPct);
+    return Number.isFinite(pct) && pct > 0 ? Math.round(pct * 10) / 10 : null;
+  }
+
+  async function handleDropOrderOnDriver(driverId: string, orderId: string) {
+    if (!tenant?.id) return;
+    const order = openOrders.find((o: any) => o.id === orderId) as any | undefined;
+    const driver = drivers.find((d: any) => d.id === driverId) as any | undefined;
+    if (!order || !driver) return;
+
+    const schedule = scheduleByDriver.get(driverId);
+    const vehicle = pickVehicleForOrder(order, schedule?.vehicle_id ?? null);
+    const utilizationPct = calculateUtilization(order, vehicle);
+    const region = getPostcodeRegion(order.delivery_address ?? "");
+    const regionLabel = getRegionLabel(region);
+
+    try {
+      const { data: group, error: groupError } = await (supabase
+        .from("consolidation_groups" as any) as any)
+        .insert({
+          tenant_id: tenant.id,
+          name: `${regionLabel} - #${order.order_number}`,
+          planned_date: selectedDate,
+          status: "VOORSTEL",
+          driver_id: driverId,
+          vehicle_id: vehicle?.id ?? null,
+          total_weight_kg: order.weight_kg ?? 0,
+          total_pallets: order.quantity ?? 0,
+          total_distance_km: null,
+          estimated_duration_min: 75,
+          utilization_pct: utilizationPct,
+          proposal_source: "manual",
+        })
+        .select("id")
+        .single();
+      if (groupError || !group) throw groupError ?? new Error("Cluster kon niet worden aangemaakt");
+
+      const { error: orderError } = await (supabase
+        .from("consolidation_orders" as any) as any)
+        .insert({
+          group_id: group.id,
+          order_id: orderId,
+          stop_sequence: 1,
+        });
+      if (orderError) throw orderError;
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["consolidation_groups_by_date", selectedDate] }),
+        queryClient.invalidateQueries({ queryKey: ["open_orders_by_date", selectedDate] }),
+      ]);
+      toast.success("Order op planbord gezet", {
+        description: `#${order.order_number} staat als voorstel bij ${driver.name}${vehicle ? ` met ${vehicle.plate || vehicle.name}` : ""}.`,
+      });
+    } catch (err) {
+      toast.error("Slepen mislukt", {
+        description: err instanceof Error ? err.message : "Kon order niet bij chauffeur zetten.",
+      });
+    }
+  }
+
+  async function handleReturnGroupToOpen(groupId: string) {
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) return;
+    if (group.status !== "VOORSTEL") {
+      toast.info("Alleen voorstellen kunnen terug", {
+        description: "Bevestigde of ingeplande ritten moeten via de detailactie worden aangepast.",
+      });
+      return;
+    }
+    try {
+      const { error } = await (supabase.rpc as any)("reject_consolidation_group", {
+        p_group_id: groupId,
+        p_reason: "Teruggezet naar open via planbord",
+      });
+      if (error) throw error;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["consolidation_groups_by_date", selectedDate] }),
+        queryClient.invalidateQueries({ queryKey: ["open_orders_by_date", selectedDate] }),
+      ]);
+      toast.success("Voorstel teruggezet", {
+        description: "De orders staan weer bij Open te plannen.",
+      });
+    } catch (err) {
+      toast.error("Terugzetten mislukt", {
+        description: err instanceof Error ? err.message : "Kon voorstel niet terugzetten.",
+      });
+    }
+  }
 
   return (
     <div className="page-container">
@@ -250,29 +385,46 @@ function PlanningV2() {
                   vehicleLabels={vehicleLabels}
                   countryRestrictionIssue={countryIssueByDriver.get(driver.id) ?? null}
                   onSelectGroup={setSelectedClusterId}
+                  onReturnGroup={handleReturnGroupToOpen}
+                  onDropOrder={handleDropOrderOnDriver}
                 />
               ))}
             </div>
 
             <div className="space-y-3">
-              <UnplacedOrdersLane orders={openOrders} hints={unplacedHints} />
+              <UnplacedOrdersLane
+                orders={openOrders}
+                hints={unplacedHints}
+                onDropGroup={handleReturnGroupToOpen}
+                assignOptions={activeDrivers.map((driver: any) => ({
+                  id: driver.id,
+                  name: driver.name,
+                }))}
+                onAssignOrder={handleDropOrderOnDriver}
+              />
             </div>
           </div>
 
           <DaySetupDialog open={daySetupOpen} onOpenChange={setDaySetupOpen} date={selectedDate} />
-          <ClusterDetailPanel groupId={selectedClusterId} onClose={() => setSelectedClusterId(null)} />
+          <ClusterDetailPanel
+            groupId={selectedClusterId}
+            groupSummary={selectedCluster as any}
+            driverSummary={selectedClusterDriver as any}
+            vehicleSummary={selectedClusterVehicle as any}
+            onClose={() => setSelectedClusterId(null)}
+          />
         </>
       )}
 
       {section === "ritten" && (
         <DeferredMount label="Ritten laden">
-          <ChauffeursRit />
+          <ChauffeursRit date={selectedDate} />
         </DeferredMount>
       )}
 
       {section === "rooster" && (
         <DeferredMount label="Rooster laden">
-          <RoosterTab />
+          <RoosterTab date={selectedDate} />
         </DeferredMount>
       )}
     </div>

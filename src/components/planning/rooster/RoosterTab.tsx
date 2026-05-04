@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useMemo, useCallback, type ComponentType } from "react";
+import { lazy, Suspense, useState, useMemo, useCallback, useEffect, type ComponentType } from "react";
 import { ChevronLeft, ChevronRight, Calendar, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
@@ -44,11 +44,19 @@ const RoosterBulkActions = lazy<BulkActionsComponent>(() =>
     default: m.RoosterBulkActions as BulkActionsComponent,
   })),
 );
-export function RoosterTab() {
+interface RoosterTabProps {
+  date?: string;
+}
+
+export function RoosterTab({ date: externalDate }: RoosterTabProps = {}) {
   useDriverSchedulesRealtime();
   const [mode, setMode] = useState<RoosterMode>("day");
-  const [date, setDate] = useState<string>(toDateString(new Date()));
+  const [date, setDate] = useState<string>(externalDate ?? toDateString(new Date()));
   const today = toDateString(new Date());
+
+  useEffect(() => {
+    if (externalDate) setDate(externalDate);
+  }, [externalDate]);
 
   const shiftDays = useCallback(
     (delta: number) => {

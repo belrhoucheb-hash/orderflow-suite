@@ -118,7 +118,8 @@ export function useInbox() {
     if (typeof userTenantId === "string" && userTenantId.length > 0) {
       return userTenantId;
     }
-    return tenant?.id || "00000000-0000-0000-0000-000000000001";
+    if (tenant?.id) return tenant.id;
+    throw new Error("Geen tenant beschikbaar voor deze actie.");
   }, [tenant?.id, user?.app_metadata]);
 
   // ─── Email Import ───

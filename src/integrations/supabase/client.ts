@@ -4,6 +4,7 @@ import type { Database } from './types';
 
 const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
 const SUPABASE_PUBLISHABLE_KEY = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
+const SUPABASE_FETCH_TIMEOUT_MS = 3_500;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -12,9 +13,28 @@ const supabaseGlobal = globalThis as typeof globalThis & {
   __orderflowSupabaseClient?: SupabaseClient<Database>;
 };
 
+const timeoutFetch: typeof fetch = async (input, init = {}) => {
+  let timeout: ReturnType<typeof window.setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<Response>((_, reject) => {
+    timeout = window.setTimeout(() => {
+      reject(new Error(`Supabase request duurde langer dan ${SUPABASE_FETCH_TIMEOUT_MS}ms`));
+    }, SUPABASE_FETCH_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([fetch(input, init), timeoutPromise]);
+  } finally {
+    if (timeout) window.clearTimeout(timeout);
+  }
+};
+
 export const supabase =
   supabaseGlobal.__orderflowSupabaseClient ??
   (supabaseGlobal.__orderflowSupabaseClient = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    global: {
+      fetch: timeoutFetch,
+    },
     auth: {
       storage: localStorage,
       persistSession: true,

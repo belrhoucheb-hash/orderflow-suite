@@ -13,24 +13,26 @@ import {
 } from "@/lib/driverCountryRestrictions";
 
 // ─── Fetch trips for a date ─────────────────────────────────
+export async function fetchTripsForDate(date?: string) {
+  let query = supabase
+    .from("trips")
+    .select("*, trip_stops(*, proof_of_delivery(*))")
+    .order("planned_start_time", { ascending: true });
+
+  if (date) {
+    query = query.eq("planned_date", date);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as Trip[];
+}
+
 export function useTrips(date?: string) {
   return useQuery({
     queryKey: ["trips", date],
-    staleTime: 10_000,
-    queryFn: async () => {
-      let query = supabase
-        .from("trips")
-        .select("*, trip_stops(*, proof_of_delivery(*))")
-        .order("planned_start_time", { ascending: true });
-
-      if (date) {
-        query = query.eq("planned_date", date);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as Trip[];
-    },
+    staleTime: 60_000,
+    queryFn: () => fetchTripsForDate(date),
   });
 }
 

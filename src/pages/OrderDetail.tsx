@@ -1,14 +1,13 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import {
-  ArrowLeft, MapPin, Package, Truck, User, Clock, FileText,
+  ArrowLeft, MapPin, Package, Truck, User, FileText,
   MessageSquare, AlertTriangle, XCircle, Edit, CheckCircle2,
   Undo2, Send, Loader2, Printer, Warehouse, ScrollText, Image,
-  Save, X, Bell, Route, ArrowRight, Barcode
+  Save, X, Bell, Route, ArrowRight, Barcode, Flag
 } from "lucide-react";
 import { useShipment } from "@/hooks/useShipments";
 import { ClickableAddress } from "@/components/ClickableAddress";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge, type OrderStatus } from "@/components/ui/StatusBadge";
@@ -51,6 +50,7 @@ import { ReturnOrderDialog } from "@/components/orders/ReturnOrderDialog";
 import { CreateReturnDialog } from "@/components/orders/CreateReturnDialog";
 import { MoreHorizontal } from "lucide-react";
 import { formatRouteStopWindow, parseRouteStops } from "@/lib/routeStops";
+import type { RoutePreviewMapStop } from "@/components/orders/RoutePreviewMap";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -60,6 +60,36 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { STATUS_MAP } from "@/lib/orderDisplay";
+
+const RoutePreviewMap = lazy(() =>
+  import("@/components/orders/RoutePreviewMap").then((module) => ({ default: module.RoutePreviewMap })),
+);
+
+function toRad(value: number): number {
+  return (value * Math.PI) / 180;
+}
+
+function estimateRoadDistanceKm(
+  pickupLat?: number | null,
+  pickupLng?: number | null,
+  deliveryLat?: number | null,
+  deliveryLng?: number | null,
+): number | null {
+  if (pickupLat == null || pickupLng == null || deliveryLat == null || deliveryLng == null) return null;
+  const earthKm = 6371;
+  const dLat = toRad(deliveryLat - pickupLat);
+  const dLng = toRad(deliveryLng - pickupLng);
+  const lat1 = toRad(pickupLat);
+  const lat2 = toRad(deliveryLat);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const straightKm = 2 * earthKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(Math.max(1, straightKm * 1.28));
+}
+
+function mapsPointFromCoords(lat?: number | null, lng?: number | null, fallbackAddress?: string | null): string {
+  if (lat != null && lng != null) return `${lat},${lng}`;
+  return fallbackAddress?.trim() || "";
+}
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -330,6 +360,12 @@ const OrderDetail = () => {
 
   const handleCreateInvoice = async () => {
     if (!order) return;
+    if (order.status !== "DELIVERED" || order.invoice_id) {
+      toast.error("Factuur aanmaken geblokkeerd", {
+        description: "Facturatie kan pas nadat de order is afgeleverd en nog niet gefactureerd is.",
+      });
+      return;
+    }
     setIsCreatingInvoice(true);
     try {
       // Find or create client
@@ -422,10 +458,157 @@ const OrderDetail = () => {
 
   const statusInfo = STATUS_MAP[order.status] || STATUS_MAP.DRAFT;
   const isCancelled = order.status === "CANCELLED";
+  const isDelivered = order.status === "DELIVERED";
+  const canCreateInvoice = isDelivered && !order.invoice_id;
   const isPrintable = order.status !== "CANCELLED"; // Printable for DRAFT, OPEN, PLANNED, DELIVERED
   const routeStops = parseRouteStops(order.notification_preferences);
   const isActive = order.status === "PENDING" || order.status === "OPEN" || order.status === "PLANNED";
   const requirements = (order.requirements || []) as string[];
+  const driverState = order.driver_id ? "Chauffeur gekoppeld" : "Nog niet ingepland";
+  const vehicleState = order.vehicle_id ? "Voertuig gekoppeld" : "Nog niet gekoppeld";
+  const planningState = (() => {
+    if (isCancelled) return "Geannuleerd";
+    if (order.status === "DELIVERED") return "Afgeleverd";
+    if (order.status === "IN_TRANSIT") return "Onderweg";
+    if (order.status === "PLANNED") return "Gepland";
+    if (order.driver_id && order.vehicle_id) return "Klaar voor dispatch";
+    if (order.driver_id || order.vehicle_id) return "In planning";
+    return "Planning nog niet gestart";
+  })();
+  const openPoints = [
+    !order.pickup_address ? "Ophaaladres" : null,
+    !order.delivery_address ? "Afleveradres" : null,
+    !order.pickup_date ? "Ophaaldatum" : null,
+    !order.time_window_start && !order.pickup_time_window_start ? "Ophaaltijd" : null,
+    !order.weight_kg ? "Gewicht" : null,
+    !order.quantity ? "Aantal" : null,
+    order.info_status && order.info_status !== "COMPLETE" ? "Klantinfo" : null,
+  ].filter(Boolean) as string[];
+  const planningPoints = [
+    !order.driver_id ? "Chauffeur plannen" : null,
+    !order.vehicle_id ? "Voertuig koppelen" : null,
+  ].filter(Boolean) as string[];
+  const documentPoints = [
+    order.cmr_number ? null : "CMR",
+    canCreateInvoice ? "Factuur" : null,
+    isDelivered && !order.pod_signed_at ? "PoD" : null,
+  ].filter(Boolean) as string[];
+  const documentStatusDetail = documentPoints.length
+    ? documentPoints.join(", ")
+    : isDelivered
+      ? "CMR, factuur en PoD bekend"
+      : "Factuur en PoD volgen na aflevering";
+  const formatOrderDate = (value?: string | null) => {
+    if (!value) return "Datum volgt";
+    const date = new Date(`${value}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return "Datum volgt";
+    return date.toLocaleDateString("nl-NL", { day: "2-digit", month: "short", year: "numeric" });
+  };
+  const formatWindow = (from?: string | null, to?: string | null) => {
+    if (from && to) return `${from} - ${to}`;
+    if (from) return `Vanaf ${from}`;
+    if (to) return `Tot ${to}`;
+    return "Tijdvenster volgt";
+  };
+  const pickupWindow = formatWindow(order.time_window_start ?? order.pickup_time_window_start, order.time_window_end ?? order.pickup_time_window_end);
+  const deliveryWindow = formatWindow(order.delivery_time_window_start, order.delivery_time_window_end);
+  const routeMapStops: RoutePreviewMapStop[] = [
+    {
+      id: "pickup",
+      label: "Ophalen",
+      line: { lat: order.geocoded_pickup_lat ?? null, lng: order.geocoded_pickup_lng ?? null },
+      onClick: () => undefined,
+    },
+    {
+      id: "delivery",
+      label: "Afleveren",
+      line: { lat: order.geocoded_delivery_lat ?? null, lng: order.geocoded_delivery_lng ?? null },
+      onClick: () => undefined,
+    },
+  ];
+  const routeMapPlottedCount = routeMapStops.filter((stop) => stop.line?.lat != null && stop.line?.lng != null).length;
+  const estimatedDistanceKm = estimateRoadDistanceKm(
+    order.geocoded_pickup_lat,
+    order.geocoded_pickup_lng,
+    order.geocoded_delivery_lat,
+    order.geocoded_delivery_lng,
+  );
+  const routeDistanceLabel = order.distance_km
+    ? `${Math.round(Number(order.distance_km))} km`
+    : estimatedDistanceKm
+      ? `± ${estimatedDistanceKm} km`
+      : "Afstand volgt";
+  const mapsOrigin = mapsPointFromCoords(order.geocoded_pickup_lat, order.geocoded_pickup_lng, order.pickup_address);
+  const mapsDestination = mapsPointFromCoords(order.geocoded_delivery_lat, order.geocoded_delivery_lng, order.delivery_address);
+  const routeMapsUrl = mapsOrigin && mapsDestination
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(mapsOrigin)}&destination=${encodeURIComponent(mapsDestination)}&travelmode=driving`
+    : null;
+  const newInvoiceParams = new URLSearchParams({
+    new: "invoice",
+    order_id: order.id,
+  });
+  if (order.client_id) newInvoiceParams.set("client_id", order.client_id);
+  if (order.client_name) newInvoiceParams.set("client_name", order.client_name);
+  const newInvoiceUrl = `/facturatie?${newInvoiceParams.toString()}`;
+  const routeInsightItems = [
+    { label: "Afstand", value: routeDistanceLabel, icon: Route },
+    { label: "Ophalen", value: `${formatOrderDate(order.pickup_date)} · ${pickupWindow}`, icon: MapPin },
+    { label: "Afleveren", value: `${formatOrderDate(order.delivery_date)} · ${deliveryWindow}`, icon: Flag },
+  ];
+  const nextPlannerAction = isCancelled
+    ? "Heropenen indien deze order toch doorgaat"
+    : order.info_status && order.info_status !== "COMPLETE"
+      ? "Open klantinformatie afronden"
+      : !order.driver_id
+        ? "Chauffeur koppelen"
+        : !order.vehicle_id
+          ? "Voertuig koppelen"
+          : !order.cmr_number
+            ? "CMR voorbereiden"
+            : order.status === "PLANNED"
+              ? "Klaarzetten voor dispatch"
+              : "Order controleren en opvolgen";
+  const commandCenterStatusRows = [
+    {
+      label: "Ordergegevens",
+      value: openPoints.length ? `${openPoints.length} ontbreekt` : "Compleet",
+      detail: openPoints.length ? openPoints.join(", ") : "New Order-data compleet",
+      action: "edit" as const,
+      urgent: openPoints.length > 0,
+    },
+    {
+      label: "Klantinformatie",
+      value: !order.info_status || order.info_status === "COMPLETE" ? "Compleet" : "Controle nodig",
+      detail: order.info_status ? String(order.info_status).toLowerCase().replaceAll("_", " ") : "Geen blokkade",
+      href: "#order-open-info",
+      urgent: !!order.info_status && order.info_status !== "COMPLETE",
+    },
+    {
+      label: "Planning",
+      value: planningState,
+      detail: `${driverState} · ${vehicleState}`,
+      to: "/planning",
+      urgent: planningPoints.length > 0,
+    },
+    {
+      label: "Documenten",
+      value: documentPoints.length ? `${documentPoints.length} open` : "Compleet",
+      detail: documentStatusDetail,
+      href: "#order-documents",
+      urgent: documentPoints.length > 0,
+    },
+  ];
+  const primaryPlannerAction = isCancelled
+    ? { label: "Order heropenen", type: "reopen" as const, detail: "Deze order is geannuleerd." }
+    : openPoints.length
+      ? { label: "Ordergegevens bijwerken", type: "edit" as const, detail: openPoints.join(", ") }
+      : order.info_status && order.info_status !== "COMPLETE"
+        ? { label: "Ga naar klantinformatie", type: "anchor" as const, href: "#order-open-info", detail: "Open klantinformatie afronden." }
+        : planningPoints.length
+          ? { label: "Ga naar planbord", type: "link" as const, to: "/planning", detail: planningPoints.join(", ") }
+          : documentPoints.length
+            ? { label: "Bekijk documenten", type: "anchor" as const, href: "#order-documents", detail: documentPoints.join(", ") }
+            : { label: "Bekijk vrachtdossier", type: "anchor" as const, href: "#order-route", detail: "Geen operationele blokkades." };
 
   // Build audit trail from order timestamps
   const auditTrail: { time: string; label: string; icon: any; color?: string }[] = [];
@@ -565,15 +748,17 @@ const OrderDetail = () => {
                     <span>Print CMR</span>
                   </DropdownMenuItem>
                 )}
-                {!isEditing && (order.status === "DELIVERED" || order.status === "PENDING" || order.status === "IN_TRANSIT") && !order.invoice_id && (
-                  <DropdownMenuItem onClick={handleCreateInvoice} disabled={isCreatingInvoice}>
-                    {isCreatingInvoice ? <Loader2 className="animate-spin" /> : <Receipt />}
-                    <span>Factuur aanmaken</span>
+                {!isEditing && !isCancelled && canCreateInvoice && (
+                  <DropdownMenuItem asChild>
+                    <Link to={newInvoiceUrl} className="flex items-center gap-3 w-full">
+                      <Receipt />
+                      <span>Factuur aanmaken</span>
+                    </Link>
                   </DropdownMenuItem>
                 )}
                 {!isEditing && order.invoice_id && (
                   <DropdownMenuItem asChild>
-                    <Link to={`/facturatie`} className="flex items-center gap-3 w-full">
+                    <Link to={`/facturatie/${order.invoice_id}`} className="flex items-center gap-3 w-full">
                       <Receipt />
                       <span>Factuur bekijken</span>
                     </Link>
@@ -662,6 +847,115 @@ const OrderDetail = () => {
         </div>
       )}
 
+      <section className="card--luxe relative overflow-hidden p-5 sm:p-6">
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px"
+          style={{ background: "linear-gradient(90deg, transparent, hsl(var(--gold) / 0.55), transparent)" }}
+        />
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="section-label flex items-center gap-2">
+              <Route className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+              Planneroverzicht
+            </div>
+            <h2 className="section-title">Beslisruimte voor uitvoering</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Gebaseerd op de gegevens uit New Order. Route en lading staan volledig in het vrachtdossier hieronder.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-[hsl(var(--gold)/0.24)] bg-[hsl(var(--gold-soft)/0.22)] text-[hsl(var(--gold-deep))]">
+              {order.priority || "normaal"}
+            </Badge>
+            <Badge variant={openPoints.length ? "destructive" : "outline"}>
+              {openPoints.length ? `${openPoints.length} open` : "Compleet"}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-[hsl(var(--gold)/0.20)] bg-[hsl(var(--gold-soft)/0.18)] p-4">
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Volgende stap
+            </div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-xl font-semibold leading-7 text-foreground">{nextPlannerAction}</p>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{primaryPlannerAction.detail}</p>
+              </div>
+              {primaryPlannerAction.type === "link" ? (
+                <Link to={primaryPlannerAction.to} className="btn-luxe shrink-0 justify-center">
+                  <Truck className="h-4 w-4" />
+                  {primaryPlannerAction.label}
+                </Link>
+              ) : primaryPlannerAction.type === "anchor" ? (
+                <a href={primaryPlannerAction.href} className="btn-primary shrink-0 justify-center">
+                  <ArrowRight className="h-4 w-4" />
+                  {primaryPlannerAction.label}
+                </a>
+              ) : primaryPlannerAction.type === "reopen" ? (
+                <button
+                  type="button"
+                  className="btn-primary shrink-0 justify-center"
+                  onClick={() => reopenMutation.mutate(order.id)}
+                  disabled={reopenMutation.isPending}
+                >
+                  {reopenMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                  {primaryPlannerAction.label}
+                </button>
+              ) : (
+                <button type="button" onClick={startEditing} className="btn-primary shrink-0 justify-center">
+                  <Edit className="h-4 w-4" />
+                  {primaryPlannerAction.label}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[hsl(var(--gold)/0.14)] bg-white/72 p-3">
+            <div className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Waar sta ik?
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {commandCenterStatusRows.map((item) => (
+                <div key={item.label} className="grid gap-3 rounded-lg border border-[hsl(var(--gold)/0.10)] bg-white/70 px-3 py-2 sm:grid-rows-[1fr_auto]">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={cn("h-2 w-2 rounded-full", item.urgent ? "bg-[hsl(var(--gold-deep))]" : "bg-emerald-500")} />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]">{item.label}</span>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{item.value}</p>
+                    <p className="line-clamp-1 text-xs text-muted-foreground">{item.detail}</p>
+                  </div>
+                  {item.to ? (
+                    <Link to={item.to} className="btn-luxe h-8 justify-center px-3 text-xs">
+                      Ga
+                    </Link>
+                  ) : item.href ? (
+                    <a href={item.href} className="btn-luxe h-8 justify-center px-3 text-xs">
+                      Ga
+                    </a>
+                  ) : (
+                    <button type="button" onClick={startEditing} className="btn-luxe h-8 justify-center px-3 text-xs">
+                      Ga
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div id="order-open-info">
+        <OrderInfoRequestsCard
+          orderId={order.id}
+          pickupAtIso={order.time_window_start ?? null}
+        />
+      </div>
+
       {/* Referentie & Opmerkingen — subtiele banner, zichtbaar maar niet schreeuwerig.
           Toont order-specifieke notitie en (separaat) de shipment-breed notitie als die er is. */}
       {(order.notes?.trim() || order.reference?.trim() || shipmentForBanner?.notes?.trim()) && (
@@ -710,15 +1004,8 @@ const OrderDetail = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left column */}
         <div className="lg:col-span-2 space-y-4">
-          {/* §22 Info-tracking — altijd zichtbaar zodat planner kan toevoegen */}
-          <OrderInfoRequestsCard
-            orderId={order.id}
-            pickupAtIso={order.time_window_start ?? null}
-          />
-
           {/* Route & Lading — luxe card, matches new-order-redesign */}
-          <section className="card--luxe relative p-6 sm:p-7">
-            <span className="card-chapter">I</span>
+          <section id="order-route" className="card--luxe relative p-6 sm:p-7">
             <div className="mb-5">
               <div className="section-label flex items-center gap-2">
                 <MapPin className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
@@ -727,6 +1014,62 @@ const OrderDetail = () => {
               <h3 className="section-title">Route & Lading</h3>
             </div>
             <div className="space-y-4">
+              <div className="overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.12)]">
+                <div className="relative border-b border-[hsl(var(--gold)/0.12)] bg-[linear-gradient(135deg,#f8f6f1_0%,#ece7dc_54%,#fbfaf7_100%)] p-3">
+                  {routeMapPlottedCount > 0 ? (
+                    <Suspense
+                      fallback={
+                        <div className="relative h-60 rounded-xl bg-[linear-gradient(90deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px)] bg-[length:22px_22px] lg:h-96">
+                          <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">
+                            Routekaart laden...
+                          </div>
+                        </div>
+                      }
+                    >
+                      <RoutePreviewMap stops={routeMapStops} className="h-60 lg:h-96" />
+                    </Suspense>
+                  ) : (
+                    <div className="relative h-60 rounded-xl bg-[linear-gradient(90deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px)] bg-[length:22px_22px] lg:h-96">
+                      <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">
+                        Routekaart verschijnt zodra GPS-punten uit New Order bekend zijn.
+                      </div>
+                    </div>
+                  )}
+                  {routeMapsUrl && (
+                    <a
+                      href={routeMapsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Route openen in Google Maps"
+                      className="absolute inset-3 z-[400] rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gold))]"
+                    >
+                      <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--gold)/0.22)] bg-white/95 px-3 py-1.5 text-xs font-semibold text-[hsl(var(--gold-deep))] shadow-sm transition hover:bg-[hsl(var(--gold-soft)/0.35)]">
+                        <MapPin className="h-3.5 w-3.5" />
+                        Open in Maps
+                      </span>
+                    </a>
+                  )}
+                  <div className="absolute bottom-5 left-6 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-[hsl(var(--gold-deep))] shadow-sm">
+                    {routeMapPlottedCount > 0 ? "Route op GPS-punten" : "Route preview"}
+                  </div>
+                </div>
+                <div className="grid gap-0 divide-y divide-[hsl(var(--gold)/0.12)] bg-white/70 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                  {routeInsightItems.map((item) => (
+                    <div key={item.label} className="flex items-start gap-3 px-4 py-3">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold-soft)/0.45)] text-[hsl(var(--gold-deep))]">
+                        <item.icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold leading-5 text-foreground">{item.value}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Klantnaam blijft altijd zichtbaar, in read-mode als kop,
                   in edit-mode als bewerkbaar veld. */}
               {isEditing ? (
@@ -1002,7 +1345,6 @@ const OrderDetail = () => {
           {/* Source email — luxe */}
           {order.source_email_body && (
             <section className="card--luxe relative p-6 sm:p-7">
-              <span className="card-chapter">II</span>
               <div className="mb-5">
                 <div className="section-label flex items-center gap-2">
                   <MessageSquare className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
@@ -1026,7 +1368,6 @@ const OrderDetail = () => {
           {/* Internal note — luxe */}
           {order.internal_note && !order.internal_note.startsWith("[") && (
             <section className="card--luxe relative p-6 sm:p-7">
-              <span className="card-chapter">III</span>
               <div className="mb-5">
                 <div className="section-label flex items-center gap-2">
                   <MessageSquare className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
@@ -1040,7 +1381,6 @@ const OrderDetail = () => {
 
           {/* Recipient & Notifications — luxe */}
           <section className="card--luxe relative p-6 sm:p-7">
-            <span className="card-chapter">IV</span>
             <div className="mb-5">
               <div className="section-label flex items-center gap-2">
                 <Bell className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
@@ -1078,14 +1418,52 @@ const OrderDetail = () => {
 
         {/* Right column */}
         <div className="space-y-4">
-          {/* Tariefberekening: toont uitsluitend de pricing die via New Order is vastgelegd. */}
-          <OrderPricePreview
-            pricing={shipmentForBanner?.pricing ?? null}
-            totalCents={shipmentForBanner?.price_total_cents ?? null}
-          />
+          <section className="card--luxe relative p-6 sm:p-7">
+            <div className="mb-5">
+              <div className="section-label flex items-center gap-2">
+                <Truck className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+                Planning
+              </div>
+              <h3 className="section-title">Planning &amp; uitvoering</h3>
+            </div>
+            <div className="space-y-3 text-sm">
+              {[
+                { label: "Status", value: planningState, urgent: false },
+                { label: "Chauffeur", value: driverState, urgent: false },
+                { label: "Voertuig", value: vehicleState, urgent: false },
+                { label: "Volgende actie", value: nextPlannerAction, urgent: openPoints.length > 0 },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={cn(
+                    "flex items-start justify-between gap-3 rounded-md border px-3 py-2.5",
+                    item.urgent
+                      ? "border-[hsl(var(--gold)/0.34)] bg-[hsl(var(--gold-soft)/0.34)]"
+                      : "border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.15)]"
+                  )}
+                >
+                  <span className="font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                    {item.label}
+                  </span>
+                  <span className="max-w-[58%] text-right text-[13px] font-medium text-foreground/85">
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {!isCancelled && (
+              <Link
+                to="/planning"
+                className="btn-luxe mt-4 inline-flex w-full items-center justify-center gap-2 px-3 py-2 text-sm font-semibold"
+              >
+                <Truck className="h-4 w-4" />
+                Open in planbord
+              </Link>
+            )}
+          </section>
 
           {/* Facturatie & documenten, statusoverzicht van CMR, factuur en PoD */}
-          <section className="card--luxe relative p-6 sm:p-7">
+          <section id="order-documents" className="card--luxe relative p-6 sm:p-7">
             <div className="mb-5">
               <div className="section-label flex items-center gap-2">
                 <ScrollText className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
@@ -1134,28 +1512,32 @@ const OrderDetail = () => {
                     Factuur
                   </div>
                   <div className="text-[13px] text-foreground/80 truncate">
-                    {order.invoice_id ? "Gefactureerd" : "Nog niet gefactureerd"}
+                    {order.invoice_id
+                      ? "Gefactureerd"
+                      : isDelivered
+                        ? "Nog niet gefactureerd"
+                        : "Beschikbaar na aflevering"}
                   </div>
                 </div>
                 {order.invoice_id ? (
                   <Link
-                    to="/facturatie"
+                    to={`/facturatie/${order.invoice_id}`}
                     className="shrink-0 inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] hover:underline"
                   >
                     <Receipt className="h-3 w-3" /> Bekijk
                   </Link>
+                ) : canCreateInvoice ? (
+                  <Link
+                    to={newInvoiceUrl}
+                    className="shrink-0 inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] hover:underline"
+                  >
+                    <Receipt className="h-3 w-3" />
+                    Nieuwe factuur
+                  </Link>
                 ) : (
-                  (order.status === "DELIVERED" || order.status === "PENDING" || order.status === "IN_TRANSIT") && (
-                    <button
-                      type="button"
-                      onClick={handleCreateInvoice}
-                      disabled={isCreatingInvoice}
-                      className="shrink-0 inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))] hover:underline disabled:opacity-50"
-                    >
-                      {isCreatingInvoice ? <Loader2 className="h-3 w-3 animate-spin" /> : <Receipt className="h-3 w-3" />}
-                      Aanmaken
-                    </button>
-                  )
+                  <span className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Na aflevering
+                  </span>
                 )}
               </div>
 
@@ -1174,12 +1556,17 @@ const OrderDetail = () => {
             </div>
           </section>
 
+          {/* Tariefberekening: toont uitsluitend de pricing die via New Order is vastgelegd. */}
+          <OrderPricePreview
+            pricing={shipmentForBanner?.pricing ?? null}
+            totalCents={shipmentForBanner?.price_total_cents ?? null}
+          />
+
           {/* Audit Trail — luxe */}
           <section className="card--luxe relative p-6 sm:p-7">
-            <span className="card-chapter">V</span>
             <div className="mb-5">
               <div className="section-label">Historie</div>
-              <h3 className="section-title">Tijdlijn</h3>
+              <h3 className="section-title">Activiteit</h3>
             </div>
             <div className="space-y-4">
               {auditTrail.map((event, i) => (
@@ -1202,25 +1589,23 @@ const OrderDetail = () => {
             </div>
           </section>
 
-          {/* Event Pipeline Timeline — luxe */}
+          {/* Automatische stappen — luxe */}
           <section className="card--luxe relative p-6 sm:p-7">
-            <span className="card-chapter">VI</span>
             <div className="mb-5">
               <div className="section-label">Automatisering</div>
-              <h3 className="section-title">Event pipeline</h3>
+              <h3 className="section-title">Automatische stappen</h3>
             </div>
             <OrderTimeline orderId={order.id} />
           </section>
 
           {/* Notification Log — luxe */}
           <section className="card--luxe relative p-6 sm:p-7">
-            <span className="card-chapter">VII</span>
             <div className="mb-5">
               <div className="section-label flex items-center gap-2">
                 <Bell className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
                 Communicatie
               </div>
-              <h3 className="section-title">Notificatielogboek</h3>
+              <h3 className="section-title">Notificaties</h3>
             </div>
             <NotificationLogPanel orderId={order.id} />
           </section>
@@ -1425,15 +1810,15 @@ const ShipmentBanner = ({
     : shipment.id.slice(0, 8);
 
   return (
-    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+    <div className="rounded-xl border border-[hsl(var(--gold)/0.22)] bg-[hsl(var(--gold-soft)/0.18)] p-4">
       <div className="flex items-start gap-3">
-        <Route className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+        <Route className="h-5 w-5 text-[hsl(var(--gold-deep))] shrink-0 mt-0.5" />
         <div className="flex-1 space-y-2">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="text-sm font-semibold text-amber-900">
+            <p className="text-sm font-semibold text-foreground">
               Shipment {shipNumber} · {shipment.legs.length} legs
             </p>
-            <span className="text-xs text-amber-700">
+            <span className="text-xs text-muted-foreground">
               {shipment.origin_address} → {shipment.destination_address}
             </span>
           </div>
@@ -1449,8 +1834,8 @@ const ShipmentBanner = ({
                     className={cn(
                       "w-full flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs text-left transition",
                       isCurrent
-                        ? "border-amber-400 bg-amber-100 text-amber-900 cursor-default font-semibold"
-                        : "border-amber-200 bg-white/60 text-amber-900 hover:bg-white",
+                        ? "border-[hsl(var(--gold)/0.35)] bg-[hsl(var(--gold-soft)/0.42)] text-foreground cursor-default font-semibold"
+                        : "border-[hsl(var(--gold)/0.14)] bg-white/60 text-foreground hover:bg-white",
                     )}
                   >
                     <span className="font-mono text-[10px] w-6">#{leg.legNumber ?? "?"}</span>
@@ -1463,7 +1848,7 @@ const ShipmentBanner = ({
                     <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
                       {leg.status}
                     </Badge>
-                    {isCurrent && <CheckCircle2 className="h-3 w-3 text-amber-700" />}
+                    {isCurrent && <CheckCircle2 className="h-3 w-3 text-[hsl(var(--gold-deep))]" />}
                   </button>
                 </li>
               );

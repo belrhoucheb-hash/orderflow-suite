@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { addDays, format } from "date-fns";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
@@ -51,7 +53,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useDispatchTrip, useTrips, useTripsRealtime, useUpdateTripStatus } from "@/hooks/useTrips";
+import { fetchTripsForDate, useDispatchTrip, useTrips, useTripsRealtime, useUpdateTripStatus } from "@/hooks/useTrips";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useVehicles } from "@/hooks/useVehicles";
 import {
@@ -73,7 +75,7 @@ function formatDate(iso: string): string {
 }
 
 function getTodayISO(): string {
-  return new Date().toISOString().split("T")[0];
+  return format(new Date(), "yyyy-MM-dd");
 }
 
 function getTimeBucket(iso: string | null): "Vroege shift" | "Middag" | "Avond" | "Ongepland" {
@@ -175,12 +177,25 @@ const Dispatch = () => {
   const [laneOrders, setLaneOrders] = useState<Record<string, string[]>>({});
 
   const { data: trips = [], isLoading, isError, refetch } = useTrips(selectedDate);
+  const queryClient = useQueryClient();
   useTripsRealtime();
   const { data: drivers = [] } = useDrivers();
   const { data: vehicles = [] } = useVehicles();
   const updateStatus = useUpdateTripStatus();
   const dispatchTrip = useDispatchTrip();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  useEffect(() => {
+    const selected = new Date(`${selectedDate}T00:00:00`);
+    for (const offset of [-1, 1]) {
+      const adjacentDate = format(addDays(selected, offset), "yyyy-MM-dd");
+      queryClient.prefetchQuery({
+        queryKey: ["trips", adjacentDate],
+        queryFn: () => fetchTripsForDate(adjacentDate),
+        staleTime: 60_000,
+      });
+    }
+  }, [queryClient, selectedDate]);
 
   const driverMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -191,7 +206,9 @@ const Dispatch = () => {
   const vehicleMap = useMemo(() => {
     const map = new Map<string, { name: string; plate: string }>();
     for (const v of vehicles) {
-      map.set(v.code, { name: v.name, plate: v.plate });
+      map.set(v.id, { name: v.name, plate: v.plate });
+      if (v.dbId) map.set(v.dbId, { name: v.name, plate: v.plate });
+      if (v.code) map.set(v.code, { name: v.name, plate: v.plate });
     }
     return map;
   }, [vehicles]);
@@ -356,15 +373,11 @@ const Dispatch = () => {
   }, [baseBoardLanes, boardTrips, currentLaneByTrip, laneOrders]);
 
   const goToPrevDay = () => {
-    const d = new Date(selectedDate + "T00:00:00");
-    d.setDate(d.getDate() - 1);
-    setSelectedDate(d.toISOString().split("T")[0]);
+    setSelectedDate(format(addDays(new Date(`${selectedDate}T00:00:00`), -1), "yyyy-MM-dd"));
   };
 
   const goToNextDay = () => {
-    const d = new Date(selectedDate + "T00:00:00");
-    d.setDate(d.getDate() + 1);
-    setSelectedDate(d.toISOString().split("T")[0]);
+    setSelectedDate(format(addDays(new Date(`${selectedDate}T00:00:00`), 1), "yyyy-MM-dd"));
   };
 
   const toggleTripSelection = (tripId: string) => {

@@ -355,7 +355,7 @@ const Rapportage = () => {
   const { data: aiUsage = [], isLoading: aiLoading } = useAiUsage(shouldLoadReportData);
   const { data: availability = [], isLoading: availLoading } = useVehicleAvailability(shouldLoadReportData);
 
-  const isLoading = overviewLoading || vehiclesLoading || aiLoading || availLoading;
+  const isPrimaryLoading = overviewLoading;
   const isError = overviewError;
 
   /* ---------- Orders per week ---------- */
@@ -621,7 +621,7 @@ const Rapportage = () => {
         </DeferredMount>
       )}
 
-      {section === "rapportage" && isLoading && (
+      {section === "rapportage" && isPrimaryLoading && (
         <LoadingState message="Rapportage laden..." />
       )}
 
@@ -633,15 +633,15 @@ const Rapportage = () => {
         </div>
       )}
 
-      {section === "rapportage" && !isLoading && !isError && (
+      {section === "rapportage" && !isPrimaryLoading && !isError && (
       <>
       {/* KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Totaal orders", value: overview?.kpis.totalOrders ?? 0, icon: Package, color: "text-blue-600", bg: "bg-blue-500/8" },
           { label: "Gem. levertijd", value: avgDeliveryDays ? `${avgDeliveryDays} d` : "\u2014", icon: Clock, color: "text-amber-600", bg: "bg-amber-500/8" },
-          { label: "Voertuigen", value: vehicles.length, icon: Truck, color: "text-primary", bg: "bg-primary/8" },
-          { label: "AI aanroepen", value: aiStats.totalCalls, icon: Brain, color: "text-violet-600", bg: "bg-violet-500/8" },
+          { label: "Voertuigen", value: vehiclesLoading ? "..." : vehicles.length, icon: Truck, color: "text-primary", bg: "bg-primary/8" },
+          { label: "AI aanroepen", value: aiLoading ? "..." : aiStats.totalCalls, icon: Brain, color: "text-violet-600", bg: "bg-violet-500/8" },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}
@@ -789,7 +789,9 @@ const Rapportage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {vehicleUtilisation.length === 0 ? (
+              {vehiclesLoading || availLoading ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">Voertuigbenutting laden...</div>
+              ) : vehicleUtilisation.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">Geen voertuigen gevonden</div>
               ) : (
                 <div className="space-y-3">
@@ -827,7 +829,11 @@ const Rapportage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {aiStats.totalCalls === 0 ? (
+              {aiLoading ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  AI-kosten laden...
+                </div>
+              ) : aiStats.totalCalls === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
                   Geen AI-gebruik geregistreerd
                 </div>

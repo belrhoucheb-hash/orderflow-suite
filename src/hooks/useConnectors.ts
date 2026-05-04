@@ -223,21 +223,28 @@ export function usePullConnector(provider: string) {
 }
 
 // ─── OAuth-flow start (Exact) ───────────────────────────────────────
+// State wordt server-side HMAC-signed door exact-oauth-start om CSRF
+// op de callback te voorkomen. Frontend heeft geen toegang tot het
+// secret, dus de URL moet via die edge function opgehaald worden.
 
-export function buildExactOAuthUrl(input: {
+export async function startExactOAuth(input: {
   tenantId: string;
   clientId?: string | null;
   redirectUri?: string | null;
-}): string | null {
+}): Promise<string | null> {
   const clientId = input.clientId?.trim();
   const redirectUri = input.redirectUri?.trim();
   if (!clientId || !redirectUri) return null;
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    state: input.tenantId,
-    force_login: "1",
-  });
-  return `https://start.exactonline.nl/api/oauth2/auth?${params.toString()}`;
+  const { data, error } = await supabase.functions.invoke<{ authorize_url: string }>(
+    "exact-oauth-start",
+    {
+      body: {
+        tenant_id: input.tenantId,
+      },
+    },
+  );
+  if (error || !data?.authorize_url) {
+    throw new Error(error?.message ?? "Kon Exact-authorize-URL niet ophalen");
+  }
+  return data.authorize_url;
 }

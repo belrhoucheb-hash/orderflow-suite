@@ -33,7 +33,14 @@ export interface ConsolidationGroup {
   // Joined
   consolidation_orders?: ConsolidationOrder[];
   orders?: ConsolidationOrder[];
-  vehicle?: { name: string; plate: string; capacityKg: number; capacityPallets: number };
+  vehicle?: {
+    name: string | null;
+    plate: string | null;
+    capacityKg?: number | null;
+    capacityPallets?: number | null;
+    capacity_kg?: number | null;
+    capacity_pallets?: number | null;
+  };
 }
 
 export interface ConsolidationOrder {

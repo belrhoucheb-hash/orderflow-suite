@@ -28,6 +28,7 @@ export interface BookingInput {
   client_id?: string | null;
   client_name?: string | null;
   weight_kg?: number | null;
+  distance_km?: number | null;
   quantity?: number | null;
   unit?: string | null;
   transport_type?: string | null;
@@ -473,6 +474,7 @@ export async function createShipmentWithLegs(
       source: normalizeOrderSource(booking.source),
       status: normalizedStatus,
       weight_kg: booking.weight_kg ?? null,
+      distance_km: booking.distance_km ?? null,
       quantity: booking.quantity ?? null,
       unit: booking.unit ?? null,
       transport_type: booking.transport_type ?? null,

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -74,11 +74,12 @@ export function useInvoices(options: UseInvoicesOptions = {}) {
 
   return useQuery({
     queryKey: ["invoices", { page, pageSize, statusFilter, search }],
-    staleTime: 15_000,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       let query = supabase
         .from("invoices")
-        .select("*", { count: "exact" })
+        .select("*", { count: "estimated" })
         .order("invoice_date", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 

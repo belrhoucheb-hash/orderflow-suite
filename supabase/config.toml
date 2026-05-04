@@ -1,5 +1,20 @@
 project_id = "mdcfqircyxltiwfnmjsj"
 
+[api]
+port = 55431
+
+[db]
+port = 55432
+
+[studio]
+port = 55433
+
+[inbucket]
+port = 55434
+
+[analytics]
+port = 55435
+
 [functions.parse-order]
 verify_jwt = false
 
@@ -22,4 +37,14 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.google-places]
+verify_jwt = false
+
+# OAuth-callback komt vanuit Exact (3rd-party redirect, geen Supabase JWT).
+# CSRF-bescherming gebeurt via HMAC-signed state-parameter.
+[functions.oauth-callback-exact]
+verify_jwt = false
+
+# WhatsApp-webhook komt vanuit Twilio (geen Supabase JWT).
+# Auth gebeurt via Twilio HMAC-signature in de function.
+[functions.whatsapp-webhook]
 verify_jwt = false

@@ -26,6 +26,8 @@ interface PlanningDriverLaneProps {
   vehicleLabels?: Map<string, string>;
   countryRestrictionIssue?: DriverCountryRestrictionIssue | null;
   onSelectGroup: (groupId: string) => void;
+  onReturnGroup?: (groupId: string) => void;
+  onDropOrder?: (driverId: string, orderId: string) => void;
 }
 
 function laneStatusBadge(status?: string) {
@@ -44,6 +46,8 @@ export function PlanningDriverLane({
   vehicleLabels,
   countryRestrictionIssue,
   onSelectGroup,
+  onReturnGroup,
+  onDropOrder,
 }: PlanningDriverLaneProps) {
   const statusBadge = laneStatusBadge(driver.status);
   const contractHrs = driver.contract_hours_per_week;
@@ -59,7 +63,20 @@ export function PlanningDriverLane({
     !!schedule && schedule.status === "werkt" && (scheduleStartTime || scheduleVehicleLabel);
 
   return (
-    <div className="card--luxe p-5 space-y-4">
+    <div
+      className="card--luxe p-5 space-y-4"
+      onDragOver={(event) => {
+        if (!onDropOrder) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={(event) => {
+        if (!onDropOrder) return;
+        event.preventDefault();
+        const orderId = event.dataTransfer.getData("application/x-order-id");
+        if (orderId) onDropOrder(driver.id, orderId);
+      }}
+    >
       <div className="flex items-center justify-between gap-2 pb-3 hairline border-b-0">
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-10 w-10 rounded-full flex items-center justify-center bg-[hsl(var(--gold-soft)/0.6)] border border-[hsl(var(--gold)/0.3)] shrink-0">
@@ -150,8 +167,15 @@ export function PlanningDriverLane({
       </div>
 
       {groups.length === 0 && (
-        <div className="text-sm text-muted-foreground italic text-center py-6">
-          Geen clusters toegewezen voor deze dag.
+        <div className="rounded-lg border border-dashed border-[hsl(var(--gold)/0.25)] bg-[hsl(var(--gold-soft)/0.14)] py-6 px-4 text-center">
+          <div className="text-sm text-muted-foreground italic">
+            Geen clusters toegewezen voor deze dag.
+          </div>
+          {onDropOrder && (
+            <div className="mt-2 text-[10px] uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+              Sleep hier een open order naartoe
+            </div>
+          )}
         </div>
       )}
 
@@ -161,6 +185,7 @@ export function PlanningDriverLane({
             key={g.id}
             group={g}
             onSelect={onSelectGroup}
+            onReturn={onReturnGroup}
           />
         ))}
       </div>

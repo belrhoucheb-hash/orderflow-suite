@@ -3,6 +3,7 @@ import {
   interpolatePosition,
   calculateHeading,
   haversineKm,
+  distanceToRouteKm,
   calculateETAMinutes,
   detectAlerts,
 } from "@/hooks/useTracking";
@@ -115,11 +116,28 @@ describe("calculateETAMinutes", () => {
   });
 });
 
+describe("distanceToRouteKm", () => {
+  it("returns 0 without route points", () => {
+    expect(distanceToRouteKm(52.0, 5.0, [])).toBe(0);
+  });
+
+  it("returns shortest distance to route points", () => {
+    const distance = distanceToRouteKm(52.37, 4.9, [
+      { lat: 52.36, lng: 4.9 },
+      { lat: 51.92, lng: 4.48 },
+    ]);
+
+    expect(distance).toBeGreaterThan(0);
+    expect(distance).toBeLessThan(2);
+  });
+});
+
 // ─── detectAlerts ──────────────────────────────────────────────
 
 describe("detectAlerts", () => {
   const baseStatus: TripTrackingStatus = {
     tripId: "trip-1",
+    tripLabel: "Rit #1001",
     vehicleId: "veh-1",
     driverName: "Test Driver",
     currentStopIndex: 2,
@@ -130,14 +148,25 @@ describe("detectAlerts", () => {
     lastUpdate: new Date().toISOString(),
   };
 
+  const livePosition: VehiclePosition = {
+    vehicleId: "veh-1",
+    lat: 52.37,
+    lng: 4.9,
+    heading: 0,
+    speed: 50,
+    timestamp: new Date().toISOString(),
+    tripId: "trip-1",
+    source: "real",
+  };
+
   it("generates no alerts for on-time trips", () => {
-    const alerts = detectAlerts([baseStatus], [], []);
+    const alerts = detectAlerts([baseStatus], [livePosition], []);
     expect(alerts).toHaveLength(0);
   });
 
   it("generates delay alert when >15 min behind", () => {
     const delayed = { ...baseStatus, delayMinutes: 20, status: "delayed" as const };
-    const alerts = detectAlerts([delayed], [], []);
+    const alerts = detectAlerts([delayed], [livePosition], []);
     expect(alerts).toHaveLength(1);
     expect(alerts[0].type).toBe("delay");
     expect(alerts[0].severity).toBe("warning");
@@ -145,10 +174,63 @@ describe("detectAlerts", () => {
 
   it("generates critical delay alert when >30 min behind", () => {
     const critical = { ...baseStatus, delayMinutes: 45, status: "critical" as const };
-    const alerts = detectAlerts([critical], [], []);
+    const alerts = detectAlerts([critical], [livePosition], []);
     expect(alerts).toHaveLength(1);
     expect(alerts[0].type).toBe("delay");
     expect(alerts[0].severity).toBe("critical");
+  });
+
+  it("generates fallback GPS alert for simulated positions", () => {
+    const alerts = detectAlerts(
+      [baseStatus],
+      [{ ...livePosition, source: "simulated" }],
+      [],
+    );
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].type).toBe("gps_missing");
+    expect(alerts[0].severity).toBe("info");
+  });
+
+  it("generates stale GPS alert for old real positions", () => {
+    const alerts = detectAlerts(
+      [baseStatus],
+      [
+        {
+          ...livePosition,
+          timestamp: new Date(Date.now() - 12 * 60_000).toISOString(),
+        },
+      ],
+      [],
+    );
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].type).toBe("gps_stale");
+    expect(alerts[0].severity).toBe("warning");
+  });
+
+  it("generates route deviation alert", () => {
+    const alerts = detectAlerts(
+      [baseStatus],
+      [{ ...livePosition, deviationKm: 3.4 }],
+      [],
+    );
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].type).toBe("deviation");
+    expect(alerts[0].severity).toBe("warning");
+  });
+
+  it("generates ETA window alert", () => {
+    const alerts = detectAlerts(
+      [{ ...baseStatus, etaWindowDeltaMinutes: 18 }],
+      [livePosition],
+      [],
+    );
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].type).toBe("eta_window");
+    expect(alerts[0].severity).toBe("warning");
   });
 
   it("generates idle alert when vehicle has not moved for >10 min", () => {

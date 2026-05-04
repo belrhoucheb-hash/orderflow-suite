@@ -2,7 +2,6 @@ import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { nl } from "date-fns/locale";
 import { AlertTriangle, Bell, Check, Clock, Plus, X } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -98,30 +97,31 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
   };
 
   return (
-    <Card className={openRequests.some(r => r.status === "OVERDUE") ? "border-red-300" : ""}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base font-display flex items-center gap-2">
-            <Bell className="h-4 w-4 text-amber-600" />
-            Openstaande informatie
+    <section className={openRequests.some(r => r.status === "OVERDUE") ? "card--luxe relative border-red-300 p-6 sm:p-7" : "card--luxe relative p-6 sm:p-7"}>
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <div className="section-label flex items-center gap-2">
+            <Bell className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+            Klantinformatie
             {openRequests.length > 0 && (
-              <span className="inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-800 text-xs font-medium h-5 min-w-5 px-1.5">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[hsl(var(--gold)/0.22)] bg-[hsl(var(--gold-soft)/0.45)] px-1.5 text-[10px] font-semibold text-[hsl(var(--gold-deep))]">
                 {openRequests.length}
               </span>
             )}
-          </CardTitle>
-          {!adding && (
-            <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setAdding(true)}>
-              <Plus className="h-3 w-3" /> Toevoegen
-            </Button>
-          )}
+          </div>
+          <h3 className="section-title">Openstaande informatie</h3>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
+        {!adding && (
+          <Button size="sm" variant="outline" className="btn-luxe h-8 gap-1 px-3" onClick={() => setAdding(true)}>
+            <Plus className="h-3.5 w-3.5" /> Toevoegen
+          </Button>
+        )}
+      </div>
+      <div className="space-y-3">
         {isLoading && <div className="font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70">Laden…</div>}
 
         {adding && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2">
+          <div className="space-y-3 rounded-xl border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.18)] p-3">
             <div className="flex items-center gap-2 flex-wrap">
               <Select value={newField} onValueChange={setNewField}>
                 <SelectTrigger className="h-8 text-xs w-48"><SelectValue /></SelectTrigger>
@@ -147,7 +147,7 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
             </div>
             <div className="flex items-center justify-end gap-2">
               <Button size="sm" variant="ghost" className="h-7" onClick={() => setAdding(false)}>Annuleren</Button>
-              <Button size="sm" className="h-7" onClick={handleAdd} disabled={createMut.isPending}>
+              <Button size="sm" className="btn-primary h-7" onClick={handleAdd} disabled={createMut.isPending}>
                 Toevoegen
               </Button>
             </div>
@@ -155,7 +155,7 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
         )}
 
         {openRequests.length === 0 && !adding && (
-          <p className="font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70 py-1">
+          <p className="rounded-xl border border-[hsl(var(--gold)/0.12)] bg-[hsl(var(--gold-soft)/0.14)] px-3 py-2 font-display text-[11px] uppercase tracking-[0.14em] text-muted-foreground/75">
             Dossier compleet — geen openstaande info van klant.
           </p>
         )}
@@ -165,14 +165,14 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
           return (
             <div
               key={req.id}
-              className={`rounded-lg border p-3 text-sm ${isOverdue ? "border-red-300 bg-red-50/60" : "border-amber-200 bg-amber-50/40"}`}
+              className={`rounded-xl border p-3 text-sm ${isOverdue ? "border-red-300 bg-red-50/60" : "border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--gold-soft)/0.20)]"}`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     {isOverdue
                       ? <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
-                      : <Clock className="h-4 w-4 text-amber-600 shrink-0" />}
+                      : <Clock className="h-4 w-4 text-[hsl(var(--gold-deep))] shrink-0" />}
                     <span className="font-display text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))] font-semibold">
                       {req.field_label ?? req.field_name}
                     </span>
@@ -196,7 +196,7 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1 shrink-0">
-                  <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => handleFulfill(req)}>
+                  <Button size="sm" variant="outline" className="btn-luxe h-7 gap-1 px-2.5" onClick={() => handleFulfill(req)}>
                     <Check className="h-3 w-3" /> Vul in
                   </Button>
                   <Button size="sm" variant="ghost" className="h-7 gap-1" onClick={() => handleRemind(req)}>
@@ -218,7 +218,7 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
             </summary>
             <div className="space-y-1 mt-2">
               {closedRequests.map(req => (
-                <div key={req.id} className="text-xs flex items-center gap-2 text-muted-foreground">
+                <div key={req.id} className="flex items-center gap-2 rounded-md border border-[hsl(var(--gold)/0.10)] bg-white/55 px-2 py-1.5 text-xs text-muted-foreground">
                   {req.status === "FULFILLED"
                     ? <Check className="h-3 w-3 text-emerald-600" />
                     : <X className="h-3 w-3" />}
@@ -234,7 +234,7 @@ export function OrderInfoRequestsCard({ orderId, pickupAtIso }: Props) {
             </div>
           </details>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

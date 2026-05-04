@@ -511,6 +511,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
               value={form.main_address}
               onChange={setAddress("main_address")}
               error={errors["main_address.lat"] || errors["main_address.street"]}
+              compactFlow
             />
           </Section>
 
@@ -602,6 +603,7 @@ export function NewClientDialog({ open, onOpenChange, client }: Props) {
                   error={
                     errors["billing_address.lat"] || errors["billing_address.street"]
                   }
+                  compactFlow
                 />
               )}
             </div>

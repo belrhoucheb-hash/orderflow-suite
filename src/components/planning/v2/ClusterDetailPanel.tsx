@@ -31,6 +31,11 @@ import {
 
 interface ClusterDetailPanelProps {
   groupId: string | null;
+  groupSummary?: (ConsolidationGroup & {
+    consolidation_orders?: Array<{ id: string; order_id: string; stop_sequence: number | null; order: OrderRow }>;
+  }) | null;
+  driverSummary?: DriverInfo | null;
+  vehicleSummary?: VehicleInfo | null;
   onClose: () => void;
 }
 
@@ -68,7 +73,13 @@ interface OrderRow {
   requirements: string[] | null;
 }
 
-export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps) {
+export function ClusterDetailPanel({
+  groupId,
+  groupSummary,
+  driverSummary,
+  vehicleSummary,
+  onClose,
+}: ClusterDetailPanelProps) {
   const qc = useQueryClient();
   const [reason, setReason] = useState("");
   const [actionBusy, setActionBusy] = useState<"confirm" | "reject" | "override" | null>(null);
@@ -77,9 +88,9 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
   // Reset reden-veld bij cluster-wissel
   useEffect(() => setReason(""), [groupId]);
 
-  const { data: group, isLoading } = useQuery({
+  const { data: groupDetail, isLoading, isError, error } = useQuery({
     queryKey: ["cluster_detail", groupId],
-    enabled: !!groupId,
+    enabled: !!groupId && !groupSummary,
     staleTime: 5_000,
     queryFn: async () => {
       const client = supabase as any;
@@ -95,15 +106,17 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
     },
   });
 
+  const group = groupSummary ?? groupDetail;
+
   const { data: vehicle } = useQuery({
     queryKey: ["cluster_vehicle", group?.vehicle_id],
-    enabled: !!group?.vehicle_id,
+    enabled: !!group?.vehicle_id && !vehicleSummary && !group?.vehicle,
     staleTime: 60_000,
     queryFn: async () => {
       const client = supabase as any;
       const { data, error } = await client
         .from("vehicles")
-        .select("id, name, plate, capacity_kg, capacity_pallets, vehicle_type_id, vehicle_types(name, max_weight_kg, max_volume_m3, max_pallets)")
+        .select("id, name, plate, capacity_kg, capacity_pallets, vehicle_type_id")
         .eq("id", group!.vehicle_id!)
         .maybeSingle();
       if (error) throw error;
@@ -113,7 +126,7 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
 
   const { data: driver } = useQuery({
     queryKey: ["cluster_driver", group?.driver_id],
-    enabled: !!group?.driver_id,
+    enabled: !!group?.driver_id && !driverSummary,
     staleTime: 60_000,
     queryFn: async () => {
       const client = supabase as any;
@@ -129,6 +142,8 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
 
   const open = !!groupId;
   const orders = group?.consolidation_orders ?? [];
+  const vehicleInfo = vehicleSummary ?? (group?.vehicle as VehicleInfo | undefined) ?? vehicle ?? null;
+  const driverInfo = driverSummary ?? driver ?? null;
   const countryRestrictionIssue = group?.driver_id
     ? getDriverCountryRestrictionIssue(
         group.driver_id,
@@ -138,8 +153,8 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
       )
     : null;
 
-  const weightCap = vehicle?.vehicle_types?.max_weight_kg ?? vehicle?.capacity_kg ?? 0;
-  const palletCap = vehicle?.vehicle_types?.max_pallets ?? vehicle?.capacity_pallets ?? 0;
+  const weightCap = vehicleInfo?.vehicle_types?.max_weight_kg ?? vehicleInfo?.capacity_kg ?? 0;
+  const palletCap = vehicleInfo?.vehicle_types?.max_pallets ?? vehicleInfo?.capacity_pallets ?? 0;
   const weightUsed = group?.total_weight_kg ?? 0;
   const palletsUsed = group?.total_pallets ?? 0;
   const weightPct = weightCap > 0 ? (weightUsed / weightCap) * 100 : 0;
@@ -166,6 +181,8 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
       if (error) throw error;
       toast.success("Cluster bevestigd", { description: "Trip en stops zijn aangemaakt." });
       qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date"] });
+      qc.invalidateQueries({ queryKey: ["open_orders_by_date"] });
+      qc.invalidateQueries({ queryKey: ["trip-orders"] });
       qc.invalidateQueries({ queryKey: ["cluster_detail"] });
       onClose();
     } catch (err) {
@@ -183,6 +200,7 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
       if (error) throw error;
       toast.info("Cluster verworpen", { description: "Orders staan weer open te plannen." });
       qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date"] });
+      qc.invalidateQueries({ queryKey: ["open_orders_by_date"] });
       onClose();
     } catch (err) {
       toast.error("Verwerpen mislukt", { description: (err as Error).message });
@@ -208,6 +226,7 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
       setReason("");
       qc.invalidateQueries({ queryKey: ["cluster_detail"] });
       qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date"] });
+      qc.invalidateQueries({ queryKey: ["open_orders_by_date"] });
     } catch (err) {
       toast.error("Override mislukt", { description: (err as Error).message });
     } finally {
@@ -218,8 +237,13 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent className="sm:max-w-[440px] overflow-y-auto p-0">
-        {isLoading || !group ? (
+        {isLoading ? (
           <div className="p-6 text-sm text-muted-foreground">Laden...</div>
+        ) : isError || !group ? (
+          <div className="p-6 text-sm text-red-700">
+            Cluster-details konden niet worden geladen
+            {error instanceof Error && <div className="mt-1 text-xs text-muted-foreground">{error.message}</div>}
+          </div>
         ) : (
           <div className="flex flex-col h-full">
             <SheetHeader className="p-6 pb-4 border-b border-[hsl(var(--gold)/0.2)]">
@@ -244,9 +268,9 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
                     </div>
                     <div className="min-w-0 text-sm">
                       <div className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">Voertuig</div>
-                      <div className="font-medium truncate">{vehicle?.name ?? "-"}</div>
+                      <div className="font-medium truncate">{vehicleInfo?.name ?? "-"}</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {vehicle?.plate ?? ""} {vehicle?.vehicle_types?.name ? `, ${vehicle.vehicle_types.name}` : ""}
+                        {vehicleInfo?.plate ?? ""} {vehicleInfo?.vehicle_types?.name ? `, ${vehicleInfo.vehicle_types.name}` : ""}
                       </div>
                     </div>
                   </div>
@@ -256,10 +280,10 @@ export function ClusterDetailPanel({ groupId, onClose }: ClusterDetailPanelProps
                     </div>
                     <div className="min-w-0 text-sm">
                       <div className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">Chauffeur</div>
-                      <div className="font-medium truncate">{driver?.name ?? "-"}</div>
-                      {driver?.contract_hours_per_week !== null && driver?.contract_hours_per_week !== undefined && (
+                      <div className="font-medium truncate">{driverInfo?.name ?? "-"}</div>
+                      {driverInfo?.contract_hours_per_week !== null && driverInfo?.contract_hours_per_week !== undefined && (
                         <div className="text-xs text-muted-foreground">
-                          Contract: {driver.contract_hours_per_week} u/week
+                          Contract: {driverInfo.contract_hours_per_week} u/week
                         </div>
                       )}
                     </div>

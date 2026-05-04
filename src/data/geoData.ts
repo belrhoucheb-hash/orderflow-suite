@@ -242,6 +242,7 @@ export function getRegionLabel(region: string): string {
   const labels: Record<string, string> = {
     "10": "Amsterdam / Noord-Holland",
     "11": "Schiphol / Haarlemmermeer",
+    "21": "Hoofddorp / Haarlemmermeer",
     "20": "Haarlem / Kennemerland",
     "25": "Den Haag / Zuid-Holland",
     "30": "Rotterdam / Rijnmond",

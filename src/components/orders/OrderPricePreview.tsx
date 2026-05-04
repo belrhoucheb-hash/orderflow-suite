@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calculator, CircleSlash } from "lucide-react";
 import { formatCurrency } from "@/lib/invoiceUtils";
@@ -61,19 +60,22 @@ export function OrderPricePreview({ pricing, totalCents }: OrderPricePreviewProp
   const manualAddOnAmount = asNumber(manualAddOns?.base_amount) ?? 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calculator className="h-4 w-4" />
-            Prijsberekening
-          </CardTitle>
-          <Badge variant="outline">{modeLabel(mode)}</Badge>
+    <section className="card--luxe relative p-6 sm:p-7">
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <div className="section-label flex items-center gap-2">
+            <Calculator className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+            Tarief
+          </div>
+          <h3 className="section-title">Prijsberekening</h3>
         </div>
-      </CardHeader>
-      <CardContent>
+        <Badge variant="outline" className="border-[hsl(var(--gold)/0.24)] bg-[hsl(var(--gold-soft)/0.25)] text-[hsl(var(--gold-deep))]">
+          {modeLabel(mode)}
+        </Badge>
+      </div>
+      <div>
         {!details || total == null ? (
-          <div className="flex items-start gap-2 rounded-md border border-dashed border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.22)] p-3 text-sm text-muted-foreground">
+          <div className="flex items-start gap-2 rounded-xl border border-dashed border-[hsl(var(--gold)/0.28)] bg-[hsl(var(--gold-soft)/0.22)] p-3 text-sm text-muted-foreground">
             <CircleSlash className="mt-0.5 h-4 w-4 text-[hsl(var(--gold-deep))]" />
             <span>Geen tarief vastgelegd in New Order.</span>
           </div>
@@ -118,7 +120,7 @@ export function OrderPricePreview({ pricing, totalCents }: OrderPricePreviewProp
             )}
 
             {mode === "override" && (
-              <div className="rounded-md border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.18)] px-3 py-2 text-sm">
+              <div className="rounded-xl border border-[hsl(var(--gold)/0.16)] bg-[hsl(var(--gold-soft)/0.18)] px-3 py-2 text-sm">
                 <div className="font-medium">Afwijkend tarief uit New Order</div>
                 {typeof details.reason === "string" && details.reason.trim() && (
                   <div className="mt-1 text-muted-foreground">{details.reason}</div>
@@ -127,9 +129,9 @@ export function OrderPricePreview({ pricing, totalCents }: OrderPricePreviewProp
             )}
 
             {(surcharges.length > 0 || manualAddOnAmount > 0 || tollAmount > 0) && (
-              <div className="space-y-1 border-t pt-2">
+              <div className="space-y-1 border-t border-[hsl(var(--gold)/0.12)] pt-2">
                 {surcharges.map((surcharge, idx) => (
-                  <div key={`${asText(surcharge.name, "Toeslag")}-${idx}`} className="flex justify-between gap-3 text-sm text-amber-700">
+                  <div key={`${asText(surcharge.name, "Toeslag")}-${idx}`} className="flex justify-between gap-3 text-sm text-[hsl(var(--gold-deep))]">
                     <span>+ {asText(surcharge.name, "Toeslag")}</span>
                     <span className="font-mono tabular-nums">
                       {formatCurrency(asNumber(surcharge.amount) ?? 0)}
@@ -137,13 +139,13 @@ export function OrderPricePreview({ pricing, totalCents }: OrderPricePreviewProp
                   </div>
                 ))}
                 {manualAddOnAmount > 0 && (
-                  <div className="flex justify-between gap-3 text-sm text-amber-700">
+                  <div className="flex justify-between gap-3 text-sm text-[hsl(var(--gold-deep))]">
                     <span>+ Wacht- en stopkosten</span>
                     <span className="font-mono tabular-nums">{formatCurrency(manualAddOnAmount)}</span>
                   </div>
                 )}
                 {tollAmount > 0 && (
-                  <div className="flex justify-between gap-3 text-sm text-amber-700">
+                  <div className="flex justify-between gap-3 text-sm text-[hsl(var(--gold-deep))]">
                     <span>+ Tol</span>
                     <span className="font-mono tabular-nums">{formatCurrency(tollAmount)}</span>
                   </div>
@@ -151,7 +153,7 @@ export function OrderPricePreview({ pricing, totalCents }: OrderPricePreviewProp
               </div>
             )}
 
-            <div className="flex justify-between border-t pt-2">
+            <div className="flex justify-between border-t border-[hsl(var(--gold)/0.12)] pt-3">
               <span className="font-bold">Totaal (excl. BTW)</span>
               <span className="font-mono tabular-nums text-lg font-bold">
                 {formatCurrency(total)}
@@ -159,7 +161,7 @@ export function OrderPricePreview({ pricing, totalCents }: OrderPricePreviewProp
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

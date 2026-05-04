@@ -14,7 +14,7 @@ import {
   useConnectorSyncLog,
   useTestConnector,
   usePullConnector,
-  buildExactOAuthUrl,
+  startExactOAuth,
   type SyncLogRow,
 } from "@/hooks/useConnectors";
 import {
@@ -172,11 +172,31 @@ function ExactConnectionForm({
 
   const hasStoredSecrets = creds.__hasStoredSecrets === true;
   const hasCreds = Boolean(enabled || hasStoredSecrets);
-  const oauthUrl = tenant ? buildExactOAuthUrl({
-    tenantId: tenant.id,
-    clientId,
-    redirectUri,
-  }) : null;
+  const canStartOAuth = Boolean(tenant && clientId.trim() && redirectUri.trim());
+  const [startingOAuth, setStartingOAuth] = useState(false);
+
+  const handleStartOAuth = async () => {
+    if (!tenant) return;
+    setStartingOAuth(true);
+    try {
+      const url = await startExactOAuth({
+        tenantId: tenant.id,
+        clientId,
+        redirectUri,
+      });
+      if (!url) {
+        toast.error("Vul eerst Client ID en Redirect URI in");
+        return;
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      toast.error("Exact-koppeling starten mislukt", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setStartingOAuth(false);
+    }
+  };
 
   const saveExact = async () => {
     try {
@@ -238,12 +258,14 @@ function ExactConnectionForm({
           {saving ? "Opslaan..." : "Exact-config opslaan"}
         </Button>
       </div>
-      {oauthUrl ? (
-        <Button asChild>
-          <a href={oauthUrl} target="_blank" rel="noopener noreferrer" className="gap-2">
-            <ExternalLink className="h-4 w-4" />
-            {hasCreds ? "Opnieuw verbinden met Exact" : "Verbinden met Exact Online"}
-          </a>
+      {canStartOAuth ? (
+        <Button onClick={handleStartOAuth} disabled={startingOAuth} className="gap-2">
+          <ExternalLink className="h-4 w-4" />
+          {startingOAuth
+            ? "Bezig..."
+            : hasCreds
+              ? "Opnieuw verbinden met Exact"
+              : "Verbinden met Exact Online"}
         </Button>
       ) : (
         <p className="text-sm text-destructive">

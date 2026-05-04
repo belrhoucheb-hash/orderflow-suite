@@ -34,8 +34,9 @@ export function useAutoPlan() {
       return data as AutoPlanResult;
     },
     onSuccess: (result, variables) => {
-      qc.invalidateQueries({ queryKey: ["consolidation_groups", variables.date] });
       qc.invalidateQueries({ queryKey: ["consolidation_groups"] });
+      qc.invalidateQueries({ queryKey: ["consolidation_groups_by_date", variables.date] });
+      qc.invalidateQueries({ queryKey: ["open_orders_by_date", variables.date] });
       if (result.skipped) {
         toast({
           title: "Planbord v2 staat uit",

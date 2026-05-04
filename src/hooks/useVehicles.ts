@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface FleetVehicle {
   id: string;
+  dbId?: string;
   code: string;
   name: string;
   plate: string;
@@ -25,6 +26,7 @@ export function useVehicles() {
       if (error) throw error;
       return (data ?? []).map((v) => ({
         id: v.code,
+        dbId: v.id,
         code: v.code,
         name: v.name,
         plate: v.plate,

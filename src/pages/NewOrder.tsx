@@ -488,7 +488,10 @@ function toRad(value: number): number {
   return (value * Math.PI) / 180;
 }
 
-function roadDistanceKm(from: FreightLine, to: FreightLine): number | null {
+function roadDistanceKm(
+  from: Pick<FreightLine, "lat" | "lng">,
+  to: Pick<FreightLine, "lat" | "lng">,
+): number | null {
   if (from.lat == null || from.lng == null || to.lat == null || to.lng == null) return null;
   const earthKm = 6371;
   const dLat = toRad(to.lat - from.lat);
@@ -498,6 +501,23 @@ function roadDistanceKm(from: FreightLine, to: FreightLine): number | null {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   const straightKm = 2 * earthKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.max(1, straightKm * 1.28);
+}
+
+function totalRouteDistanceKm(stops: RoutePreviewMapStop[]): number | null {
+  const mappedStops = stops.filter((stop) => stop.line?.lat != null && stop.line?.lng != null);
+  if (mappedStops.length < 2 || mappedStops.length !== stops.length) return null;
+
+  let total = 0;
+  for (let index = 0; index < mappedStops.length - 1; index += 1) {
+    const from = mappedStops[index].line;
+    const to = mappedStops[index + 1].line;
+    if (!from || !to) return null;
+    const distance = roadDistanceKm(from, to);
+    if (distance == null) return null;
+    total += distance;
+  }
+
+  return Math.round(total * 10) / 10;
 }
 
 function routeAverageSpeedKmh(vehicle: string): number {
@@ -2958,6 +2978,7 @@ const NewOrder = () => {
       // Requirements array
       const reqs: string[] = [];
       if (klepNodig) reqs.push("laadklep");
+      const distanceKm = totalRouteDistanceKm(routeMapStops);
 
       const booking: BookingInput = {
         pickup_address: pickupLine?.locatie || null,
@@ -2969,6 +2990,7 @@ const NewOrder = () => {
         client_id: clientId,
         transport_type: transportType || null,
         afdeling: afdeling || null,
+        distance_km: distanceKm,
         weight_kg: weightKg ? parseInt(weightKg) : null,
         quantity: quantity ? parseInt(quantity) : null,
         unit: transportEenheid || null,

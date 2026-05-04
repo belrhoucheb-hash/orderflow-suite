@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import type { LatLngExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { cn } from "@/lib/utils";
 
 export interface RoutePreviewMapStop {
   id: string;
@@ -23,7 +24,7 @@ function routeMarkerMeta(label: string, index: number, total: number) {
   return { code: "W", title: "Tussenstop", tone: "warehouse" };
 }
 
-export function RoutePreviewMap({ stops }: { stops: RoutePreviewMapStop[] }) {
+export function RoutePreviewMap({ stops, className }: { stops: RoutePreviewMapStop[]; className?: string }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const mappedStops = useMemo(
@@ -110,7 +111,7 @@ export function RoutePreviewMap({ stops }: { stops: RoutePreviewMapStop[] }) {
 
   if (positions.length === 0) {
     return (
-      <div className="relative h-32 rounded-xl bg-[linear-gradient(90deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px)] bg-[length:22px_22px]">
+      <div className={cn("relative h-32 rounded-xl bg-[linear-gradient(90deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--gold)_/_0.08)_1px,transparent_1px)] bg-[length:22px_22px]", className)}>
         <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground">
           Kaart verschijnt zodra GPS-punten bekend zijn
         </div>
@@ -118,5 +119,5 @@ export function RoutePreviewMap({ stops }: { stops: RoutePreviewMapStop[] }) {
     );
   }
 
-  return <div ref={mapRef} className="h-32 w-full rounded-xl" aria-label="Routekaart" />;
+  return <div ref={mapRef} className={cn("h-32 w-full rounded-xl", className)} aria-label="Routekaart" />;
 }

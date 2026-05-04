@@ -20,7 +20,7 @@ vi.mock("@/hooks/useConnectors", () => ({
   useConnectorSyncLog: () => ({ data: [], isLoading: false }),
   useTestConnector: () => ({ mutate: vi.fn(), isPending: false }),
   usePullConnector: () => ({ mutate: vi.fn(), isPending: false }),
-  buildExactOAuthUrl: () => null,
+  startExactOAuth: vi.fn(async () => null),
 }));
 
 vi.mock("@/hooks/useIntegrationCredentials", () => ({

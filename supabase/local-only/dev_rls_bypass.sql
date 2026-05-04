@@ -2,7 +2,21 @@
 -- DEV ONLY: RLS bypass for anon key on dev tenant
 -- Allows the anon/publishable key to read/write all data
 -- for tenant '00000000-0000-0000-0000-000000000001'
+--
+-- THIS SCRIPT IS DESTRUCTIVE TO RLS GUARANTEES. NEVER RUN
+-- AGAINST PRODUCTION. Run lokaal via:
+--   psql -c "SET orderflow.allow_dev_rls_bypass = 'YES_I_AM_LOCAL_DEV';" \
+--        -f supabase/local-only/dev_rls_bypass.sql
 -- ============================================================
+
+DO $guard$
+BEGIN
+  IF current_setting('orderflow.allow_dev_rls_bypass', true) IS DISTINCT FROM 'YES_I_AM_LOCAL_DEV' THEN
+    RAISE EXCEPTION
+      'Refusing to run dev_rls_bypass.sql. Set "orderflow.allow_dev_rls_bypass" = ''YES_I_AM_LOCAL_DEV'' explicitly. Local development only.';
+  END IF;
+END
+$guard$;
 
 DO $$
 DECLARE

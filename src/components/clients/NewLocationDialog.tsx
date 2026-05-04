@@ -168,6 +168,7 @@ export function NewLocationDialog({ clientId, open, onOpenChange }: Props) {
               value={form.address}
               onChange={setAddress}
               error={addressError}
+              compactFlow
             />
           </Section>
 

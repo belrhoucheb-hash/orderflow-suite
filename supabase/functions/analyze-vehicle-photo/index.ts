@@ -13,6 +13,21 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsFor, handleOptions } from "../_shared/cors.ts";
+import { getUserAuth, isServiceRoleToken } from "../_shared/auth.ts";
+
+// Beperkt SSRF: alleen URLs van de eigen Supabase storage zijn toegestaan.
+function isAllowedPhotoUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    const supaUrl = Deno.env.get("SUPABASE_URL");
+    if (!supaUrl) return false;
+    const supaHost = new URL(supaUrl).host;
+    return u.host === supaHost && u.pathname.startsWith("/storage/v1/");
+  } catch {
+    return false;
+  }
+}
 
 // Retry helper met exponential backoff voor 429 en netwerk-errors.
 async function fetchWithRetry(
@@ -85,14 +100,38 @@ Antwoord ALLEEN als JSON: {"description": "...", "diff_vs_baseline": "..." of nu
 serve(async (req) => {
   const preflight = handleOptions(req);
   if (preflight) return preflight;
+  const corsHeaders = corsFor(req);
 
   try {
+    if (!isServiceRoleToken(req)) {
+      const auth = await getUserAuth(req);
+      if (!auth.ok) {
+        return new Response(JSON.stringify({ error: auth.error }), {
+          status: auth.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const { photo_url, side, baseline_photo_url, baseline_description } = await req.json();
 
     if (!photo_url || !side) {
       return new Response(JSON.stringify({ error: "photo_url en side zijn verplicht" }), {
         status: 400,
-        headers: { ...corsFor(req), "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!isAllowedPhotoUrl(photo_url)) {
+      return new Response(JSON.stringify({ error: "photo_url moet een Supabase storage URL zijn" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (baseline_photo_url && !isAllowedPhotoUrl(baseline_photo_url)) {
+      return new Response(JSON.stringify({ error: "baseline_photo_url moet een Supabase storage URL zijn" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

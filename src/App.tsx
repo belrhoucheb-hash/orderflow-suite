@@ -68,11 +68,12 @@ const PortalSettings = lazy(() => import("@/pages/portal/PortalSettings"));
 const Dispatch = lazy(() => import("@/pages/Dispatch"));
 const LiveTracking = lazy(() => import("@/pages/LiveTracking"));
 const Autonomie = lazy(() => import("@/pages/Autonomie"));
+const StylePreview = lazy(() => import("@/pages/StylePreview"));
 
 // Performance: saner React Query defaults.
 //   * staleTime 60s — avoids instant re-fetch op elk mount.
 //   * refetchOnWindowFocus off — voorkomt full reload bij tab-switch.
-//   * retry 1 — laat fouten snel terugzien ipv 3x wachten.
+//   * retry false — pagina's tonen binnen 4s een staat; handmatig retryen blijft mogelijk.
 // Per-query overrides blijven mogelijk via queryOptions.
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,7 +81,7 @@ const queryClient = new QueryClient({
       staleTime: 60_000,
       gcTime: 5 * 60_000,
       refetchOnWindowFocus: false,
-      retry: 1,
+      retry: false,
     },
   },
 });
@@ -136,6 +137,7 @@ const App = () => (
               <Route path="/tracking" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><LiveTracking /></Suspense></ErrorBoundary>} />
               <Route path="/exceptions" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Exceptions /></Suspense></ErrorBoundary>} />
               <Route path="/autonomie" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><Autonomie /></Suspense></ErrorBoundary>} />
+              <Route path="/stijltest" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><StylePreview /></Suspense></ErrorBoundary>} />
               <Route path="/settings" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />
               <Route path="/settings/*" element={<RoleGuard allow={["admin"]}><ErrorBoundary><Suspense fallback={<PageLoader />}><Settings /></Suspense></ErrorBoundary></RoleGuard>} />
             </Route>

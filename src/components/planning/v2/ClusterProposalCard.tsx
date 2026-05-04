@@ -1,10 +1,11 @@
-import { MapPin, Package, Scale, Timer } from "lucide-react";
+import { MapPin, Package, Scale, Timer, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ConsolidationGroup } from "@/types/consolidation";
 
 interface ClusterProposalCardProps {
   group: ConsolidationGroup;
   onSelect?: (groupId: string) => void;
+  onReturn?: (groupId: string) => void;
 }
 
 function statusStyling(group: ConsolidationGroup) {
@@ -44,17 +45,28 @@ function utilizationBarClass(pct: number | null): string {
   return "bg-[hsl(var(--gold))]";
 }
 
-export function ClusterProposalCard({ group, onSelect }: ClusterProposalCardProps) {
+export function ClusterProposalCard({ group, onSelect, onReturn }: ClusterProposalCardProps) {
   const styling = statusStyling(group);
   const orderCount = group.consolidation_orders?.length ?? group.orders?.length ?? 0;
   const util = group.utilization_pct;
+  const vehicle = group.vehicle as any;
+  const vehicleLabel = vehicle
+    ? vehicle.plate || vehicle.name || "Voertuig"
+    : group.vehicle_id
+      ? "Voertuig gekoppeld"
+      : "Voertuig kiezen";
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(group.id)}
+    <div
+      draggable={group.status === "VOORSTEL"}
+      onDragStart={(event) => {
+        if (group.status !== "VOORSTEL") return;
+        event.dataTransfer.setData("application/x-consolidation-group-id", group.id);
+        event.dataTransfer.effectAllowed = "move";
+      }}
       className={cn(
         "card--luxe p-4 space-y-3 transition-all hover:-translate-y-0.5 w-full text-left cursor-pointer",
+        group.status === "VOORSTEL" && "active:cursor-grabbing",
         styling.dashed && "border-dashed",
       )}
     >
@@ -81,7 +93,7 @@ export function ClusterProposalCard({ group, onSelect }: ClusterProposalCardProp
               util !== null && util < 80 && "text-[hsl(var(--gold-deep))]",
             )}
           >
-            {util !== null ? `${util.toFixed(0)}%` : "-"}
+            {util !== null ? `${util.toFixed(0)}%` : "Nog niet bekend"}
           </div>
         </div>
       </div>
@@ -94,6 +106,10 @@ export function ClusterProposalCard({ group, onSelect }: ClusterProposalCardProp
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Truck className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
+          <span className="truncate">{vehicleLabel}</span>
+        </div>
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Package className="h-3.5 w-3.5 text-[hsl(var(--gold-deep))]" />
           <span>{orderCount} orders</span>
@@ -113,10 +129,37 @@ export function ClusterProposalCard({ group, onSelect }: ClusterProposalCardProp
       </div>
 
       {group.status === "VOORSTEL" && (
-        <div className="pt-2 text-xs text-[hsl(var(--gold-deep))] font-medium">
-          Klik voor details en acties
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+          <button
+            type="button"
+            onClick={() => onSelect?.(group.id)}
+            className="btn-luxe !h-8 px-3 text-xs"
+          >
+            Details
+          </button>
+          {onReturn && (
+            <button
+              type="button"
+              onClick={() => onReturn(group.id)}
+              className="btn-luxe !h-8 px-3 text-xs"
+            >
+              Zet terug
+            </button>
+          )}
+          <span className="text-xs text-[hsl(var(--gold-deep))] font-medium">
+            Of sleep terug naar Open te plannen
+          </span>
         </div>
       )}
-    </button>
+      {group.status !== "VOORSTEL" && (
+        <button
+          type="button"
+          onClick={() => onSelect?.(group.id)}
+          className="btn-luxe !h-8 px-3 text-xs"
+        >
+          Details
+        </button>
+      )}
+    </div>
   );
 }

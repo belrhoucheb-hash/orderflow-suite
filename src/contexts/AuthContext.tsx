@@ -31,6 +31,27 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AUTH_BOOT_TIMEOUT_MS = 3_000;
+const USER_ACCESS_TIMEOUT_MS = 3_500;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error(`${label} duurde langer dan ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
 
 function createDevBypassSession(user: User): Session {
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -184,6 +205,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfileAndRoles]);
 
   useEffect(() => {
+    const initialBypassUser = readDevBypassUser();
+    if (initialBypassUser) {
+      const bypassSession = createDevBypassSession(initialBypassUser);
+      setSession(bypassSession);
+      setUser(initialBypassUser);
+      void fetchProfileAndRoles(initialBypassUser.id)
+        .catch((error) => {
+          console.error("Failed to load user access", error);
+        })
+        .finally(() => setLoading(false));
+      return undefined;
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         const bypassUser = !session ? readDevBypassUser() : null;
@@ -197,7 +231,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Run outside the Supabase auth callback tick while keeping
           // route guards loading until roles/access are known.
           setTimeout(() => {
-            void fetchProfileAndRoles(effectiveUser.id)
+            void withTimeout(
+              fetchProfileAndRoles(effectiveUser.id),
+              USER_ACCESS_TIMEOUT_MS,
+              "Gebruikerstoegang ophalen",
+            )
               .catch((error) => {
                 console.error("Failed to load user access", error);
               })
@@ -214,22 +252,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const bypassUser = !session ? readDevBypassUser() : null;
-      const effectiveSession = session ?? (bypassUser ? createDevBypassSession(bypassUser) : null);
-      const effectiveUser = effectiveSession?.user ?? null;
+    withTimeout(supabase.auth.getSession(), AUTH_BOOT_TIMEOUT_MS, "Auth sessie ophalen")
+      .then(async ({ data: { session } }) => {
+        const bypassUser = !session ? readDevBypassUser() : null;
+        const effectiveSession = session ?? (bypassUser ? createDevBypassSession(bypassUser) : null);
+        const effectiveUser = effectiveSession?.user ?? null;
 
-      setSession(effectiveSession);
-      setUser(effectiveUser);
-      if (effectiveUser) {
-        try {
-          await fetchProfileAndRoles(effectiveUser.id);
-        } catch (error) {
-          console.error("Failed to load user access", error);
+        setSession(effectiveSession);
+        setUser(effectiveUser);
+        if (effectiveUser) {
+          try {
+            await withTimeout(
+              fetchProfileAndRoles(effectiveUser.id),
+              USER_ACCESS_TIMEOUT_MS,
+              "Gebruikerstoegang ophalen",
+            );
+          } catch (error) {
+            console.error("Failed to load user access", error);
+          }
         }
-      }
-      setLoading(false);
-    });
+      })
+      .catch((error) => {
+        const bypassUser = readDevBypassUser();
+        const bypassSession = bypassUser ? createDevBypassSession(bypassUser) : null;
+
+        console.error("Failed to initialize auth session", error);
+        setSession(bypassSession);
+        setUser(bypassSession?.user ?? null);
+      })
+      .finally(() => setLoading(false));
 
     return () => subscription.unsubscribe();
   }, [fetchProfileAndRoles]);

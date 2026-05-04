@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Receipt, Search, Plus, Eye, Download, Loader2, ArrowRight, Check, FileDown, ChevronDown, ChevronLeft, ChevronRight, FileSpreadsheet, FileCode, Wallet, AlertTriangle, CheckCircle2, FileClock, SendHorizonal } from "lucide-react";
 import { SortableHeader, type SortConfig } from "@/components/ui/SortableHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useInvoices, useCreateInvoice, useUpdateInvoiceStatus, type InvoiceLine } from "@/hooks/useInvoices";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -45,6 +45,7 @@ const statusLabels: Record<string, string> = {
 
 const filterOptions = ["alle", "concept", "verzonden", "betaald", "vervallen"] as const;
 const tableHeaderLabelClass = "text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60";
+const EMPTY_CLIENT_ORDERS: any[] = [];
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("nl-NL", {
@@ -84,6 +85,11 @@ const Facturatie = () => {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const prefillInvoice = searchParams.get("new") === "invoice";
+  const prefillClientId = searchParams.get("client_id") || "";
+  const prefillClientName = searchParams.get("client_name") || "";
+  const prefillOrderId = searchParams.get("order_id") || "";
 
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
@@ -92,23 +98,70 @@ const Facturatie = () => {
   const createInvoiceMutation = useCreateInvoice();
   const updateInvoiceStatusMutation = useUpdateInvoiceStatus();
 
-  const { data: clientOrders = [], isLoading: isLoadingClientOrders } = useQuery({
-    queryKey: ["client-uninvoiced-orders", selectedClientId],
-    enabled: !!selectedClientId,
+  useEffect(() => {
+    if (!prefillInvoice) return;
+
+    const matchedClientId = prefillClientId || clients.find((client) =>
+      prefillClientName && client.name.toLowerCase() === prefillClientName.toLowerCase()
+    )?.id || "";
+
+    setShowNewInvoice(true);
+    if (matchedClientId) setSelectedClientId(matchedClientId);
+    if (prefillOrderId) setSelectedOrderIds(new Set([prefillOrderId]));
+  }, [clients, prefillClientId, prefillClientName, prefillInvoice, prefillOrderId]);
+
+  const { data: clientOrders = EMPTY_CLIENT_ORDERS, isLoading: isLoadingClientOrders } = useQuery({
+    queryKey: ["client-uninvoiced-orders", selectedClientId, prefillOrderId, clients.length],
+    enabled: !!selectedClientId || !!prefillOrderId,
     queryFn: async () => {
       const client = clients.find((c) => c.id === selectedClientId);
-      if (!client) return [];
-      const { data, error } = await supabase
+      const selectedClientFilter = client
+        ? `client_id.eq.${selectedClientId},client_name.ilike.%${client.name}%`
+        : null;
+
+      const rows = [];
+      if (prefillOrderId) {
+        const { data: prefilledOrder, error: prefilledError } = await supabase
+          .from("orders")
+          .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, status, distance_km")
+          .eq("id", prefillOrderId)
+          .eq("status", "DELIVERED")
+          .is("invoice_id", null)
+          .maybeSingle();
+        if (prefilledError) throw prefilledError;
+        if (prefilledOrder) rows.push(prefilledOrder);
+      }
+
+      if (!selectedClientFilter) return rows;
+
+      const { data: deliveredOrders, error: deliveredError } = await supabase
         .from("orders")
         .select("id, order_number, client_name, weight_kg, quantity, unit, pickup_address, delivery_address, status, distance_km")
+        .or(selectedClientFilter)
         .eq("status", "DELIVERED")
         .is("invoice_id", null)
-        .or(`client_id.eq.${selectedClientId},client_name.ilike.%${client.name}%`)
         .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data || [];
+      if (deliveredError) throw deliveredError;
+
+      for (const order of deliveredOrders || []) {
+        if (!rows.some((row) => row.id === order.id)) rows.push(order);
+      }
+      return rows;
     },
   });
+
+  useEffect(() => {
+    if (clientOrders.length === 0) {
+      setSelectedOrderIds((prev) => (prev.size === 0 ? prev : new Set()));
+      return;
+    }
+
+    const availableOrderIds = new Set(clientOrders.map((order: any) => order.id));
+    setSelectedOrderIds((prev) => {
+      const next = new Set([...prev].filter((orderId) => availableOrderIds.has(orderId)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [clientOrders]);
 
   const { data: clientRates = [] } = useQuery({
     queryKey: ["client-rates-for-invoice", selectedClientId],
@@ -140,6 +193,14 @@ const Facturatie = () => {
     const lines: Omit<InvoiceLine, "id" | "invoice_id" | "created_at">[] = [];
     let sortOrder = 0;
     const selectedOrders = clientOrders.filter((o: any) => selectedOrderIds.has(o.id));
+
+    if (selectedOrders.length !== selectedOrderIds.size || selectedOrders.some((order: any) => order.status !== "DELIVERED")) {
+      toast.error("Factuur aanmaken geblokkeerd", {
+        description: "Alleen afgeleverde, ongefactureerde orders kunnen worden gefactureerd.",
+      });
+      setSelectedOrderIds(new Set(selectedOrders.filter((order: any) => order.status === "DELIVERED").map((order: any) => order.id)));
+      return;
+    }
 
     for (const order of selectedOrders) {
       if (clientRates.length === 0) {
@@ -963,7 +1024,7 @@ const Facturatie = () => {
                   Onverfactureerde orders
                   </label>
                   <p className="text-xs text-muted-foreground">
-                    {clientOrders.length} beschikbaar
+                    {clientOrders.length} afgeleverd beschikbaar
                   </p>
                 </div>
                 {isLoadingClientOrders ? (
@@ -978,8 +1039,8 @@ const Facturatie = () => {
                       background: "hsl(var(--gold-soft) / 0.1)",
                     }}
                   >
-                    <p className="text-sm font-medium text-foreground">Geen onverfactureerde orders voor deze klant</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Zodra er leveringen klaarstaan, kun je ze hier bundelen.</p>
+                    <p className="text-sm font-medium text-foreground">Geen afgeleverde orders om te factureren</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Facturatie start pas nadat de order is afgeleverd en nog geen factuur heeft.</p>
                   </div>
                 ) : (
                   <div

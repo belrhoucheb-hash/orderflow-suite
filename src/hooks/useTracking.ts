@@ -11,6 +11,22 @@ import type {
 import { parseRouteStops } from "@/lib/routeStops";
 import { resolveCoordinates } from "@/data/geoData";
 
+export interface TrackingOrderContext {
+  id: string;
+  order_number: number | null;
+  client_name: string | null;
+  recipient_name: string | null;
+  recipient_email: string | null;
+  recipient_phone: string | null;
+  notification_preferences: unknown;
+  time_window_start: string | null;
+  time_window_end: string | null;
+  pickup_time_window_start: string | null;
+  pickup_time_window_end: string | null;
+  delivery_time_window_start: string | null;
+  delivery_time_window_end: string | null;
+}
+
 // ─── Helpers (exported for testing) ────────────────────────────
 
 /**
@@ -70,6 +86,20 @@ export function haversineKm(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+export function distanceToRouteKm(
+  lat: number,
+  lng: number,
+  routePoints: Array<{ lat: number; lng: number }>,
+): number {
+  if (routePoints.length === 0) return 0;
+
+  let minDistance = Number.POSITIVE_INFINITY;
+  for (const point of routePoints) {
+    minDistance = Math.min(minDistance, haversineKm(lat, lng, point.lat, point.lng));
+  }
+  return Number.isFinite(minDistance) ? minDistance : 0;
+}
+
 /**
  * Calculate ETA in minutes based on remaining distance and average speed.
  * Returns 0 if speed is 0 or negative.
@@ -94,6 +124,54 @@ export function detectAlerts(
   const now = new Date();
 
   for (const status of statuses) {
+    const position = positions.find((pos) => pos.tripId === status.tripId);
+
+    if (!position) {
+      alerts.push({
+        id: `gps-missing-${status.tripId}`,
+        type: "gps_missing",
+        tripId: status.tripId,
+        message: `${status.tripLabel} heeft geen GPS-positie`,
+        severity: "warning",
+        timestamp: now.toISOString(),
+      });
+    } else {
+      if (position.source === "simulated") {
+        alerts.push({
+          id: `gps-fallback-${status.tripId}`,
+          type: "gps_missing",
+          tripId: status.tripId,
+          message: `${status.tripLabel} gebruikt fallbackpositie - controleer voertuigtracking`,
+          severity: "info",
+          timestamp: now.toISOString(),
+        });
+      }
+
+      const ageMinutes =
+        (now.getTime() - new Date(position.timestamp).getTime()) / 60_000;
+      if (position.source === "real" && ageMinutes > 10) {
+        alerts.push({
+          id: `gps-stale-${status.tripId}`,
+          type: "gps_stale",
+          tripId: status.tripId,
+          message: `${status.tripLabel} GPS is ${Math.round(ageMinutes)} minuten oud`,
+          severity: ageMinutes > 20 ? "critical" : "warning",
+          timestamp: now.toISOString(),
+        });
+      }
+
+      if ((position.deviationKm ?? 0) > 2) {
+        alerts.push({
+          id: `deviation-${status.tripId}`,
+          type: "deviation",
+          tripId: status.tripId,
+          message: `${status.tripLabel} wijkt ${position.deviationKm?.toFixed(1)} km af van de route`,
+          severity: (position.deviationKm ?? 0) > 5 ? "critical" : "warning",
+          timestamp: now.toISOString(),
+        });
+      }
+    }
+
     // Delay alert: >15 min behind schedule
     if (status.delayMinutes > 15) {
       const severity: TrackingAlertSeverity =
@@ -102,8 +180,19 @@ export function detectAlerts(
         id: `delay-${status.tripId}`,
         type: "delay",
         tripId: status.tripId,
-        message: `Rit ${status.tripId.slice(0, 8)} heeft ${status.delayMinutes} minuten vertraging`,
+        message: `${status.tripLabel} heeft ${status.delayMinutes} minuten vertraging`,
         severity,
+        timestamp: now.toISOString(),
+      });
+    }
+
+    if (status.etaWindowDeltaMinutes && status.etaWindowDeltaMinutes > 0) {
+      alerts.push({
+        id: `eta-window-${status.tripId}`,
+        type: "eta_window",
+        tripId: status.tripId,
+        message: `${status.tripLabel} ETA valt ${status.etaWindowDeltaMinutes} minuten buiten tijdvenster`,
+        severity: status.etaWindowDeltaMinutes > 20 ? "critical" : "warning",
         timestamp: now.toISOString(),
       });
     }
@@ -157,6 +246,7 @@ function simulatePositionForTrip(trip: Trip): VehiclePosition | null {
       speed: 0,
       timestamp: new Date().toISOString(),
       tripId: trip.id,
+      source: "simulated",
     };
   }
 
@@ -170,6 +260,7 @@ function simulatePositionForTrip(trip: Trip): VehiclePosition | null {
       speed: 0,
       timestamp: new Date().toISOString(),
       tripId: trip.id,
+      source: "simulated",
     };
   }
 
@@ -185,6 +276,7 @@ function simulatePositionForTrip(trip: Trip): VehiclePosition | null {
       speed: 0,
       timestamp: new Date().toISOString(),
       tripId: trip.id,
+      source: "simulated",
     };
   }
 
@@ -237,6 +329,7 @@ function simulatePositionForTrip(trip: Trip): VehiclePosition | null {
     speed,
     timestamp: new Date().toISOString(),
     tripId: trip.id,
+    source: "simulated",
   };
 }
 
@@ -280,12 +373,15 @@ export function useRealVehiclePositions(
         if (tripId && !posMap.has(tripId)) {
           posMap.set(tripId, {
             vehicleId: (row.vehicle_id as string) || "",
+            driverId: (row.driver_id as string | null) ?? null,
             lat: Number(row.lat),
             lng: Number(row.lng),
             heading: Number(row.heading) || 0,
             speed: Number(row.speed) || 0,
+            accuracy: row.accuracy == null ? null : Number(row.accuracy),
             timestamp: row.recorded_at as string,
             tripId,
+            source: "real",
           });
         }
       }
@@ -311,12 +407,15 @@ export function useRealVehiclePositions(
             if (tripId && !posMap.has(tripId)) {
               posMap.set(tripId, {
                 vehicleId,
+                driverId: (row.driver_id as string | null) ?? null,
                 lat: Number(row.lat),
                 lng: Number(row.lng),
                 heading: Number(row.heading) || 0,
                 speed: Number(row.speed) || 0,
+                accuracy: row.accuracy == null ? null : Number(row.accuracy),
                 timestamp: row.recorded_at as string,
                 tripId,
+                source: "real",
               });
             }
           }
@@ -471,6 +570,26 @@ export function useActiveTrips() {
   });
 }
 
+export function useTrackingOrderContext(orderId: string | null) {
+  return useQuery({
+    queryKey: ["tracking-order-context", orderId],
+    staleTime: 30_000,
+    enabled: !!orderId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select(
+          "id, order_number, client_name, recipient_name, recipient_email, recipient_phone, notification_preferences, time_window_start, time_window_end, pickup_time_window_start, pickup_time_window_end, delivery_time_window_start, delivery_time_window_end",
+        )
+        .eq("id", orderId!)
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data ?? null) as TrackingOrderContext | null;
+    },
+  });
+}
+
 /**
  * Vehicle positions for active trips.
  * Prefers real GPS positions from `vehicle_positions` when available,
@@ -507,7 +626,14 @@ export function useVehiclePositions(trips: Trip[]) {
         // Prefer real position when available
         const realPos = realPositions?.get(trip.id);
         if (realPos) {
-          positions.push(realPos);
+          const routePoints = getStopsWithCoords(trip).map((stop) => ({
+            lat: stop.planned_latitude!,
+            lng: stop.planned_longitude!,
+          }));
+          positions.push({
+            ...realPos,
+            deviationKm: distanceToRouteKm(realPos.lat, realPos.lng, routePoints),
+          });
         } else {
           // Fall back to simulated position
           const simPos = simulatePositionForTrip(trip);
@@ -543,10 +669,11 @@ export function useTripTrackingStatuses(
 
       // Calculate delay: compare actual progress with planned time
       let delayMinutes = 0;
-      if (currentStopIndex < totalStops) {
-        const currentStop = sortedStops[currentStopIndex];
-        if (currentStop?.planned_time) {
-          const plannedTime = new Date(currentStop.planned_time).getTime();
+      const currentStop =
+        currentStopIndex < totalStops ? sortedStops[currentStopIndex] : null;
+      if (currentStop?.planned_time) {
+        const plannedTime = new Date(currentStop.planned_time).getTime();
+        if (Number.isFinite(plannedTime)) {
           const now = Date.now();
           const diffMin = (now - plannedTime) / 60_000;
           delayMinutes = Math.max(0, Math.round(diffMin));
@@ -560,6 +687,7 @@ export function useTripTrackingStatuses(
 
       // Calculate ETA for last stop
       let eta = "";
+      let etaWindowDeltaMinutes = 0;
       const remainingStops = totalStops - currentStopIndex;
       if (remainingStops > 0) {
         const etaMinutes = remainingStops * 25; // ~25 min per remaining stop
@@ -568,10 +696,25 @@ export function useTripTrackingStatuses(
           hour: "2-digit",
           minute: "2-digit",
         });
+        if (currentStop?.planned_time) {
+          const plannedArrival = new Date(currentStop.planned_time).getTime();
+          if (Number.isFinite(plannedArrival)) {
+            etaWindowDeltaMinutes = Math.max(
+              0,
+              Math.round((etaDate.getTime() - plannedArrival) / 60_000),
+            );
+          }
+        }
       }
+
+      const tripNumber = (trip as any).trip_number ?? (trip as any).order_number;
+      const tripLabel = tripNumber
+        ? `Rit #${tripNumber}`
+        : `Rit ${trip.id.slice(0, 8)}`;
 
       return {
         tripId: trip.id,
+        tripLabel,
         vehicleId: trip.vehicle_id,
         driverName: driverMap.get(trip.driver_id || "") || "Onbekend",
         currentStopIndex,
@@ -579,6 +722,7 @@ export function useTripTrackingStatuses(
         status,
         eta,
         delayMinutes,
+        etaWindowDeltaMinutes,
         lastUpdate: new Date().toISOString(),
       };
     });

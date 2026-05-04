@@ -1,15 +1,16 @@
 // OAuth-callback voor Exact Online.
 //
-// De UI start de flow door de gebruiker naar Exact's authorize-URL te
-// sturen met state=tenant_id en redirect_uri naar deze function. Exact
-// roept ons hier terug met ?code=... en ?state=tenant_id. Wij ruilen
-// de code voor access+refresh-token en slaan die op in
-// integration_credentials.
+// De UI start de flow via exact-oauth-start. Die function bouwt Exact's
+// authorize-URL met een HMAC-signed state en redirect_uri naar deze callback.
+// Exact roept ons hier terug met ?code=... en ?state=<signed_state>. Wij
+// verifieren de state, ruilen de code voor access+refresh-token en slaan die
+// op in integration_credentials.
 //
 // Returnt een HTML-pagina die de UI signaleert klaar te zijn (postMessage
 // of window.close), zodat de gebruiker terugvalt naar Settings.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { verifyOAuthState } from "../_shared/oauth-state.ts";
 
 const EXACT_TOKEN = "https://start.exactonline.nl/api/oauth2/token";
 
@@ -26,7 +27,14 @@ Deno.serve(async (req) => {
     return htmlPage("Ongeldige callback (code of state ontbreekt)", false);
   }
 
-  const tenantId = state;
+  const verified = await verifyOAuthState(state);
+  if (!verified) {
+    return htmlPage(
+      "Ongeldige of verlopen state-parameter (CSRF-bescherming). Start de koppeling opnieuw vanuit Settings.",
+      false,
+    );
+  }
+  const tenantId = verified.tenantId;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -107,6 +115,14 @@ Deno.serve(async (req) => {
 
 function htmlPage(message: string, success: boolean): Response {
   const color = success ? "#0f766e" : "#b91c1c";
+  const appOrigin = (Deno.env.get("APP_ORIGIN") ?? "").trim();
+  const postScript = appOrigin
+    ? `<script>
+    if (window.opener) {
+      window.opener.postMessage({ type: 'orderflow-exact-callback', success: ${success} }, ${JSON.stringify(appOrigin)});
+    }
+  </script>`
+    : "";
   const html = `<!doctype html>
 <html lang="nl"><head><meta charset="utf-8"><title>OrderFlow Exact-koppeling</title>
 <style>
@@ -119,11 +135,7 @@ function htmlPage(message: string, success: boolean): Response {
   <h1>${success ? "Gelukt" : "Mislukt"}</h1>
   <p>${escapeHtml(message)}</p>
   <button onclick="window.close()">Tabblad sluiten</button>
-  <script>
-    if (window.opener) {
-      window.opener.postMessage({ type: 'orderflow-exact-callback', success: ${success} }, '*');
-    }
-  </script>
+  ${postScript}
 </body></html>`;
   return new Response(html, {
     status: 200,

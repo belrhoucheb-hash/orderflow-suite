@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 
 const DEV_BYPASS_STORAGE_KEY = "debug_bypass";
-const DEV_BYPASS_EMAIL = "test@orderflow.nl";
-const DEV_BYPASS_PASSWORD = "Test1234!";
+const DEV_BYPASS_EMAIL = import.meta.env.DEV ? "test@orderflow.nl" : "";
+const DEV_BYPASS_PASSWORD = import.meta.env.DEV ? "Test1234!" : "";
 
 type LoginPolicy = {
   locked_until?: string | null;
