@@ -1419,7 +1419,6 @@ const NewOrder = () => {
     });
 
     warehouses
-      .filter((warehouse) => warehouse.default_stop_role === "pickup" || warehouse.warehouse_type !== "IMPORT")
       .forEach((warehouse) => {
         const value = bestEffortAddressValue(warehouse.address);
         const composed = composeAddressString(value, { includeLocality: true }) || warehouse.address;
@@ -1536,7 +1535,6 @@ const NewOrder = () => {
     });
 
     warehouses
-      .filter((warehouse) => warehouse.default_stop_role === "delivery" || warehouse.warehouse_type !== "EXPORT")
       .forEach((warehouse) => {
         const value = bestEffortAddressValue(warehouse.address);
         const composed = composeAddressString(value, { includeLocality: true }) || warehouse.address;
