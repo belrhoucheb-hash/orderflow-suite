@@ -79,15 +79,15 @@ export function MijnWeekView({ driverId }: Props) {
 
   return (
     <div className="space-y-4">
-      <Card className="rounded-2xl border-none shadow-sm bg-white ring-1 ring-slate-200">
+      <Card className="card--luxe border-[hsl(var(--gold)/0.18)] p-0">
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <div className="h-9 w-9 rounded-full bg-[hsl(var(--gold-soft)/0.6)] text-[hsl(var(--gold-deep))] flex items-center justify-center shrink-0">
                 <Calendar className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">Mijn week</p>
+                <p className="text-sm font-semibold text-slate-900 font-display">Mijn week</p>
                 <p className="text-xs text-slate-500 truncate">{headerLabel}</p>
               </div>
             </div>
@@ -95,7 +95,7 @@ export function MijnWeekView({ driverId }: Props) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 rounded-xl"
+                className="btn-luxe btn-luxe--secondary h-9 w-9 rounded-xl"
                 onClick={goPrevious}
                 aria-label="Vorige week"
               >
@@ -104,7 +104,7 @@ export function MijnWeekView({ driverId }: Props) {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 rounded-xl text-xs font-semibold"
+                className="btn-luxe btn-luxe--secondary h-9 rounded-xl text-xs font-semibold px-3"
                 onClick={goToday}
               >
                 Vandaag
@@ -112,7 +112,7 @@ export function MijnWeekView({ driverId }: Props) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 rounded-xl"
+                className="btn-luxe btn-luxe--secondary h-9 w-9 rounded-xl"
                 onClick={goNext}
                 aria-label="Volgende week"
               >
@@ -156,22 +156,24 @@ export function MijnWeekView({ driverId }: Props) {
             return (
               <Card
                 key={date}
-                className={`rounded-2xl border-none shadow-sm bg-white ring-1 ${
-                  isToday ? "ring-primary/40 ring-2" : "ring-slate-200"
+                className={`card--luxe p-0 ${
+                  isToday
+                    ? "border-[hsl(var(--gold)/0.55)] bg-[hsl(var(--gold-soft)/0.28)]"
+                    : "border-[hsl(var(--gold)/0.18)]"
                 }`}
               >
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 capitalize leading-tight">
+                      <p className="text-sm font-semibold text-slate-900 capitalize leading-tight font-display">
                         {dayName}
                         {isToday && (
-                          <span className="ml-2 text-xs text-primary font-medium">
+                          <span className="ml-2 text-xs text-[hsl(var(--gold-deep))] font-medium">
                             (vandaag)
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-slate-500 capitalize mt-0.5">
+                      <p className="text-xs text-slate-500 capitalize mt-0.5 tabular-nums">
                         {dayDateLabel}
                       </p>
                     </div>
@@ -191,7 +193,7 @@ export function MijnWeekView({ driverId }: Props) {
                       {startTime && (
                         <div className="flex items-center gap-2 text-slate-700">
                           <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          <span>Start om {startTime} uur</span>
+                          <span>Start om <span className="tabular-nums font-display">{startTime}</span> uur</span>
                         </div>
                       )}
                       {vehicle && (
