@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Save, X, Check, Printer, Download, Mail, Plus, Trash2, Clock, Route, ChevronDown, Sparkles, ArrowRight, CircleAlert, CheckCircle2, ClipboardPaste, Truck, Search, Pencil } from "lucide-react";
-import { AddressAutocomplete as LegacyAddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   AddressAutocomplete,
   EMPTY_ADDRESS,
@@ -851,6 +850,12 @@ const NewOrder = () => {
   const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>("idle");
   const [draftSaveError, setDraftSaveError] = useState<string | null>(null);
   const [serverBaselineSignature, setServerBaselineSignature] = useState<string | null>(null);
+  const [remoteDraftConflict, setRemoteDraftConflict] = useState<{
+    remoteUpdatedAt: string;
+    remoteUpdatedBy: string | null;
+    detectedAt: string;
+  } | null>(null);
+  const [forceOverwriteOpen, setForceOverwriteOpen] = useState(false);
   const serverDraftCreateStartedRef = useRef(false);
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pickupLookup, setPickupLookup] = useState("");
@@ -1419,7 +1424,6 @@ const NewOrder = () => {
     });
 
     warehouses
-      .filter((warehouse) => warehouse.default_stop_role === "pickup" || warehouse.warehouse_type !== "IMPORT")
       .forEach((warehouse) => {
         const value = bestEffortAddressValue(warehouse.address);
         const composed = composeAddressString(value, { includeLocality: true }) || warehouse.address;
@@ -1536,7 +1540,6 @@ const NewOrder = () => {
     });
 
     warehouses
-      .filter((warehouse) => warehouse.default_stop_role === "delivery" || warehouse.warehouse_type !== "EXPORT")
       .forEach((warehouse) => {
         const value = bestEffortAddressValue(warehouse.address);
         const composed = composeAddressString(value, { includeLocality: true }) || warehouse.address;
@@ -2118,7 +2121,6 @@ const NewOrder = () => {
     });
   }, [routeMapStops, updateFreightLineAddress]);
   const requiredTextClass = (missing: boolean) => missing ? "text-red-600" : "text-foreground";
-  const previewTextClass = (missing: boolean) => missing ? "text-red-600" : "text-foreground";
   const requiredFieldClass = (missing: boolean) => missing ? "border-red-200 bg-red-50/40 placeholder:text-red-500" : "";
   const wizardMissingLabel: Record<string, string> = {
     klant: "Klant kiezen",
@@ -2359,7 +2361,8 @@ const NewOrder = () => {
         return;
       }
       setWizardStep("route");
-      setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+      setRouteManualBack(false);
+      setRouteActiveQuestion(1);
       return;
     }
     if (wizardStep === "route") {
@@ -2402,9 +2405,9 @@ const NewOrder = () => {
         return;
       }
     }
-    if (wizardStep === "route" && routeActiveQuestion < routeSuggestedQuestion) {
+    if (wizardStep === "route" && routeActiveQuestion < 4) {
       setRouteManualBack(false);
-      setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+      setRouteActiveQuestion((routeActiveQuestion + 1) as 1 | 2 | 3 | 4);
       return;
     }
     if (wizardStep === "cargo" && cargoActiveQuestion < cargoSuggestedQuestion) {
@@ -2419,7 +2422,7 @@ const NewOrder = () => {
       if (current === "financial") return "review";
       return "review";
     });
-  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, selectedContactId, transportFlowChoice, wizardStep]);
+  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, selectedContactId, transportFlowChoice, wizardStep]);
 
   const goToPreviousWizardStep = useCallback(() => {
     if (wizardStep === "intake" && intakeActiveQuestion > 1) {
@@ -3019,6 +3022,25 @@ const NewOrder = () => {
     return "een andere gebruiker";
   }, [user?.id]);
 
+  const handleLoadRemoteDraft = useCallback(() => {
+    skipDirtyGuardRef.current = true;
+    if (draftStorageKey) window.localStorage.removeItem(draftStorageKey);
+    window.location.reload();
+  }, [draftStorageKey]);
+
+  const handleShowConflictDetails = useCallback(() => {
+    if (!remoteDraftConflict) return;
+    const when = new Date(remoteDraftConflict.remoteUpdatedAt).toLocaleString("nl-NL", {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+    });
+    toast.info(`Aangepast op ${when}`, {
+      description: `Door ${describeDraftEditor(remoteDraftConflict.remoteUpdatedBy)}. Veld-voor-veld vergelijking volgt in latere versie.`,
+    });
+  }, [describeDraftEditor, remoteDraftConflict]);
+
   const upsertServerDraft = useCallback(async (nextStatus: ServerDraftLifecycleStatus = "DRAFT", committedShipmentId?: string | null) => {
     if (!tenant?.id || initialClientId || fromOrderId) return null;
     let draftId = serverDraftId;
@@ -3087,6 +3109,13 @@ const NewOrder = () => {
         setDraftSaveStatus("conflict");
         const message = `Deze order is zojuist aangepast door ${describeDraftEditor(latestDraft.updated_by)}.`;
         setDraftSaveError(message);
+        if (latestDraft.updated_at) {
+          setRemoteDraftConflict({
+            remoteUpdatedAt: latestDraft.updated_at,
+            remoteUpdatedBy: latestDraft.updated_by ?? null,
+            detectedAt: new Date().toISOString(),
+          });
+        }
         throw new Error(message);
       }
       if (serverDraftStorageKey) window.localStorage.removeItem(serverDraftStorageKey);
@@ -3127,6 +3156,29 @@ const NewOrder = () => {
     user?.id,
     validationSnapshot,
   ]);
+
+  const handleForceLocalOverwrite = useCallback(async () => {
+    if (!remoteDraftConflict) return;
+    setForceOverwriteOpen(false);
+    setServerDraftUpdatedAt(remoteDraftConflict.remoteUpdatedAt);
+    setRemoteDraftConflict(null);
+    setDraftSaveStatus("saving");
+    setDraftSaveError(null);
+    try {
+      await upsertServerDraft("DRAFT");
+      setDraftSaveStatus("saved");
+      setLastDraftSavedAt(new Date().toISOString());
+      toast.success("Jouw versie is opgeslagen", {
+        description: "De serverversie is overschreven met jouw lokale wijzigingen.",
+      });
+    } catch (error) {
+      console.warn("[NewOrder] geforceerd opslaan faalde:", error);
+      const message = error instanceof Error ? error.message : "Opslaan mislukt - probeer opnieuw.";
+      setDraftSaveStatus("error");
+      setDraftSaveError(message);
+      toast.error("Geforceerd opslaan mislukt", { description: message });
+    }
+  }, [remoteDraftConflict, upsertServerDraft]);
 
   useEffect(() => {
     if (!tenant?.id || initialClientId || fromOrderId || draftIdParam || !serverDraftStorageKey || serverDraftReady || serverDraftCreateStartedRef.current) return;
@@ -3245,6 +3297,7 @@ const NewOrder = () => {
   useEffect(() => {
     if (!serverDraftReady || !serverDraftId || !draftRestored || !prefillReady || initialClientId || fromOrderId) return;
     if (serverBaselineSignature === formSignature) return;
+    if (remoteDraftConflict) return;
     if (draftAutosaveTimerRef.current) window.clearTimeout(draftAutosaveTimerRef.current);
     draftAutosaveTimerRef.current = window.setTimeout(() => {
       setDraftSaveStatus("saving");
@@ -3274,6 +3327,7 @@ const NewOrder = () => {
     fromOrderId,
     initialClientId,
     prefillReady,
+    remoteDraftConflict,
     serverDraftId,
     serverDraftReady,
     serverBaselineSignature,
@@ -3430,6 +3484,11 @@ const NewOrder = () => {
           const message = `Deze order is zojuist aangepast door ${describeDraftEditor(draftRow.updated_by)}.`;
           setDraftSaveStatus("conflict");
           setDraftSaveError(message);
+          setRemoteDraftConflict({
+            remoteUpdatedAt: draftRow.updated_at,
+            remoteUpdatedBy: draftRow.updated_by ?? null,
+            detectedAt: new Date().toISOString(),
+          });
           toast.error(message, {
             description: "Gereedmelden is gestopt zodat we geen oudere lokale versie committen.",
           });
@@ -4481,7 +4540,7 @@ const NewOrder = () => {
     }
     if (step === "route") {
       setRouteManualBack(true);
-      setRouteActiveQuestion((routeSuggestedQuestion || 1) as 1 | 2 | 3 | 4);
+      setRouteActiveQuestion(1);
       return;
     }
     if (step === "cargo") {
@@ -4490,7 +4549,7 @@ const NewOrder = () => {
       return;
     }
     setReviewActiveQuestion(2);
-  }, [cargoSuggestedQuestion, routeSuggestedQuestion]);
+  }, [cargoSuggestedQuestion]);
 
   const renderFlowModules = (variant: "side" | "top" = "side") => {
     const isSide = variant === "side";
@@ -4745,7 +4804,7 @@ const NewOrder = () => {
                 >
                   <span className={cn("absolute -left-6 top-1 h-3 w-3 rounded-full ring-4", stop.missingAddress || stop.issue ? "bg-red-500 ring-red-100" : "bg-[hsl(var(--gold))] ring-[hsl(var(--gold-soft))]")} />
                   <div className="text-xs font-medium text-muted-foreground">{stop.label}</div>
-                  <div className={cn("mt-0.5 text-sm font-medium", previewTextClass(stop.missingAddress))}>{stop.line?.locatie || stop.fallback}</div>
+                  <div className={cn("mt-0.5 text-sm font-medium", requiredTextClass(stop.missingAddress))}>{stop.line?.locatie || stop.fallback}</div>
                   {stop.issue && (
                     <div className="mt-1 text-xs font-medium text-red-600">{stop.issue.message}</div>
                   )}
@@ -4761,8 +4820,8 @@ const NewOrder = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.20)] p-3">
               <div className="text-[11px] font-medium text-muted-foreground">Lading</div>
-              <div className={cn("mt-1 text-sm font-semibold", previewTextClass(missingQuantity))}>{cargoTotals.totAantal || 0} {cargoTotals.primaryUnit || "eenheden"}</div>
-              <div className={cn("text-xs", previewTextClass(missingWeight))}>{cargoTotals.totGewicht || 0} kg</div>
+              <div className={cn("mt-1 text-sm font-semibold", requiredTextClass(missingQuantity))}>{cargoTotals.totAantal || 0} {cargoTotals.primaryUnit || "eenheden"}</div>
+              <div className={cn("text-xs", requiredTextClass(missingWeight))}>{cargoTotals.totGewicht || 0} kg</div>
             </div>
             <div className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.20)] p-3">
               <div className="text-[11px] font-medium text-muted-foreground">Voertuig</div>
@@ -4856,6 +4915,65 @@ const NewOrder = () => {
 
   return (
     <div className="-m-6 min-h-[calc(100vh-3rem)] flex flex-col bg-[#f6f4f0]">
+      {remoteDraftConflict && (
+        <div className="border-b border-amber-300/70 bg-amber-50/95">
+          <div className="mx-auto flex max-w-[1120px] flex-col gap-3 px-6 py-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+              <div className="text-sm text-amber-900">
+                <div className="font-semibold">Serverversie is nieuwer dan je lokale wijzigingen</div>
+                <div className="text-xs text-amber-800/85">
+                  Aangepast door {describeDraftEditor(remoteDraftConflict.remoteUpdatedBy)} op{" "}
+                  {new Date(remoteDraftConflict.remoteUpdatedAt).toLocaleString("nl-NL", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    day: "2-digit",
+                    month: "2-digit",
+                  })}
+                  . Autosave staat gepauzeerd tot je een keuze maakt.
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleShowConflictDetails}
+                className="inline-flex h-8 items-center justify-center rounded-full border border-amber-400/70 bg-white px-3 text-xs font-medium text-amber-900 transition hover:bg-amber-100"
+              >
+                Verschillen tonen
+              </button>
+              <button
+                type="button"
+                onClick={() => setForceOverwriteOpen(true)}
+                className="inline-flex h-8 items-center justify-center rounded-full border border-red-300 bg-white px-3 text-xs font-medium text-red-700 transition hover:bg-red-50"
+              >
+                Mijn versie forceren
+              </button>
+              <button
+                type="button"
+                onClick={handleLoadRemoteDraft}
+                className="inline-flex h-8 items-center justify-center rounded-full bg-amber-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-700"
+              >
+                Hun versie laden
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <AlertDialog open={forceOverwriteOpen} onOpenChange={setForceOverwriteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Serverversie overschrijven?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Je lokale wijzigingen overschrijven de versie die {describeDraftEditor(remoteDraftConflict?.remoteUpdatedBy ?? null)} zojuist heeft opgeslagen. Deze actie kan niet ongedaan worden gemaakt.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { void handleForceLocalOverwrite(); }}>Ja, overschrijven</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* ── Header ── */}
       <div className="relative shrink-0">
         <span
