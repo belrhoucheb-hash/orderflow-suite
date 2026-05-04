@@ -626,9 +626,28 @@ function shouldLearnAlias(alias: string, resolvedAddress: string): boolean {
   return normalizedAlias !== normalizeLookup(resolvedAddress);
 }
 
-function bestEffortAddressValue(address: string | null | undefined, fallbackCountry = "NL"): AddressValue {
-  if (!address) return { ...EMPTY_ADDRESS, country: fallbackCountry };
-  const trimmed = address.trim();
+function addressTextFromUnknown(address: unknown): string {
+  if (typeof address === "string") return address.trim();
+  if (!address || typeof address !== "object") return "";
+
+  const record = address as Record<string, unknown>;
+  if (typeof record.display === "string" && record.display.trim()) {
+    return record.display.trim();
+  }
+
+  return [
+    [record.street, record.house_number, record.house_number_suffix].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    [record.zipcode, record.city].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    typeof record.country === "string" ? record.country : "",
+  ]
+    .filter((part) => part.trim())
+    .join(", ")
+    .trim();
+}
+
+function bestEffortAddressValue(address: unknown, fallbackCountry = "NL"): AddressValue {
+  const trimmed = addressTextFromUnknown(address);
+  if (!trimmed) return { ...EMPTY_ADDRESS, country: fallbackCountry };
   const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
   const streetPart = parts[0] ?? trimmed;
   const streetMatch = streetPart.match(/^(.*?)(?:\s+(\d+[A-Za-z]?))(?:\s+([A-Za-z0-9-]+))?$/);
@@ -646,6 +665,13 @@ function bestEffortAddressValue(address: string | null | undefined, fallbackCoun
     lat: null,
     lng: null,
     coords_manual: false,
+  };
+}
+
+function sanitizeFreightLine(line: FreightLine): FreightLine {
+  return {
+    ...line,
+    locatie: addressTextFromUnknown(line.locatie),
   };
 }
 
@@ -2531,7 +2557,7 @@ const NewOrder = () => {
         if (parsed.quantity) setQuantity(parsed.quantity);
         if (parsed.weightKg) setWeightKg(parsed.weightKg);
         if (Array.isArray(parsed.cargoRows) && parsed.cargoRows.length > 0) setCargoRows(parsed.cargoRows);
-        if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines);
+        if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines.map(sanitizeFreightLine));
         if (parsed.pickupAddr) setPickupAddr({ ...EMPTY_ADDRESS, ...parsed.pickupAddr });
         if (parsed.deliveryAddr) setDeliveryAddr({ ...EMPTY_ADDRESS, ...parsed.deliveryAddr });
         if (typeof parsed.klepNodig === "boolean") setKlepNodig(parsed.klepNodig);
@@ -2603,7 +2629,7 @@ const NewOrder = () => {
       if (parsed.quantity) setQuantity(parsed.quantity);
       if (parsed.weightKg) setWeightKg(parsed.weightKg);
       if (Array.isArray(parsed.cargoRows) && parsed.cargoRows.length > 0) setCargoRows(parsed.cargoRows);
-      if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines);
+      if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines.map(sanitizeFreightLine));
       if (parsed.pickupAddr) setPickupAddr({ ...EMPTY_ADDRESS, ...parsed.pickupAddr });
       if (parsed.deliveryAddr) setDeliveryAddr({ ...EMPTY_ADDRESS, ...parsed.deliveryAddr });
       if (typeof parsed.klepNodig === "boolean") setKlepNodig(parsed.klepNodig);
@@ -3832,19 +3858,21 @@ const NewOrder = () => {
       setKlepNodig(true);
     }
     if (last.pickup_address || last.delivery_address) {
+      const pickupAddress = addressTextFromUnknown(last.pickup_address);
+      const deliveryAddress = addressTextFromUnknown(last.delivery_address);
       if (last.pickup_address) {
-        setPickupAddr(bestEffortAddressValue(last.pickup_address, prefillClient.country || "NL"));
+        setPickupAddr(bestEffortAddressValue(pickupAddress, prefillClient.country || "NL"));
       }
       if (last.delivery_address) {
-        setDeliveryAddr(bestEffortAddressValue(last.delivery_address, prefillClient.country || "NL"));
+        setDeliveryAddr(bestEffortAddressValue(deliveryAddress, prefillClient.country || "NL"));
       }
       setFreightLines((prev) =>
         prev.map((l) => {
-          if (l.activiteit === "Laden" && last.pickup_address) {
-            return { ...l, locatie: last.pickup_address };
+          if (l.activiteit === "Laden" && pickupAddress) {
+            return { ...l, locatie: pickupAddress };
           }
-          if (l.activiteit === "Lossen" && last.delivery_address) {
-            return { ...l, locatie: last.delivery_address };
+          if (l.activiteit === "Lossen" && deliveryAddress) {
+            return { ...l, locatie: deliveryAddress };
           }
           return l;
         }),
@@ -3933,19 +3961,21 @@ const NewOrder = () => {
         setKlepNodig(true);
       }
       if (src.pickup_address || src.delivery_address) {
+        const pickupAddress = addressTextFromUnknown(src.pickup_address);
+        const deliveryAddress = addressTextFromUnknown(src.delivery_address);
         if (src.pickup_address) {
-          setPickupAddr(bestEffortAddressValue(src.pickup_address));
+          setPickupAddr(bestEffortAddressValue(pickupAddress));
         }
         if (src.delivery_address) {
-          setDeliveryAddr(bestEffortAddressValue(src.delivery_address));
+          setDeliveryAddr(bestEffortAddressValue(deliveryAddress));
         }
         setFreightLines((prev) =>
           prev.map((l) => {
-            if (l.activiteit === "Laden" && src.pickup_address) {
-              return { ...l, locatie: src.pickup_address };
+            if (l.activiteit === "Laden" && pickupAddress) {
+              return { ...l, locatie: pickupAddress };
             }
-            if (l.activiteit === "Lossen" && src.delivery_address) {
-              return { ...l, locatie: src.delivery_address };
+            if (l.activiteit === "Lossen" && deliveryAddress) {
+              return { ...l, locatie: deliveryAddress };
             }
             return l;
           }),
