@@ -314,7 +314,7 @@ describe("NewOrder", () => {
     expect(document.body.textContent).toBeTruthy();
   });
 
-  it("moves from client question to contact, reference and then route", async () => {
+  it("moves from client question to contact, reference, routeflow and then route", async () => {
     const user = userEvent.setup();
     renderNewOrder();
 
@@ -331,6 +331,12 @@ describe("NewOrder", () => {
       expect(screen.getByText(/Welke referentie hoort bij deze order/i)).toBeInTheDocument();
     });
     await user.click(screen.getAllByRole("button", { name: /Geen referentie/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Is dit export, import of direct A-B/i)).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Direct/i }));
+    await user.click(screen.getByRole("button", { name: /Plan route/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Waar wordt de lading opgehaald/i)).toBeInTheDocument();
