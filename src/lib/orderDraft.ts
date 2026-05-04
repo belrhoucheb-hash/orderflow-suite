@@ -36,6 +36,8 @@ export interface OrderDraftStop {
   date?: string | null;
   timeFrom?: string | null;
   timeTo?: string | null;
+  vehicleTypeId?: string | null;
+  vehicleTypeLabel?: string | null;
 }
 
 export interface OrderDraftCargoLine {
@@ -275,6 +277,10 @@ export function validateOrderDraft(draft: OrderDraft): OrderReadinessResult {
       warnings.push(issue("WARNING", `delivery-date-${stop.id}`, `${stop.label} zonder moment`, "Flexibel toegestaan, maar handig voor planning en ETA.", "time"));
     }
   });
+  const stopVehicleTypes = Array.from(new Set(sortedStops.map((stop) => stop.vehicleTypeLabel).filter(Boolean)));
+  if (stopVehicleTypes.length > 1) {
+    warnings.push(issue("WARNING", "stop-vehicle-conflict", "Stop-eisen verschillen", `Controleer voertuigtype per adres: ${stopVehicleTypes.join(", ")}.`, "transport"));
+  }
   if (!draft.contactName) {
     warnings.push(issue("WARNING", "contactpersoon", "Geen contactpersoon gekoppeld", "Mag door als concept, maar blijft zichtbaar voor planning.", "client"));
   }
