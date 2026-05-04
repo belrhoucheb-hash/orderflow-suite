@@ -1436,6 +1436,41 @@ const NewOrder = () => {
   ]);
   const [cargoSameDimensions, setCargoSameDimensions] = useState(true);
 
+  useEffect(() => {
+    setCargoRows(prev => {
+      const first = prev[0] ?? { id: "1", aantal: "", eenheid: "Pallets", gewicht: "", lengte: "", breedte: "", hoogte: "", stapelbaar: true, adr: "", omschrijving: "" };
+      const unitCount = Math.max(1, Math.min(50, parseInt(first.aantal || quantity || "1", 10) || 1));
+
+      if (cargoSameDimensions) {
+        if (prev.length === 1) return prev;
+        const totalAantal = prev.reduce((sum, row) => sum + (parseInt(row.aantal, 10) || 0), 0) || unitCount;
+        return [{
+          ...first,
+          aantal: String(totalAantal),
+          gewicht: first.gewicht || prev.find(row => row.gewicht)?.gewicht || "",
+        }];
+      }
+
+      if (prev.length === unitCount && prev.every(row => row.aantal === "1")) return prev;
+      return Array.from({ length: unitCount }, (_, index) => {
+        const existing = prev[index];
+        return {
+          ...(existing ?? first),
+          id: existing?.id ?? crypto.randomUUID(),
+          aantal: "1",
+          eenheid: first.eenheid || existing?.eenheid || "Pallets",
+          gewicht: index === 0 ? (existing?.gewicht || first.gewicht || "") : (existing?.gewicht || ""),
+          lengte: existing?.lengte || (index === 0 ? first.lengte : ""),
+          breedte: existing?.breedte || (index === 0 ? first.breedte : ""),
+          hoogte: existing?.hoogte || (index === 0 ? first.hoogte : ""),
+          stapelbaar: existing?.stapelbaar ?? first.stapelbaar ?? true,
+          adr: existing?.adr || "",
+          omschrijving: existing?.omschrijving || "",
+        };
+      });
+    });
+  }, [cargoSameDimensions, quantity]);
+
   const addCargoRow = () => {
     setCargoRows(prev => {
       const template = cargoSameDimensions ? prev[0] : null;
@@ -1702,6 +1737,11 @@ const NewOrder = () => {
 
     return stops;
   }, [freightLines]);
+  const locationDisplay = (line: FreightLine | undefined, fallbackLabel: string, fallbackAddress: string) => {
+    const address = line?.locatie?.trim() || fallbackAddress;
+    const company = line?.companyName?.trim() || (line?.locatie ? clientName.trim() : "") || fallbackLabel;
+    return { company, address };
+  };
   const pickupRouteIssue = routeRuleIssues.find((issue) => issue.lineId === pickupLine?.id);
   const primaryDeliveryRouteIssue = routeRuleIssues.find((issue) => issue.lineId === deliveryLine?.id && issue.key !== "route_duplicate");
   const isMultiLegRoute = deliveryStops.length > 1;
@@ -1890,7 +1930,9 @@ const NewOrder = () => {
         : missingDeliveryTimeWindow
           ? 4
           : routeQuestionForIssue(routeRuleIssues[0]);
-  const cargoHasDimensions = cargoRows.some((row) => row.lengte && row.breedte && row.hoogte);
+  const cargoHasDimensions = cargoSameDimensions
+    ? Boolean(cargoRows[0]?.lengte && cargoRows[0]?.breedte && cargoRows[0]?.hoogte)
+    : cargoRows.length > 0 && cargoRows.every((row) => row.lengte && row.breedte && row.hoogte);
   const cargoSuggestedQuestion = missingQuantity ? 1 : !cargoHasDimensions ? 2 : missingWeight ? 3 : 4;
 
   useEffect(() => {
@@ -3077,6 +3119,8 @@ const NewOrder = () => {
       if (routeRequiresTemperature) reqs.push("temperatuur");
       if (routeRequiresPhotos) reqs.push("fotos_verplicht");
       const distanceKm = totalRouteDistanceKm(routeMapStops);
+      const resolvedTransportType = transportType || suggestedTransportType || null;
+      const resolvedVehicleType = voertuigtype || suggestedVehicleType || null;
 
       const booking: BookingInput = {
         pickup_address: pickupLine?.locatie || null,
@@ -3086,7 +3130,7 @@ const NewOrder = () => {
         status: readinessStatus,
         client_name: clientName.trim(),
         client_id: clientId,
-        transport_type: transportType || null,
+        transport_type: resolvedTransportType,
         afdeling: afdeling || null,
         distance_km: distanceKm,
         weight_kg: weightKg ? parseInt(weightKg) : null,
@@ -3103,10 +3147,10 @@ const NewOrder = () => {
         pricing: pricingPayload.details,
         // §25 Shipment-level velden
         contact_person: contactpersoon || null,
-        vehicle_type: voertuigtype || null,
+        vehicle_type: resolvedVehicleType,
         client_reference: klantReferentie.trim() || null,
         mrn_document: mrnDoc.trim() || null,
-        requires_tail_lift: klepNodig,
+        requires_tail_lift: klepNodig || routeRequiresTailLift,
         pmt: pmtPayload,
         cargo: cargoPayload.length > 0 ? cargoPayload : null,
         // Per-leg detail
@@ -3661,16 +3705,16 @@ const NewOrder = () => {
   const renderLocationOperationalDetails = (line: FreightLine | undefined, title: string) => {
     if (!line) return null;
     return (
-      <div className="mt-4 rounded-2xl border border-[hsl(var(--gold)_/_0.18)] bg-[hsl(var(--gold-soft)_/_0.14)] p-4">
-        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mt-5 rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white p-4 shadow-[0_18px_44px_-38px_hsl(var(--gold-deep)_/_0.55)]">
+        <div className="mb-4 flex flex-col gap-2 border-b border-[hsl(var(--gold)_/_0.12)] pb-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]">
-              Locatiegegevens
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+              Adresboek
             </div>
             <div className="mt-1 text-sm font-semibold text-foreground">{title}</div>
           </div>
-          <div className="text-xs text-muted-foreground">
-            Wordt opgeslagen in adresboek en meegegeven aan planning/chauffeur.
+          <div className="max-w-[16rem] text-right text-[11px] leading-5 text-muted-foreground">
+            Bij aanmaken wordt dit adres bijgewerkt in het adresboek.
           </div>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -3693,38 +3737,6 @@ const NewOrder = () => {
             />
           </div>
         </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          {[
-            ["requiresTailLift", "Laadklep nodig"],
-            ["temperatureControlled", "Temperatuurgevoelig"],
-            ["photoRequired", "Foto's verplicht"],
-          ].map(([field, label]) => (
-            <label
-              key={field}
-              className="flex min-h-12 items-center gap-3 rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white px-4 py-3 text-sm font-medium text-foreground shadow-[0_12px_30px_-28px_hsl(var(--gold-deep)_/_0.55)]"
-            >
-              <input
-                type="checkbox"
-                checked={Boolean(line[field as keyof FreightLine])}
-                onChange={(e) => updateFreightLine(line.id, field as keyof FreightLine, e.target.checked as never)}
-                className="h-4 w-4 rounded border-[hsl(var(--gold)_/_0.35)] text-[hsl(var(--gold-deep))]"
-              />
-              <span>{label}</span>
-            </label>
-          ))}
-        </div>
-        <div className="mt-4">
-          <label className={flowLabelClass}>Instructies voor chauffeur</label>
-          <Textarea
-            value={line.driverInstructions || line.opmerkingen || ""}
-            onChange={(e) => {
-              updateFreightLine(line.id, "driverInstructions", e.target.value);
-              updateFreightLine(line.id, "opmerkingen", e.target.value);
-            }}
-            placeholder="Bijv. melden bij dock 4, foto's maken van zending, temperatuur controleren..."
-            className="min-h-[88px] rounded-2xl border-[hsl(var(--gold)_/_0.22)] bg-white px-4 py-3 text-sm shadow-[inset_0_1px_0_hsl(var(--gold)_/_0.10)]"
-          />
-        </div>
       </div>
     );
   };
@@ -3744,24 +3756,30 @@ const NewOrder = () => {
     value: string,
     onEdit: () => void,
     mutedValue?: string,
-  ) => (
-    <button
-      type="button"
-      onClick={onEdit}
-      className="flex w-full animate-in fade-in slide-in-from-top-1 items-center justify-between gap-3 rounded-2xl bg-white/90 px-4 py-3 text-left shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.18),0_14px_36px_-32px_hsl(var(--gold-deep)_/_0.58)] transition hover:bg-[hsl(var(--gold-soft)_/_0.18)] focus:outline-none focus:ring-4 focus:ring-[hsl(var(--gold)_/_0.16)]"
-    >
-      <span className="flex min-w-0 items-center gap-3">
-        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold))] text-[#17130b] shadow-[0_6px_18px_-10px_hsl(var(--gold-deep)_/_0.75)]">
-          <Check className="h-3 w-3" />
+  ) => {
+    const [primaryValue, secondaryValue] = (value || mutedValue || "Ingevuld").split("\n");
+    return (
+      <button
+        type="button"
+        onClick={onEdit}
+        className="flex w-full animate-in fade-in slide-in-from-top-1 items-center justify-between gap-3 rounded-2xl bg-white/90 px-4 py-3 text-left shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.18),0_14px_36px_-32px_hsl(var(--gold-deep)_/_0.58)] transition hover:bg-[hsl(var(--gold-soft)_/_0.18)] focus:outline-none focus:ring-4 focus:ring-[hsl(var(--gold)_/_0.16)]"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--gold))] text-[#17130b] shadow-[0_6px_18px_-10px_hsl(var(--gold-deep)_/_0.75)]">
+            <Check className="h-3 w-3" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-xs font-medium text-muted-foreground">{label}</span>
+            <span className="block truncate text-sm font-semibold text-foreground">{primaryValue}</span>
+            {secondaryValue && (
+              <span className="block truncate text-xs text-muted-foreground">{secondaryValue}</span>
+            )}
+          </span>
         </span>
-        <span className="min-w-0">
-          <span className="block text-xs font-medium text-muted-foreground">{label}</span>
-          <span className="block truncate text-sm font-medium text-foreground">{value || mutedValue || "Ingevuld"}</span>
-        </span>
-      </span>
-      <span className="shrink-0 text-[11px] font-semibold text-[hsl(var(--gold-deep))]">Wijzig</span>
-    </button>
-  );
+        <span className="shrink-0 text-[11px] font-semibold text-[hsl(var(--gold-deep))]">Wijzig</span>
+      </button>
+    );
+  };
 
   const renderCollapsedFacts = (
     facts: Array<{ label: string; value: string; onEdit: () => void }>,
@@ -4959,6 +4977,7 @@ const NewOrder = () => {
                         (routeActiveQuestion === 2 && stop.line.id === deliveryLine?.id) ||
                         (routeActiveQuestion === 4 && stop.kind !== "pickup");
                       const canClearStop = stop.kind === "delivery";
+                      const display = locationDisplay(stop.line, stop.title, stop.fallback);
 
                       return (
                         <div
@@ -4995,9 +5014,9 @@ const NewOrder = () => {
                               {stop.shortTitle}
                             </span>
                             <span className="min-w-0">
-                              <span className="block font-semibold">{stop.title}</span>
+                              <span className="block font-semibold">{stop.line.locatie ? `${stop.title} · ${display.company}` : stop.title}</span>
                               <span className={cn("block max-w-[15rem] truncate", stop.missingAddress ? "text-red-600" : "text-muted-foreground")}>
-                                {stop.line.locatie || stop.fallback}
+                                {display.address}
                               </span>
                             </span>
                           </button>
@@ -5028,7 +5047,9 @@ const NewOrder = () => {
 
                 {routeActiveQuestion > 1 && renderCollapsedAnswer(
                   "Ophalen",
-                  pickupLine?.locatie || "",
+                  pickupLine?.locatie
+                    ? `${locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").company}\n${locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").address}`
+                    : "",
                   () => {
                     setRouteManualBack(true);
                     setRouteActiveQuestion(1);
@@ -5039,7 +5060,7 @@ const NewOrder = () => {
                 {routeActiveQuestion === 1 && (
                 <div className={conversationalCardClass(0)}>
                   {renderQuestionPrompt(
-                    { step: "Ophaaladres", title: "Waar wordt de lading opgehaald?", hint: "Na een geldig ophaaladres verschijnt de aflevervraag automatisch." },
+                    { step: "Ophaaladres", title: "Waar wordt de lading opgehaald?", hint: "Kies het adres en vul de bedrijfsnaam in. Bijzonderheden beheer je per adres in het adresboek." },
                     !missingPickupAddress,
                   )}
                   <div className={cn(flowLabelClass, requiredTextClass(missingPickupAddress))}>
@@ -5063,14 +5084,13 @@ const NewOrder = () => {
                        if (selected) applyPlannerLocation("pickup", selected);
                        setPickupAddressBookLabel({ label: option.title, key: buildAddressBookKey(option.value) });
                        setRouteManualBack(false);
-                       setRouteActiveQuestion(2);
                      }}
                      onResolvedSelection={(selection) => {
                        void maybeLearnClientAlias(selection);
                        if (primaryLadenId) {
                          setFreightLines(prev => prev.map(line => line.id === primaryLadenId ? {
                            ...line,
-                           companyName: selection.searchTerm || clientName || line.companyName,
+                           companyName: line.companyName || clientName,
                          } : line));
                        }
                        setPickupAddressBookLabel({
@@ -5078,7 +5098,6 @@ const NewOrder = () => {
                          key: buildAddressBookKey(selection.value),
                        });
                        setRouteManualBack(false);
-                       setRouteActiveQuestion(2);
                     }}
                     />
                     {renderLocationOperationalDetails(pickupLine, "Ophaal-/laadadres")}
@@ -5086,7 +5105,9 @@ const NewOrder = () => {
                 )}
                   {routeActiveQuestion > 2 && renderCollapsedAnswer(
                     getDeliveryStopLabel(0),
-                    deliveryLine?.locatie || "",
+                    deliveryLine?.locatie
+                      ? `${locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").company}\n${locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").address}`
+                      : "",
                     () => {
                       setRouteManualBack(true);
                       setRouteActiveQuestion(2);
@@ -5131,14 +5152,13 @@ const NewOrder = () => {
                           return;
                         }
                         setRouteManualBack(false);
-                        setRouteActiveQuestion(3);
                       }}
                       onResolvedSelection={(selection) => {
                         void maybeLearnClientAlias(selection);
                         if (primaryLossenId) {
                           setFreightLines(prev => prev.map(line => line.id === primaryLossenId ? {
                             ...line,
-                            companyName: selection.searchTerm || clientName || line.companyName,
+                            companyName: line.companyName || clientName,
                           } : line));
                         }
                         setDeliveryAddressBookLabel({
@@ -5154,7 +5174,6 @@ const NewOrder = () => {
                           return;
                         }
                         setRouteManualBack(false);
-                        setRouteActiveQuestion(3);
                       }}
                     />
                     {renderLocationOperationalDetails(deliveryLine, isMultiLegRoute ? "Stop 1 / afleveradres" : "Afleveradres")}
