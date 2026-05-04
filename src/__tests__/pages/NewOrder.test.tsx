@@ -322,10 +322,19 @@ describe("NewOrder", () => {
     await user.type(clientInput, "FreightNed Air{enter}");
 
     await waitFor(() => {
+      expect(screen.getByText(/Welke referentie hoort bij deze order/i)).toBeInTheDocument();
+    });
+    await user.click(screen.getAllByRole("button", { name: /Geen referentie/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Welke contactpersoon hoort bij deze order/i)).toBeInTheDocument();
+    });
+    await user.type(screen.getByPlaceholderText(/Naam contactpersoon/i), "Planner Contact");
+    await user.click(screen.getByRole("button", { name: /Bevestig contactpersoon/i }));
+
+    await waitFor(() => {
       expect(screen.getByText(/Welk transport hoort hierbij/i)).toBeInTheDocument();
     });
-
-    await user.type(screen.getByPlaceholderText(/Naam contactpersoon/i), "Planner Contact");
     await user.click(screen.getByRole("button", { name: /Binnenland \/ direct/i }));
 
     await waitFor(() => {

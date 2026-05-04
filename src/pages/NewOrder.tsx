@@ -745,7 +745,7 @@ const NewOrder = () => {
   const [mainTab, setMainTab] = useState<MainTab>("algemeen");
   const [bottomTab, setBottomTab] = useState<BottomTab>("vrachmeen");
   const [wizardStep, setWizardStep] = useState<WizardStep>("intake");
-  const [intakeActiveQuestion, setIntakeActiveQuestion] = useState<1 | 2>(1);
+  const [intakeActiveQuestion, setIntakeActiveQuestion] = useState<1 | 2 | 3 | 4>(1);
   const [intakeManualBack, setIntakeManualBack] = useState(false);
   const [routeActiveQuestion, setRouteActiveQuestion] = useState<1 | 2 | 3 | 4>(1);
   const [routeManualBack, setRouteManualBack] = useState(false);
@@ -2212,6 +2212,11 @@ const NewOrder = () => {
       return;
     }
     if (wizardStep === "intake" && intakeActiveQuestion === 2) {
+      setIntakeManualBack(false);
+      setIntakeActiveQuestion(3);
+      return;
+    }
+    if (wizardStep === "intake" && intakeActiveQuestion === 3) {
       const manualName = manualContactName.trim();
       if (contactChoiceMode === "manual") {
         if (!manualName) {
@@ -2223,6 +2228,11 @@ const NewOrder = () => {
         toast.error("Contactpersoon ontbreekt", { description: "Kies een bestaande contactpersoon of voeg er een toe." });
         return;
       }
+      setIntakeManualBack(false);
+      setIntakeActiveQuestion(4);
+      return;
+    }
+    if (wizardStep === "intake" && intakeActiveQuestion === 4) {
       if (!transportFlowChoice) {
         toast.error("Transportkeuze ontbreekt", { description: "Kies eerst import, export of direct/binnenland." });
         return;
@@ -2291,9 +2301,9 @@ const NewOrder = () => {
   }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, selectedContactId, transportFlowChoice, wizardStep]);
 
   const goToPreviousWizardStep = useCallback(() => {
-    if (wizardStep === "intake" && intakeActiveQuestion === 2) {
+    if (wizardStep === "intake" && intakeActiveQuestion > 1) {
       setIntakeManualBack(true);
-      setIntakeActiveQuestion(1);
+      setIntakeActiveQuestion((intakeActiveQuestion - 1) as 1 | 2 | 3 | 4);
       return;
     }
     if (wizardStep === "route" && routeActiveQuestion > 1) {
@@ -2481,7 +2491,7 @@ const NewOrder = () => {
 
     if (!transportFlowChoice) {
       setWizardStep("intake");
-      setIntakeActiveQuestion(2);
+      setIntakeActiveQuestion(4);
       return;
     }
 
@@ -2657,8 +2667,41 @@ const NewOrder = () => {
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
+  const discardDraftAndLeave = async () => {
+    skipDirtyGuardRef.current = true;
+    setShowUnsavedDialog(false);
+    if (draftStorageKey) window.localStorage.removeItem(draftStorageKey);
+    if (serverDraftStorageKey) window.localStorage.removeItem(serverDraftStorageKey);
+    if (serverDraftId && tenant?.id) {
+      try {
+        await (supabase as any)
+          .from("order_drafts")
+          .update({
+            status: "ABANDONED",
+            last_activity_at: new Date().toISOString(),
+            updated_by: user?.id ?? null,
+          })
+          .eq("id", serverDraftId)
+          .eq("tenant_id", tenant.id)
+          .is("committed_shipment_id", null);
+      } catch (error) {
+        console.warn("[NewOrder] concept weggooien faalde:", error);
+        toast.warning("Concept lokaal verwijderd, maar serverconcept kon niet volledig worden gemarkeerd");
+      }
+    }
+    setDirty(false);
+    navigate("/orders");
+  };
+
+  const keepDraftAndLeave = () => {
+    skipDirtyGuardRef.current = true;
+    setShowUnsavedDialog(false);
+    setDirty(false);
+    navigate("/orders");
+  };
+
   const attemptCancel = () => {
-    if (dirty && !skipDirtyGuardRef.current) {
+    if ((dirty || serverDraftId) && !skipDirtyGuardRef.current) {
       setShowUnsavedDialog(true);
       return;
     }
@@ -3149,7 +3192,7 @@ const NewOrder = () => {
     const weightNum = cargoTotals.totGewicht || (weightKg ? parseFloat(weightKg) : NaN);
     if (!contactAnswered) {
       setWizardStep("intake");
-      setIntakeActiveQuestion(2);
+      setIntakeActiveQuestion(3);
       toast.error("Contactpersoon ontbreekt", { description: "Kies of voeg een contactpersoon toe voordat je de order aanmaakt." });
       return;
     }
@@ -3919,8 +3962,14 @@ const NewOrder = () => {
       ? clientNeedsConfirmation
         ? "Bevestig klant"
         : "Volgende stap"
+      : wizardStep === "intake" && intakeActiveQuestion === 2
+        ? klantReferentie.trim()
+          ? "Gebruik referentie"
+          : "Geen referentie"
+      : wizardStep === "intake" && intakeActiveQuestion === 3
+        ? "Bevestig contactpersoon"
       : wizardStep === "intake"
-        ? "Voeg route toe"
+        ? "Plan route"
         : wizardStep === "route"
           ? routeActiveQuestion === 1
             ? "Bevestig ophaaladres"
@@ -5115,7 +5164,7 @@ const NewOrder = () => {
                 </div>
                 )}
 
-                {intakeActiveQuestion === 2 && clientAnswered && renderCollapsedAnswer(
+                {intakeActiveQuestion >= 2 && clientAnswered && renderCollapsedAnswer(
                   "Klant",
                   clientName,
                   () => {
@@ -5125,123 +5174,164 @@ const NewOrder = () => {
                 )}
 
                 {intakeActiveQuestion === 2 && (
-                  <>
-                    <div className="rounded-3xl border border-[hsl(var(--gold)_/_0.16)] bg-white p-5 shadow-[0_18px_48px_-42px_hsl(var(--foreground)_/_0.55)]">
-                      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Referentie",
+                        title: "Welke referentie hoort bij deze order?",
+                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
+                      },
+                      Boolean(klantReferentie.trim()),
+                      true,
+                    )}
+                    <div className="max-w-xl">
+                      <label className={flowLabelClass}>Klant-referentie</label>
+                      <Input
+                        value={klantReferentie}
+                        onChange={e => setKlantReferentie(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            setIntakeActiveQuestion(3);
+                          }
+                        }}
+                        placeholder="PO-nummer of bestelreferentie"
+                        className={flowInputClass}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIntakeActiveQuestion(3)}
+                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
+                      >
+                        {klantReferentie.trim() ? "Gebruik referentie" : "Geen referentie"}
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {intakeActiveQuestion >= 3 && renderCollapsedAnswer(
+                  "Referentie",
+                  klantReferentie.trim() || "Geen referentie",
+                  () => {
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(2);
+                  },
+                )}
+
+                {intakeActiveQuestion === 3 && (
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Contactpersoon",
+                        title: "Welke contactpersoon hoort bij deze order?",
+                        hint: "Kies de juiste contactpersoon van de klant, of voeg direct een nieuwe toe.",
+                      },
+                      contactAnswered,
+                      true,
+                    )}
+                    <div className="grid max-w-3xl gap-5">
+                      {activeClientContacts.length > 0 && (
                         <div>
-                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
-                            Klantgegevens
-                          </div>
-                          <h3 className="mt-1 text-lg font-semibold">Contactpersoon en referentie</h3>
+                          <label className={flowLabelClass}>Contactpersoon van {clientName || "klant"}</label>
+                          <Select
+                            value={selectedContactId ?? ""}
+                            onValueChange={(id) => {
+                              const contact = activeClientContacts.find((ct) => ct.id === id);
+                              setSelectedContactId(id);
+                              setContactChoiceMode("existing");
+                              setContactpersoon(contact?.name ?? "");
+                            }}
+                          >
+                            <SelectTrigger className={cn(flowInputClass, "justify-between")}>
+                              <SelectValue placeholder="Kies contactpersoon" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {activeClientContacts.map(ct => (
+                                <SelectItem key={ct.id} value={ct.id}>
+                                  {[ct.name, contactRoleLabel(ct.role), ct.email].filter(Boolean).join(" - ")}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                        {!contactAnswered && (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                            Contact verplicht
-                          </span>
+                      )}
+
+                      <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white/80 p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                              Nieuwe contactpersoon
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">Wordt na aanmaken bij de klantcontacten opgeslagen.</p>
+                          </div>
+                          {activeClientContacts.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setContactChoiceMode("manual");
+                                setSelectedContactId(null);
+                              }}
+                              className="rounded-full border border-[hsl(var(--gold)_/_0.24)] bg-white px-3 py-1.5 text-xs font-semibold text-[hsl(var(--gold-deep))] transition hover:bg-[hsl(var(--gold-soft)_/_0.32)]"
+                            >
+                              Handmatig invullen
+                            </button>
+                          )}
+                        </div>
+                        {(contactChoiceMode === "manual" || activeClientContacts.length === 0) && (
+                          <div className="grid gap-3">
+                            <Input value={manualContactName} onChange={e => { setManualContactName(e.target.value); setContactpersoon(e.target.value); }} placeholder="Naam contactpersoon" className={flowInputClass} />
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <Input value={manualContactEmail} onChange={e => setManualContactEmail(e.target.value)} placeholder="E-mail" className="h-12 rounded-2xl text-sm" />
+                              <Input value={manualContactPhone} onChange={e => setManualContactPhone(e.target.value)} placeholder="Telefoon" className="h-12 rounded-2xl text-sm" />
+                            </div>
+                          </div>
                         )}
                       </div>
-                      <div className="grid gap-4 md:grid-cols-[1.15fr_0.85fr]">
-                        <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--muted)_/_0.22)] p-4">
-                          <div className="mb-2 text-xs font-medium text-muted-foreground">Contactpersoon van {clientName || "klant"}</div>
-                          {activeClientContacts.length > 0 && (
-                            <Select
-                              value={selectedContactId ?? ""}
-                              onValueChange={(id) => {
-                                const contact = activeClientContacts.find((ct) => ct.id === id);
-                                setSelectedContactId(id);
-                                setContactChoiceMode("existing");
-                                setContactpersoon(contact?.name ?? "");
-                              }}
-                            >
-                              <SelectTrigger className="h-11 rounded-xl bg-white text-sm">
-                                <SelectValue placeholder="Kies contactpersoon" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {activeClientContacts.map(ct => (
-                                  <SelectItem key={ct.id} value={ct.id}>
-                                    {[ct.name, contactRoleLabel(ct.role), ct.email].filter(Boolean).join(" - ")}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setContactChoiceMode("manual");
-                              setSelectedContactId(null);
-                            }}
-                            className="mt-3 rounded-full border border-[hsl(var(--gold)_/_0.24)] bg-white px-3 py-1.5 text-xs font-semibold text-[hsl(var(--gold-deep))] transition hover:bg-[hsl(var(--gold-soft)_/_0.32)]"
-                          >
-                            Nieuwe contactpersoon toevoegen
-                          </button>
-                          {(contactChoiceMode === "manual" || activeClientContacts.length === 0) && (
-                            <div className="mt-3 grid gap-2">
-                              <Input value={manualContactName} onChange={e => { setManualContactName(e.target.value); setContactpersoon(e.target.value); }} placeholder="Naam contactpersoon" className="h-10 rounded-xl text-sm" />
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                <Input value={manualContactEmail} onChange={e => setManualContactEmail(e.target.value)} placeholder="E-mail" className="h-10 rounded-xl text-sm" />
-                                <Input value={manualContactPhone} onChange={e => setManualContactPhone(e.target.value)} placeholder="Telefoon" className="h-10 rounded-xl text-sm" />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="grid gap-3 rounded-2xl border border-[hsl(var(--gold)_/_0.14)] bg-white p-4">
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div>
-                              <label className="mb-1 block text-xs font-medium text-muted-foreground">Prioriteit</label>
-                              <Select value={prioriteit} onValueChange={setPrioriteit}>
-                                <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Standaard">Standaard</SelectItem>
-                                  <SelectItem value="Spoed">Spoed</SelectItem>
-                                  <SelectItem value="Retour">Retour</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <label className="mb-1 block text-xs font-medium text-muted-foreground">Klantreferentie</label>
-                              <Input value={klantReferentie} onChange={e => setKlantReferentie(e.target.value)} placeholder="PO-nummer" className="h-10 rounded-xl text-sm" />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-medium text-muted-foreground">Opmerkingen voor planner</label>
-                            <Textarea value={referentie} onChange={e => setReferentie(e.target.value)} rows={2} placeholder="Bijzonderheden of klantinstructies" className="resize-none rounded-xl text-sm" />
-                          </div>
-                        </div>
-                      </div>
                     </div>
+                  </div>
+                )}
 
-                    <div className={conversationalCardClass(0)}>
-                      {renderQuestionPrompt(intakeQuestion, transportFlowAnswered)}
-                      <div className="grid gap-3 md:grid-cols-3">
-                        {([
-                          { value: "export", title: "Export", hint: "Laad via export-warehouse", badge: "Warehouse laadadres" },
-                          { value: "import", title: "Import", hint: "Warehouse volgens instelling", badge: "Warehouse route" },
-                          { value: "direct", title: "Binnenland / direct", hint: "Van laadadres naar losadres", badge: "Zonder warehouse" },
-                        ] as Array<{ value: TransportFlowChoice; title: string; hint: string; badge: string }>).map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => chooseTransportFlow(option.value)}
-                            className={cn(
-                              "group min-h-[126px] rounded-2xl border p-4 text-left transition hover:-translate-y-px hover:border-[hsl(var(--gold)_/_0.44)] hover:bg-[hsl(var(--gold-soft)_/_0.18)]",
-                              transportFlowChoice === option.value
-                                ? "border-[hsl(var(--gold)_/_0.58)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)_/_0.34),white_58%)] shadow-[0_20px_48px_-38px_hsl(var(--gold-deep)_/_0.70)]"
-                                : "border-[hsl(var(--gold)_/_0.16)] bg-white",
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <span className="text-base font-semibold">{option.title}</span>
-                              <span className="rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--gold-deep))]">
-                                {option.badge}
-                              </span>
-                            </div>
-                            <p className="mt-3 text-sm text-muted-foreground">{option.hint}</p>
-                          </button>
-                        ))}
-                      </div>
+                {intakeActiveQuestion >= 4 && renderCollapsedAnswer(
+                  "Contactpersoon",
+                  contactpersoon.trim() || manualContactName.trim(),
+                  () => {
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(3);
+                  },
+                )}
+
+                {intakeActiveQuestion === 4 && (
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(intakeQuestion, transportFlowAnswered)}
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {([
+                        { value: "export", title: "Export", hint: "Laad via export-warehouse", badge: "Warehouse laadadres" },
+                        { value: "import", title: "Import", hint: "Warehouse volgens instelling", badge: "Warehouse route" },
+                        { value: "direct", title: "Binnenland / direct", hint: "Van laadadres naar losadres", badge: "Zonder warehouse" },
+                      ] as Array<{ value: TransportFlowChoice; title: string; hint: string; badge: string }>).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => chooseTransportFlow(option.value)}
+                          className={cn(
+                            "group min-h-[126px] rounded-2xl border p-4 text-left transition hover:-translate-y-px hover:border-[hsl(var(--gold)_/_0.44)] hover:bg-[hsl(var(--gold-soft)_/_0.18)]",
+                            transportFlowChoice === option.value
+                              ? "border-[hsl(var(--gold)_/_0.58)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)_/_0.34),white_58%)] shadow-[0_20px_48px_-38px_hsl(var(--gold-deep)_/_0.70)]"
+                              : "border-[hsl(var(--gold)_/_0.16)] bg-white",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-base font-semibold">{option.title}</span>
+                            <span className="rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--gold-deep))]">
+                              {option.badge}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-sm text-muted-foreground">{option.hint}</p>
+                        </button>
+                      ))}
                     </div>
-                  </>
+                  </div>
                 )}
 
                 {false && intakeActiveQuestion === 2 && (
@@ -7145,22 +7235,25 @@ const NewOrder = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Wijzigingen weggooien?</AlertDialogTitle>
+            <AlertDialogTitle>Concept afsluiten?</AlertDialogTitle>
             <AlertDialogDescription>
-              Je hebt wijzigingen die nog niet zijn opgeslagen. Verlaat je de pagina nu,
-              dan gaan ze verloren.
+              Deze order wordt automatisch als concept bewaard. Kies of je het concept wilt bewaren
+              voor later, of helemaal wilt weggooien.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Doorgaan met bewerken</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                skipDirtyGuardRef.current = true;
-                setShowUnsavedDialog(false);
-                navigate("/orders");
-              }}
+            <button
+              type="button"
+              onClick={() => void discardDraftAndLeave()}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
             >
-              Wijzigingen weggooien
+              Concept weggooien
+            </button>
+            <AlertDialogAction
+              onClick={keepDraftAndLeave}
+            >
+              Concept bewaren
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
