@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { clearSupabaseAuthStorage, DEV_BYPASS_STORAGE_KEY } from "@/lib/devSession";
 import {
   AlertCircle,
   ArrowLeft,
@@ -23,7 +24,6 @@ import {
   Truck,
 } from "lucide-react";
 
-const DEV_BYPASS_STORAGE_KEY = "debug_bypass";
 const DEV_BYPASS_EMAIL = import.meta.env.DEV ? "test@orderflow.nl" : "";
 const DEV_BYPASS_PASSWORD = import.meta.env.DEV ? "Test1234!" : "";
 
@@ -166,6 +166,7 @@ const Login = () => {
       loginEmail.trim().toLowerCase() === DEV_BYPASS_EMAIL &&
       loginPassword === DEV_BYPASS_PASSWORD
     ) {
+      clearSupabaseAuthStorage();
       localStorage.setItem(
         DEV_BYPASS_STORAGE_KEY,
         JSON.stringify({ email: DEV_BYPASS_EMAIL, display_name: "Local Admin" }),

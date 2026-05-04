@@ -4,8 +4,8 @@ import type { Database } from './types';
 
 const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim();
 const SUPABASE_PUBLISHABLE_KEY = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
-const SUPABASE_FETCH_TIMEOUT_MS = 3_500;
-const SUPABASE_AUTH_FETCH_TIMEOUT_MS = 10_000;
+const SUPABASE_FETCH_TIMEOUT_MS = 8_000;
+const SUPABASE_AUTH_FETCH_TIMEOUT_MS = 12_000;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,12 @@ const SUPABASE_AUTH_FETCH_TIMEOUT_MS = 10_000;
 const supabaseGlobal = globalThis as typeof globalThis & {
   __orderflowSupabaseClient?: SupabaseClient<Database>;
 };
+
+function isLocalDevBypassActive() {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  const isLocalHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  return isLocalHost && Boolean(localStorage.getItem("debug_bypass"));
+}
 
 function requestUrl(input: Parameters<typeof fetch>[0]) {
   if (typeof input === "string") return input;
@@ -58,6 +64,6 @@ export const supabase =
     auth: {
       storage: localStorage,
       persistSession: true,
-      autoRefreshToken: true,
+      autoRefreshToken: !isLocalDevBypassActive(),
     },
   }));

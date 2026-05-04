@@ -190,7 +190,7 @@ const Dispatch = () => {
       return;
     }
 
-    const timer = window.setTimeout(() => setLoadStalled(true), 4_000);
+    const timer = window.setTimeout(() => setLoadStalled(true), 9_000);
     return () => window.clearTimeout(timer);
   }, [isLoading, selectedDate]);
 

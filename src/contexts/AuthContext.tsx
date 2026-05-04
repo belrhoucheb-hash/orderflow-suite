@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, Re
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { DEV_BYPASS_USER_ID, readDevBypassUser } from "@/lib/devSession";
+import { clearSupabaseAuthStorage, DEV_BYPASS_USER_ID, readDevBypassUser } from "@/lib/devSession";
 import {
   defaultAccessByRole,
   getAccessActions,
@@ -207,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initialBypassUser = readDevBypassUser();
     if (initialBypassUser) {
+      clearSupabaseAuthStorage();
       const bypassSession = createDevBypassSession(initialBypassUser);
       setSession(bypassSession);
       setUser(initialBypassUser);
@@ -221,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         const bypassUser = !session ? readDevBypassUser() : null;
+        if (bypassUser) clearSupabaseAuthStorage();
         const effectiveSession = session ?? (bypassUser ? createDevBypassSession(bypassUser) : null);
         const effectiveUser = effectiveSession?.user ?? null;
 
@@ -255,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     withTimeout(supabase.auth.getSession(), AUTH_BOOT_TIMEOUT_MS, "Auth sessie ophalen")
       .then(async ({ data: { session } }) => {
         const bypassUser = !session ? readDevBypassUser() : null;
+        if (bypassUser) clearSupabaseAuthStorage();
         const effectiveSession = session ?? (bypassUser ? createDevBypassSession(bypassUser) : null);
         const effectiveUser = effectiveSession?.user ?? null;
 
@@ -274,6 +277,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch((error) => {
         const bypassUser = readDevBypassUser();
+        if (bypassUser) clearSupabaseAuthStorage();
         const bypassSession = bypassUser ? createDevBypassSession(bypassUser) : null;
 
         console.error("Failed to initialize auth session", error);

@@ -25,6 +25,18 @@ export function readDevBypassPayload(): { email?: string; display_name?: string 
   }
 }
 
+export function clearSupabaseAuthStorage() {
+  if (!import.meta.env.DEV || !isLocalDevHost() || typeof window === "undefined") return;
+
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (!key) continue;
+    if ((key.startsWith("sb-") && key.includes("auth-token")) || key === "supabase.auth.token") {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
 export function readDevBypassUser(): User | null {
   const parsed = readDevBypassPayload();
   if (!parsed?.email) return null;

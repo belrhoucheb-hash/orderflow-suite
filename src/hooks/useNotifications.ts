@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getEffectiveLocalUserId, DEV_BYPASS_USER_ID } from "@/lib/devSession";
+import { getEffectiveLocalUserId, DEV_BYPASS_USER_ID, readDevBypassUser } from "@/lib/devSession";
 
 export interface Notification {
   id: string;
@@ -21,6 +21,11 @@ export function useNotifications() {
 
   // Get current user id on mount
   useEffect(() => {
+    if (readDevBypassUser()) {
+      setUserId(DEV_BYPASS_USER_ID);
+      return;
+    }
+
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? getEffectiveLocalUserId());
     });
@@ -31,6 +36,7 @@ export function useNotifications() {
     queryKey: ["notifications", userId],
     queryFn: async () => {
       if (!userId) return [];
+      if (userId === DEV_BYPASS_USER_ID && readDevBypassUser()) return [];
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
@@ -38,7 +44,6 @@ export function useNotifications() {
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) {
-        console.error("Notifications fetch error:", error);
         throw error;
       }
       return (data ?? []) as unknown as Notification[];
@@ -51,6 +56,7 @@ export function useNotifications() {
   // Subscribe to realtime inserts for this user
   useEffect(() => {
     if (!userId) return;
+    if (userId === DEV_BYPASS_USER_ID && readDevBypassUser()) return;
 
     const channel = supabase
       .channel("notifications-realtime")
