@@ -7,6 +7,8 @@ interface Props {
   currentPosition: { lat: number; lng: number } | null;
   stops: TripStop[];
   currentStopId: string | null;
+  height?: number | string;
+  className?: string;
 }
 
 interface Coord {
@@ -29,7 +31,7 @@ function getStopCoord(stop: TripStop): Coord | null {
   return null;
 }
 
-export function LiveTripMap({ currentPosition, stops, currentStopId }: Props) {
+export function LiveTripMap({ currentPosition, stops, currentStopId, height = 280, className }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const driverMarkerRef = useRef<L.Marker | null>(null);
@@ -174,8 +176,8 @@ export function LiveTripMap({ currentPosition, stops, currentStopId }: Props) {
   return (
     <div
       ref={containerRef}
-      className="w-full overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.2)] shadow-sm"
-      style={{ height: 280 }}
+      className={className ?? "w-full overflow-hidden rounded-2xl border border-[hsl(var(--gold)/0.2)] shadow-sm"}
+      style={{ height }}
     />
   );
 }
