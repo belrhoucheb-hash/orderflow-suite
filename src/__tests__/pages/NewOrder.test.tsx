@@ -4,9 +4,10 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
-const { mockNavigate, mockCreateOrder } = vi.hoisted(() => ({
+const { mockNavigate, mockCreateOrder, mockWarehouses } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockCreateOrder: vi.fn().mockResolvedValue({ id: "new-1" }),
+  mockWarehouses: [] as any[],
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -45,7 +46,7 @@ vi.mock("@/hooks/useClientContacts", () => ({
 }));
 
 vi.mock("@/hooks/useWarehouses", () => ({
-  useWarehouses: () => ({ data: [] }),
+  useWarehouses: () => ({ data: mockWarehouses }),
 }));
 
 vi.mock("@/lib/trajectRouter", () => ({
@@ -124,7 +125,10 @@ function renderNewOrder() {
 }
 
 describe("NewOrder", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockWarehouses.length = 0;
+  });
   afterEach(() => cleanup());
 
   it("renders without crashing", () => {
@@ -340,6 +344,58 @@ describe("NewOrder", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Waar wordt de lading opgehaald/i)).toBeInTheDocument();
+    });
+  });
+
+  it("opens every route question even when export prefills the pickup warehouse", async () => {
+    mockWarehouses.push({
+      id: "warehouse-export-1",
+      tenant_id: "tenant-1",
+      name: "Export Warehouse",
+      address: "Laadkade 12, 3088 Amsterdam",
+      warehouse_type: "EXPORT",
+      transport_flow: "export",
+      default_stop_role: "pickup",
+      warehouse_reference_mode: "manual",
+      warehouse_reference_prefix: null,
+      manual_reference: null,
+      is_default: true,
+      created_at: "2026-05-04T00:00:00.000Z",
+      updated_at: "2026-05-04T00:00:00.000Z",
+    });
+    const user = userEvent.setup();
+    renderNewOrder();
+
+    const clientInput = screen.getByPlaceholderText(/Typ klantnaam of kies uit lijst/i);
+    await user.type(clientInput, "FreightNed Air{enter}");
+
+    await waitFor(() => {
+      expect(screen.getByText(/Welke contactpersoon hoort bij deze order/i)).toBeInTheDocument();
+    });
+    await user.type(screen.getByPlaceholderText(/Naam contactpersoon/i), "Planner Contact");
+    await user.click(screen.getByRole("button", { name: /Bevestig contactpersoon/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Welke referentie hoort bij deze order/i)).toBeInTheDocument();
+    });
+    await user.click(screen.getAllByRole("button", { name: /Geen referentie/i })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Is dit export, import of direct A-B/i)).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /Warehouse als laadadres/i }));
+    await user.click(screen.getByRole("button", { name: /Plan route/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Waar wordt de lading opgehaald/i)).toBeInTheDocument();
+      expect(screen.getByText(/Export Warehouse/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Wat is de volgende stop of eindbestemming/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Bevestig ophaaladres/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Wat is de volgende stop of eindbestemming/i)).toBeInTheDocument();
     });
   });
 
