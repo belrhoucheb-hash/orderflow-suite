@@ -7,6 +7,7 @@ import {
   findConnector,
   type ConnectorDefinition,
 } from "@/lib/connectors/catalog";
+import { logConnectorAuditEvent } from "@/hooks/useConnectorAuditLog";
 
 // ─── Catalog merged with live status ────────────────────────────────
 
@@ -104,9 +105,17 @@ export function useSaveConnectorMapping(provider: string) {
         .from("integration_mapping")
         .upsert(rows, { onConflict: "tenant_id,provider,key" });
       if (error) throw error;
+
+      void logConnectorAuditEvent({
+        tenantId: tenant.id,
+        provider,
+        action: "mapping_save",
+        details: { keys: rows.map((r) => r.key) },
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["connector_mapping"] });
+      qc.invalidateQueries({ queryKey: ["connector_audit_log"] });
       toast.success("Mapping opgeslagen");
     },
     onError: (err) => {
@@ -194,12 +203,26 @@ export function usePullConnector(provider: string) {
         },
       });
       if (error) throw error;
+
+      void logConnectorAuditEvent({
+        tenantId: tenant.id,
+        provider,
+        action: "manual_sync",
+        details: {
+          since: params?.since ?? null,
+          until: params?.until ?? null,
+          ok: (data as { ok?: boolean })?.ok ?? null,
+          imported: (data as { imported?: number })?.imported ?? null,
+        },
+      });
+
       return data as { ok: boolean; recordsCount?: number; imported?: number; skipped?: number; message?: string; error?: string };
     },
     onSuccess: (res) => {
       if (res.ok) {
         toast.success(res.message ?? "Gegevens opgehaald");
         qc.invalidateQueries({ queryKey: ["connector_sync_log"] });
+        qc.invalidateQueries({ queryKey: ["connector_audit_log"] });
         qc.invalidateQueries({ queryKey: ["drivers"] });
         qc.invalidateQueries({ queryKey: ["driver_actual_hours_per_week"] });
         qc.invalidateQueries({ queryKey: ["driver_availability_range"] });

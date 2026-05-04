@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { logConnectorAuditEvent } from "@/hooks/useConnectorAuditLog";
 
 export type IntegrationProvider =
   | "snelstart"
@@ -95,11 +96,20 @@ export function useSaveIntegrationCredentials<T = Record<string, unknown>>(
       const { error } = await supabase.rpc("save_integration_credentials_secure" as any, args);
 
       if (error) throw error;
+
+      // Audit-trail: best-effort log van credential-update + connect/disconnect.
+      void logConnectorAuditEvent({
+        tenantId: tenant.id,
+        provider,
+        action: input.enabled ? "credential_update" : "disconnect",
+        details: { enabled: input.enabled, fields: Object.keys((input.credentials ?? {}) as object) },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["integration_credentials", tenant?.id, provider],
       });
+      queryClient.invalidateQueries({ queryKey: ["connector_audit_log"] });
     },
   });
 }
