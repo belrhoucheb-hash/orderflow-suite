@@ -2,7 +2,7 @@
 
 **Bestand-doel**: aan het begin van elke sessie weet Claude waar we zijn gebleven, en aan het einde van elke sessie wordt dit bestand bijgewerkt zodat de volgende sessie ook weet waar we staan. Bron van waarheid voor harde feiten blijft `git log` en het Supabase-dashboard; dit bestand vult de zachte context aan (waarom, blokkers, openstaande beslissingen).
 
-**Laatste update**: 2026-04-26 (origin/main bijgewerkt t/m `bd0e3b4`; inbox, settings, roster/autonomy, dispatch/planning en tenant-guardrails verwerkt)
+**Laatste update**: 2026-05-04 (origin/main bijgewerkt t/m `6d6efd6`; chauffeursportaal Uber-flow uplift gemerged via PR #20)
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Laag           | Bron                          | Status                                                  |
 | -------------- | ----------------------------- | ------------------------------------------------------- |
-| `origin/main`  | github.com/belrhoucheb-hash   | Tot commit `bd0e3b4` (tenant-bound integraties + recente inbox/settings/planning-dispatch updates). |
+| `origin/main`  | github.com/belrhoucheb-hash   | Tot commit `6d6efd6` (chauffeursportaal Uber-flow uplift, PR #20). |
 | Frontend prod  | Vercel/Netlify (door gebruiker) | **Onbekend, gebruiker moet checken**. Vermoeden: nog op een oudere commit, want gebruiker zag connector-platform niet. |
 | Supabase prod  | Supabase Dashboard            | Onbekend, gebruiker moet checken. Migraties tot `20260429010000` staan klaar in repo, niet bevestigd of toegepast. |
 | Edge functions | Supabase Edge Functions       | Onbekend. Nieuw te deployen: `connector-snelstart`, `connector-exact_online`, `oauth-callback-exact`, `connector-dispatcher`, `eta-watcher`. |
@@ -59,6 +59,17 @@
 ---
 
 ## Recente sessies-samenvatting
+
+### 2026-05-04 (chauffeursportaal Uber-flow uplift, gemerged in `6d6efd6`)
+
+- Audit van `/chauffeur` uitgevoerd, vervolgens upgrade in 3 parallelle subagents (worktrees) en sequentieel gemerged op `feat/chauffeur-portal-uplift`. PR #20 op main.
+- **Block 1**: luxe gold-huisstijl door alle chauffeur-screens, `SwipeToConfirm` op Ik ben er / Start lossen / POD, `vibrate(HAPTICS.*)` op statusovergangen, 5s undo-toast op Aangekomen, dead legacy POD-modal verwijderd, telefoon-knop in detail-modal werkt nu via `tel:`.
+- **Block 2**: `LiveTripMap` (Leaflet, gold polyline + pulse driver-marker), `NextStopHero` met haversine-ETA, `compressImage`/`compressImageToDataUrl` plus `Promise.allSettled` parallel POD-foto upload, POD insert nu via `proof_of_delivery` + `useUpdateStopStatus(AFGELEVERD)` i.p.v. `orders.update`.
+- **Block 3**: klant-broadcast via Edge Function `notify-customer-stop-status` (hangt aan bestaande `send-notification` mailer-pipeline), `useUpdateStopStatus` triggert bij ONDERWEG/AANGEKOMEN/AFGELEVERD/MISLUKT/OVERGESLAGEN. Nieuwe `IncidentDialog` met 4 categorieen + verplichte foto + planner-notificatie. Driver↔planner chat via `messages` tabel + realtime, `DriverChatPanel` en `PlannerChatPanel`. Migraties `20260504120000` (trip_stops.extra), `20260504120100` (stop_incidents), `20260504120200` (driver_planner_messages).
+- **`/chauffeur-demo`**: standalone, auth-loze showcase-route. Full-bleed Leaflet map, glass header, draggable bottom-sheet met current-stop hero + SwipeToConfirm, hamburger drawer met voertuigcheck-gate (6 foto-tegels + checklist), rooster (week + maand-grid), beschikbaarheid, chat, documenten met vervaldatum-warnings, cijfers, bonnetjes, instellingen, SOS. CMR on-the-spot signing met email-copy toggle. Premium polish: `IconBubble` met gold-soft inset-highlight, gradient buttons, hairline gold-rules.
+- **Bekend issue na deploy**: dubbele klant-notificatie bij AANGEKOMEN mogelijk omdat zowel oude DB-trigger `trg_notify_driver_arrived` als nieuwe Edge Function `notify-customer-stop-status` afgaan. Dedup of trigger-drop nog te beslissen.
+- **Generated supabase types** missen nog `messages` en `stop_incidents`, daarom `as any` casts in `useDriverPlannerMessages`. Na `supabase gen types typescript` op te ruimen.
+- **Edge Function deploy + 3 migraties** nog niet uitgevoerd op productie.
 
 ### 2026-04-26 (main bijgewerkt t/m `bd0e3b4`)
 
