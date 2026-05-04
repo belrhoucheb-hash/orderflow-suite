@@ -126,25 +126,45 @@ vi.mock("@/hooks/useDriverTracking", () => ({
 
 vi.mock("@/hooks/useTrips", () => ({
   useDriverTrips: () => ({ data: [], isLoading: false }),
-  useUpdateStopStatus: () => ({ mutateAsync: mockMutateStopStatus }),
+  useUpdateStopStatus: () => ({ mutateAsync: mockMutateStopStatus, mutate: vi.fn() }),
   useSavePOD: () => ({ mutateAsync: vi.fn() }),
 }));
 
-vi.mock("@/components/chauffeur/TripFlow", () => ({
-  TripFlow: ({ driverId, onStartPOD, onTripStarted, onTripCompleted }: any) => (
-    <div data-testid="trip-flow" data-driver-id={driverId}>
-      Trip Flow
-      <button data-testid="start-pod-btn" onClick={() => onStartPOD({ id: "stop1", order_id: "order1", contact_name: "Test Klant", planned_address: "Teststraat 1" })}>
-        Start POD
-      </button>
-      <button data-testid="start-trip-btn" onClick={() => onTripStarted("trip-1")}>
-        Start trip
-      </button>
-      <button data-testid="complete-trip-btn" onClick={() => onTripCompleted("trip-1")}>
-        Complete trip
-      </button>
-    </div>
+vi.mock("@/hooks/usePositionReporter", () => ({
+  usePositionReporter: () => ({
+    isTracking: false,
+    startTracking: vi.fn(),
+    stopTracking: vi.fn(),
+  }),
+}));
+
+vi.mock("@/hooks/useDriverSchedulesRealtime", () => ({
+  useDriverSchedulesRealtime: vi.fn(),
+}));
+
+// LiveTripMap mocked om Leaflet niet te laden in jsdom (vermijdt
+// canvas/window-issues en versnelt tests).
+vi.mock("@/components/chauffeur/LiveTripMap", () => ({
+  LiveTripMap: ({ currentStopId }: any) => (
+    <div data-testid="live-trip-map" data-current-stop={currentStopId ?? ""}>map</div>
   ),
+}));
+
+vi.mock("@/components/chauffeur/DriverChatPanel", () => ({
+  DriverChatPanel: () => <div data-testid="driver-chat">chat</div>,
+}));
+
+vi.mock("@/components/chauffeur/MijnWeekView", () => ({
+  MijnWeekView: () => <div data-testid="mijn-week-view">week view</div>,
+}));
+
+vi.mock("@/components/chauffeur/VehicleCheckScreen", () => ({
+  VehicleCheckScreen: () => <div data-testid="vehicle-check-screen">vehicle check</div>,
+}));
+
+vi.mock("@/components/chauffeur/IncidentDialog", () => ({
+  IncidentDialog: ({ open }: any) =>
+    open ? <div data-testid="incident-dialog">incident</div> : null,
 }));
 
 vi.mock("@/components/chauffeur/DriveTimeMonitor", () => ({
@@ -543,10 +563,10 @@ describe("ChauffeurApp", () => {
   // ACTIVE DRIVER DASHBOARD
   // ════════════════════════════════════════════════════════════════════
 
-  it("shows the trip flow component when driver is active", async () => {
+  it("shows the live map when driver is active", async () => {
     renderWithActiveDriver("d1");
     await waitFor(() => {
-      expect(screen.getByTestId("trip-flow")).toBeInTheDocument();
+      expect(screen.getByTestId("live-trip-map")).toBeInTheDocument();
     });
   });
 
@@ -578,50 +598,18 @@ describe("ChauffeurApp", () => {
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // GPS TRACKING (handleToggleGPS)
+  // GPS TRACKING — toggle is verplaatst naar instellingen-drawer.
+  // Buiten een actieve trip wordt GPS niet gestart vanuit de header.
   // ════════════════════════════════════════════════════════════════════
 
-  it("handleToggleGPS - does not start GPS tracking outside an active trip", async () => {
+  it("does not auto-start GPS tracking outside an active trip", async () => {
     mockIsTracking.value = false;
     renderWithActiveDriver("d1");
     await waitFor(() => {
-      expect(screen.getByTitle("GPS uit")).toBeInTheDocument();
+      expect(screen.getByTestId("live-trip-map")).toBeInTheDocument();
     });
-    const gpsBtn = screen.getByTitle("GPS uit");
-    await act(async () => {
-      fireEvent.click(gpsBtn);
-    });
+    // Geen actieve trip-stops, dus useGPSTracking moet niet auto-starten
     expect(mockStartTracking).not.toHaveBeenCalled();
-    expect(mockToastInfo).toHaveBeenCalledWith(
-      "GPS start automatisch tijdens een actieve rit.",
-      expect.objectContaining({ description: "Zo blijft tracking beperkt tot route-uitvoering." }),
-    );
-  });
-
-  it("starts GPS tracking when a trip starts", async () => {
-    mockIsTracking.value = false;
-    renderWithActiveDriver("d1");
-    const startTripBtn = await screen.findByTestId("start-trip-btn");
-
-    await act(async () => {
-      fireEvent.click(startTripBtn);
-    });
-
-    expect(mockStartTracking).toHaveBeenCalledTimes(1);
-  });
-
-  it("handleToggleGPS - stops GPS tracking when on", async () => {
-    mockIsTracking.value = true;
-    renderWithActiveDriver("d1");
-    await waitFor(() => {
-      expect(screen.getByTitle("GPS actief")).toBeInTheDocument();
-    });
-    const gpsBtn = screen.getByTitle("GPS actief");
-    await act(async () => {
-      fireEvent.click(gpsBtn);
-    });
-    expect(mockStopTracking).toHaveBeenCalledTimes(1);
-    expect(mockToastInfo).toHaveBeenCalledWith("GPS tracking gestopt");
   });
 
   // ════════════════════════════════════════════════════════════════════
@@ -986,10 +974,10 @@ describe("ChauffeurApp", () => {
     });
   });
 
-  it("fetchDriverOrders - shows trip flow when no legacy orders", async () => {
+  it("renders the live map area when driver is active", async () => {
     renderWithActiveDriver("d1");
     await waitFor(() => {
-      expect(screen.getByTestId("trip-flow")).toBeInTheDocument();
+      expect(screen.getByTestId("live-trip-map")).toBeInTheDocument();
     });
   });
 
@@ -1012,29 +1000,35 @@ describe("ChauffeurApp", () => {
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // TripFlow CALLBACKS
+  // DRAWER NAVIGATION
   // ════════════════════════════════════════════════════════════════════
 
-  it("TripFlow receives driverId prop", async () => {
+  it("opens hamburger drawer when menu button is clicked", async () => {
     renderWithActiveDriver("d1");
     await waitFor(() => {
-      const tripFlow = screen.getByTestId("trip-flow");
-      expect(tripFlow).toHaveAttribute("data-driver-id", "d1");
+      expect(screen.getByLabelText("Menu")).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Menu"));
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Voertuigcheck/)).toBeInTheDocument();
+      expect(screen.getByText(/Mijn rooster/)).toBeInTheDocument();
+      expect(screen.getByText(/Mijn cijfers/)).toBeInTheDocument();
     });
   });
 
-  it("TripFlow onStartPOD sets selectedOrder for POD capture", async () => {
+  it("drawer shows tachograaf entry", async () => {
     renderWithActiveDriver("d1");
     await waitFor(() => {
-      expect(screen.getByTestId("start-pod-btn")).toBeInTheDocument();
+      expect(screen.getByLabelText("Menu")).toBeInTheDocument();
     });
-    const startPodBtn = screen.getByTestId("start-pod-btn");
     await act(async () => {
-      fireEvent.click(startPodBtn);
+      fireEvent.click(screen.getByLabelText("Menu"));
     });
-    // After clicking start POD, the component should set selectedOrder
-    // which triggers POD UI elements - we just verify no crash
-    expect(document.body.textContent).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText(/Tachograaf/)).toBeInTheDocument();
+    });
   });
 
   // ════════════════════════════════════════════════════════════════════
@@ -1086,8 +1080,7 @@ describe("ChauffeurApp", () => {
   it("shows completed orders count in header", async () => {
     renderWithActiveDriver("d1");
     await waitFor(() => {
-      // 0 / 0 Voltooid when no orders
-      expect(screen.getByText(/0 \/ 0 Voltooid/)).toBeInTheDocument();
+      expect(screen.getByText(/0 \/ 0 voltooid/i)).toBeInTheDocument();
     });
   });
 });

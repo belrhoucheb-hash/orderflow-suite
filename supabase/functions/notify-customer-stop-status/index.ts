@@ -142,7 +142,7 @@ serve(async (req) => {
     // Trip stop -> trip -> tenant + order
     const { data: stop, error: stopErr } = await supabase
       .from("trip_stops")
-      .select("id, trip_id, order_id, planned_time")
+      .select("id, trip_id, order_id, planned_time, last_notified_status")
       .eq("id", body.trip_stop_id)
       .single();
     if (stopErr || !stop) {
@@ -150,6 +150,16 @@ serve(async (req) => {
       return new Response(JSON.stringify({ skipped: "stop_not_found" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Dedup: zelfde status voor deze stop al eerder gebroadcast?
+    // Dit voorkomt dubbel-fire wanneer zowel de DB-trigger als de hook deze
+    // function aanroepen voor dezelfde overgang.
+    if ((stop as { last_notified_status?: string | null }).last_notified_status === body.status) {
+      return new Response(
+        JSON.stringify({ skipped: true, reason: "already_notified" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     const { data: trip } = await supabase
@@ -243,6 +253,16 @@ serve(async (req) => {
     const { error: notifErr } = await supabase.from("notifications").insert(notificationRows);
     if (notifErr) {
       console.error("notify-customer-stop-status: portal-insert mislukt", notifErr);
+    } else {
+      // Markeer deze status als verstuurd zodat een herhaalde aanroep
+      // (bv. door de DB-trigger plus de hook) niet opnieuw broadcast.
+      const { error: markErr } = await supabase
+        .from("trip_stops")
+        .update({ last_notified_status: body.status })
+        .eq("id", stop.id);
+      if (markErr) {
+        console.warn("notify-customer-stop-status: last_notified_status update mislukt", markErr);
+      }
     }
 
     // Email/SMS via bestaande pipeline. Falen mag niet gooien.

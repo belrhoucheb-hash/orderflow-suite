@@ -457,17 +457,22 @@ export function useSavePOD() {
       recipient_name: string;
       notes?: string;
     }) => {
-      const { error } = await supabase.from("proof_of_delivery").insert({
-        trip_stop_id: input.trip_stop_id,
-        order_id: input.order_id || null,
-        pod_status: "ONTVANGEN",
-        signature_url: input.signature_url,
-        photos: input.photos || [],
-        recipient_name: input.recipient_name,
-        received_at: new Date().toISOString(),
-        notes: input.notes || null,
-      });
+      const { data, error } = await supabase
+        .from("proof_of_delivery")
+        .insert({
+          trip_stop_id: input.trip_stop_id,
+          order_id: input.order_id || null,
+          pod_status: "ONTVANGEN",
+          signature_url: input.signature_url,
+          photos: input.photos || [],
+          recipient_name: input.recipient_name,
+          received_at: new Date().toISOString(),
+          notes: input.notes || null,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
+      return data as { id: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trips"] });

@@ -111,9 +111,15 @@ async function uploadDataUrl(
 
 /**
  * Attempt to sync a single pending POD to the server.
- * Returns true if successful.
+ * Returns an outcome describing whether the insert succeeded and whether
+ * any photo uploads failed. Photos worden parallel geüpload zodat één
+ * trage upload de hele sync niet vertraagt; partial-success is OK.
  */
-async function syncSinglePOD(pod: PendingPOD): Promise<boolean> {
+type SyncOutcome =
+  | { ok: true; partialPhotoFailure: boolean }
+  | { ok: false; partialPhotoFailure: boolean; hadPhotos: boolean };
+
+async function syncSinglePOD(pod: PendingPOD): Promise<SyncOutcome> {
   try {
     // Upload signature
     let signatureUrl: string | null = null;
@@ -121,16 +127,36 @@ async function syncSinglePOD(pod: PendingPOD): Promise<boolean> {
       signatureUrl = await uploadDataUrl(pod.orderId, "signature", pod.signatureDataUrl, "image/png", "png");
     }
 
-    // Upload photos
+    // Upload photos parallel zodat de slowest-link niet alle anderen blokkeert.
+    const hadPhotos = pod.photoDataUrls.length > 0;
+    const photoResults = await Promise.allSettled(
+      pod.photoDataUrls.map((dataUrl) =>
+        uploadDataUrl(pod.orderId, "photo", dataUrl, "image/jpeg", "jpg"),
+      ),
+    );
+
     const photoEntries: { url: string; type: string }[] = [];
-    for (let i = 0; i < pod.photoDataUrls.length; i++) {
-      const url = await uploadDataUrl(pod.orderId, "photo", pod.photoDataUrls[i], "image/jpeg", "jpg");
-      if (url) {
-        photoEntries.push({ url, type: "delivery_photo" });
+    let photoFailures = 0;
+    photoResults.forEach((res, idx) => {
+      if (res.status === "fulfilled" && res.value) {
+        photoEntries.push({ url: res.value, type: "delivery_photo" });
+      } else {
+        photoFailures++;
+        const reason = res.status === "rejected" ? res.reason : "upload returned null";
+        console.error(`Offline POD foto ${idx + 1} upload mislukt:`, reason);
       }
+    });
+
+    const partialPhotoFailure = photoFailures > 0 && photoEntries.length > 0;
+    const allPhotosFailed = hadPhotos && photoEntries.length === 0;
+
+    // Geen succesvolle foto's terwijl ze er wel waren: laat de POD pending zodat
+    // we het later opnieuw kunnen proberen.
+    if (allPhotosFailed) {
+      return { ok: false, partialPhotoFailure: false, hadPhotos };
     }
 
-    // Insert POD record
+    // Insert POD record met de foto's die het wel haalden.
     const { error } = await supabase.from("proof_of_delivery").insert({
       trip_stop_id: pod.tripStopId,
       order_id: pod.orderId || null,
@@ -144,13 +170,13 @@ async function syncSinglePOD(pod: PendingPOD): Promise<boolean> {
 
     if (error) {
       console.error("Offline POD sync insert error:", error);
-      return false;
+      return { ok: false, partialPhotoFailure, hadPhotos };
     }
 
-    return true;
+    return { ok: true, partialPhotoFailure };
   } catch (err) {
     console.error("Offline POD sync failed:", err);
-    return false;
+    return { ok: false, partialPhotoFailure: false, hadPhotos: pod.photoDataUrls.length > 0 };
   }
 }
 
@@ -176,12 +202,13 @@ export async function syncPendingPODs(): Promise<{ synced: number; failed: numbe
       continue;
     }
 
-    const success = await syncSinglePOD(pod);
-    if (success) {
+    const outcome = await syncSinglePOD(pod);
+    if (outcome.ok) {
       await removePendingPOD(pod.id);
       synced++;
     } else {
-      // Verhoog retry-teller en sla opnieuw op.
+      // Bij partial-success op foto's hebben we geen insert gedaan; bij volledige
+      // foto-fail óf insert-fail bumpen we de retry-teller.
       await savePendingPOD({ ...pod, retryCount: retries + 1 });
       failed++;
     }
