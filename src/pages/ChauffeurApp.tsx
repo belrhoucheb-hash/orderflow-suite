@@ -14,13 +14,14 @@ import { TripFlow } from "@/components/chauffeur/TripFlow";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
 import { MijnWeekView } from "@/components/chauffeur/MijnWeekView";
 import { useVehicleCheckGate } from "@/hooks/useVehicleCheck";
-import { useDriverTrips, useUpdateStopStatus } from "@/hooks/useTrips";
+import { useDriverTrips, useUpdateStopStatus, useSavePOD } from "@/hooks/useTrips";
 import { useDriverSchedulesRealtime } from "@/hooks/useDriverSchedulesRealtime";
 import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
 import { cn } from "@/lib/utils";
 import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineStore";
 import { getPodFileUrl, uploadPodBlob } from "@/lib/podStorage";
+import { compressImage, compressImageToDataUrl } from "@/lib/imageCompress";
 
 /**
  * Hash a PIN using PBKDF2 (100k iteraties, SHA-256) met een per-driver salt.
@@ -506,6 +507,7 @@ export default function ChauffeurApp() {
   // -- Geofence Arrival Detection --
   const { data: driverTrips = [] } = useDriverTrips(activeDriverId);
   const updateStopStatus = useUpdateStopStatus();
+  const savePOD = useSavePOD();
   const allActiveStops: TripStop[] = driverTrips.flatMap(
     (trip: any) => (trip.trip_stops || []) as TripStop[]
   );
@@ -617,9 +619,16 @@ export default function ChauffeurApp() {
         return;
       }
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = async (ev) => {
         const dataUrl = ev.target?.result as string;
-        setPodPhotos(prev => [...prev, dataUrl]);
+        if (!dataUrl) return;
+        try {
+          const compressed = await compressImageToDataUrl(dataUrl, 1600, 0.8);
+          setPodPhotos(prev => [...prev, compressed]);
+        } catch (err) {
+          console.error("Foto-compressie mislukt, originele versie gebruikt:", err);
+          setPodPhotos(prev => [...prev, dataUrl]);
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -727,23 +736,36 @@ export default function ChauffeurApp() {
     });
   };
 
-  // -- Upload photos to Supabase Storage --
+  // -- Upload photos to Supabase Storage (parallel) --
   const uploadPhotos = async (orderId: string): Promise<string[]> => {
-    const urls: string[] = [];
-    
-    for (let i = 0; i < podPhotos.length; i++) {
-      const dataUrl = podPhotos[i];
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
-      
+    if (podPhotos.length === 0) return [];
+
+    const tasks = podPhotos.map(async (dataUrl, index) => {
+      const blob = await compressImage(dataUrl, 1600, 0.8);
       const storagePath = await uploadPodBlob(blob, {
         orderId,
         kind: "photo",
         contentType: "image/jpeg",
         extension: "jpg",
       });
+      if (!storagePath) throw new Error(`Foto ${index + 1} upload zonder pad`);
+      return storagePath;
+    });
 
-      if (storagePath) urls.push(storagePath);
+    const results = await Promise.allSettled(tasks);
+    const urls: string[] = [];
+    let failures = 0;
+    results.forEach((res, idx) => {
+      if (res.status === "fulfilled") {
+        urls.push(res.value);
+      } else {
+        failures++;
+        console.error(`POD foto ${idx + 1} upload mislukt:`, res.reason);
+      }
+    });
+
+    if (failures > 0) {
+      toast.error(`${failures} foto('s) konden niet worden geupload`);
     }
 
     return urls;
@@ -795,29 +817,30 @@ export default function ChauffeurApp() {
       return;
     }
 
+    const tripStopId: string | null = selectedOrder._tripStopId || null;
+    if (!tripStopId) {
+      toast.error("Geen trip-stop gekoppeld aan deze aflevering");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // Upload signature
-      const signatureUrl = await uploadSignature(selectedOrder.id);
-      
-      // Upload photos
-      const photoUrls = await uploadPhotos(selectedOrder.id);
+      const [signatureUrl, photoUrls] = await Promise.all([
+        uploadSignature(selectedOrder.id),
+        uploadPhotos(selectedOrder.id),
+      ]);
 
-      // Update order
-      const { error } = await supabase
-        .from("orders" as any)
-        .update({
-          status: "DELIVERED",
-          pod_signature_url: signatureUrl,
-          pod_photos: photoUrls,
-          pod_signed_by: podSignedBy || null,
-          pod_signed_at: new Date().toISOString(),
-          pod_notes: podNotes || null,
-        })
-        .eq("id", selectedOrder.id);
-        
-      if (error) throw error;
-      
+      await savePOD.mutateAsync({
+        trip_stop_id: tripStopId,
+        order_id: selectedOrder.id || undefined,
+        signature_url: signatureUrl ?? "",
+        photos: photoUrls.map((url) => ({ url, type: "delivery_photo" })),
+        recipient_name: podSignedBy || "",
+        notes: podNotes || undefined,
+      });
+
+      await updateStopStatus.mutateAsync({ stopId: tripStopId, status: "AFGELEVERD" });
+
       toast.success("Zending succesvol afgeleverd!", {
         description: "Handtekening en bewijs zijn opgeslagen."
       });
@@ -833,7 +856,7 @@ export default function ChauffeurApp() {
 
         await savePendingPOD({
           id: `pod-${selectedOrder.id}-${Date.now()}`,
-          tripStopId: selectedOrder._tripStopId || selectedOrder.id,
+          tripStopId,
           orderId: selectedOrder.id,
           recipientName: podSignedBy || "",
           signatureDataUrl,
@@ -1341,7 +1364,7 @@ export default function ChauffeurApp() {
 
         {/* Trip-based workflow (new) */}
         {activeDriverId && (
-          <TripFlow driverId={activeDriverId} onStartPOD={(stop) => {
+          <TripFlow driverId={activeDriverId} currentPosition={currentPosition ? { lat: currentPosition.latitude, lng: currentPosition.longitude } : null} onStartPOD={(stop) => {
             // Map trip stop to order-like object for POD capture
             const fakeOrder = { id: stop.order_id || stop.id, client_name: stop.contact_name || "", delivery_address: stop.planned_address || "", status: "IN_TRANSIT", _tripStopId: stop.id };
             setSelectedOrder(fakeOrder);

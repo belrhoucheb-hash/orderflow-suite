@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Check, X, Play, MapPin, Navigation, AlertTriangle, Camera, Fingerprint, Package, Truck, ChevronRight, Clock } from "lucide-react";
 import { PackagingRegistration } from "./PackagingRegistration";
+import { LiveTripMap } from "./LiveTripMap";
+import { NextStopHero } from "./NextStopHero";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -13,12 +15,13 @@ import { PreDepartureInfoCheck } from "./PreDepartureInfoCheck";
 
 interface Props {
   driverId: string;
+  currentPosition?: { lat: number; lng: number } | null;
   onStartPOD: (stop: TripStop) => void; // Callback to show POD capture in parent
   onTripStarted?: (tripId: string) => void;  // Called when trip becomes ACTIEF
   onTripCompleted?: (tripId: string) => void; // Called when trip is completed
 }
 
-export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted }: Props) {
+export function TripFlow({ driverId, currentPosition = null, onStartPOD, onTripStarted, onTripCompleted }: Props) {
   const { data: trips = [], isLoading } = useDriverTrips(driverId);
   const updateTrip = useUpdateTripStatus();
   const updateStop = useUpdateStopStatus();
@@ -199,6 +202,27 @@ export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted 
           </div>
         )}
       </div>
+
+      {/* Live navigation hero + map (only while trip is active) */}
+      {selectedTrip.dispatch_status === "ACTIEF" && currentStop && (
+        <div className="space-y-3 px-4 pt-4">
+          <NextStopHero
+            stop={currentStop}
+            currentPosition={currentPosition ?? null}
+            onNavigate={() => handleNavigate(currentStop.planned_address || "")}
+            onCall={() => {
+              if (currentStop.contact_phone) {
+                window.location.href = `tel:${currentStop.contact_phone}`;
+              }
+            }}
+          />
+          <LiveTripMap
+            currentPosition={currentPosition ?? null}
+            stops={sortedStops}
+            currentStopId={currentStop.id}
+          />
+        </div>
+      )}
 
       {/* Stop list */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
