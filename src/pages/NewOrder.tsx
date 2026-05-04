@@ -69,6 +69,53 @@ import { LuxeTimePicker } from "@/components/LuxeTimePicker";
 import type { FinancialTabPayload, FinancialTabCargo } from "@/components/orders/FinancialTab";
 import { IntakeSourceBadge } from "@/components/intake/IntakeSourceBadge";
 import type { RoutePreviewMapStop } from "@/components/orders/RoutePreviewMap";
+import type {
+  CargoRow,
+  FreightLine,
+  GooglePlaceDetailsResult,
+  PlannerLocationOption,
+  RouteLegInsight,
+  SmartOrderDraft,
+} from "@/lib/newOrder/types";
+import {
+  addressFromAddressBookEntry,
+  addressFromClientLocation,
+  addressFromClientRecord,
+  addressLooksIncompleteWarning,
+  addressTextFromUnknown,
+  addressValueFromFreightLine,
+  addressValueFromGoogleDetails,
+  bestEffortAddressValue,
+  buildRouteLegInsights,
+  cargoRowIssue,
+  cleanupLocationText,
+  composeSearchLabel,
+  extractClientHint,
+  formatDuration,
+  formatEta,
+  hasUsableAddress,
+  normalizeLookup,
+  parseRouteDeparture,
+  parseSmartOrderInput,
+  roadDistanceKm,
+  routeAverageSpeedKmh,
+  routeQuestionForIssue,
+  sanitizeFreightLine,
+  shouldLearnAlias,
+  toAddressSuggestionOption,
+  totalRouteDistanceKm,
+  vehicleCapacityIssue,
+} from "@/lib/newOrder/helpers";
+import {
+  applyDraftFormSnapshot,
+  applyDraftWizardSnapshot,
+  buildLocalDraftSnapshot,
+  buildServerDraftPayload,
+  parseLocalDraft,
+  parseServerDraftPayload,
+  type DraftFormSetters,
+  type DraftWizardSetters,
+} from "@/lib/newOrder/draftStorage";
 
 const FinancialTab = lazy(() =>
   import("@/components/orders/FinancialTab").then((module) => ({ default: module.FinancialTab })),
@@ -95,33 +142,6 @@ type TransportFlowChoice = "import" | "export" | "direct";
 type ContactChoiceMode = "existing" | "manual";
 type ServerDraftLifecycleStatus = "DRAFT" | "PENDING" | "NEEDS_REVIEW" | "PLANNED" | "CANCELLED" | "ON_HOLD" | "ABANDONED";
 type DraftSaveStatus = "idle" | "creating" | "saving" | "saved" | "error" | "conflict";
-
-interface FreightLine {
-  id: string;
-  activiteit: "Laden" | "Lossen";
-  companyName?: string;
-  locatie: string;
-  datum: string;
-  tijd: string;
-  tijdTot: string;
-  referentie: string;
-  contactLocatie: string;
-  opmerkingen: string;
-  driverInstructions?: string;
-  requiresTailLift?: boolean;
-  temperatureControlled?: boolean;
-  photoRequired?: boolean;
-  vehicleTypeId?: string | null;
-  vehicleTypeLabel?: string | null;
-  warehouseId?: string;
-  warehouseReferenceMode?: "manual" | "order_number";
-  warehouseReferencePrefix?: string | null;
-  // Optionele coord-info per leg, voorbereidend voor hub-routing
-  // op afstand en betere Webfleet-export per stop.
-  lat?: number | null;
-  lng?: number | null;
-  coords_manual?: boolean;
-}
 
 type RouteStopKind = "pickup" | "stop" | "delivery";
 
@@ -151,41 +171,6 @@ interface FreightSummaryItem {
   afmetingen: string;
 }
 
-interface CargoRow {
-  id: string;
-  aantal: string;
-  eenheid: string;
-  gewicht: string;
-  lengte: string;
-  breedte: string;
-  hoogte: string;
-  stapelbaar: boolean;
-  adr: string;
-  omschrijving: string;
-}
-
-interface PlannerLocationOption {
-  id: string;
-  label: string;
-  subtitle: string;
-  badge: string;
-  value: AddressValue;
-  addressString: string;
-  companyName?: string;
-  contactHint?: string;
-  notesHint?: string;
-  driverInstructions?: string;
-  requiresTailLift?: boolean;
-  temperatureControlled?: boolean;
-  photoRequired?: boolean;
-  timeWindowStart?: string | null;
-  timeWindowEnd?: string | null;
-  warehouseId?: string;
-  warehouseReferenceMode?: "manual" | "order_number";
-  warehouseReferencePrefix?: string | null;
-  warehouseReference?: string | null;
-}
-
 interface PlannerTemplate {
   id: string;
   label: string;
@@ -196,26 +181,6 @@ interface PlannerTemplate {
   voertuigtype?: string;
   klepNodig?: boolean;
   shipmentSecure?: boolean;
-}
-
-interface SmartOrderDraft {
-  raw: string;
-  clientHint: string;
-  pickupHint: string;
-  deliveryHint: string;
-  pickupDate: string;
-  pickupFrom: string;
-  pickupTo: string;
-  deliveryDate: string;
-  deliveryBefore: string;
-  quantity: string;
-  unit: "Pallets" | "Colli" | "Box";
-  weightKg: string;
-  reference: string;
-  priority: "Standaard" | "Spoed" | "Retour";
-  missing: string[];
-  matchedClientId?: string | null;
-  matchedClientName?: string | null;
 }
 
 const today = new Date().toISOString().split("T")[0];
@@ -270,504 +235,6 @@ const WIZARD_STEPS: { key: WizardStep; label: string; hint: string }[] = [
   { key: "review", label: "Controle", hint: "Valideren en aanmaken" },
 ];
 
-function toIsoDate(offsetDays = 0): string {
-  const next = new Date();
-  next.setDate(next.getDate() + offsetDays);
-  return next.toISOString().slice(0, 10);
-}
-
-function normalizeSmartText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function findKeywordIndex(haystack: string, keywords: string[]): number {
-  const lower = normalizeSmartText(haystack).toLowerCase();
-  const hits = keywords
-    .map((keyword) => {
-      const idx = lower.indexOf(keyword.toLowerCase());
-      return idx >= 0 ? idx : Number.POSITIVE_INFINITY;
-    })
-    .filter((idx) => Number.isFinite(idx));
-  return hits.length > 0 ? Math.min(...hits) : -1;
-}
-
-function extractClientHint(raw: string): string {
-  const splitIndex = findKeywordIndex(raw, [" ophalen ", " pickup ", " laden ", " van "]);
-  const beforePickup = splitIndex >= 0 ? raw.slice(0, splitIndex) : raw;
-  const cleaned = beforePickup
-    .replace(/\b(?:vandaag|morgen|spoed|retour|ref(?:erentie)?|po|order(?:nummer)?)\b.*$/i, "")
-    .split(",")[0]
-    ?.trim() ?? "";
-  return cleaned;
-}
-
-function extractSegment(raw: string, keywords: string[], untilKeywords: string[]): string {
-  const normalized = normalizeSmartText(raw);
-  const startPattern = new RegExp(`\\b(?:${keywords.join("|")})\\b`, "i");
-  const startMatch = normalized.match(startPattern);
-  if (!startMatch || startMatch.index == null) return "";
-
-  const fromStart = normalized.slice(startMatch.index + startMatch[0].length).trim();
-  const stopPattern = new RegExp(`\\b(?:${untilKeywords.join("|")})\\b`, "i");
-  const stopMatch = fromStart.match(stopPattern);
-  const segment = stopMatch?.index != null ? fromStart.slice(0, stopMatch.index) : fromStart;
-  return segment.replace(/\s+/g, " ").trim();
-}
-
-function extractTimeRange(segment: string): { from: string; to: string } {
-  const range = segment.match(/(\d{1,2}[:.]\d{2})\s*(?:-|tot|t\/m)\s*(\d{1,2}[:.]\d{2})/i);
-  if (!range) return { from: "", to: "" };
-  return {
-    from: range[1].replace(".", ":").padStart(5, "0"),
-    to: range[2].replace(".", ":").padStart(5, "0"),
-  };
-}
-
-function extractBeforeTime(segment: string): string {
-  const before = normalizeSmartText(segment).match(/\b(?:voor|before)\s*(\d{1,2}[:.]\d{2})/i);
-  return before?.[1]?.replace(".", ":").padStart(5, "0") ?? "";
-}
-
-function extractExactTime(segment: string): string {
-  const normalized = normalizeSmartText(segment);
-  const direct = normalized.match(/\b(?:om|at)?\s*(\d{1,2}[:.]\d{2})\b/i);
-  return direct?.[1]?.replace(".", ":").padStart(5, "0") ?? "";
-}
-
-function extractDateValue(raw: string): string {
-  const normalized = normalizeSmartText(raw).toLowerCase();
-  if (/\bvandaag\b/.test(normalized)) return toIsoDate(0);
-  if (/\bmorgen\b/.test(normalized)) return toIsoDate(1);
-
-  const explicit = normalized.match(/\b(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{2,4}))?\b/);
-  if (!explicit) return "";
-
-  const day = Number(explicit[1]);
-  const month = Number(explicit[2]);
-  const currentYear = new Date().getFullYear();
-  const year = explicit[3] ? Number(explicit[3].length === 2 ? `20${explicit[3]}` : explicit[3]) : currentYear;
-  if (!day || !month || !year) return "";
-
-  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-}
-
-function cleanupLocationText(value: string): string {
-  return normalizeSmartText(value)
-    .replace(/\b(?:vandaag|morgen)\b.*$/i, "")
-    .replace(/\b(?:voor|before)\s*\d{1,2}[:.]\d{2}\b.*$/i, "")
-    .replace(/\b\d{1,2}[:.]\d{2}\s*(?:-|tot)\s*\d{1,2}[:.]\d{2}\b.*$/i, "")
-    .replace(/\bom\s*\d{1,2}[:.]\d{2}\b.*$/i, "")
-    .replace(/\b\d+\s*(?:pallets?|colli|box|kg)\b.*$/i, "")
-    .replace(/[.,;]\s*$/g, "")
-    .trim();
-}
-
-function parseSmartOrderInput(raw: string, clientMatches: Client[]): SmartOrderDraft {
-  const pickupSegment = extractSegment(raw, ["ophalen", "pickup", "laden", "van"], ["afleveren", "delivery", "lossen", "naar", "vandaag", "morgen"]);
-  const deliverySegment = extractSegment(raw, ["afleveren", "delivery", "lossen", "naar"], ["vandaag", "morgen", "spoed", "retour", "ref", "po"]);
-  const pickupRange = extractTimeRange(raw);
-  const deliveryRange = extractTimeRange(deliverySegment);
-  const pickupExact = extractExactTime(pickupSegment);
-  const deliveryExact = extractExactTime(deliverySegment || raw);
-  const deliveryBefore = extractBeforeTime(deliverySegment || raw);
-  const weightMatch = raw.match(/(\d+(?:[.,]\d+)?)\s*kg\b/i);
-  const palletMatch = raw.match(/(\d+)\s*pallets?\b/i);
-  const colliMatch = raw.match(/(\d+)\s*colli\b/i);
-  const boxMatch = raw.match(/(\d+)\s*box(?:en)?\b/i);
-  const referenceMatch = raw.match(/\b(?:ref(?:erentie)?|po|order(?:nummer)?)\s*[:#-]?\s*([A-Za-z0-9/_-]+)/i);
-  const parsedDate = extractDateValue(raw);
-  const matchedClient = clientMatches.find((client) => raw.toLowerCase().includes(client.name.toLowerCase()))
-    ?? clientMatches.find((client) => extractClientHint(raw).toLowerCase().includes(client.name.toLowerCase()))
-    ?? clientMatches[0]
-    ?? null;
-
-  const quantityMatch = palletMatch ?? colliMatch ?? boxMatch;
-  const unit = palletMatch ? "Pallets" : colliMatch ? "Colli" : "Box";
-
-  const draft: SmartOrderDraft = {
-    raw,
-    clientHint: matchedClient?.name ?? extractClientHint(raw),
-    pickupHint: cleanupLocationText(pickupSegment),
-    deliveryHint: cleanupLocationText(deliverySegment),
-    pickupDate: parsedDate,
-    pickupFrom: pickupRange.from || pickupExact,
-    pickupTo: pickupRange.to,
-    deliveryDate: parsedDate,
-    deliveryBefore: deliveryBefore || deliveryRange.to || deliveryExact,
-    quantity: quantityMatch?.[1] ?? "",
-    unit,
-    weightKg: weightMatch?.[1]?.replace(",", ".") ?? "",
-    reference: referenceMatch?.[1] ?? "",
-    priority: /\bspoed|express\b/i.test(raw) ? "Spoed" : /\bretour\b/i.test(raw) ? "Retour" : "Standaard",
-    missing: [],
-    matchedClientId: matchedClient?.id ?? null,
-    matchedClientName: matchedClient?.name ?? null,
-  };
-
-  draft.missing = [
-    !draft.clientHint && "klant",
-    !draft.pickupHint && "ophaaladres",
-    !draft.deliveryHint && "afleveradres",
-    !draft.quantity && "aantal",
-    !draft.weightKg && "gewicht",
-    !draft.pickupDate && !draft.deliveryDate && !draft.pickupFrom && !draft.deliveryBefore && "datum/tijd",
-  ].filter(Boolean) as string[];
-
-  return draft;
-}
-
-function normalizeLookup(value: string | null | undefined): string {
-  return (value ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function addressLooksIncompleteWarning(address: AddressValue, composed: string | null | undefined): string | null {
-  if (!composed?.trim()) return null;
-  if (!address.street || (!address.zipcode && !address.city)) {
-    return "Adres is onvolledig: controleer straat, postcode en plaats.";
-  }
-  if (address.zipcode && address.city && !/\d/.test(address.zipcode)) {
-    return "Postcode lijkt niet te kloppen bij de plaats.";
-  }
-  return null;
-}
-
-function cargoRowIssue(row: CargoRow, index: number): string | null {
-  const hasAnyValue = Boolean(row.aantal || row.gewicht || row.omschrijving || row.adr || row.lengte || row.breedte || row.hoogte);
-  if (!hasAnyValue) return null;
-  const label = `Ladingregel ${index + 1}`;
-  if (!row.eenheid) return `${label}: eenheid is verplicht.`;
-  if ((parseInt(row.aantal) || 0) <= 0) return `${label}: aantal moet groter zijn dan 0.`;
-  if ((parseFloat(row.gewicht) || 0) <= 0) return `${label}: gewicht moet groter zijn dan 0.`;
-  return null;
-}
-
-function vehicleCapacityIssue(
-  vehicleType: string,
-  cargo: FinancialTabCargo,
-): string | null {
-  if (!vehicleType) return null;
-  const normalized = vehicleType.toLowerCase();
-  const capacity = normalized.includes("bestel")
-    ? { label: "Bestelbus", maxWeightKg: 1200, maxPallets: 6, maxLengthCm: 420, maxWidthCm: 180, maxHeightCm: 190 }
-    : normalized.includes("trailer")
-      ? { label: "Trailer", maxWeightKg: 24000, maxPallets: 33, maxLengthCm: 1360, maxWidthCm: 250, maxHeightCm: 280 }
-      : normalized.includes("vracht")
-        ? { label: "Vrachtwagen", maxWeightKg: 12000, maxPallets: 18, maxLengthCm: 750, maxWidthCm: 245, maxHeightCm: 260 }
-        : null;
-  if (!capacity) return null;
-  if (cargo.totalWeightKg > capacity.maxWeightKg) {
-    return `Voertuig ongeschikt: ${capacity.label} kan maximaal ${capacity.maxWeightKg.toLocaleString("nl-NL")} kg laden.`;
-  }
-  if ((cargo.unit || "").toLowerCase().includes("pallet") && (cargo.totalQuantity ?? 0) > capacity.maxPallets) {
-    return `Voertuig ongeschikt: ${capacity.label} heeft maximaal ${capacity.maxPallets} palletplaatsen.`;
-  }
-  if (cargo.maxLengthCm > capacity.maxLengthCm || cargo.maxWidthCm > capacity.maxWidthCm || cargo.maxHeightCm > capacity.maxHeightCm) {
-    return `Voertuig ongeschikt: afmetingen passen niet globaal in ${capacity.label}.`;
-  }
-  return null;
-}
-
-function routeQuestionForIssue(issue: OrderRouteRuleIssue | undefined): 1 | 2 | 3 | 4 {
-  if (!issue) return 4;
-  if (issue.key === "route_duplicate") return issue.label === "Levermoment" ? 2 : 4;
-  if (issue.key === "pickup_time_window") return 3;
-  return 4;
-}
-
-interface RouteLegInsight {
-  id: string;
-  fromLabel: string;
-  toLabel: string;
-  distanceLabel: string;
-  durationLabel: string;
-  etaLabel: string;
-  hasGps: boolean;
-}
-
-interface GooglePlaceDetailsResult {
-  formatted_address?: string;
-  street?: string;
-  house_number?: string;
-  zipcode?: string;
-  city?: string;
-  country?: string;
-  lat?: number | null;
-  lng?: number | null;
-}
-
-function toRad(value: number): number {
-  return (value * Math.PI) / 180;
-}
-
-function roadDistanceKm(
-  from: Pick<FreightLine, "lat" | "lng">,
-  to: Pick<FreightLine, "lat" | "lng">,
-): number | null {
-  if (from.lat == null || from.lng == null || to.lat == null || to.lng == null) return null;
-  const earthKm = 6371;
-  const dLat = toRad(to.lat - from.lat);
-  const dLng = toRad(to.lng - from.lng);
-  const lat1 = toRad(from.lat);
-  const lat2 = toRad(to.lat);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  const straightKm = 2 * earthKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Math.max(1, straightKm * 1.28);
-}
-
-function totalRouteDistanceKm(stops: RoutePreviewMapStop[]): number | null {
-  const mappedStops = stops.filter((stop) => stop.line?.lat != null && stop.line?.lng != null);
-  if (mappedStops.length < 2 || mappedStops.length !== stops.length) return null;
-
-  let total = 0;
-  for (let index = 0; index < mappedStops.length - 1; index += 1) {
-    const from = mappedStops[index].line;
-    const to = mappedStops[index + 1].line;
-    if (!from || !to) return null;
-    const distance = roadDistanceKm(from, to);
-    if (distance == null) return null;
-    total += distance;
-  }
-
-  return Math.round(total * 10) / 10;
-}
-
-function routeAverageSpeedKmh(vehicle: string): number {
-  const normalized = vehicle.toLowerCase();
-  if (normalized.includes("bus")) return 72;
-  if (normalized.includes("vracht") || normalized.includes("truck")) return 62;
-  return 66;
-}
-
-function parseRouteDeparture(line: FreightLine): Date | null {
-  if (!line.datum || !line.tijd) return null;
-  const date = new Date(`${line.datum}T${line.tijd}`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function formatDuration(minutes: number): string {
-  const rounded = Math.max(1, Math.round(minutes));
-  const hours = Math.floor(rounded / 60);
-  const mins = rounded % 60;
-  if (hours <= 0) return `${mins} min`;
-  return `${hours}u ${mins.toString().padStart(2, "0")}`;
-}
-
-function formatEta(date: Date): string {
-  return date.toLocaleString("nl-NL", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function buildRouteLegInsights(
-  stops: RoutePreviewMapStop[],
-  vehicle: string,
-): RouteLegInsight[] {
-  const speed = routeAverageSpeedKmh(vehicle);
-  return stops.slice(0, -1).map((stop, index) => {
-    const next = stops[index + 1];
-    const from = stop.line;
-    const to = next.line;
-    const distance = from && to ? roadDistanceKm(from, to) : null;
-    const minutes = distance == null ? null : (distance / speed) * 60;
-    const departure = from ? parseRouteDeparture(from) : null;
-    const eta = departure && minutes != null
-      ? new Date(departure.getTime() + minutes * 60_000)
-      : null;
-
-    return {
-      id: `${stop.id}-${next.id}`,
-      fromLabel: stop.label,
-      toLabel: next.label,
-      distanceLabel: distance == null ? "GPS nodig" : `± ${Math.round(distance)} km`,
-      durationLabel: minutes == null ? "ETA volgt" : `± ${formatDuration(minutes)}`,
-      etaLabel: eta ? `ETA ${formatEta(eta)}` : "Datum/tijd nodig",
-      hasGps: distance != null,
-    };
-  });
-}
-
-function addressValueFromGoogleDetails(
-  details: GooglePlaceDetailsResult,
-  fallbackAddress: string,
-): AddressValue {
-  return {
-    ...bestEffortAddressValue(details.formatted_address || fallbackAddress, details.country || "NL"),
-    street: details.street || details.formatted_address || fallbackAddress,
-    house_number: details.house_number || "",
-    house_number_suffix: "",
-    zipcode: details.zipcode || "",
-    city: details.city || "",
-    country: details.country || "NL",
-    lat: typeof details.lat === "number" ? details.lat : null,
-    lng: typeof details.lng === "number" ? details.lng : null,
-    coords_manual: false,
-  };
-}
-
-function composeSearchLabel(address: AddressValue): string {
-  return [address.street, address.house_number, address.house_number_suffix].filter(Boolean).join(" ");
-}
-
-function shouldLearnAlias(alias: string, resolvedAddress: string): boolean {
-  const normalizedAlias = normalizeLookup(alias);
-  if (normalizedAlias.length < 3) return false;
-  return normalizedAlias !== normalizeLookup(resolvedAddress);
-}
-
-function addressTextFromUnknown(address: unknown): string {
-  if (typeof address === "string") return address.trim();
-  if (!address || typeof address !== "object") return "";
-
-  const record = address as Record<string, unknown>;
-  if (typeof record.display === "string" && record.display.trim()) {
-    return record.display.trim();
-  }
-
-  return [
-    [record.street, record.house_number, record.house_number_suffix].filter((part) => typeof part === "string" && part.trim()).join(" "),
-    [record.zipcode, record.city].filter((part) => typeof part === "string" && part.trim()).join(" "),
-    typeof record.country === "string" ? record.country : "",
-  ]
-    .filter((part) => part.trim())
-    .join(", ")
-    .trim();
-}
-
-function bestEffortAddressValue(address: unknown, fallbackCountry = "NL"): AddressValue {
-  const trimmed = addressTextFromUnknown(address);
-  if (!trimmed) return { ...EMPTY_ADDRESS, country: fallbackCountry };
-  const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
-  const streetPart = parts[0] ?? trimmed;
-  const streetMatch = streetPart.match(/^(.*?)(?:\s+(\d+[A-Za-z]?))(?:\s+([A-Za-z0-9-]+))?$/);
-  const postcodeMatch = trimmed.match(/\b\d{4}\s?[A-Z]{2}\b/i);
-  const countryMatch = parts[parts.length - 1]?.length === 2 ? parts[parts.length - 1].toUpperCase() : fallbackCountry;
-  const cityPart = parts.length > 1 ? parts[1].replace(/\b\d{4}\s?[A-Z]{2}\b/i, "").trim() : "";
-
-  return {
-    street: streetMatch?.[1]?.trim() || streetPart,
-    house_number: streetMatch?.[2]?.trim() || "",
-    house_number_suffix: streetMatch?.[3]?.trim() || "",
-    zipcode: postcodeMatch?.[0]?.toUpperCase() || "",
-    city: cityPart,
-    country: countryMatch || fallbackCountry,
-    lat: null,
-    lng: null,
-    coords_manual: false,
-  };
-}
-
-function sanitizeFreightLine(line: FreightLine): FreightLine {
-  const vehicleTypeLabel = typeof line.vehicleTypeLabel === "string" ? line.vehicleTypeLabel : null;
-  const vehicleTypeId = typeof line.vehicleTypeId === "string" ? line.vehicleTypeId : null;
-  return {
-    ...line,
-    locatie: addressTextFromUnknown(line.locatie),
-    vehicleTypeId,
-    vehicleTypeLabel,
-  };
-}
-
-function hasUsableAddress(addr: AddressValue): boolean {
-  const street = addr.street.trim();
-  const hasLocality = Boolean(addr.zipcode.trim() || addr.city.trim());
-  const hasResolvedLocation = addr.lat != null && addr.lng != null;
-  const looksLikeFullGoogleLabel = street.includes(",");
-
-  return Boolean(street && (hasLocality || hasResolvedLocation || looksLikeFullGoogleLabel));
-}
-
-function addressValueFromFreightLine(line: FreightLine | null | undefined): AddressValue {
-  if (!line?.locatie) {
-    return { ...EMPTY_ADDRESS, country: "NL" };
-  }
-  return {
-    ...bestEffortAddressValue(line.locatie),
-    lat: line.lat ?? null,
-    lng: line.lng ?? null,
-    coords_manual: line.coords_manual ?? false,
-  };
-}
-
-function addressFromClientRecord(client: Client | null | undefined, type: "main" | "shipping"): AddressValue {
-  if (!client) return { ...EMPTY_ADDRESS };
-  if (type === "shipping") {
-    return {
-      street: client.shipping_street || "",
-      house_number: client.shipping_house_number || "",
-      house_number_suffix: client.shipping_house_number_suffix || "",
-      zipcode: client.shipping_zipcode || "",
-      city: client.shipping_city || "",
-      country: client.shipping_country || "NL",
-      lat: client.shipping_lat,
-      lng: client.shipping_lng,
-      coords_manual: client.shipping_coords_manual,
-    };
-  }
-  return {
-    street: client.street || "",
-    house_number: client.house_number || "",
-    house_number_suffix: client.house_number_suffix || "",
-    zipcode: client.zipcode || "",
-    city: client.city || "",
-    country: client.country || "NL",
-    lat: client.lat,
-    lng: client.lng,
-    coords_manual: client.coords_manual,
-  };
-}
-
-function addressFromAddressBookEntry(entry: AddressBookEntry): AddressValue {
-  return {
-    street: entry.street || "",
-    house_number: entry.house_number || "",
-    house_number_suffix: entry.house_number_suffix || "",
-    zipcode: entry.zipcode || "",
-    city: entry.city || "",
-    country: entry.country || "NL",
-    lat: entry.lat,
-    lng: entry.lng,
-    coords_manual: entry.coords_manual,
-  };
-}
-
-function addressFromClientLocation(location: ClientLocation): AddressValue {
-  return {
-    street: location.street || "",
-    house_number: location.house_number || "",
-    house_number_suffix: location.house_number_suffix || "",
-    zipcode: location.zipcode || "",
-    city: location.city || "",
-    country: location.country || "NL",
-    lat: location.lat,
-    lng: location.lng,
-    coords_manual: location.coords_manual,
-  };
-}
-
-function toAddressSuggestionOption(option: PlannerLocationOption): AddressSuggestionOption {
-  return {
-    id: option.id,
-    title: option.label,
-    subtitle: option.subtitle,
-    badge: option.badge,
-    value: option.value,
-  };
-}
-
 const NewOrder = () => {
   const navigate = useNavigate();
   const { tenant } = useTenantOptional();
@@ -810,13 +277,15 @@ const NewOrder = () => {
   const [clientQuestionConfirmed, setClientQuestionConfirmed] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
   const clientListToggleUntilRef = useRef(0);
-  const { data: clientSuggestions = [] } = useClients(clientName.trim() || undefined);
+  const debouncedClientName = useDebouncedValue(clientName.trim(), 250);
+  const { data: clientSuggestions = [] } = useClients(debouncedClientName || undefined);
   const clientListOpen = clientOpen && clientSuggestions.length > 0;
   const smartClientLookup = useMemo(() => extractClientHint(smartInput), [smartInput]);
-  const { data: smartClientMatches = [] } = useClients(smartClientLookup || undefined);
+  const debouncedSmartClientLookup = useDebouncedValue(smartClientLookup, 250);
+  const { data: smartClientMatches = [] } = useClients(debouncedSmartClientLookup || undefined);
   const { data: selectedClient } = useClient(clientId);
   const { data: clientLocations = [] } = useClientLocations(clientId);
-  const { data: addressSuggestions } = useAddressSuggestions(clientName.trim() || null, clientId || null);
+  const { data: addressSuggestions } = useAddressSuggestions(debouncedClientName || null, clientId || null);
   const { data: clientContacts = [] } = useClientContacts(clientId);
   const createClientContact = useCreateClientContact();
   const { data: warehouses = [] } = useWarehouses();
@@ -928,12 +397,14 @@ const NewOrder = () => {
   const [deliveryAddr, setDeliveryAddr] = useState<AddressValue>({ ...EMPTY_ADDRESS });
   const [pickupAddressBookLabel, setPickupAddressBookLabel] = useState<{ label: string; key: string } | null>(null);
   const [deliveryAddressBookLabel, setDeliveryAddressBookLabel] = useState<{ label: string; key: string } | null>(null);
-  const { data: pickupClientMatches = [] } = useClients(pickupLookup.trim() || undefined);
-  const { data: deliveryClientMatches = [] } = useClients(deliveryLookup.trim() || undefined);
-  const { data: pickupLocationMatches = [] } = useTenantLocationSearch(pickupLookup);
-  const { data: deliveryLocationMatches = [] } = useTenantLocationSearch(deliveryLookup);
-  const { data: pickupAddressBookMatches = [] } = useAddressBookSearch(pickupLookup);
-  const { data: deliveryAddressBookMatches = [] } = useAddressBookSearch(deliveryLookup);
+  const debouncedPickupLookup = useDebouncedValue(pickupLookup, 250);
+  const debouncedDeliveryLookup = useDebouncedValue(deliveryLookup, 250);
+  const { data: pickupClientMatches = [] } = useClients(debouncedPickupLookup.trim() || undefined);
+  const { data: deliveryClientMatches = [] } = useClients(debouncedDeliveryLookup.trim() || undefined);
+  const { data: pickupLocationMatches = [] } = useTenantLocationSearch(debouncedPickupLookup);
+  const { data: deliveryLocationMatches = [] } = useTenantLocationSearch(debouncedDeliveryLookup);
+  const { data: pickupAddressBookMatches = [] } = useAddressBookSearch(debouncedPickupLookup);
+  const { data: deliveryAddressBookMatches = [] } = useAddressBookSearch(debouncedDeliveryLookup);
   const upsertAddressBookEntry = useUpsertAddressBookEntry();
   const vehicleTypeOptions = useMemo(
     () => vehicleTypes
@@ -1749,7 +1220,7 @@ const NewOrder = () => {
   // Aggregated cargo totals (gebruikt door handleSave om de bestaande quantity/weight/unit state
   // te voeden zonder de Supabase-integratie te breken).
   const cargoTotals = useMemo(() => {
-    const totAantal = cargoRows.reduce((s, r) => s + (parseInt(r.aantal) || 0), 0);
+    const totAantal = cargoRows.reduce((s, r) => s + (parseInt(r.aantal, 10) || 0), 0);
     const totGewicht = cargoRows.reduce((s, r) => s + (parseFloat(r.gewicht) || 0), 0);
     const primaryUnit = cargoRows.find(r => r.aantal && r.eenheid)?.eenheid || cargoRows[0]?.eenheid || "";
     return { totAantal, totGewicht, primaryUnit };
@@ -1831,7 +1302,7 @@ const NewOrder = () => {
       .filter((row) => row.aantal || row.gewicht || row.eenheid || row.omschrijving || row.lengte || row.breedte || row.hoogte)
       .map((row) => ({
         id: row.id,
-        quantity: parseInt(row.aantal) || 0,
+        quantity: parseInt(row.aantal, 10) || 0,
         unit: row.eenheid || "",
         weightKg: parseFloat(row.gewicht) || 0,
         lengthCm: parseFloat(row.lengte) || 0,
@@ -2495,7 +1966,7 @@ const NewOrder = () => {
     infoFollows, infoContactName, infoContactEmail, pricingPayload,
   ]);
 
-  const draftPayload = useMemo(() => ({
+  const draftPayload = useMemo(() => buildLocalDraftSnapshot({
     clientName,
     clientId,
     contactpersoon,
@@ -2577,44 +2048,21 @@ const NewOrder = () => {
           return;
         }
 
-        const payload = (data.payload ?? {}) as any;
-        const parsed = (payload.form ?? {}) as Partial<typeof draftPayload>;
-        if (parsed.clientName) {
-          setClientName(parsed.clientName);
-          if (parsed.clientName.trim().length >= 2) setClientQuestionConfirmed(true);
-        }
-        if (parsed.clientId) setClientId(parsed.clientId);
-        if (parsed.contactpersoon) setContactpersoon(parsed.contactpersoon);
-        if (parsed.contactChoiceMode) setContactChoiceMode(parsed.contactChoiceMode);
-        if (parsed.selectedContactId) setSelectedContactId(parsed.selectedContactId);
-        if (parsed.manualContactName) setManualContactName(parsed.manualContactName);
-        if (parsed.manualContactEmail) setManualContactEmail(parsed.manualContactEmail);
-        if (parsed.manualContactPhone) setManualContactPhone(parsed.manualContactPhone);
-        if (parsed.prioriteit) setPrioriteit(parsed.prioriteit);
-        if (parsed.klantReferentie) setKlantReferentie(parsed.klantReferentie);
-        if (parsed.transportFlowChoice) setTransportFlowChoice(parsed.transportFlowChoice);
-        if (parsed.transportType) setTransportType(parsed.transportType);
-        if (typeof parsed.transportTypeManual === "boolean") setTransportTypeManual(parsed.transportTypeManual);
-        if (parsed.afdeling) setAfdeling(parsed.afdeling);
-        if (typeof parsed.afdelingManual === "boolean") setAfdelingManual(parsed.afdelingManual);
-        if (parsed.voertuigtype) setVoertuigtype(parsed.voertuigtype);
-        if (typeof parsed.voertuigtypeManual === "boolean") setVoertuigtypeManual(parsed.voertuigtypeManual);
-        if (parsed.referentie) setReferentie(parsed.referentie);
-        if (parsed.transportEenheid) setTransportEenheid(parsed.transportEenheid);
-        if (parsed.quantity) setQuantity(parsed.quantity);
-        if (parsed.weightKg) setWeightKg(parsed.weightKg);
-        if (Array.isArray(parsed.cargoRows) && parsed.cargoRows.length > 0) setCargoRows(parsed.cargoRows);
-        if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines.map(sanitizeFreightLine));
-        if (parsed.pickupAddr) setPickupAddr({ ...EMPTY_ADDRESS, ...parsed.pickupAddr });
-        if (parsed.deliveryAddr) setDeliveryAddr({ ...EMPTY_ADDRESS, ...parsed.deliveryAddr });
-        if (typeof parsed.klepNodig === "boolean") setKlepNodig(parsed.klepNodig);
-        if (typeof parsed.shipmentSecure === "boolean") setShipmentSecure(parsed.shipmentSecure);
-        if (payload.pricingPayload) setPricingPayload(payload.pricingPayload);
-        if (payload.wizard?.step) setWizardStep(payload.wizard.step);
-        if (payload.wizard?.intakeActiveQuestion) setIntakeActiveQuestion(payload.wizard.intakeActiveQuestion);
-        if (payload.wizard?.routeActiveQuestion) setRouteActiveQuestion(payload.wizard.routeActiveQuestion);
-        if (payload.wizard?.cargoActiveQuestion) setCargoActiveQuestion(payload.wizard.cargoActiveQuestion);
-        if (payload.wizard?.reviewActiveQuestion) setReviewActiveQuestion(payload.wizard.reviewActiveQuestion);
+        const parsedServer = parseServerDraftPayload(data.payload);
+        const formSetters: DraftFormSetters = {
+          setClientName, setClientQuestionConfirmed, setClientId, setContactpersoon, setContactChoiceMode,
+          setSelectedContactId, setManualContactName, setManualContactEmail, setManualContactPhone,
+          setPrioriteit, setKlantReferentie, setTransportFlowChoice, setTransportType, setTransportTypeManual,
+          setAfdeling, setAfdelingManual, setVoertuigtype, setVoertuigtypeManual, setReferentie,
+          setTransportEenheid, setQuantity, setWeightKg, setCargoRows, setFreightLines,
+          setPickupAddr, setDeliveryAddr, setKlepNodig, setShipmentSecure,
+        };
+        const wizardSetters: DraftWizardSetters = {
+          setPricingPayload, setWizardStep, setIntakeActiveQuestion,
+          setRouteActiveQuestion, setCargoActiveQuestion, setReviewActiveQuestion,
+        };
+        applyDraftFormSnapshot(parsedServer.form, formSetters);
+        applyDraftWizardSnapshot(parsedServer.wizard, parsedServer.pricingPayload, wizardSetters);
 
         setServerDraftId(data.id);
         setServerDraftUpdatedAt(data.updated_at ?? null);
@@ -2650,37 +2098,20 @@ const NewOrder = () => {
       return;
     }
     try {
-      const parsed = JSON.parse(raw) as Partial<typeof draftPayload> & { savedAt?: string };
-      if (parsed.clientName) {
-        setClientName(parsed.clientName);
-        if (parsed.clientName.trim().length >= 2) setClientQuestionConfirmed(true);
+      const parsed = parseLocalDraft(raw);
+      if (!parsed) {
+        window.localStorage.removeItem(draftStorageKey);
+        return;
       }
-      if (parsed.clientId) setClientId(parsed.clientId);
-      if (parsed.contactpersoon) setContactpersoon(parsed.contactpersoon);
-      if (parsed.contactChoiceMode) setContactChoiceMode(parsed.contactChoiceMode);
-      if (parsed.selectedContactId) setSelectedContactId(parsed.selectedContactId);
-      if (parsed.manualContactName) setManualContactName(parsed.manualContactName);
-      if (parsed.manualContactEmail) setManualContactEmail(parsed.manualContactEmail);
-      if (parsed.manualContactPhone) setManualContactPhone(parsed.manualContactPhone);
-      if (parsed.prioriteit) setPrioriteit(parsed.prioriteit);
-      if (parsed.klantReferentie) setKlantReferentie(parsed.klantReferentie);
-      if (parsed.transportFlowChoice) setTransportFlowChoice(parsed.transportFlowChoice);
-      if (parsed.transportType) setTransportType(parsed.transportType);
-      if (typeof parsed.transportTypeManual === "boolean") setTransportTypeManual(parsed.transportTypeManual);
-      if (parsed.afdeling) setAfdeling(parsed.afdeling);
-      if (typeof parsed.afdelingManual === "boolean") setAfdelingManual(parsed.afdelingManual);
-      if (parsed.voertuigtype) setVoertuigtype(parsed.voertuigtype);
-      if (typeof parsed.voertuigtypeManual === "boolean") setVoertuigtypeManual(parsed.voertuigtypeManual);
-      if (parsed.referentie) setReferentie(parsed.referentie);
-      if (parsed.transportEenheid) setTransportEenheid(parsed.transportEenheid);
-      if (parsed.quantity) setQuantity(parsed.quantity);
-      if (parsed.weightKg) setWeightKg(parsed.weightKg);
-      if (Array.isArray(parsed.cargoRows) && parsed.cargoRows.length > 0) setCargoRows(parsed.cargoRows);
-      if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines.map(sanitizeFreightLine));
-      if (parsed.pickupAddr) setPickupAddr({ ...EMPTY_ADDRESS, ...parsed.pickupAddr });
-      if (parsed.deliveryAddr) setDeliveryAddr({ ...EMPTY_ADDRESS, ...parsed.deliveryAddr });
-      if (typeof parsed.klepNodig === "boolean") setKlepNodig(parsed.klepNodig);
-      if (typeof parsed.shipmentSecure === "boolean") setShipmentSecure(parsed.shipmentSecure);
+      const formSetters: DraftFormSetters = {
+        setClientName, setClientQuestionConfirmed, setClientId, setContactpersoon, setContactChoiceMode,
+        setSelectedContactId, setManualContactName, setManualContactEmail, setManualContactPhone,
+        setPrioriteit, setKlantReferentie, setTransportFlowChoice, setTransportType, setTransportTypeManual,
+        setAfdeling, setAfdelingManual, setVoertuigtype, setVoertuigtypeManual, setReferentie,
+        setTransportEenheid, setQuantity, setWeightKg, setCargoRows, setFreightLines,
+        setPickupAddr, setDeliveryAddr, setKlepNodig, setShipmentSecure,
+      };
+      applyDraftFormSnapshot(parsed.snapshot, formSetters);
       if (parsed.savedAt) setLastDraftSavedAt(parsed.savedAt);
       toast.success("Concept hersteld", {
         description: "Je vorige handmatige invoer is teruggezet in het formulier.",
@@ -2976,11 +2407,8 @@ const NewOrder = () => {
       : null,
   }), [afdeling, afdelingManual, transportType, transportTypeManual, voertuigtype, voertuigtypeManual]);
 
-  const serverDraftPayload = useMemo(() => ({
-    lifecycle: {
-      model: "draft-shipment-trip",
-      draftStatus: readinessStatus,
-    },
+  const serverDraftPayload = useMemo(() => buildServerDraftPayload({
+    readinessStatus,
     validationEngineVersion: ORDER_VALIDATION_ENGINE_VERSION,
     pricingEngineVersion: ORDER_PRICING_ENGINE_VERSION,
     orderDraft,
@@ -2993,14 +2421,12 @@ const NewOrder = () => {
       reviewActiveQuestion,
     },
     pricingPayload,
-    observability: {
-      step: wizardStep,
+    readiness: {
       score: orderReadiness.score,
-      blockers: orderReadiness.blockers.length,
-      warnings: orderReadiness.warnings.length,
-      infos: orderReadiness.infos.length,
+      blockersCount: orderReadiness.blockers.length,
+      warningsCount: orderReadiness.warnings.length,
+      infosCount: orderReadiness.infos.length,
     },
-    savedAt: new Date().toISOString(),
   }), [
     cargoActiveQuestion,
     draftPayload,
@@ -3428,7 +2854,7 @@ const NewOrder = () => {
     // gestructureerde adres-checks (street/zipcode/city plus de "is geen losse
     // plaatsnaam"-regel) via superRefine, dus elke ZodError vertaalt direct
     // naar een UI-veldfout zonder parallelle if/else-ketens.
-    const quantityNum = cargoTotals.totAantal || (quantity ? parseInt(quantity) : NaN);
+    const quantityNum = cargoTotals.totAantal || (quantity ? parseInt(quantity, 10) : NaN);
     const weightNum = cargoTotals.totGewicht || (weightKg ? parseFloat(weightKg) : NaN);
     if (!contactAnswered) {
       setWizardStep("intake");
@@ -3568,7 +2994,7 @@ const NewOrder = () => {
       const cargoPayload = cargoRows
         .filter(r => r.aantal || r.gewicht)
         .map(r => ({
-          aantal: parseInt(r.aantal) || 0,
+          aantal: parseInt(r.aantal, 10) || 0,
           eenheid: r.eenheid || null,
           gewicht: parseFloat(r.gewicht) || 0,
           lengte: parseFloat(r.lengte) || null,
@@ -3647,7 +3073,7 @@ const NewOrder = () => {
         afdeling: afdeling || null,
         distance_km: distanceKm,
         weight_kg: weightKg ? parseInt(weightKg) : null,
-        quantity: quantity ? parseInt(quantity) : null,
+        quantity: quantity ? parseInt(quantity, 10) : null,
         unit: transportEenheid || null,
         priority: prioriteit || null,
         requirements: reqs.length > 0 ? reqs : null,
