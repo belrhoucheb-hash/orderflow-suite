@@ -361,6 +361,11 @@ export default function ChauffeurApp() {
   // -- Offline POD state --
   const [pendingPODCount, setPendingPODCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  // Ref voor de in-flight guard zodat handleSyncPending stabiel blijft
+  // (state-deps maakten de callback-identiteit veranderlijk en triggerden
+  // zo de mount-useEffect in een loop, met spammend toast-error tot gevolg).
+  const isSyncingRef = useRef(false);
+  const lastSyncErrorAtRef = useRef(0);
 
   const refreshPendingCount = useCallback(async () => {
     try {
@@ -372,7 +377,8 @@ export default function ChauffeurApp() {
   }, []);
 
   const handleSyncPending = useCallback(async () => {
-    if (isSyncing || !navigator.onLine) return;
+    if (isSyncingRef.current || !navigator.onLine) return;
+    isSyncingRef.current = true;
     setIsSyncing(true);
     try {
       const result = await syncPendingPODs();
@@ -387,15 +393,25 @@ export default function ChauffeurApp() {
       }
       await refreshPendingCount();
     } catch {
-      toast.error("Synchronisatie mislukt");
+      // Cooldown van 60s zodat opeenvolgende mislukte syncs niet de chauffeur bedolven
+      // onder dezelfde toast (voorheen botste dit met de useEffect-loop).
+      const now = Date.now();
+      if (now - lastSyncErrorAtRef.current > 60_000) {
+        lastSyncErrorAtRef.current = now;
+        toast.error("Synchronisatie mislukt", { id: "pod-sync-failed" });
+      }
     } finally {
+      isSyncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [isSyncing, refreshPendingCount]);
+  }, [refreshPendingCount]);
 
-  // On mount: check pending PODs and sync if online
+  // On mount: check pending PODs and sync if online. Pas syncen wanneer er een
+  // ingelogde chauffeur is, anders zou een gefaalde insert (RLS) elke render
+  // opnieuw afgaan zolang de PIN-flow nog niet is voltooid.
   useEffect(() => {
     refreshPendingCount();
+    if (!activeDriverId) return;
     if (navigator.onLine) {
       handleSyncPending();
     }
@@ -407,7 +423,7 @@ export default function ChauffeurApp() {
 
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
-  }, [refreshPendingCount, handleSyncPending]);
+  }, [activeDriverId, refreshPendingCount, handleSyncPending]);
 
   // -- Chauffeur Notifications --
   const [driverNotifications, setDriverNotifications] = useState<any[]>([]);
