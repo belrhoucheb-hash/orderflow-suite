@@ -589,6 +589,7 @@ function WarehousesSection({ onRequestDelete }: { onRequestDelete: (wh: Warehous
                       searchLabel="Adres"
                       searchPlaceholder="Typ bedrijfsnaam, straat of plaats"
                       compactFlow
+                      compactGoogleSource="native"
                     />
                   </TableCell>
                   <TableCell>

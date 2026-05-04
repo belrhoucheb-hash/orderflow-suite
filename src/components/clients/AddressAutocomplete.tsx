@@ -105,6 +105,7 @@ interface Props {
   searchLabel?: string;
   searchPlaceholder?: string;
   compactFlow?: boolean;
+  compactGoogleSource?: "edge" | "native";
   quickOptions?: AddressSuggestionOption[];
   onQuickSelect?: (option: AddressSuggestionOption) => void;
   onSearchInputChange?: (value: string) => void;
@@ -165,6 +166,7 @@ export function AddressAutocomplete({
   searchLabel = "Zoek adres",
   searchPlaceholder = "Typ straat + huisnummer, bijv. Winthontlaan 30B Utrecht",
   compactFlow = false,
+  compactGoogleSource = "edge",
   quickOptions = [],
   onQuickSelect,
   onSearchInputChange,
@@ -189,6 +191,7 @@ export function AddressAutocomplete({
 
   const hasCoords = value.lat !== null && value.lng !== null;
   const mapCenter = hasCoords ? { lat: value.lat!, lng: value.lng! } : NL_CENTER;
+  const compactUsesNativeGoogle = compactFlow && compactGoogleSource === "native" && isLoaded && !missingKey && !loadError;
   const shouldShowFlowError = Boolean(error) && (!compactFlow || manualMode || (!flowSuggestionsOpen && !flowSearchLoading));
   const blockedAddressKeys = useMemo(
     () => blockedAddresses.map(normalizeSuggestionText).filter(Boolean),
@@ -499,6 +502,39 @@ export function AddressAutocomplete({
   }, [blockedMessage, isFlowSuggestionBlocked, onChange, onQuickSelect, onResolvedSelection, onSearchInputChange, searchInput, value]);
 
   if (compactFlow) {
+    const compactSearchInput = (
+      <input
+        type="text"
+        value={searchInput}
+        onChange={(e) => {
+          const nextValue = e.target.value;
+          setSearchInput(nextValue);
+          onSearchInputChange?.(nextValue);
+          if (compactGoogleSource === "edge") {
+            setFlowSuggestionsOpen(true);
+            if (flowSearchDebounceRef.current) clearTimeout(flowSearchDebounceRef.current);
+            flowSearchDebounceRef.current = setTimeout(() => searchGoogleBusiness(nextValue), 250);
+          } else {
+            setFlowSuggestionsOpen(filteredQuickOptions.length > 0);
+            setFlowSearchError(null);
+          }
+        }}
+        onFocus={() => {
+          if (compactGoogleSource === "edge") {
+            if (flowSuggestions.length > 0 || searchInput.trim().length >= 2) {
+              setFlowSuggestionsOpen(true);
+              if (searchInput.trim().length >= 2) searchGoogleBusiness(searchInput);
+            }
+          } else if (filteredQuickOptions.length > 0) {
+            setFlowSuggestionsOpen(true);
+          }
+        }}
+        onBlur={onBlur}
+        placeholder={searchPlaceholder}
+        className="h-14 w-full rounded-2xl border border-[hsl(var(--gold)_/_0.22)] bg-white px-4 pr-10 text-base shadow-[inset_0_1px_0_hsl(var(--gold)_/_0.10),0_12px_34px_-30px_hsl(var(--gold-deep)_/_0.65)] outline-none transition placeholder:text-muted-foreground/70 focus:border-[hsl(var(--gold)_/_0.62)] focus:ring-4 focus:ring-[hsl(var(--gold)_/_0.18)]"
+      />
+    );
+
     return (
       <div ref={wrapperRef} className="space-y-3">
         {!manualMode && (
@@ -514,27 +550,18 @@ export function AddressAutocomplete({
               </button>
             </div>
             <div className="relative mt-1">
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => {
-                  const nextValue = e.target.value;
-                  setSearchInput(nextValue);
-                  onSearchInputChange?.(nextValue);
-                  setFlowSuggestionsOpen(true);
-                  if (flowSearchDebounceRef.current) clearTimeout(flowSearchDebounceRef.current);
-                  flowSearchDebounceRef.current = setTimeout(() => searchGoogleBusiness(nextValue), 250);
-                }}
-                onFocus={() => {
-                  if (flowSuggestions.length > 0 || searchInput.trim().length >= 2) {
-                    setFlowSuggestionsOpen(true);
-                    if (searchInput.trim().length >= 2) searchGoogleBusiness(searchInput);
-                  }
-                }}
-                onBlur={onBlur}
-                placeholder={searchPlaceholder}
-                className="h-14 w-full rounded-2xl border border-[hsl(var(--gold)_/_0.22)] bg-white px-4 pr-10 text-base shadow-[inset_0_1px_0_hsl(var(--gold)_/_0.10),0_12px_34px_-30px_hsl(var(--gold-deep)_/_0.65)] outline-none transition placeholder:text-muted-foreground/70 focus:border-[hsl(var(--gold)_/_0.62)] focus:ring-4 focus:ring-[hsl(var(--gold)_/_0.18)]"
-              />
+              {compactUsesNativeGoogle ? (
+                <Autocomplete
+                  onLoad={(ac) => {
+                    autocompleteRef.current = ac;
+                    ac.setFields(["address_components", "geometry", "formatted_address"]);
+                    ac.setComponentRestrictions({ country: ["nl", "be", "de", "lu", "fr"] });
+                  }}
+                  onPlaceChanged={onPlaceChanged}
+                >
+                  {compactSearchInput}
+                </Autocomplete>
+              ) : compactSearchInput}
               {flowSearchLoading && (
                 <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
               )}
@@ -624,7 +651,7 @@ export function AddressAutocomplete({
                   })}
                 </div>
               )}
-              {flowSuggestionsOpen && searchInput.trim().length >= 2 && !flowSearchLoading && flowSuggestions.length === 0 && (
+              {compactGoogleSource === "edge" && flowSuggestionsOpen && searchInput.trim().length >= 2 && !flowSearchLoading && flowSuggestions.length === 0 && (
                 <div className="mt-2 rounded-2xl border border-[hsl(var(--gold)_/_0.22)] bg-white p-4 shadow-[0_20px_45px_rgba(15,23,42,0.16),0_0_0_1px_hsl(var(--gold)_/_0.08)]">
                   <div className="text-sm font-semibold text-foreground">Geen bekende adressen</div>
                   <div className="mt-1 text-xs text-muted-foreground">
