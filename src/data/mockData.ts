@@ -8,6 +8,8 @@ export type OrderStatus = "DRAFT" | "PENDING" | "PLANNED" | "IN_TRANSIT" | "DELI
 export interface Order {
   id: string;
   orderNumber: string;
+  sourceKind?: "order" | "draft";
+  draftId?: string;
   customer: string;
   clientId?: string | null;
   email: string;

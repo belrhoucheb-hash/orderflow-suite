@@ -743,6 +743,7 @@ const NewOrder = () => {
   const [searchParams] = useSearchParams();
   const initialClientId = searchParams.get("client_id");
   const fromOrderId = searchParams.get("from_order_id");
+  const draftIdParam = searchParams.get("draft_id");
   const [saving, setSaving] = useState(false);
   const [trajectPreview, setTrajectPreview] = useState<TrajectPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -895,13 +896,13 @@ const NewOrder = () => {
   const { data: deliveryAddressBookMatches = [] } = useAddressBookSearch(deliveryLookup);
   const upsertAddressBookEntry = useUpsertAddressBookEntry();
   const draftStorageKey = useMemo(() => {
-    if (!tenant?.id || initialClientId || fromOrderId) return null;
+    if (!tenant?.id || initialClientId || fromOrderId || draftIdParam) return null;
     return `new-order-draft:${tenant.id}`;
-  }, [tenant?.id, initialClientId, fromOrderId]);
+  }, [tenant?.id, initialClientId, fromOrderId, draftIdParam]);
   const serverDraftStorageKey = useMemo(() => {
-    if (!tenant?.id || initialClientId || fromOrderId) return null;
+    if (!tenant?.id || initialClientId || fromOrderId || draftIdParam) return null;
     return `new-order-draft-id:${tenant.id}`;
-  }, [tenant?.id, initialClientId, fromOrderId]);
+  }, [tenant?.id, initialClientId, fromOrderId, draftIdParam]);
 
   // Prefill vanuit ?client_id=, geïnitieerd vanuit de klantenlijst of
   // klant-detail ("Nieuwe order voor deze klant"). We fetchen de klant en
@@ -2382,7 +2383,7 @@ const NewOrder = () => {
     }
   }, [cargoActiveQuestion, intakeActiveQuestion, missingPickupTimeWindow, reviewActiveQuestion, routeActiveQuestion, wizardStep]);
 
-  const [prefillReady, setPrefillReady] = useState(!initialClientId && !fromOrderId);
+  const [prefillReady, setPrefillReady] = useState(!initialClientId && !fromOrderId && !draftIdParam);
   const [dirty, setDirty] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const baselineSignatureRef = useRef<string | null>(null);
@@ -2466,6 +2467,95 @@ const NewOrder = () => {
     voertuigtypeManual,
     weightKg,
   ]);
+
+  useEffect(() => {
+    if (!draftIdParam || !tenant?.id || draftRestored) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        setDraftSaveStatus("creating");
+        const { data, error } = await (supabase as any)
+          .from("order_drafts")
+          .select("id,status,payload,updated_at,updated_by")
+          .eq("id", draftIdParam)
+          .eq("tenant_id", tenant.id)
+          .is("committed_shipment_id", null)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) throw error;
+        if (!data?.id) {
+          toast.error("Concept niet gevonden", { description: "Dit concept is mogelijk al gereedgemeld of verwijderd." });
+          setPrefillReady(true);
+          setDraftRestored(true);
+          setServerDraftReady(true);
+          return;
+        }
+
+        const payload = (data.payload ?? {}) as any;
+        const parsed = (payload.form ?? {}) as Partial<typeof draftPayload>;
+        if (parsed.clientName) {
+          setClientName(parsed.clientName);
+          if (parsed.clientName.trim().length >= 2) setClientQuestionConfirmed(true);
+        }
+        if (parsed.clientId) setClientId(parsed.clientId);
+        if (parsed.contactpersoon) setContactpersoon(parsed.contactpersoon);
+        if (parsed.contactChoiceMode) setContactChoiceMode(parsed.contactChoiceMode);
+        if (parsed.selectedContactId) setSelectedContactId(parsed.selectedContactId);
+        if (parsed.manualContactName) setManualContactName(parsed.manualContactName);
+        if (parsed.manualContactEmail) setManualContactEmail(parsed.manualContactEmail);
+        if (parsed.manualContactPhone) setManualContactPhone(parsed.manualContactPhone);
+        if (parsed.prioriteit) setPrioriteit(parsed.prioriteit);
+        if (parsed.klantReferentie) setKlantReferentie(parsed.klantReferentie);
+        if (parsed.transportFlowChoice) setTransportFlowChoice(parsed.transportFlowChoice);
+        if (parsed.transportType) setTransportType(parsed.transportType);
+        if (typeof parsed.transportTypeManual === "boolean") setTransportTypeManual(parsed.transportTypeManual);
+        if (parsed.afdeling) setAfdeling(parsed.afdeling);
+        if (typeof parsed.afdelingManual === "boolean") setAfdelingManual(parsed.afdelingManual);
+        if (parsed.voertuigtype) setVoertuigtype(parsed.voertuigtype);
+        if (typeof parsed.voertuigtypeManual === "boolean") setVoertuigtypeManual(parsed.voertuigtypeManual);
+        if (parsed.referentie) setReferentie(parsed.referentie);
+        if (parsed.transportEenheid) setTransportEenheid(parsed.transportEenheid);
+        if (parsed.quantity) setQuantity(parsed.quantity);
+        if (parsed.weightKg) setWeightKg(parsed.weightKg);
+        if (Array.isArray(parsed.cargoRows) && parsed.cargoRows.length > 0) setCargoRows(parsed.cargoRows);
+        if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines);
+        if (parsed.pickupAddr) setPickupAddr({ ...EMPTY_ADDRESS, ...parsed.pickupAddr });
+        if (parsed.deliveryAddr) setDeliveryAddr({ ...EMPTY_ADDRESS, ...parsed.deliveryAddr });
+        if (typeof parsed.klepNodig === "boolean") setKlepNodig(parsed.klepNodig);
+        if (typeof parsed.shipmentSecure === "boolean") setShipmentSecure(parsed.shipmentSecure);
+        if (payload.pricingPayload) setPricingPayload(payload.pricingPayload);
+        if (payload.wizard?.step) setWizardStep(payload.wizard.step);
+        if (payload.wizard?.intakeActiveQuestion) setIntakeActiveQuestion(payload.wizard.intakeActiveQuestion);
+        if (payload.wizard?.routeActiveQuestion) setRouteActiveQuestion(payload.wizard.routeActiveQuestion);
+        if (payload.wizard?.cargoActiveQuestion) setCargoActiveQuestion(payload.wizard.cargoActiveQuestion);
+        if (payload.wizard?.reviewActiveQuestion) setReviewActiveQuestion(payload.wizard.reviewActiveQuestion);
+
+        setServerDraftId(data.id);
+        setServerDraftUpdatedAt(data.updated_at ?? null);
+        setServerDraftUpdatedBy(data.updated_by ?? null);
+        setLastDraftSavedAt(data.updated_at ?? null);
+        setDraftSaveStatus("saved");
+        setDraftRestored(true);
+        setPrefillReady(true);
+        setServerDraftReady(true);
+        toast.success("Concept geopend", { description: "Je kunt verder werken aan dit orderconcept." });
+      } catch (error) {
+        if (cancelled) return;
+        console.warn("[NewOrder] concept kon niet worden geopend:", error);
+        setDraftSaveStatus("error");
+        setDraftSaveError("Concept kon niet worden geopend.");
+        setDraftRestored(true);
+        setPrefillReady(true);
+        setServerDraftReady(true);
+        toast.error("Concept kon niet worden geopend");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draftIdParam, draftPayload, draftRestored, tenant?.id]);
 
   useEffect(() => {
     if (!draftStorageKey || !prefillReady || draftRestored) return;
@@ -2957,7 +3047,7 @@ const NewOrder = () => {
   ]);
 
   useEffect(() => {
-    if (!tenant?.id || initialClientId || fromOrderId || !serverDraftStorageKey || serverDraftReady || serverDraftCreateStartedRef.current) return;
+    if (!tenant?.id || initialClientId || fromOrderId || draftIdParam || !serverDraftStorageKey || serverDraftReady || serverDraftCreateStartedRef.current) return;
     serverDraftCreateStartedRef.current = true;
     const existingDraftId = window.localStorage.getItem(serverDraftStorageKey);
     if (existingDraftId) {
@@ -3058,6 +3148,7 @@ const NewOrder = () => {
     })();
   }, [
     fromOrderId,
+    draftIdParam,
     initialClientId,
     manualOverridesSnapshot,
     serverDraftReady,
@@ -3768,7 +3859,7 @@ const NewOrder = () => {
   useEffect(() => {
     if (!clientId || !selectedClient) return;
     if (clientDefaultsAppliedRef.current === clientId) return;
-    if (initialClientId || fromOrderId) return;
+    if (initialClientId || fromOrderId || draftIdParam) return;
 
     clientDefaultsAppliedRef.current = clientId;
     if (!pickupAddr.street) {
@@ -3793,7 +3884,7 @@ const NewOrder = () => {
         timeWindowEnd: clientLocations[0].time_window_end,
       });
     }
-  }, [applyPlannerLocation, clientId, clientLocations, deliveryAddr.street, fromOrderId, handlePickupAddrChange, initialClientId, pickupAddr.street, selectedClient]);
+  }, [applyPlannerLocation, clientId, clientLocations, deliveryAddr.street, draftIdParam, fromOrderId, handlePickupAddrChange, initialClientId, pickupAddr.street, selectedClient]);
 
   // Prefill vanuit ?from_order_id=: kopieer pickup, delivery, requirements,
   // afdeling, vehicle_type, order_type en klant-identificatie van een
