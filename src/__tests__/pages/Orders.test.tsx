@@ -5,11 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────
-const { mockUseOrders, mockSupabase, mockNavigate, mockDeleteOrder } = vi.hoisted(() => {
+const { mockUseOrders, mockSupabase, mockNavigate, mockDeleteOrder, mockDeleteOrderDraft } = vi.hoisted(() => {
   const mockOrders = [
     { id: "o1", orderNumber: "ORD-001", customer: "Acme BV", status: "DELIVERED", priority: "normaal", totalWeight: 500, pickupAddress: "Amsterdam", deliveryAddress: "Rotterdam", createdAt: "2025-01-10T10:00:00Z" },
     { id: "o2", orderNumber: "ORD-002", customer: "Widget NL", status: "IN_TRANSIT", priority: "spoed", totalWeight: 1200, pickupAddress: "Utrecht", deliveryAddress: "Den Haag", createdAt: "2025-01-11T10:00:00Z" },
-    { id: "o3", orderNumber: "ORD-003", customer: "Beta Corp", status: "DRAFT", priority: "hoog", totalWeight: 300, pickupAddress: "Eindhoven", deliveryAddress: "Tilburg", createdAt: "2025-01-09T10:00:00Z" },
+    { id: "draft:d1", draftId: "d1", sourceKind: "draft", orderNumber: "CONCEPT-D1", customer: "Beta Corp", status: "DRAFT", priority: "hoog", totalWeight: 300, pickupAddress: "Eindhoven", deliveryAddress: "Tilburg", createdAt: "2025-01-09T10:00:00Z" },
   ];
   return {
     mockUseOrders: vi.fn(() => ({
@@ -31,6 +31,7 @@ const { mockUseOrders, mockSupabase, mockNavigate, mockDeleteOrder } = vi.hoiste
     },
     mockNavigate: vi.fn(),
     mockDeleteOrder: vi.fn().mockResolvedValue("o1"),
+    mockDeleteOrderDraft: vi.fn().mockResolvedValue("d1"),
   };
 });
 
@@ -43,6 +44,10 @@ vi.mock("@/hooks/useOrders", () => ({
   useOrders: (...args: any[]) => mockUseOrders(...args),
   useDeleteOrder: () => ({
     mutateAsync: mockDeleteOrder,
+    isPending: false,
+  }),
+  useDeleteOrderDraft: () => ({
+    mutateAsync: mockDeleteOrderDraft,
     isPending: false,
   }),
   useOrdersListMeta: () => ({
@@ -102,7 +107,7 @@ import Orders from "@/pages/Orders";
 const defaultOrders = [
   { id: "o1", orderNumber: "ORD-001", customer: "Acme BV", status: "DELIVERED", priority: "normaal", totalWeight: 500, pickupAddress: "Amsterdam", deliveryAddress: "Rotterdam", createdAt: "2025-01-10T10:00:00Z" },
   { id: "o2", orderNumber: "ORD-002", customer: "Widget NL", status: "IN_TRANSIT", priority: "spoed", totalWeight: 1200, pickupAddress: "Utrecht", deliveryAddress: "Den Haag", createdAt: "2025-01-11T10:00:00Z" },
-  { id: "o3", orderNumber: "ORD-003", customer: "Beta Corp", status: "DRAFT", priority: "hoog", totalWeight: 300, pickupAddress: "Eindhoven", deliveryAddress: "Tilburg", createdAt: "2025-01-09T10:00:00Z" },
+  { id: "draft:d1", draftId: "d1", sourceKind: "draft", orderNumber: "CONCEPT-D1", customer: "Beta Corp", status: "DRAFT", priority: "hoog", totalWeight: 300, pickupAddress: "Eindhoven", deliveryAddress: "Tilburg", createdAt: "2025-01-09T10:00:00Z" },
 ];
 
 function renderOrders() {
@@ -120,6 +125,7 @@ describe("Orders", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDeleteOrder.mockResolvedValue("o1");
+    mockDeleteOrderDraft.mockResolvedValue("d1");
     mockUseOrders.mockReturnValue({
       data: { orders: defaultOrders, totalCount: 3 },
       isLoading: false, isError: false, refetch: vi.fn(),
@@ -186,13 +192,20 @@ describe("Orders", () => {
     expect(screen.getByTestId("import-dialog")).toBeInTheDocument();
   });
 
-  it("opens delete confirmation for selected orders", async () => {
+  it("opens delete confirmation for selected orders and concepts", async () => {
     const user = userEvent.setup();
     renderOrders();
     await user.click(screen.getByLabelText("Alles selecteren"));
     fireEvent.click(screen.getByTitle("Geselecteerde orders verwijderen"));
-    expect(await screen.findByText(/Geselecteerde orders? verwijderen\?/)).toBeInTheDocument();
+    expect(await screen.findByText(/Geselecteerde regels verwijderen\?/)).toBeInTheDocument();
+    expect(screen.getByText(/2 orders en 1 concept worden uit de orderlijst verwijderd/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Verwijderen$/i })).toBeInTheDocument();
+  });
+
+  it("visually marks draft rows as concept", () => {
+    renderOrders();
+    expect(screen.getAllByText("Concept").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("CONCEPT-D1").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows pagination info", () => {

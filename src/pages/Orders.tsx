@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
-import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy, Trash2 } from "lucide-react";
+import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy, Trash2, FileClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
 import { INFO_STATUS_LABEL, priorityDotColors } from "@/lib/orderDisplay";
-import { useOrders, useOrdersListMeta, useDeleteOrder, type OrderListCursor } from "@/hooks/useOrders";
+import { useOrders, useOrdersListMeta, useDeleteOrder, useDeleteOrderDraft, type OrderListCursor } from "@/hooks/useOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUnreadNoteOrderIds } from "@/hooks/useOrderNotesRead";
 import { supabase } from "@/integrations/supabase/client";
@@ -61,6 +61,8 @@ function formatOrderDate(value: string | null | undefined): { label: string; too
 
 const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED"] as const;
 
+const isDraftOrder = (order: any) => order.sourceKind === "draft" || order.status === "DRAFT";
+
 function exportOrders(orders: Array<any>, baseName: string): number {
   if (orders.length === 0) return 0;
   const headers = [
@@ -111,6 +113,7 @@ const Orders = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteSelectionOpen, setDeleteSelectionOpen] = useState(false);
   const deleteOrderMutation = useDeleteOrder();
+  const deleteDraftMutation = useDeleteOrderDraft();
 
   const { attachRef: attachColWidthRef } = useColumnWidths("orderflow:orders:col-widths:v1");
 
@@ -197,10 +200,10 @@ const Orders = () => {
     staleThresholdHours: 2,
   });
   const rawOrders = useMemo(() => data?.orders ?? [], [data?.orders]);
-  const visibleOrderIds = useMemo(() => rawOrders.filter((order) => order.sourceKind !== "draft").map((order) => order.id), [rawOrders]);
+  const visibleOrderIds = useMemo(() => rawOrders.filter((order) => !isDraftOrder(order)).map((order) => order.id), [rawOrders]);
   const { unreadOrderIds } = useUnreadNoteOrderIds(visibleOrderIds);
   const totalCount = meta?.totalCount ?? 0;
-  const openOrderPath = (order: any) => order.sourceKind === "draft" && order.draftId
+  const openOrderPath = (order: any) => isDraftOrder(order) && order.draftId
     ? `/orders/nieuw?draft_id=${order.draftId}`
     : `/orders/${order.id}`;
 
@@ -221,31 +224,39 @@ const Orders = () => {
   // misleidend omdat het alleen binnen de huidige 25-pagina werkte.
   const orders = filteredByInfo;
   const selectedOrders = useMemo(() => orders.filter((order) => selectedIds.has(order.id)), [orders, selectedIds]);
-  const selectedDeletableOrders = useMemo(
-    () => selectedOrders.filter((order) => order.sourceKind !== "draft"),
+  const selectedRegularOrders = useMemo(
+    () => selectedOrders.filter((order) => !isDraftOrder(order)),
     [selectedOrders],
   );
-  const selectedDraftCount = selectedOrders.length - selectedDeletableOrders.length;
+  const selectedDraftOrders = useMemo(
+    () => selectedOrders.filter((order) => isDraftOrder(order) && order.draftId),
+    [selectedOrders],
+  );
+  const selectedDeleteCount = selectedRegularOrders.length + selectedDraftOrders.length;
+  const deleteSelectionPending = deleteOrderMutation.isPending || deleteDraftMutation.isPending;
 
   const handleDeleteSelectedOrders = async () => {
-    if (selectedDeletableOrders.length === 0) {
-      toast.info("Geen definitieve orders geselecteerd", {
-        description: "Concepten open je opnieuw vanuit de lijst; definitieve orders kun je hier verwijderen.",
+    if (selectedDeleteCount === 0) {
+      toast.info("Geen verwijderbare selectie", {
+        description: "Selecteer een order of concept om te verwijderen.",
       });
       setDeleteSelectionOpen(false);
       return;
     }
 
     try {
-      for (const order of selectedDeletableOrders) {
+      for (const order of selectedRegularOrders) {
         await deleteOrderMutation.mutateAsync(order.id);
       }
-      toast.success(
-        selectedDeletableOrders.length === 1 ? "Order verwijderd" : "Orders verwijderd",
-        {
-          description: `${selectedDeletableOrders.length} ${selectedDeletableOrders.length === 1 ? "order is" : "orders zijn"} uit de orderlijst gehaald.`,
-        },
-      );
+      for (const order of selectedDraftOrders) {
+        await deleteDraftMutation.mutateAsync(order.draftId);
+      }
+      toast.success("Selectie verwijderd", {
+        description: [
+          selectedRegularOrders.length > 0 ? `${selectedRegularOrders.length} ${selectedRegularOrders.length === 1 ? "order" : "orders"}` : null,
+          selectedDraftOrders.length > 0 ? `${selectedDraftOrders.length} ${selectedDraftOrders.length === 1 ? "concept" : "concepten"}` : null,
+        ].filter(Boolean).join(" en ") + " verwijderd.",
+      });
       clearSelection();
       setDeleteSelectionOpen(false);
     } catch (error) {
@@ -707,10 +718,10 @@ const Orders = () => {
             <button
               className="btn-luxe text-destructive hover:text-destructive"
               onClick={() => setDeleteSelectionOpen(true)}
-              disabled={deleteOrderMutation.isPending}
+              disabled={deleteSelectionPending}
               title="Geselecteerde orders verwijderen"
             >
-              {deleteOrderMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {deleteSelectionPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               Verwijder selectie
             </button>
             <button
@@ -745,6 +756,7 @@ const Orders = () => {
                   transition={{ duration: 0.15 }}
                   className={cn(
                     "px-4 py-3.5",
+                    isDraftOrder(order) && "bg-[hsl(var(--gold-soft)/0.36)]",
                     unreadOrderIds.has(order.id) && "shadow-[inset_2px_0_0_0_#3b82f6]",
                   )}
                 >
@@ -772,6 +784,12 @@ const Orders = () => {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <IncompleteBadge order={order} size="dot" />
+                            {isDraftOrder(order) && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--gold)/0.24)] bg-[hsl(var(--gold-soft)/0.7)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]">
+                                <FileClock className="h-3 w-3" />
+                                Concept
+                              </span>
+                            )}
                             <span className="truncate text-sm font-semibold tabular-nums text-foreground">
                               {order.orderNumber}
                             </span>
@@ -795,7 +813,7 @@ const Orders = () => {
                       </div>
                     </button>
                     <div className="flex shrink-0 flex-col gap-1">
-                      {order.sourceKind === "draft" ? (
+                      {isDraftOrder(order) ? (
                         <button
                           onClick={() => navigate(openOrderPath(order))}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground"
@@ -903,6 +921,7 @@ const Orders = () => {
                     transition={{ duration: 0.15 }}
                     className={cn(
                       "table-row group cursor-pointer",
+                      isDraftOrder(order) && "bg-[hsl(var(--gold-soft)/0.38)] hover:bg-[hsl(var(--gold-soft)/0.58)]",
                       unreadOrderIds.has(order.id) && "shadow-[inset_2px_0_0_0_#3b82f6]",
                     )}
                     onClick={() => navigate(openOrderPath(order))}
@@ -929,6 +948,12 @@ const Orders = () => {
                     <td className="table-cell">
                       <div className="flex items-center gap-2">
                         <IncompleteBadge order={order} size="dot" />
+                        {isDraftOrder(order) && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--gold)/0.24)] bg-[hsl(var(--gold-soft)/0.7)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))]">
+                            <FileClock className="h-3 w-3" />
+                            Concept
+                          </span>
+                        )}
                         <Link
                           to={openOrderPath(order)}
                           className="text-[14px] font-semibold text-foreground hover:text-[hsl(var(--gold-deep))] transition-colors tabular-nums tracking-[0.02em] whitespace-nowrap"
@@ -942,7 +967,7 @@ const Orders = () => {
                     <td className="table-cell text-foreground/90 font-medium" style={{ fontFamily: "var(--font-display)" }}>
                       <div className="flex items-center gap-2">
                         <span>{order.customer}</span>
-                        {order.sourceKind !== "draft" && order.clientId && (
+                        {!isDraftOrder(order) && order.clientId && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1000,7 +1025,7 @@ const Orders = () => {
                     </td>
                     <td className="table-cell text-center">
                       <div className="inline-flex items-center gap-0.5">
-                        {order.sourceKind === "draft" ? (
+                        {isDraftOrder(order) ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); navigate(openOrderPath(order)); }}
                             className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
@@ -1131,26 +1156,28 @@ const Orders = () => {
         <AlertDialogContent className="border-[hsl(var(--gold)/0.22)] bg-[hsl(var(--card))]">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {selectedDeletableOrders.length === 1 ? "Geselecteerde order verwijderen?" : "Geselecteerde orders verwijderen?"}
+              {selectedDeleteCount === 1 ? "Geselecteerde regel verwijderen?" : "Geselecteerde regels verwijderen?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {selectedDeletableOrders.length > 0
-                ? `${selectedDeletableOrders.length} ${selectedDeletableOrders.length === 1 ? "order wordt" : "orders worden"} definitief verwijderd.`
-                : "Er zijn geen definitieve orders geselecteerd om te verwijderen."}
-              {selectedDraftCount > 0 ? ` ${selectedDraftCount} ${selectedDraftCount === 1 ? "concept wordt" : "concepten worden"} overgeslagen.` : ""}
+              {selectedDeleteCount > 0
+                ? [
+                    selectedRegularOrders.length > 0 ? `${selectedRegularOrders.length} ${selectedRegularOrders.length === 1 ? "order" : "orders"}` : null,
+                    selectedDraftOrders.length > 0 ? `${selectedDraftOrders.length} ${selectedDraftOrders.length === 1 ? "concept" : "concepten"}` : null,
+                  ].filter(Boolean).join(" en ") + " worden uit de orderlijst verwijderd."
+                : "Er is geen verwijderbare selectie."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteOrderMutation.isPending}>Annuleren</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteSelectionPending}>Annuleren</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteOrderMutation.isPending || selectedDeletableOrders.length === 0}
+              disabled={deleteSelectionPending || selectedDeleteCount === 0}
               onClick={(event) => {
                 event.preventDefault();
                 void handleDeleteSelectedOrders();
               }}
             >
-              {deleteOrderMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              {deleteSelectionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
               Verwijderen
             </AlertDialogAction>
           </AlertDialogFooter>

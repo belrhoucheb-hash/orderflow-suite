@@ -893,3 +893,24 @@ export function useDeleteOrder() {
     },
   });
 }
+
+export function useDeleteOrderDraft() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (draftId: string) => {
+      const { error } = await (supabase as any)
+        .from("order_drafts")
+        .update({ archived_at: new Date().toISOString() })
+        .eq("id", draftId)
+        .is("committed_shipment_id", null);
+
+      if (error) throw error;
+      return draftId;
+    },
+    onSuccess: (draftId) => {
+      queryClient.removeQueries({ queryKey: ["orders", `draft:${draftId}`] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
