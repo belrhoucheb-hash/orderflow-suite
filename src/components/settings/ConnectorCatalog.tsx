@@ -1,5 +1,9 @@
-import { useMemo, useState } from "react";
-import { CheckCircle2, Clock, Search, Sparkles, ShieldCheck, Zap, AlertCircle, ArrowRight, Activity } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  CheckCircle2, Clock, Search, Sparkles, Zap, AlertCircle, ArrowRight, Activity,
+  Lock, Radio, ArrowLeftRight, Webhook, KeyRound, Globe2, MapPin,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   CATEGORY_LABELS,
@@ -27,6 +31,61 @@ const BADGE_LABELS: Record<NonNullable<ConnectorWithStatus["badge"]>, string> = 
   aanbevolen: "Aanbevolen",
 };
 
+const BUNDLES: Array<{
+  id: string;
+  title: string;
+  blurb: string;
+  slugs: string[];
+  accent: string;
+  icon: ReactNode;
+}> = [
+  {
+    id: "boekhouding-nl",
+    title: "Boekhouding NL",
+    blurb: "Snelstart en Exact, klaar voor verkoopboekingen vanaf dag 1.",
+    slugs: ["snelstart", "exact_online"],
+    accent: "from-rose-50 to-amber-50",
+    icon: <Sparkles className="h-4 w-4" />,
+  },
+  {
+    id: "klant-communicatie",
+    title: "Klantcommunicatie",
+    blurb: "WhatsApp, Slack en Twilio voor live klant- en team-updates.",
+    slugs: ["whatsapp_business", "slack", "twilio"],
+    accent: "from-emerald-50 to-sky-50",
+    icon: <Radio className="h-4 w-4" />,
+  },
+  {
+    id: "fleet-pro",
+    title: "Fleet pro",
+    blurb: "Live tracking en chauffeurinzicht via Webfleet en Samsara.",
+    slugs: ["webfleet", "samsara"],
+    accent: "from-slate-50 to-indigo-50",
+    icon: <MapPin className="h-4 w-4" />,
+  },
+];
+
+const CAPABILITY_ICON: Array<{ test: (cap: string) => boolean; icon: ReactNode }> = [
+  { test: (c) => /oauth/i.test(c), icon: <Lock className="h-3 w-3" /> },
+  { test: (c) => /api[\s-]?key/i.test(c), icon: <KeyRound className="h-3 w-3" /> },
+  { test: (c) => /webhook/i.test(c), icon: <Webhook className="h-3 w-3" /> },
+  { test: (c) => /realtime/i.test(c), icon: <Radio className="h-3 w-3" /> },
+  { test: (c) => /bidirectioneel/i.test(c), icon: <ArrowLeftRight className="h-3 w-3" /> },
+  { test: (c) => /(NL|BE|EU|wereldwijd|cloud)/i.test(c), icon: <Globe2 className="h-3 w-3" /> },
+  { test: (c) => /push|sync/i.test(c), icon: <Zap className="h-3 w-3" /> },
+];
+
+function capabilityIcon(cap: string): ReactNode {
+  return CAPABILITY_ICON.find((m) => m.test(cap))?.icon ?? <Sparkles className="h-3 w-3" />;
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export function ConnectorCatalog({ onSelect }: Props) {
   const list = useConnectorList();
   const [filter, setFilter] = useState<FilterChip>("alle");
@@ -41,15 +100,18 @@ export function ConnectorCatalog({ onSelect }: Props) {
       if (c.status === "beta") return 2;
       return 3;
     };
-    // Eerst hand-gecureerde featured-connectors, daarna eventueel aangevuld op status.
+<<<<<<< Updated upstream
+    return [...all].sort((a, b) => order(a) - order(b)).slice(0, 4);
+=======
     const curated = all.filter((c) => c.featured).sort((a, b) => order(a) - order(b));
     if (curated.length >= 4) return curated.slice(0, 4);
     const fallback = all.filter((c) => !c.featured).sort((a, b) => order(a) - order(b));
     return [...curated, ...fallback].slice(0, 4);
+>>>>>>> Stashed changes
   }, [all]);
 
   if (list.isLoading) {
-    return <div className="card--luxe p-6 text-sm text-muted-foreground">Laden...</div>;
+    return <CatalogSkeleton />;
   }
 
   const liveCount = all.filter((c) => c.enabled && c.hasCredentials).length;
@@ -69,38 +131,60 @@ export function ConnectorCatalog({ onSelect }: Props) {
 
   const liveAndBeta = filtered.filter((c) => c.status !== "soon");
   const roadmap = filtered.filter((c) => c.status === "soon");
+  const showBundles = filter === "alle" && !queryLower;
+  const showFeatured = filter === "alle" && !queryLower;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* HERO */}
-      <div className="card--luxe relative overflow-hidden p-6">
-        <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-[hsl(var(--gold)/0.18)] blur-3xl pointer-events-none" />
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="relative overflow-hidden rounded-[28px] border border-[hsl(var(--gold)/0.25)] bg-gradient-to-br from-white via-[hsl(var(--gold-soft)/0.3)] to-white p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_30px_60px_-30px_rgba(0,0,0,0.18)]"
+      >
+        <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-[hsl(var(--gold)/0.22)] blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-24 h-72 w-72 rounded-full bg-[hsl(var(--gold-light)/0.18)] blur-3xl pointer-events-none" />
+        <div
+          className="absolute inset-0 opacity-[0.04] pointer-events-none"
+          style={{
+            backgroundImage: "radial-gradient(circle, hsl(var(--gold-deep)) 1px, transparent 1px)",
+            backgroundSize: "20px 20px",
+          }}
+        />
+
         <div className="relative">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="inline-flex h-7 items-center rounded-full bg-[hsl(var(--gold-soft))] px-2.5 text-[10px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="inline-flex h-7 items-center rounded-full bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] px-3 text-[10px] font-display font-semibold uppercase tracking-[0.24em] text-white shadow-sm">
               Marketplace
             </span>
+            <span className="inline-flex h-7 items-center rounded-full border border-[hsl(var(--gold)/0.3)] bg-white/70 backdrop-blur-sm px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]">
+              <Sparkles className="h-3 w-3 mr-1" />
+              {totalCount} koppelingen
+            </span>
           </div>
-          <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Koppel OrderFlow aan je stack
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-foreground leading-tight">
+            Koppel OrderFlow aan je stack.
+            <span className="block text-[hsl(var(--gold-deep))]">In een paar klikken live.</span>
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
-            Boekhouding, telematica, communicatie of webshop, beheer alle koppelingen op een plek met sync-log, mapping en audit.
+          <p className="mt-3 text-sm text-muted-foreground max-w-2xl leading-relaxed">
+            Boekhouding, telematica, communicatie of webshop. Beheer alle koppelingen op een plek met sync-log, mapping, en audit. Officiele partners, OAuth-flows en realtime events ingebouwd.
           </p>
 
-          {/* Search */}
-          <div className="relative mt-5 max-w-xl">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="relative mt-6 max-w-2xl">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--gold-deep))]" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Zoek op naam, beschrijving of capability..."
-              className="w-full h-11 pl-10 pr-4 rounded-xl border border-[hsl(var(--gold)/0.25)] bg-white/80 backdrop-blur-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)/0.35)] focus:border-[hsl(var(--gold)/0.4)] transition-all"
+              placeholder="Zoek op naam, capability of categorie..."
+              className="w-full h-12 pl-11 pr-4 rounded-2xl border border-[hsl(var(--gold)/0.3)] bg-white text-sm font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_4px_12px_-4px_rgba(0,0,0,0.08)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--gold)/0.4)] focus:border-[hsl(var(--gold)/0.5)] transition-all"
             />
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:inline-flex h-6 items-center rounded-md border border-[hsl(var(--gold)/0.25)] bg-white/80 px-2 text-[10px] font-mono text-muted-foreground">
+              /
+            </kbd>
           </div>
 
-          {/* Health strip */}
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <HealthCell
               icon={<CheckCircle2 className="h-4 w-4" />}
               label="Verbonden"
@@ -124,111 +208,181 @@ export function ConnectorCatalog({ onSelect }: Props) {
             />
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* FEATURED ROW */}
-      {filter === "alle" && !queryLower && (
+      {showFeatured && (
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.22em] flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" />
-              Aanbevolen
-            </h3>
+          <SectionHeader eyebrow="Aanbevolen" subtitle="Onze pick voor 2026" icon={<Sparkles className="h-3.5 w-3.5" />} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
+            <AnimatePresence>
+              {featured.map((c, i) => (
+                <FeaturedCard key={c.slug} connector={c} delay={i * 0.05} onSelect={() => onSelect(c.slug)} />
+              ))}
+            </AnimatePresence>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {featured.map((c) => (
-              <FeaturedCard key={c.slug} connector={c} onSelect={() => onSelect(c.slug)} />
+        </section>
+      )}
+
+      {showBundles && (
+        <section>
+          <SectionHeader eyebrow="Bundels" subtitle="Klaar-voor-gebruik combinaties" icon={<Zap className="h-3.5 w-3.5" />} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+            {BUNDLES.map((bundle, i) => (
+              <BundleCard
+                key={bundle.id}
+                bundle={bundle}
+                connectors={all.filter((c) => bundle.slugs.includes(c.slug))}
+                delay={i * 0.05}
+                onSelect={onSelect}
+              />
             ))}
           </div>
         </section>
       )}
 
-      {/* CATEGORY CHIPS */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 sticky top-0 z-10 -mx-1 px-1 py-2 bg-gradient-to-b from-background via-background/95 to-transparent">
         {CHIP_ORDER.map((chip) => {
           const active = filter === chip;
+          const count = chip === "alle" ? all.length : all.filter((c) => c.category === chip).length;
           return (
             <button
               key={chip}
               onClick={() => setFilter(chip)}
               className={cn(
-                "h-8 px-3.5 rounded-full text-xs font-display font-semibold transition-all border",
+                "h-9 px-4 rounded-full text-xs font-display font-semibold transition-all border inline-flex items-center gap-1.5",
                 active
-                  ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white border-transparent shadow-sm"
-                  : "bg-white text-foreground border-[hsl(var(--gold)/0.22)] hover:border-[hsl(var(--gold)/0.4)] hover:bg-[hsl(var(--gold-soft)/0.4)]",
+                  ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white border-transparent shadow-[0_8px_20px_-8px_hsl(var(--gold-deep)/0.5)]"
+                  : "bg-white text-foreground border-[hsl(var(--gold)/0.22)] hover:border-[hsl(var(--gold)/0.45)] hover:bg-[hsl(var(--gold-soft)/0.4)] hover:-translate-y-0.5",
               )}
             >
               {CHIP_LABELS[chip]}
+              <span className={cn(
+                "ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-semibold tabular-nums",
+                active ? "bg-white/25 text-white" : "bg-[hsl(var(--gold-soft))] text-[hsl(var(--gold-deep))]",
+              )}>
+                {count}
+              </span>
             </button>
           );
         })}
         {(query || filter !== "alle") && (
           <button
             onClick={() => { setFilter("alle"); setQuery(""); }}
-            className="h-8 px-3 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            className="h-9 px-3 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             Wis filter
           </button>
         )}
       </div>
 
-      {/* RESULTS */}
       {liveAndBeta.length === 0 && roadmap.length === 0 ? (
-        <div className="card--luxe p-10 text-center">
-          <AlertCircle className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-semibold font-display text-foreground">Geen koppelingen gevonden</p>
-          <p className="text-xs text-muted-foreground mt-1">Probeer een andere zoekterm of filter.</p>
+        <div className="rounded-2xl border border-[hsl(var(--gold)/0.18)] bg-gradient-to-br from-white to-[hsl(var(--gold-soft)/0.2)] p-12 text-center">
+          <div className="mx-auto h-12 w-12 rounded-2xl bg-[hsl(var(--gold-soft))] flex items-center justify-center text-[hsl(var(--gold-deep))] mb-3">
+            <AlertCircle className="h-5 w-5" />
+          </div>
+          <p className="text-base font-display font-semibold text-foreground">Geen koppelingen gevonden</p>
+          <p className="text-sm text-muted-foreground mt-1">Probeer een andere zoekterm of filter.</p>
         </div>
       ) : (
         <>
           {liveAndBeta.length > 0 && (
-            <section className="space-y-3">
-              <h3 className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.22em]">
-                Beschikbaar
-              </h3>
+            <section className="space-y-4">
+              <SectionHeader eyebrow="Beschikbaar" subtitle={`${liveAndBeta.length} ${liveAndBeta.length === 1 ? "koppeling" : "koppelingen"} klaar om te verbinden`} icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {liveAndBeta.map((c) => (
-                  <ConnectorCard key={c.slug} connector={c} onSelect={() => onSelect(c.slug)} />
-                ))}
+                <AnimatePresence>
+                  {liveAndBeta.map((c, i) => (
+                    <ConnectorCard key={c.slug} connector={c} delay={i * 0.04} onSelect={() => onSelect(c.slug)} />
+                  ))}
+                </AnimatePresence>
               </div>
             </section>
           )}
 
           {roadmap.length > 0 && (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.22em]">
-                  Op de roadmap
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Aangekondigd, deze koppelingen worden binnenkort live gezet.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {roadmap.map((c) => (
-                  <RoadmapCard key={c.slug} connector={c} />
-                ))}
+            <section className="space-y-4">
+              <SectionHeader
+                eyebrow="Op de roadmap"
+                subtitle="Aangekondigd, deze koppelingen worden binnenkort live gezet"
+                icon={<Clock className="h-3.5 w-3.5" />}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <AnimatePresence>
+                  {roadmap.map((c, i) => (
+                    <RoadmapCard key={c.slug} connector={c} delay={i * 0.03} />
+                  ))}
+                </AnimatePresence>
               </div>
             </section>
           )}
         </>
       )}
 
-      {/* REQUEST PANEL */}
-      <div className="card--luxe p-5 flex flex-col sm:flex-row sm:items-center gap-4 border-[hsl(var(--gold)/0.22)]">
-        <div className="h-10 w-10 rounded-xl bg-[hsl(var(--gold-soft))] flex items-center justify-center text-[hsl(var(--gold-deep))] shrink-0">
-          <Zap className="h-5 w-5" strokeWidth={2.25} />
+      <div className="relative overflow-hidden rounded-[24px] border border-[hsl(var(--gold)/0.25)] bg-gradient-to-br from-[hsl(var(--gold-deep))] via-[hsl(var(--gold-deep))] to-[hsl(var(--gold))] p-6 sm:p-7 text-white shadow-[0_20px_40px_-20px_hsl(var(--gold-deep)/0.5)]">
+        <div className="absolute -top-20 -right-20 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+          <div className="h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
+            <Zap className="h-5 w-5" strokeWidth={2.25} />
+          </div>
+          <div className="flex-1">
+            <p className="text-base font-display font-semibold tracking-tight">Mis je een koppeling?</p>
+            <p className="text-sm text-white/85 mt-0.5">
+              Stuur een verzoek, wij stemmen 'm in op de roadmap en je hoort terug van het productteam.
+            </p>
+          </div>
+          <a
+            href={"mailto:product@orderflow.nl?subject=" + encodeURIComponent("Verzoek nieuwe koppeling") + "&body=" + encodeURIComponent("Ik mis de volgende koppeling in OrderFlow:\n\nNaam:\nWebsite:\nWaarom belangrijk:\n\nDank!")}
+            className="h-11 px-5 rounded-xl text-xs font-display font-semibold bg-white text-[hsl(var(--gold-deep))] shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)] hover:shadow-[0_6px_16px_-4px_rgba(0,0,0,0.25)] hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5"
+          >
+            Vraag aan
+            <ArrowRight className="h-3.5 w-3.5" />
+          </a>
         </div>
-        <div className="flex-1">
-          <p className="text-sm font-display font-semibold text-foreground">Mis je een koppeling?</p>
-          <p className="text-xs text-muted-foreground">Stuur een verzoek, dan stemmen we 'm in op de roadmap. Je hoort terug van het productteam.</p>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ eyebrow, subtitle, icon }: { eyebrow: string; subtitle: string; icon?: ReactNode }) {
+  return (
+    <div className="flex items-end justify-between gap-3">
+      <div>
+        <h3 className="text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] uppercase tracking-[0.24em] flex items-center gap-1.5">
+          {icon}
+          {eyebrow}
+        </h3>
+        <p className="mt-1 text-[12px] text-muted-foreground">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+function CatalogSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="rounded-[28px] border border-[hsl(var(--gold)/0.18)] bg-white p-8 animate-pulse">
+        <div className="h-6 w-40 rounded-full bg-[hsl(var(--gold-soft))]" />
+        <div className="mt-4 h-9 w-2/3 rounded-lg bg-slate-100" />
+        <div className="mt-2 h-4 w-1/2 rounded-md bg-slate-50" />
+        <div className="mt-6 h-12 w-full max-w-2xl rounded-2xl bg-slate-50" />
+        <div className="mt-6 grid grid-cols-3 gap-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-16 rounded-xl bg-slate-50" />
+          ))}
         </div>
-        <a
-          href={"mailto:product@orderflow.nl?subject=" + encodeURIComponent("Verzoek nieuwe koppeling") + "&body=" + encodeURIComponent("Ik mis de volgende koppeling in OrderFlow:\n\nNaam:\nWebsite:\nWaarom belangrijk:\n\nDank!")}
-          className="h-10 px-4 rounded-xl text-xs font-display font-semibold bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm hover:opacity-95 transition-opacity flex items-center justify-center"
+<<<<<<< Updated upstream
+        <button
+          type="button"
+          className="h-10 px-4 rounded-xl text-xs font-display font-semibold bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm hover:opacity-95 transition-opacity"
         >
           Vraag aan
-        </a>
+        </button>
+=======
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-44 rounded-2xl bg-white border border-[hsl(var(--gold)/0.12)] animate-pulse" />
+        ))}
+>>>>>>> Stashed changes
       </div>
     </div>
   );
@@ -241,28 +395,28 @@ function HealthCell({
   tone,
   hint,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: number;
   tone: "success" | "gold" | "muted";
   hint: string;
 }) {
   const palette = {
-    success: "bg-emerald-50/70 border-emerald-200/60 text-emerald-700",
-    gold: "bg-[hsl(var(--gold-soft)/0.5)] border-[hsl(var(--gold)/0.3)] text-[hsl(var(--gold-deep))]",
-    muted: "bg-slate-50/80 border-slate-200/70 text-slate-600",
+    success: "bg-gradient-to-br from-emerald-50 to-emerald-50/40 border-emerald-200/70 text-emerald-700",
+    gold: "bg-gradient-to-br from-[hsl(var(--gold-soft)/0.6)] to-[hsl(var(--gold-soft)/0.2)] border-[hsl(var(--gold)/0.3)] text-[hsl(var(--gold-deep))]",
+    muted: "bg-gradient-to-br from-slate-50 to-white border-slate-200/70 text-slate-600",
   }[tone];
   return (
-    <div className={cn("rounded-xl border p-3 flex items-center gap-3", palette)}>
-      <span className="h-8 w-8 rounded-lg bg-white/70 flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+    <div className={cn("rounded-2xl border p-4 flex items-center gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]", palette)}>
+      <span className="h-10 w-10 rounded-xl bg-white/80 flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_4px_rgba(0,0,0,0.05)]">
         {icon}
       </span>
       <div className="min-w-0">
         <div className="flex items-baseline gap-2">
           <span className="font-display text-2xl font-semibold tabular-nums leading-none">{value}</span>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-80">{label}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-80">{label}</span>
         </div>
-        <p className="text-[11px] opacity-80 mt-0.5 truncate">{hint}</p>
+        <p className="text-[11px] opacity-75 mt-0.5 truncate">{hint}</p>
       </div>
     </div>
   );
@@ -270,25 +424,54 @@ function HealthCell({
 
 function FeaturedCard({
   connector,
+  delay,
   onSelect,
 }: {
   connector: ConnectorWithStatus;
+  delay: number;
   onSelect: () => void;
 }) {
   const isLive = connector.enabled && connector.hasCredentials;
+  const tint = withAlpha(connector.brandColor, 0.06);
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onSelect}
-      className="group relative rounded-2xl border border-[hsl(var(--gold)/0.18)] bg-gradient-to-br from-white to-[hsl(var(--gold-soft)/0.25)] p-4 text-left transition-all hover:border-[hsl(var(--gold)/0.4)] hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.35, delay }}
+      whileHover={{ y: -3 }}
+      className="group relative rounded-2xl border border-[hsl(var(--gold)/0.2)] p-5 text-left overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.06)] hover:border-[hsl(var(--gold)/0.45)] hover:shadow-[0_16px_36px_-16px_rgba(0,0,0,0.22)] transition-shadow"
+      style={{
+        background: `linear-gradient(135deg, ${tint} 0%, white 50%, hsl(var(--gold-soft) / 0.25) 100%)`,
+      }}
     >
-      <BrandTile connector={connector} size={48} />
-      <p className="mt-3 text-sm font-display font-semibold text-foreground truncate">{connector.name}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2 leading-snug">{connector.description}</p>
-      <div className="mt-2.5 flex items-center justify-between">
+      <div
+        aria-hidden
+        className="absolute top-0 inset-x-0 h-1"
+        style={{ backgroundColor: `#${connector.brandColor}` }}
+      />
+      <div className="flex items-start justify-between gap-3">
+        <BrandTile connector={connector} size={56} />
+        {connector.badge && (
+          <Badge
+            variant="outline"
+            className="text-[9px] font-display font-bold uppercase tracking-[0.16em] border-[hsl(var(--gold)/0.3)] bg-white/80 backdrop-blur-sm text-[hsl(var(--gold-deep))]"
+          >
+            {BADGE_LABELS[connector.badge]}
+          </Badge>
+        )}
+      </div>
+      <p className="mt-4 text-base font-display font-semibold text-foreground tracking-tight truncate">{connector.name}</p>
+      <p className="mt-1 text-[12px] text-muted-foreground line-clamp-2 leading-relaxed">{connector.description}</p>
+      <div className="mt-4 flex items-center justify-between">
         {isLive ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-display font-semibold text-emerald-700">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
             Verbonden
           </span>
         ) : connector.status === "soon" ? (
@@ -297,38 +480,59 @@ function FeaturedCard({
             Roadmap
           </span>
         ) : (
-          <span className="text-[10px] font-semibold text-[hsl(var(--gold-deep))]">
+          <span className="text-[10px] font-display font-semibold text-[hsl(var(--gold-deep))]">
             {connector.status === "beta" ? "Beta" : "Klaar om te verbinden"}
           </span>
         )}
         <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-[hsl(var(--gold-deep))] group-hover:translate-x-0.5 transition-all" />
       </div>
-    </button>
+    </motion.button>
   );
 }
 
 function ConnectorCard({
   connector,
+  delay,
   onSelect,
 }: {
   connector: ConnectorWithStatus;
+  delay: number;
   onSelect: () => void;
 }) {
   const isLive = connector.enabled && connector.hasCredentials;
+  const tint = withAlpha(connector.brandColor, 0.04);
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onSelect}
-      className="group relative card--luxe p-5 text-left transition-all hover:border-[hsl(var(--gold)/0.4)] hover:shadow-[0_12px_32px_-14px_rgba(0,0,0,0.2)] hover:-translate-y-0.5"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.3, delay }}
+      whileHover={{ y: -2 }}
+      className="group relative rounded-2xl border border-[hsl(var(--gold)/0.18)] p-5 text-left overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.05)] hover:border-[hsl(var(--gold)/0.45)] hover:shadow-[0_18px_40px_-16px_rgba(0,0,0,0.22)] transition-shadow"
+      style={{
+        background: `linear-gradient(180deg, white 0%, ${tint} 100%)`,
+      }}
     >
+      <div
+        aria-hidden
+        className="absolute top-0 inset-x-0 h-[3px] opacity-80 group-hover:opacity-100 transition-opacity"
+        style={{ backgroundColor: `#${connector.brandColor}` }}
+      />
+      <span
+        aria-hidden
+        className="absolute -inset-y-2 -left-2/3 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-[hsl(var(--gold)/0.16)] to-transparent opacity-0 group-hover:opacity-100 group-hover:left-full transition-all duration-700 ease-out pointer-events-none"
+      />
+
       <div className="flex items-start justify-between gap-3">
-        <BrandTile connector={connector} />
+        <BrandTile connector={connector} size={52} />
         <div className="flex flex-col items-end gap-1.5">
           <StatusBadge connector={connector} live={isLive} />
           {connector.badge && (
             <Badge
               variant="outline"
-              className="text-[9px] font-display font-bold uppercase tracking-[0.14em] border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--gold-soft)/0.4)] text-[hsl(var(--gold-deep))]"
+              className="text-[9px] font-display font-bold uppercase tracking-[0.16em] border-[hsl(var(--gold)/0.3)] bg-white/80 backdrop-blur-sm text-[hsl(var(--gold-deep))]"
             >
               {BADGE_LABELS[connector.badge]}
             </Badge>
@@ -336,7 +540,7 @@ function ConnectorCard({
         </div>
       </div>
 
-      <h4 className="mt-3 text-base font-display font-semibold text-foreground tracking-tight">
+      <h4 className="mt-4 text-base font-display font-semibold text-foreground tracking-tight">
         {connector.name}
       </h4>
       <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
@@ -348,8 +552,9 @@ function ConnectorCard({
           {(connector.capabilities ?? []).map((cap) => (
             <span
               key={cap}
-              className="inline-flex h-5 items-center px-2 rounded-full bg-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))] text-[10px] font-semibold tracking-wide"
+              className="inline-flex h-6 items-center gap-1 px-2 rounded-full bg-[hsl(var(--gold-soft)/0.55)] text-[hsl(var(--gold-deep))] text-[10px] font-display font-semibold tracking-wide"
             >
+              {capabilityIcon(cap)}
               {cap}
             </span>
           ))}
@@ -367,48 +572,115 @@ function ConnectorCard({
       )}
 
       <div className="mt-4 pt-3 border-t border-[hsl(var(--gold)/0.12)] flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           {CATEGORY_LABELS[connector.category]}
         </span>
-        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[hsl(var(--gold-deep))] group-hover:gap-1.5 transition-all">
+        <span className="inline-flex items-center gap-1 text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] group-hover:gap-1.5 transition-all">
           {isLive ? "Beheren" : "Verbinden"}
           <ArrowRight className="h-3 w-3" />
         </span>
       </div>
-    </button>
+    </motion.button>
   );
 }
 
-function RoadmapCard({ connector }: { connector: ConnectorWithStatus }) {
+function RoadmapCard({ connector, delay }: { connector: ConnectorWithStatus; delay: number }) {
   return (
-    <div className="rounded-2xl border border-[hsl(var(--gold)/0.14)] bg-white/60 p-4 text-left opacity-75">
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.25, delay }}
+      className="rounded-2xl border border-[hsl(var(--gold)/0.14)] bg-gradient-to-br from-white to-slate-50/40 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] opacity-90 hover:opacity-100 hover:border-[hsl(var(--gold)/0.3)] transition-all"
+    >
       <div className="flex items-start justify-between gap-3">
-        <BrandTile connector={connector} size={36} />
-        <Badge variant="secondary" className="gap-1 text-[10px] bg-slate-100 text-slate-600 hover:bg-slate-100">
+        <BrandTile connector={connector} size={40} muted />
+        <Badge variant="secondary" className="gap-1 text-[10px] bg-slate-100 text-slate-600 hover:bg-slate-100 border-0">
           <Clock className="h-3 w-3" />
           Roadmap
         </Badge>
       </div>
-      <h4 className="mt-3 text-sm font-display font-semibold text-foreground">{connector.name}</h4>
+      <h4 className="mt-3 text-sm font-display font-semibold text-foreground tracking-tight">{connector.name}</h4>
       <p className="mt-0.5 text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
         {connector.description}
       </p>
-    </div>
+    </motion.div>
+  );
+}
+
+function BundleCard({
+  bundle,
+  connectors,
+  delay,
+  onSelect,
+}: {
+  bundle: typeof BUNDLES[number];
+  connectors: ConnectorWithStatus[];
+  delay: number;
+  onSelect: (slug: string) => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay }}
+      className={cn(
+        "relative rounded-2xl border border-[hsl(var(--gold)/0.18)] p-5 overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_3px_rgba(0,0,0,0.05)] bg-gradient-to-br",
+        bundle.accent,
+      )}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className="h-8 w-8 rounded-xl bg-white/80 backdrop-blur-sm flex items-center justify-center text-[hsl(var(--gold-deep))] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_4px_rgba(0,0,0,0.05)]">
+          {bundle.icon}
+        </span>
+        <p className="text-[10px] font-display font-semibold uppercase tracking-[0.2em] text-[hsl(var(--gold-deep))]">Bundel</p>
+      </div>
+      <h4 className="text-base font-display font-semibold text-foreground tracking-tight">{bundle.title}</h4>
+      <p className="text-[12px] text-muted-foreground leading-relaxed mt-1 mb-4">{bundle.blurb}</p>
+      <div className="flex items-center -space-x-2 mb-4">
+        {connectors.map((c) => (
+          <div key={c.slug} className="relative rounded-xl bg-white ring-2 ring-white" title={c.name}>
+            <BrandTile connector={c} size={36} />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold text-muted-foreground">
+          {connectors.length} koppeling{connectors.length === 1 ? "" : "en"}
+        </span>
+        <button
+          type="button"
+          onClick={() => connectors[0] && onSelect(connectors[0].slug)}
+          className="inline-flex items-center gap-1 text-[11px] font-display font-semibold text-[hsl(var(--gold-deep))] hover:gap-1.5 transition-all"
+        >
+          Open bundel
+          <ArrowRight className="h-3 w-3" />
+        </button>
+      </div>
+    </motion.div>
   );
 }
 
 function BrandTile({
   connector,
   size = 44,
+  muted = false,
 }: {
   connector: ConnectorWithStatus;
   size?: number;
+  muted?: boolean;
 }) {
+  const radius = Math.round(size * 0.27);
   if (connector.logoUrl) {
     return (
       <div
-        className="rounded-xl bg-white border border-[hsl(var(--gold)/0.18)] flex items-center justify-center overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_3px_rgba(0,0,0,0.06)] shrink-0"
-        style={{ width: size, height: size }}
+        className={cn(
+          "bg-white border flex items-center justify-center overflow-hidden shrink-0 transition-all",
+          muted
+            ? "border-[hsl(var(--gold)/0.14)] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_1px_2px_rgba(0,0,0,0.04)]"
+            : "border-[hsl(var(--gold)/0.22)] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_2px_6px_rgba(0,0,0,0.08)] group-hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_4px_10px_rgba(0,0,0,0.12)]",
+        )}
+        style={{ width: size, height: size, borderRadius: radius }}
         aria-hidden="true"
       >
         <img src={connector.logoUrl} alt="" className="h-full w-full object-contain" />
@@ -417,10 +689,11 @@ function BrandTile({
   }
   return (
     <div
-      className="rounded-xl flex items-center justify-center text-white font-display font-bold tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_3px_rgba(0,0,0,0.12)] shrink-0"
+      className="flex items-center justify-center text-white font-display font-bold tracking-tight shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_6px_rgba(0,0,0,0.12)]"
       style={{
         width: size,
         height: size,
+        borderRadius: radius,
         backgroundColor: `#${connector.brandColor}`,
         fontSize: size * 0.32,
       }}
@@ -440,7 +713,7 @@ function StatusBadge({
 }) {
   if (live) {
     return (
-      <Badge className="gap-1 text-[10px] bg-emerald-600 hover:bg-emerald-700 border-0">
+      <Badge className="gap-1 text-[10px] font-display bg-emerald-600 hover:bg-emerald-700 border-0">
         <CheckCircle2 className="h-3 w-3" />
         Verbonden
       </Badge>
@@ -448,13 +721,13 @@ function StatusBadge({
   }
   if (connector.status === "beta") {
     return (
-      <Badge variant="outline" className="text-[10px] border-amber-300 bg-amber-50 text-amber-700">
+      <Badge variant="outline" className="text-[10px] font-display border-amber-300 bg-gradient-to-br from-amber-50 to-amber-100/50 text-amber-700">
         Beta
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] border-[hsl(var(--gold)/0.25)] bg-white text-muted-foreground">
+    <Badge variant="outline" className="text-[10px] font-display border-[hsl(var(--gold)/0.25)] bg-white/80 backdrop-blur-sm text-muted-foreground">
       Niet verbonden
     </Badge>
   );
