@@ -10,15 +10,16 @@ test.describe("Order lifecycle", () => {
   test("navigate to orders page", async ({ page }) => {
     await page.goto("/orders");
     await expect(page).toHaveURL(/\/orders/);
-    // The orders page should render (table or empty state)
+    // De Orders-page heeft een eigen "Nieuwe order"-knop in de page-header,
+    // los van de sidebar. Pak expliciet de knop in de main-content.
     await expect(
-      page.getByText("Nieuwe order").or(page.getByText("Orders")),
+      page.getByRole("button", { name: "Nieuwe order" }),
     ).toBeVisible();
   });
 
   test("open new order form", async ({ page }) => {
     await page.goto("/orders");
-    await page.getByText("Nieuwe order").click();
+    await page.getByRole("button", { name: "Nieuwe order" }).click();
     // Should navigate to /orders/nieuw
     await expect(page).toHaveURL(/\/orders\/nieuw/);
   });

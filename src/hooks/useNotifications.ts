@@ -26,8 +26,12 @@ export function useNotifications() {
       return;
     }
 
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? getEffectiveLocalUserId());
+    // getSession() leest uit localStorage zonder netwerk-roundtrip,
+    // getUser() doet een /auth/v1/user GET die geld kost en bij een
+    // recent verlopen JWT 403 retourneert (race tijdens auth-init).
+    // Voor read-only user-id lookups is de session-route voldoende.
+    supabase.auth.getSession().then(({ data }) => {
+      setUserId(data.session?.user?.id ?? getEffectiveLocalUserId());
     });
   }, []);
 

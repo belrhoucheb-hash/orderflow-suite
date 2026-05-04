@@ -46,8 +46,6 @@ export async function fetchTripsForDate(date?: string) {
         stop_sequence,
         stop_status,
         planned_address,
-        planned_latitude,
-        planned_longitude,
         planned_time,
         actual_arrival_time,
         actual_departure_time,

@@ -9,8 +9,11 @@ function useCurrentUserId(): string | null {
 
   useEffect(() => {
     let cancelled = false;
-    supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setUserId(data.user?.id ?? getEffectiveLocalUserId());
+    // getSession() leest uit localStorage zonder netwerk-roundtrip;
+    // getUser() doet een /auth/v1/user GET die niet nodig is voor een
+    // simple user-id read.
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) setUserId(data.session?.user?.id ?? getEffectiveLocalUserId());
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserId(session?.user?.id ?? null);
