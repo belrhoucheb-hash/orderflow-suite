@@ -27,7 +27,7 @@ export function useThreadMessages(threadKey: string | null) {
     queryFn: async () => {
       if (!threadKey) return [];
       const { data, error } = await supabase
-        .from("messages" as any)
+        .from("messages")
         .select("*")
         .eq("thread_key", threadKey)
         .order("created_at", { ascending: true })
@@ -55,7 +55,7 @@ export function useSendMessage() {
       if (!fromUserId) throw new Error("Niet ingelogd");
 
       const { data, error } = await supabase
-        .from("messages" as any)
+        .from("messages")
         .insert({
           tenant_id: tenant.id,
           thread_key: input.threadKey,
@@ -84,7 +84,7 @@ export function useMarkThreadRead(threadKey: string | null) {
       const userId = session?.session?.user?.id;
       if (!userId) return;
       await supabase
-        .from("messages" as any)
+        .from("messages")
         .update({ read_at: new Date().toISOString() })
         .eq("thread_key", threadKey)
         .eq("to_user_id", userId)
@@ -172,13 +172,13 @@ export function usePlannerDriverThreads() {
           const threadKey = driverThreadKey(driver.id);
           const [{ data: lastRows }, { data: unreadRows }] = await Promise.all([
             supabase
-              .from("messages" as any)
+              .from("messages")
               .select("id, body, created_at, from_user_id")
               .eq("thread_key", threadKey)
               .order("created_at", { ascending: false })
               .limit(1),
             supabase
-              .from("messages" as any)
+              .from("messages")
               .select("id")
               .eq("thread_key", threadKey)
               .is("read_at", null)

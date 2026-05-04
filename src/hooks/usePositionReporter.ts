@@ -164,6 +164,20 @@ export function usePositionReporter(
     const pos = positionRef.current;
     if (!pos || !tripId || !driverId) return;
 
+    // Zonder expliciete tenant_id durven we geen vehicle_positions weg te
+    // schrijven. Eerder leunde RLS op vehicle_id/driver_id om tenant te
+    // inferentieren, maar dat geeft tenant-leakage als die mappings niet
+    // kloppen. Skippen is veiliger dan een rij met tenant_id null.
+    if (!tenantId) {
+      if (import.meta.env.MODE === "development") {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[usePositionReporter] tenantId ontbreekt, positie niet gerapporteerd",
+        );
+      }
+      return;
+    }
+
     // Check minimum distance
     if (lastReportedRef.current) {
       const dist = haversineMeters(
@@ -176,7 +190,7 @@ export function usePositionReporter(
     }
 
     const row = {
-      tenant_id: tenantId || null,
+      tenant_id: tenantId,
       vehicle_id: vehicleId || null,
       driver_id: driverId,
       trip_id: tripId,
