@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Truck, MapPin, Package, CheckCircle2, Navigation, LogOut, Check, Phone, Fingerprint, Camera, X, User, MessageSquare, Image, Clock, Coffee, Play, Square, WifiOff, RefreshCw, Bell, Calendar as CalendarIcon } from "lucide-react";
+import { Truck, MapPin, Navigation, LogOut, Fingerprint, Camera, X, User, MessageSquare, Clock, Coffee, Play, Square, WifiOff, RefreshCw, Bell, Calendar as CalendarIcon, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { TripFlow } from "@/components/chauffeur/TripFlow";
 import { VehicleCheckScreen } from "@/components/chauffeur/VehicleCheckScreen";
 import { MijnWeekView } from "@/components/chauffeur/MijnWeekView";
+import { SwipeToConfirm } from "@/components/chauffeur/SwipeToConfirm";
 import { useVehicleCheckGate } from "@/hooks/useVehicleCheck";
 import { useDriverTrips, useUpdateStopStatus } from "@/hooks/useTrips";
 import { useDriverSchedulesRealtime } from "@/hooks/useDriverSchedulesRealtime";
@@ -20,7 +21,8 @@ import { DriveTimeMonitor } from "@/components/chauffeur/DriveTimeMonitor";
 import type { TripStop } from "@/types/dispatch";
 import { cn } from "@/lib/utils";
 import { savePendingPOD, getPendingPODs, syncPendingPODs } from "@/lib/offlineStore";
-import { getPodFileUrl, uploadPodBlob } from "@/lib/podStorage";
+import { uploadPodBlob } from "@/lib/podStorage";
+import { vibrate, HAPTICS } from "@/lib/haptics";
 
 /**
  * Hash a PIN using PBKDF2 (100k iteraties, SHA-256) met een per-driver salt.
@@ -273,6 +275,7 @@ export default function ChauffeurApp() {
         const attemptResult = await recordFailedAttempt(pendingDriverId);
         const newAttempts = pinAttempts + 1;
         setPinAttempts(newAttempts);
+        vibrate(HAPTICS.errorBurst);
 
         if (attemptResult.locked) {
           if (!attemptResult.lockUntil) {
@@ -293,6 +296,7 @@ export default function ChauffeurApp() {
       // PIN correct — reset failed attempts
       await resetFailedAttempts(pendingDriverId);
       setPinAttempts(0);
+      vibrate(HAPTICS.short);
 
       if ((data as any)?.must_change_pin) {
         setShowChangePin(true);
@@ -303,6 +307,7 @@ export default function ChauffeurApp() {
     } catch {
       setPinError("Fout bij PIN-verificatie. Probeer opnieuw.");
       setPinInput("");
+      vibrate(HAPTICS.errorBurst);
     } finally {
       setPinVerifying(false);
     }
@@ -337,19 +342,16 @@ export default function ChauffeurApp() {
   // het persoonlijke weekrooster (read-only). Geen routing, alleen lokaal.
   const [activeTab, setActiveTab] = useState<"vandaag" | "week">("vandaag");
 
-  const showLegacyOrders = false;
-  const orders: any[] = [];
-  const loadingOrders = false;
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [isSigning, setIsSigning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // PoD fields
   const [podSignedBy, setPodSignedBy] = useState("");
   const [podNotes, setPodNotes] = useState("");
   const [podPhotos, setPodPhotos] = useState<string[]>([]);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
@@ -596,8 +598,6 @@ export default function ChauffeurApp() {
     setShowChangePin(false);
   };
 
-  const [viewingPod, setViewingPod] = useState<any | null>(null);
-
   // -- Reset PoD state --
   const resetPodState = () => {
     setPodSignedBy("");
@@ -749,44 +749,6 @@ export default function ChauffeurApp() {
     return urls;
   };
 
-  const [viewingPodSignatureUrl, setViewingPodSignatureUrl] = useState<string | null>(null);
-  const [viewingPodPhotoUrls, setViewingPodPhotoUrls] = useState<string[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const resolvePodEvidence = async () => {
-      if (!viewingPod) {
-        setViewingPodSignatureUrl(null);
-        setViewingPodPhotoUrls([]);
-        return;
-      }
-
-      const [signatureUrl, photoUrls] = await Promise.all([
-        getPodFileUrl(viewingPod.pod_signature_url, {
-          orderId: viewingPod.id,
-          purpose: "view",
-        }),
-        Promise.all(
-          (Array.isArray(viewingPod.pod_photos) ? viewingPod.pod_photos : []).map((photo: string) =>
-            getPodFileUrl(photo, { orderId: viewingPod.id, purpose: "view" })
-          ),
-        ),
-      ]);
-
-      if (!cancelled) {
-        setViewingPodSignatureUrl(signatureUrl);
-        setViewingPodPhotoUrls(photoUrls.filter((url): url is string => !!url));
-      }
-    };
-
-    resolvePodEvidence();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [viewingPod]);
-
   // -- Complete delivery with full PoD --
   const handleCompleteDelivery = async () => {
     if (!selectedOrder) return;
@@ -819,8 +781,9 @@ export default function ChauffeurApp() {
       if (error) throw error;
       
       toast.success("Zending succesvol afgeleverd!", {
-        description: "Handtekening en bewijs zijn opgeslagen."
+        description: "Handtekening en bewijs zijn opgeslagen.",
       });
+      vibrate(HAPTICS.long);
       resetPodState();
       setSelectedOrder(null);
     } catch(err) {
@@ -853,6 +816,7 @@ export default function ChauffeurApp() {
       } catch (offlineErr) {
         console.error("Offline save also failed:", offlineErr);
         toast.error("Kon aflevering niet voltooien en niet offline opslaan.");
+        vibrate(HAPTICS.errorBurst);
       }
     } finally {
       setIsSubmitting(false);
@@ -861,23 +825,35 @@ export default function ChauffeurApp() {
 
   // --- RENDERS ---
 
+  const luxeAuthBg = "h-screen w-full flex flex-col p-6 items-center justify-center bg-gradient-to-b from-[hsl(var(--gold-soft)/0.45)] via-white to-white";
+
   if (driversLoading) {
-    return <div className="h-screen w-full flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-[hsl(var(--gold-soft)/0.18)]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[hsl(var(--gold-deep))]" />
+      </div>
+    );
   }
 
   // PIN CHANGE SCREEN
   if (showChangePin && pendingDriverId) {
     const pendingDriver = drivers?.find(d => d.id === pendingDriverId);
     return (
-      <div className="h-screen w-full bg-slate-50 flex flex-col p-6 items-center justify-center">
+      <div className={luxeAuthBg}>
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <div className="h-16 w-16 bg-amber-500 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-amber-500/30 mb-6">
+            <div
+              className="h-16 w-16 rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-6"
+              style={{
+                background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+                boxShadow: "0 10px 30px -10px hsl(var(--gold-deep) / 0.45)",
+              }}
+            >
               <Fingerprint className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-2xl font-display font-bold text-slate-900 tracking-tight">PIN wijzigen</h1>
             <p className="text-muted-foreground mt-2">
-              Welkom {pendingDriver?.name}! Stel een nieuwe PIN in.
+              Welkom {pendingDriver?.name}, stel een nieuwe PIN in.
             </p>
           </div>
 
@@ -891,7 +867,7 @@ export default function ChauffeurApp() {
                 value={newPin}
                 onChange={e => { setNewPin(e.target.value.replace(/\D/g, "")); setPinError(""); }}
                 placeholder="----"
-                className="text-center text-2xl tracking-[0.5em] font-mono h-14 mt-1"
+                className="text-center text-2xl tracking-[0.5em] font-mono tabular-nums h-14 mt-1 border-[hsl(var(--gold)/0.35)]"
                 autoFocus
               />
             </div>
@@ -904,12 +880,12 @@ export default function ChauffeurApp() {
                 value={confirmNewPin}
                 onChange={e => { setConfirmNewPin(e.target.value.replace(/\D/g, "")); setPinError(""); }}
                 placeholder="----"
-                className="text-center text-2xl tracking-[0.5em] font-mono h-14 mt-1"
+                className="text-center text-2xl tracking-[0.5em] font-mono tabular-nums h-14 mt-1 border-[hsl(var(--gold)/0.35)]"
               />
             </div>
             {pinError && <p className="text-sm text-red-500 text-center">{pinError}</p>}
             <Button
-              className="w-full h-12 text-base"
+              className="btn-luxe btn-luxe--primary w-full h-12 text-base"
               onClick={handleChangePin}
               disabled={newPin.length !== 4 || confirmNewPin.length !== 4}
             >
@@ -925,15 +901,21 @@ export default function ChauffeurApp() {
   if (pendingDriverId && !activeDriverId) {
     const pendingDriver = drivers?.find(d => d.id === pendingDriverId);
     return (
-      <div className="h-screen w-full bg-slate-50 flex flex-col p-6 items-center justify-center">
+      <div className={luxeAuthBg}>
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <div className="h-16 w-16 bg-primary rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-primary/30 mb-6">
+            <div
+              className="h-16 w-16 rounded-2xl mx-auto flex items-center justify-center mb-6"
+              style={{
+                background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+                boxShadow: "0 10px 30px -10px hsl(var(--gold-deep) / 0.45)",
+              }}
+            >
               <Fingerprint className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-2xl font-display font-bold text-slate-900 tracking-tight">PIN invoeren</h1>
             <p className="text-muted-foreground mt-2">
-              {pendingDriver?.name} - Voer je 4-cijferige PIN in
+              {pendingDriver?.name}, voer je 4-cijferige PIN in
             </p>
           </div>
 
@@ -946,7 +928,7 @@ export default function ChauffeurApp() {
               onChange={e => { setPinInput(e.target.value.replace(/\D/g, "")); setPinError(""); }}
               onKeyDown={e => { if (e.key === "Enter") handlePinSubmit(); }}
               placeholder="----"
-              className="text-center text-3xl tracking-[0.5em] font-mono h-16"
+              className="text-center text-3xl tracking-[0.5em] font-mono tabular-nums h-16 border-[hsl(var(--gold)/0.35)]"
               disabled={!!pinLockedUntil && Date.now() < pinLockedUntil}
               autoFocus
             />
@@ -955,13 +937,13 @@ export default function ChauffeurApp() {
               <p className="text-sm text-red-500 text-center">{pinError}</p>
             )}
             {pinLockCountdown > 0 && (
-              <p className="text-sm text-amber-600 text-center font-medium">
+              <p className="text-sm text-amber-600 text-center font-medium tabular-nums">
                 Geblokkeerd: {Math.floor(pinLockCountdown / 60)}:{(pinLockCountdown % 60).toString().padStart(2, "0")} resterend
               </p>
             )}
 
             <Button
-              className="w-full h-12 text-base"
+              className="btn-luxe btn-luxe--primary w-full h-12 text-base"
               onClick={handlePinSubmit}
               disabled={pinInput.length !== 4 || pinVerifying || (!!pinLockedUntil && Date.now() < pinLockedUntil)}
             >
@@ -970,7 +952,7 @@ export default function ChauffeurApp() {
 
             <button
               onClick={() => { setPendingDriverId(null); setPinInput(""); setPinError(""); }}
-              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="w-full text-sm text-muted-foreground hover:text-[hsl(var(--gold-deep))] transition-colors"
             >
               Terug naar chauffeur selectie
             </button>
@@ -983,10 +965,16 @@ export default function ChauffeurApp() {
   // LOGIN SCREEN (driver selection)
   if (!activeDriverId) {
     return (
-      <div className="h-screen w-full bg-slate-50 flex flex-col p-6 items-center justify-center">
+      <div className={luxeAuthBg}>
         <div className="w-full max-w-sm">
           <div className="text-center mb-10">
-            <div className="h-16 w-16 bg-primary rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-primary/30 mb-6">
+            <div
+              className="h-16 w-16 rounded-2xl mx-auto flex items-center justify-center mb-6"
+              style={{
+                background: "linear-gradient(180deg, hsl(var(--gold)) 0%, hsl(var(--gold-deep)) 100%)",
+                boxShadow: "0 10px 30px -10px hsl(var(--gold-deep) / 0.5)",
+              }}
+            >
               <Truck className="h-8 w-8 text-white" />
             </div>
             <h1 className="text-3xl font-display font-bold text-slate-900 tracking-tight">OrderFlow PWA</h1>
@@ -998,18 +986,18 @@ export default function ChauffeurApp() {
               <button
                 key={driver.id}
                 onClick={() => handleDriverSelect(driver.id)}
-                className="w-full bg-white p-4 rounded-2xl border border-slate-200 flex items-center gap-4 hover:border-primary/50 hover:shadow-md transition-all active:scale-95"
+                className="card--luxe w-full p-4 flex items-center gap-4 border-[hsl(var(--gold)/0.18)] hover:border-[hsl(var(--gold)/0.45)] hover:bg-[hsl(var(--gold-soft)/0.3)] transition-all active:scale-[0.98]"
               >
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[hsl(var(--gold-soft))] to-[hsl(var(--gold-soft)/0.5)] ring-1 ring-[hsl(var(--gold)/0.3)] flex items-center justify-center text-[hsl(var(--gold-deep))] font-bold font-display">
                   {driver.name.charAt(0)}
                 </div>
                 <div className="text-left flex-1">
-                  <h3 className="font-semibold text-slate-900">{driver.name}</h3>
+                  <h3 className="font-semibold text-slate-900 font-display">{driver.name}</h3>
                   <p className="text-xs text-slate-500">
                     Voertuig: {driver.current_vehicle_id ? 'Toegewezen' : 'Geen vrachtwagen'}
                   </p>
                 </div>
-                <Fingerprint className="h-5 w-5 text-slate-300" />
+                <Fingerprint className="h-5 w-5 text-[hsl(var(--gold)/0.6)]" />
               </button>
             ))}
           </div>
@@ -1074,20 +1062,31 @@ export default function ChauffeurApp() {
   }
 
   // MAIN DRIVER DASHBOARD
+  const completedTripStops = allActiveStops.filter(s => s.stop_status === "AFGELEVERD").length;
+  const totalTripStops = allActiveStops.length;
+
   return (
-    <div className="h-screen w-full bg-slate-50 flex flex-col overflow-hidden fixed inset-0">
+    <div className="h-screen w-full bg-[hsl(var(--gold-soft)/0.18)] flex flex-col overflow-hidden fixed inset-0">
       {/* HEADER */}
-      <header className="bg-primary px-6 py-5 text-white flex justify-between items-center z-10 shadow-md">
+      <header
+        className="px-6 py-5 text-white flex justify-between items-center z-10 shadow-lg"
+        style={{
+          background: "linear-gradient(135deg, hsl(var(--gold-deep)) 0%, hsl(var(--gold-deep)) 60%, hsl(var(--gold)) 100%)",
+        }}
+      >
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center font-bold">
+          <div className="h-10 w-10 bg-white/15 ring-1 ring-white/25 rounded-full flex items-center justify-center font-bold font-display">
             {activeDriver?.name.charAt(0)}
           </div>
           <div>
-            <h2 className="font-semibold text-lg leading-tight">{activeDriver?.name}</h2>
-            <p className="text-xs text-primary-foreground/80 font-medium tracking-wide flex items-center gap-1.5">
-              {orders.filter(o => o.status === "DELIVERED").length} / {orders.length} Voltooid
+            <h2 className="font-semibold text-lg leading-tight font-display tracking-tight">{activeDriver?.name}</h2>
+            <p className="text-xs text-white/80 font-medium tracking-wide flex items-center gap-1.5 tabular-nums">
+              {completedTripStops} / {totalTripStops} Voltooid
               {activeTripId && (
-                <span className={`inline-block h-2 w-2 rounded-full ${positionReporter.isTracking ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} title={positionReporter.isTracking ? "GPS tracking actief" : "Geen GPS signaal"} />
+                <span
+                  className={`inline-block h-2 w-2 rounded-full ${positionReporter.isTracking ? "bg-emerald-300 animate-pulse" : "bg-red-300"}`}
+                  title={positionReporter.isTracking ? "GPS tracking actief" : "Geen GPS signaal"}
+                />
               )}
             </p>
           </div>
@@ -1099,8 +1098,8 @@ export default function ChauffeurApp() {
             onClick={handleToggleGPS}
             className={`rounded-full h-10 w-10 transition-colors ${
               isTracking
-                ? "bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/40"
-                : "text-white/60 hover:bg-white/20"
+                ? "bg-emerald-400/25 text-emerald-100 hover:bg-emerald-400/35"
+                : "text-white/70 hover:bg-white/15"
             }`}
             title={isTracking ? "GPS actief" : "GPS uit"}
           >
@@ -1110,17 +1109,17 @@ export default function ChauffeurApp() {
             variant="ghost"
             size="icon"
             onClick={() => setShowNotifPanel(!showNotifPanel)}
-            className="relative rounded-full h-10 w-10 text-white hover:bg-white/20"
+            className="relative rounded-full h-10 w-10 text-white hover:bg-white/15"
             title="Notificaties"
           >
             <Bell className="h-5 w-5" />
             {unreadNotifCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 h-5 min-w-[20px] px-1 rounded-full bg-red-500 text-xs text-white flex items-center justify-center font-bold shadow-sm">
+              <span className="absolute -top-0.5 -right-0.5 h-5 min-w-[20px] px-1 rounded-full bg-red-500 text-xs text-white flex items-center justify-center font-bold shadow-sm tabular-nums">
                 {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
               </span>
             )}
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white hover:bg-white/20 rounded-full h-10 w-10">
+          <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white hover:bg-white/15 rounded-full h-10 w-10">
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
@@ -1128,16 +1127,16 @@ export default function ChauffeurApp() {
 
       {/* Notification Panel */}
       {showNotifPanel && (
-        <div className="absolute top-[72px] right-2 left-2 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 max-h-[60vh] overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-900">Notificaties</h3>
+        <div className="absolute top-[72px] right-2 left-2 z-50 card--luxe rounded-2xl shadow-2xl border-[hsl(var(--gold)/0.25)] max-h-[60vh] overflow-hidden flex flex-col p-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[hsl(var(--gold)/0.18)]">
+            <h3 className="text-sm font-bold text-slate-900 font-display">Notificaties</h3>
             <div className="flex items-center gap-2">
               {unreadNotifCount > 0 && (
-                <button onClick={markAllDriverNotifsRead} className="text-xs text-primary font-semibold">
+                <button onClick={markAllDriverNotifsRead} className="text-xs text-[hsl(var(--gold-deep))] font-semibold hover:underline">
                   Alles gelezen
                 </button>
               )}
-              <button onClick={() => setShowNotifPanel(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowNotifPanel(false)} className="text-slate-400 hover:text-[hsl(var(--gold-deep))]">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1145,7 +1144,7 @@ export default function ChauffeurApp() {
           <div className="overflow-y-auto flex-1">
             {driverNotifications.length === 0 ? (
               <div className="py-10 text-center text-slate-400">
-                <Bell className="h-8 w-8 mx-auto mb-2 text-slate-200" />
+                <Bell className="h-8 w-8 mx-auto mb-2 text-[hsl(var(--gold)/0.3)]" />
                 <p className="text-sm font-medium">Geen notificaties</p>
               </div>
             ) : (
@@ -1153,19 +1152,19 @@ export default function ChauffeurApp() {
                 <button
                   key={n.id}
                   onClick={() => { if (!n.is_read) markDriverNotifRead(n.id); }}
-                  className={`w-full text-left px-4 py-3 border-b border-slate-50 transition-colors ${!n.is_read ? "bg-primary/5" : ""}`}
+                  className={`w-full text-left px-4 py-3 border-b border-slate-50 transition-colors ${!n.is_read ? "bg-[hsl(var(--gold-soft)/0.35)]" : ""}`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${!n.is_read ? "bg-green-100" : "bg-slate-100"}`}>
-                      <Truck className={`h-4 w-4 ${!n.is_read ? "text-green-600" : "text-slate-400"}`} />
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${!n.is_read ? "bg-emerald-100" : "bg-slate-100"}`}>
+                      <Truck className={`h-4 w-4 ${!n.is_read ? "text-emerald-600" : "text-slate-400"}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{n.title}</p>
-                        {!n.is_read && <span className="h-2 w-2 rounded-full bg-primary shrink-0" />}
+                        <p className="text-sm font-semibold text-slate-900 truncate font-display">{n.title}</p>
+                        {!n.is_read && <span className="h-2 w-2 rounded-full bg-[hsl(var(--gold-deep))] shrink-0" />}
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
-                      <p className="text-xs text-slate-300 mt-1">
+                      <p className="text-xs text-slate-300 mt-1 tabular-nums">
                         {new Date(n.created_at).toLocaleString("nl-NL", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
                       </p>
                     </div>
@@ -1200,14 +1199,14 @@ export default function ChauffeurApp() {
       )}
 
       {/* TAB BAR */}
-      <div className="bg-white border-b border-slate-200 px-3 py-2 flex items-center gap-2">
+      <div className="bg-white border-b border-[hsl(var(--gold)/0.18)] px-3 py-2 flex items-center gap-2">
         <button
           onClick={() => setActiveTab("vandaag")}
           className={cn(
-            "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
+            "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 font-display",
             activeTab === "vandaag"
-              ? "bg-primary text-white shadow-sm"
-              : "bg-slate-50 text-slate-600 hover:bg-slate-100",
+              ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm"
+              : "bg-[hsl(var(--gold-soft)/0.35)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.55)]",
           )}
         >
           <Truck className="h-4 w-4" />
@@ -1216,10 +1215,10 @@ export default function ChauffeurApp() {
         <button
           onClick={() => setActiveTab("week")}
           className={cn(
-            "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
+            "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 font-display",
             activeTab === "week"
-              ? "bg-primary text-white shadow-sm"
-              : "bg-slate-50 text-slate-600 hover:bg-slate-100",
+              ? "bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white shadow-sm"
+              : "bg-[hsl(var(--gold-soft)/0.35)] text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.55)]",
           )}
         >
           <CalendarIcon className="h-4 w-4" />
@@ -1235,26 +1234,26 @@ export default function ChauffeurApp() {
           ) : null
         ) : (
         <>
-        {/* Clock In/Out & Time Tracking */}
-        <Card className="rounded-2xl border-none shadow-sm bg-white ring-1 ring-slate-200">
+        {/* GPS privacy */}
+        <Card className="card--luxe border-[hsl(var(--gold)/0.18)] p-0">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
               <div className={cn(
                 "mt-0.5 h-9 w-9 rounded-full flex items-center justify-center shrink-0",
                 activeTripId && (positionReporter.isTracking || isTracking)
                   ? "bg-emerald-100 text-emerald-600"
-                  : "bg-slate-100 text-slate-400",
+                  : "bg-[hsl(var(--gold-soft)/0.6)] text-[hsl(var(--gold-deep))]",
               )}>
                 <MapPin className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-900">GPS privacy</p>
+                  <p className="text-sm font-semibold text-slate-900 font-display">GPS privacy</p>
                   <Badge className={cn(
-                    "border-0 text-[11px] font-semibold",
+                    "border text-[11px] font-semibold",
                     activeTripId && (positionReporter.isTracking || isTracking)
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-slate-100 text-slate-600",
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))] border-[hsl(var(--gold)/0.18)]",
                   )}>
                     {activeTripId && (positionReporter.isTracking || isTracking) ? "Actieve rit" : "Uit"}
                   </Badge>
@@ -1269,20 +1268,22 @@ export default function ChauffeurApp() {
         </Card>
 
         {/* Clock In/Out & Time Tracking */}
-        <Card className="rounded-2xl border-none shadow-sm bg-white ring-1 ring-slate-200">
+        <Card className="card--luxe border-[hsl(var(--gold)/0.18)] p-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                  isClocked ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"
+                  isClocked
+                    ? "bg-emerald-100 text-emerald-600"
+                    : "bg-[hsl(var(--gold-soft)/0.6)] text-[hsl(var(--gold-deep))]"
                 }`}>
                   <Clock className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-sm font-semibold text-slate-900 font-display">
                     {isClocked ? (isOnBreak ? "Op pauze" : "Aan het werk") : "Niet ingeklokt"}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 tabular-nums">
                     Vandaag: {formatHours(totalHoursToday)} gewerkt
                   </p>
                 </div>
@@ -1294,10 +1295,10 @@ export default function ChauffeurApp() {
                     variant="outline"
                     size="sm"
                     onClick={handleToggleBreak}
-                    className={`rounded-xl h-9 px-3 text-xs font-semibold ${
+                    className={`btn-luxe btn-luxe--secondary h-9 px-3 text-xs font-semibold ${
                       isOnBreak
                         ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        : ""
                     }`}
                   >
                     <Coffee className="h-3.5 w-3.5 mr-1.5" />
@@ -1307,10 +1308,10 @@ export default function ChauffeurApp() {
                 <Button
                   size="sm"
                   onClick={isClocked ? handleClockOut : handleClockIn}
-                  className={`rounded-xl h-9 px-4 text-xs font-semibold shadow-sm ${
+                  className={`btn-luxe h-9 px-4 text-xs font-semibold shadow-sm ${
                     isClocked
-                      ? "bg-red-500 hover:bg-red-600 text-white"
-                      : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                      ? "bg-red-500 hover:bg-red-600 text-white border-red-600"
+                      : "btn-luxe--primary"
                   }`}
                 >
                   {isClocked ? (
@@ -1339,11 +1340,10 @@ export default function ChauffeurApp() {
           isVisible={isClocked && !isOnBreak}
         />
 
-        {/* Trip-based workflow (new) */}
+        {/* Trip-based workflow */}
         {activeDriverId && (
           <TripFlow driverId={activeDriverId} onStartPOD={(stop) => {
-            // Map trip stop to order-like object for POD capture
-            const fakeOrder = { id: stop.order_id || stop.id, client_name: stop.contact_name || "", delivery_address: stop.planned_address || "", status: "IN_TRANSIT", _tripStopId: stop.id };
+            const fakeOrder = { id: stop.order_id || stop.id, client_name: stop.contact_name || "", delivery_address: stop.planned_address || "", status: "IN_TRANSIT", _tripStopId: stop.id, contact_phone: (stop as any).contact_phone || null };
             setSelectedOrder(fakeOrder);
           }} onTripStarted={(tripId) => {
             setActiveTripId(tripId);
@@ -1357,215 +1357,94 @@ export default function ChauffeurApp() {
             }
           }} />
         )}
-
-
-        {showLegacyOrders && (loadingOrders ? (
-          <div className="text-center py-10 text-muted-foreground animate-pulse">Laden...</div>
-        ) : orders.length === 0 ? (
-          <div className="text-center py-20 bg-white mx-4 rounded-3xl border border-slate-100 shadow-sm mt-10">
-            <CheckCircle2 className="h-16 w-16 text-emerald-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-slate-800">Geen actieve ritten</h3>
-            <p className="text-slate-500 text-sm mt-1 px-8">Je hebt momenteel geen toegewezen orders voor jouw voertuig.</p>
-          </div>
-        ) : (
-          orders.map((order, idx) => (
-            <Card 
-              key={order.id} 
-              onClick={() => {
-                if (order.status === "DELIVERED") {
-                  setViewingPod(order);
-                } else {
-                  setSelectedOrder(order);
-                }
-              }}
-              className={`rounded-2xl border-none shadow-sm transition-all active:scale-[0.98] ${
-                order.status === "DELIVERED" ? "bg-emerald-50/80 ring-1 ring-emerald-200" : "bg-white ring-1 ring-slate-200"
-              }`}
-            >
-              <CardContent className="p-0">
-                <div className="p-5 flex gap-4">
-                  {/* Sequence Badge */}
-                  <div className="flex flex-col items-center gap-2">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${
-                      order.status === "DELIVERED" ? "bg-emerald-500 text-white" : "bg-primary text-white"
-                    }`}>
-                      {order.status === "DELIVERED" ? <Check className="h-4 w-4" /> : idx + 1}
-                    </div>
-                  </div>
-                  
-                  {/* Order Details */}
-                  <div className="flex-1 pb-1">
-                    <div className="flex justify-between items-start mb-1">
-                      <h3 className={`font-semibold ${order.status === "DELIVERED" ? "text-emerald-700" : "text-slate-900"}`}>
-                        {order.client_name || `Order #${order.order_number}`}
-                      </h3>
-                      {order.status === "DELIVERED" && order.pod_signature_url && (
-                        <Badge className="bg-emerald-100 text-emerald-700 text-xs border-0">PoD ✓</Badge>
-                      )}
-                    </div>
-                    <div className="flex items-start gap-2 text-slate-500 text-sm mt-1">
-                      <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-slate-400" />
-                      <span className="line-clamp-2 leading-relaxed">{order.delivery_address}</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100/80">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                        <Package className="h-3.5 w-3.5" />
-                        {order.quantity} {order.unit || "Colli"}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                        <Truck className="h-3.5 w-3.5" />
-                        {order.weight_kg} kg
-                      </div>
-                      {order.status === "DELIVERED" && (
-                        <div className="flex items-center gap-1 text-xs text-emerald-600 ml-auto">
-                          <Image className="h-3 w-3" />
-                          Bekijk PoD
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        ))}
         </>
         )}
       </div>
 
-      {/* MODAL - PoD VIEWER for delivered orders */}
-      {showLegacyOrders && viewingPod && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 flex flex-col justify-end backdrop-blur-sm" onClick={() => setViewingPod(null)}>
-          <div className="bg-white rounded-t-[32px] max-h-[80vh] w-full flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-300 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-lg text-slate-900">{viewingPod.client_name}</h3>
-                <p className="text-xs text-emerald-600 font-medium">Afgeleverd ✓</p>
-              </div>
-              <Button variant="secondary" onClick={() => setViewingPod(null)} className="rounded-full bg-slate-100/80 text-slate-600 hover:bg-slate-200">Sluiten</Button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* Signature */}
-              {viewingPodSignatureUrl && (
-                <div>
-                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">Handtekening</p>
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
-                    <img src={viewingPodSignatureUrl} alt="Handtekening" className="w-full max-h-40 object-contain" />
-                  </div>
-                </div>
-              )}
-              
-              {/* Metadata */}
-              <div className="space-y-2">
-                {viewingPod.pod_signed_by && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <User className="h-4 w-4 text-slate-400" />
-                    <span>Getekend door: <strong>{viewingPod.pod_signed_by}</strong></span>
-                  </div>
-                )}
-                {viewingPod.pod_signed_at && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span>{new Date(viewingPod.pod_signed_at).toLocaleString("nl-NL", {
-                      day: "numeric", month: "long", year: "numeric",
-                      hour: "2-digit", minute: "2-digit"
-                    })}</span>
-                  </div>
-                )}
-                {viewingPod.pod_notes && (
-                  <div className="flex items-start gap-2 text-sm text-slate-600">
-                    <MessageSquare className="h-4 w-4 mt-0.5 text-slate-400" />
-                    <span className="italic">"{viewingPod.pod_notes}"</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Photos */}
-              {viewingPodPhotoUrls.length > 0 && (
-                <div>
-                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">Foto-bewijs ({viewingPodPhotoUrls.length})</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {viewingPodPhotoUrls.map((url, i) => (
-                      <div key={i} className="aspect-square rounded-xl overflow-hidden border border-slate-200">
-                        <img src={url} alt={`PoD foto ${i+1}`} className="w-full h-full object-cover" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* MODAL - ORDER DETAIL & POD */}
       {selectedOrder && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 flex flex-col justify-end backdrop-blur-sm">
-          <div className="bg-white rounded-t-[32px] h-[92vh] w-full flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-300 shadow-2xl">
+          <div className="bg-white rounded-t-[32px] h-[92vh] w-full flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-300 shadow-2xl border-t border-[hsl(var(--gold)/0.25)]">
             {/* Header */}
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0">
-              <h3 className="font-bold text-xl text-slate-900 line-clamp-1">{selectedOrder.client_name}</h3>
-              <Button variant="secondary" onClick={() => { setSelectedOrder(null); resetPodState(); }} className="rounded-full bg-slate-100/80 text-slate-600 hover:bg-slate-200">Terug</Button>
+            <div className="px-6 py-5 border-b border-[hsl(var(--gold)/0.18)] flex justify-between items-center bg-white sticky top-0">
+              <h3 className="font-bold text-xl text-slate-900 line-clamp-1 font-display tracking-tight">{selectedOrder.client_name}</h3>
+              <Button
+                variant="secondary"
+                onClick={() => { setSelectedOrder(null); resetPodState(); }}
+                className="btn-luxe btn-luxe--secondary rounded-full h-9 px-4 text-xs font-semibold"
+              >
+                Terug
+              </Button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-6 flex flex-col">
               {/* Address card */}
-              <div className="bg-blue-50/50 rounded-3xl p-5 mb-6 border border-blue-100/50">
-                <p className="text-sm font-semibold text-blue-600 mb-1 flex items-center gap-2">
+              <div className="card--luxe border-[hsl(var(--gold)/0.18)] p-5 mb-6">
+                <p className="text-xs font-semibold text-[hsl(var(--gold-deep))] mb-1 flex items-center gap-2 uppercase tracking-[0.18em] font-display">
                   <MapPin className="h-4 w-4" /> Afleveradres
                 </p>
-                <p className="text-slate-900 font-medium text-lg leading-snug mt-2">{selectedOrder.delivery_address}</p>
+                <p className="text-slate-900 font-medium text-lg leading-snug mt-2 font-display">{selectedOrder.delivery_address}</p>
                 <div className="flex gap-3 mt-5">
-                   <Button
-                     className="flex-1 rounded-2xl bg-green-600 hover:bg-green-700 text-white shadow-sm h-12"
-                     onClick={() => {
-                       const encoded = encodeURIComponent(selectedOrder.delivery_address || "");
-                       window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, "_blank");
-                     }}
-                   >
-                     <Navigation className="h-4 w-4 mr-2" /> Start Navigatie
-                   </Button>
-                   <Button variant="secondary" size="icon" className="h-12 w-12 rounded-2xl flex-shrink-0 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100">
-                     <Phone className="h-5 w-5" />
-                   </Button>
+                  <Button
+                    className="btn-luxe btn-luxe--primary flex-1 rounded-2xl h-12"
+                    onClick={() => {
+                      const encoded = encodeURIComponent(selectedOrder.delivery_address || "");
+                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, "_blank");
+                    }}
+                  >
+                    <Navigation className="h-4 w-4 mr-2" /> Start navigatie
+                  </Button>
+                  {(() => {
+                    const phone: string | null = selectedOrder?.contact_phone || selectedOrder?.client_phone || null;
+                    return (
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        disabled={!phone}
+                        onClick={() => { if (phone) window.open(`tel:${phone}`); }}
+                        title={phone ? `Bel ${phone}` : "Geen telefoonnummer bekend"}
+                        className="btn-luxe btn-luxe--secondary h-12 w-12 rounded-2xl flex-shrink-0"
+                      >
+                        <Phone className="h-5 w-5" />
+                      </Button>
+                    );
+                  })()}
                 </div>
               </div>
 
               {isSigning ? (
                 <div className="flex-1 flex flex-col">
                   {/* Step indicator */}
-                  <div className="flex items-center gap-3 mb-5 bg-slate-50 rounded-2xl p-3">
-                    <div className="h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">1</div>
+                  <div className="flex items-center gap-3 mb-5 card--luxe border-[hsl(var(--gold)/0.18)] p-3">
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))] text-white flex items-center justify-center text-sm font-bold font-display tabular-nums">1</div>
                     <div className="flex-1">
-                      <h4 className="font-bold text-slate-900">Proof of Delivery</h4>
+                      <h4 className="font-bold text-slate-900 font-display">Proof of Delivery</h4>
                       <p className="text-xs text-slate-500">Laat de ontvanger tekenen en vul de gegevens in</p>
                     </div>
                   </div>
 
                   {/* Receiver name */}
                   <div className="mb-4">
-                    <label className="text-xs font-semibold text-slate-700 mb-1.5 block flex items-center gap-1.5">
+                    <label className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
                       <User className="h-3.5 w-3.5" /> Naam ontvanger
                     </label>
                     <Input
                       value={podSignedBy}
                       onChange={(e) => setPodSignedBy(e.target.value)}
                       placeholder="Naam van de persoon die tekent..."
-                      className="rounded-xl h-11 text-sm"
+                      className="rounded-xl h-11 text-sm border-[hsl(var(--gold)/0.28)]"
                     />
                   </div>
-                  
+
                   {/* Signature canvas */}
                   <div className="mb-4">
-                    <label className="text-xs font-semibold text-slate-700 mb-1.5 block flex items-center gap-1.5">
+                    <label className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
                       <Fingerprint className="h-3.5 w-3.5" /> Digitale handtekening
                     </label>
-                    <div className="border-2 border-dashed border-slate-300 rounded-[20px] bg-slate-50 relative overflow-hidden shadow-inner" style={{ height: 200 }}>
-                      <canvas 
+                    <div className="border-2 border-dashed border-[hsl(var(--gold)/0.4)] rounded-[20px] bg-[hsl(var(--gold-soft)/0.25)] relative overflow-hidden shadow-inner" style={{ height: 200 }}>
+                      <canvas
                         ref={canvasRef}
-                        width={600} 
+                        width={600}
                         height={300}
                         className="absolute inset-0 w-full h-full touch-none cursor-crosshair"
                         onMouseDown={startDrawing}
@@ -1578,21 +1457,21 @@ export default function ChauffeurApp() {
                         style={{ touchAction: "none" }}
                       />
                     </div>
-                    <Button variant="ghost" size="sm" onClick={clearCanvas} className="mt-1.5 text-xs text-slate-500 hover:text-slate-700">
+                    <Button variant="ghost" size="sm" onClick={clearCanvas} className="mt-1.5 text-xs text-[hsl(var(--gold-deep))] hover:bg-[hsl(var(--gold-soft)/0.4)]">
                       Wis handtekening
                     </Button>
                   </div>
 
                   {/* Photo upload */}
                   <div className="mb-4">
-                    <label className="text-xs font-semibold text-slate-700 mb-1.5 block flex items-center gap-1.5">
+                    <label className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
                       <Camera className="h-3.5 w-3.5" /> Foto-bewijs (optioneel, max 4)
                     </label>
                     <div className="flex gap-2 flex-wrap">
                       {podPhotos.map((photo, i) => (
-                        <div key={i} className="relative h-20 w-20 rounded-xl overflow-hidden border border-slate-200">
+                        <div key={i} className="relative h-20 w-20 rounded-xl overflow-hidden border border-[hsl(var(--gold)/0.28)]">
                           <img src={photo} alt={`Photo ${i+1}`} className="w-full h-full object-cover" />
-                          <button 
+                          <button
                             onClick={() => removePhoto(i)}
                             className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-sm"
                           >
@@ -1603,7 +1482,7 @@ export default function ChauffeurApp() {
                       {podPhotos.length < 4 && (
                         <button
                           onClick={() => photoInputRef.current?.click()}
-                          className="h-20 w-20 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 hover:border-primary hover:text-primary transition-colors"
+                          className="h-20 w-20 rounded-xl border-2 border-dashed border-[hsl(var(--gold)/0.4)] flex flex-col items-center justify-center text-[hsl(var(--gold-deep))] hover:border-[hsl(var(--gold))] hover:bg-[hsl(var(--gold-soft)/0.3)] transition-colors"
                         >
                           <Camera className="h-5 w-5 mb-0.5" />
                           <span className="text-xs font-medium">Foto</span>
@@ -1623,47 +1502,38 @@ export default function ChauffeurApp() {
 
                   {/* Notes */}
                   <div className="mb-4">
-                    <label className="text-xs font-semibold text-slate-700 mb-1.5 block flex items-center gap-1.5">
+                    <label className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
                       <MessageSquare className="h-3.5 w-3.5" /> Opmerkingen (optioneel)
                     </label>
                     <Textarea
                       value={podNotes}
                       onChange={(e) => setPodNotes(e.target.value)}
                       placeholder="Schade, afwijkingen, bijzonderheden..."
-                      className="rounded-xl text-sm resize-none"
+                      className="rounded-xl text-sm resize-none border-[hsl(var(--gold)/0.28)]"
                       rows={2}
                     />
                   </div>
-                  
-                  {/* Submit button */}
+
+                  {/* Submit swipe */}
                   <div className="mt-auto pb-4">
-                    <Button 
-                      onClick={handleCompleteDelivery}
+                    <SwipeToConfirm
+                      label={isSubmitting ? "Bezig met opslaan..." : "Veeg om aflevering te bevestigen"}
+                      icon={<Fingerprint className="h-5 w-5" />}
+                      variant="success"
+                      loading={isSubmitting}
                       disabled={isSubmitting}
-                      className="w-full rounded-[20px] bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 h-14 font-semibold text-lg transition-transform active:scale-95"
-                    >
-                      {isSubmitting ? (
-                        <span className="flex items-center gap-2">
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                          Bezig met opslaan...
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-2">
-                          <CheckCircle2 className="h-5 w-5" />
-                          Aflevering bevestigen
-                        </span>
-                      )}
-                    </Button>
+                      onConfirm={handleCompleteDelivery}
+                    />
                   </div>
                 </div>
               ) : (
                 <div className="mt-auto pt-8 pb-4">
-                  <Button 
-                    onClick={() => { 
-                      setIsSigning(true); 
-                      setTimeout(() => clearCanvas(), 150); 
-                    }} 
-                    className="w-full h-16 rounded-[20px] text-lg font-bold shadow-xl shadow-primary/20 transition-transform active:scale-95"
+                  <Button
+                    onClick={() => {
+                      setIsSigning(true);
+                      setTimeout(() => clearCanvas(), 150);
+                    }}
+                    className="btn-luxe btn-luxe--primary w-full h-16 rounded-[20px] text-lg font-bold"
                   >
                     <Fingerprint className="h-5 w-5 mr-2" />
                     Proof of Delivery (Teken)

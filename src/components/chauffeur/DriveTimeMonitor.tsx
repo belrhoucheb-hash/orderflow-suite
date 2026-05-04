@@ -11,12 +11,12 @@ interface DriveTimeMonitorProps {
 
 const COLOR_MAP = {
   green: {
-    bg: "bg-emerald-50",
-    ring: "ring-emerald-200",
-    barBg: "bg-emerald-100",
-    barFill: "bg-emerald-500",
-    text: "text-emerald-700",
-    icon: "text-emerald-500",
+    bg: "bg-[hsl(var(--gold-soft)/0.35)]",
+    ring: "ring-[hsl(var(--gold)/0.28)]",
+    barBg: "bg-[hsl(var(--gold-soft)/0.6)]",
+    barFill: "bg-gradient-to-r from-[hsl(var(--gold))] to-[hsl(var(--gold-deep))]",
+    text: "text-[hsl(var(--gold-deep))]",
+    icon: "text-[hsl(var(--gold-deep))]",
   },
   orange: {
     bg: "bg-amber-50",
@@ -60,7 +60,7 @@ export function DriveTimeMonitor({
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <Timer className={cn("h-4 w-4", colors.icon)} />
-        <span className={cn("text-xs font-bold uppercase tracking-wider", colors.text)}>
+        <span className={cn("text-[11px] font-bold uppercase tracking-[0.18em] font-display", colors.text)}>
           Rijtijd (EU 561/2006)
         </span>
       </div>

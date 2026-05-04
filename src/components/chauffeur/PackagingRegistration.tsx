@@ -101,11 +101,11 @@ export function PackagingRegistration({ clientId, orderId, tripStopId, onClose }
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+    <div className="card--luxe space-y-3 border-[hsl(var(--gold)/0.18)] p-4">
       {/* Header */}
       <div className="flex items-center gap-2 mb-1">
-        <Package className="h-4 w-4 text-primary" />
-        <span className="text-sm font-semibold text-gray-800">Emballage registreren</span>
+        <Package className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+        <span className="text-sm font-semibold text-slate-800 font-display">Emballage registreren</span>
       </div>
 
       {/* Item rows */}
@@ -175,7 +175,7 @@ export function PackagingRegistration({ clientId, orderId, tripStopId, onClose }
         <Button
           variant="ghost"
           size="sm"
-          className="text-xs text-primary gap-1"
+          className="text-xs text-[hsl(var(--gold-deep))] gap-1 hover:bg-[hsl(var(--gold-soft)/0.4)]"
           onClick={addItem}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -183,13 +183,13 @@ export function PackagingRegistration({ clientId, orderId, tripStopId, onClose }
         </Button>
         <div className="flex gap-2">
           {onClose && (
-            <Button variant="outline" size="sm" className="h-9 text-sm" onClick={onClose}>
+            <Button variant="outline" size="sm" className="btn-luxe btn-luxe--secondary h-9 text-sm" onClick={onClose}>
               Annuleren
             </Button>
           )}
           <Button
             size="sm"
-            className="h-9 text-sm gap-1.5 bg-primary hover:bg-primary/90"
+            className="btn-luxe btn-luxe--primary h-9 text-sm gap-1.5"
             onClick={handleSubmit}
             disabled={submitting}
           >

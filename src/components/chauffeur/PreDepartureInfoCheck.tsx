@@ -76,12 +76,12 @@ export function PreDepartureInfoCheck({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden">
+      <div className="w-full max-w-md card--luxe overflow-hidden p-0 border-[hsl(var(--gold)/0.3)]">
         <div className={`p-4 text-white ${hasOverdue ? "bg-red-600" : "bg-amber-600"}`}>
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-6 w-6" />
-            <h2 className="text-base font-bold">
-              {hasOverdue ? "STOP — Info niet binnen" : "Let op — info openstaand"}
+            <h2 className="text-base font-bold font-display tracking-tight">
+              {hasOverdue ? "STOP, info niet binnen" : "Let op, info openstaand"}
             </h2>
           </div>
           <p className="text-sm mt-1 text-white/90">
@@ -91,7 +91,7 @@ export function PreDepartureInfoCheck({
         </div>
 
         <div className="p-4 space-y-3 max-h-[40vh] overflow-y-auto">
-          <p className="text-xs font-bold uppercase text-gray-500 tracking-wide">
+          <p className="text-[11px] font-bold uppercase text-[hsl(var(--gold-deep))] tracking-[0.18em] font-display">
             Openstaand ({openReqs.length})
           </p>
           <ul className="space-y-1.5">
@@ -108,12 +108,12 @@ export function PreDepartureInfoCheck({
           </ul>
         </div>
 
-        <div className="p-3 border-t border-gray-100 flex flex-col gap-2">
+        <div className="p-3 border-t border-[hsl(var(--gold)/0.18)] flex flex-col gap-2">
           {plannerPhone && (
             <a href={`tel:${plannerPhone}`} className="block">
               <Button className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl">
                 <Phone className="h-4 w-4 mr-2" />
-                Bel planner ({plannerPhone})
+                Bel planner (<span className="tabular-nums">{plannerPhone}</span>)
               </Button>
             </a>
           )}
@@ -126,13 +126,13 @@ export function PreDepartureInfoCheck({
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 h-10"
+              className="btn-luxe btn-luxe--secondary flex-1 h-10"
               onClick={onCancel}
             >
               <X className="h-4 w-4 mr-1" /> Annuleren
             </Button>
             <Button
-              className="flex-1 h-10 bg-green-600 hover:bg-green-700 text-white"
+              className="btn-luxe btn-luxe--primary flex-1 h-10"
               onClick={onProceed}
             >
               <Play className="h-4 w-4 mr-1" /> Toch starten
