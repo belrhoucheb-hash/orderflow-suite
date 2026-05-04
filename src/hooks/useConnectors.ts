@@ -219,6 +219,69 @@ export function usePullConnector(provider: string) {
   });
 }
 
+// ─── Event policies ─────────────────────────────────────────────────
+// Per-tenant aan/uit-vlag per (provider, event_type). Default = aan zodra
+// connector enabled is. Ontbrekende rij wordt door de runtime ook als 'aan'
+// behandeld zodat een nieuwe tenant niet handmatig elk event hoeft aan te
+// vinken.
+
+export interface ConnectorEventPolicy {
+  event_type: string;
+  enabled: boolean;
+}
+
+export function useEventPolicies(provider: string) {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["connector_event_policies", tenant?.id, provider],
+    enabled: !!tenant?.id,
+    staleTime: 30_000,
+    queryFn: async (): Promise<Record<string, boolean>> => {
+      const { data, error } = await supabase
+        .from("connector_event_policies" as any)
+        .select("event_type, enabled")
+        .eq("tenant_id", tenant!.id)
+        .eq("provider", provider);
+      if (error) throw error;
+      const out: Record<string, boolean> = {};
+      for (const row of ((data ?? []) as unknown) as ConnectorEventPolicy[]) {
+        out[row.event_type] = row.enabled;
+      }
+      return out;
+    },
+  });
+}
+
+export function useSaveEventPolicy(provider: string) {
+  const { tenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { eventType: string; enabled: boolean }) => {
+      if (!tenant?.id) throw new Error("Geen tenant");
+      const { error } = await supabase
+        .from("connector_event_policies" as any)
+        .upsert(
+          {
+            tenant_id: tenant.id,
+            provider,
+            event_type: input.eventType,
+            enabled: input.enabled,
+          },
+          { onConflict: "tenant_id,provider,event_type" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["connector_event_policies"] });
+    },
+    onError: (err) => {
+      toast.error("Kon event-policy niet opslaan", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+}
+
 // ─── OAuth-flow start (Exact) ───────────────────────────────────────
 // State wordt server-side HMAC-signed door exact-oauth-start om CSRF
 // op de callback te voorkomen. Frontend heeft geen toegang tot het
