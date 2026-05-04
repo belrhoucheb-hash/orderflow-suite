@@ -178,6 +178,10 @@ interface PlannerLocationOption {
   photoRequired?: boolean;
   timeWindowStart?: string | null;
   timeWindowEnd?: string | null;
+  warehouseId?: string;
+  warehouseReferenceMode?: "manual" | "order_number";
+  warehouseReferencePrefix?: string | null;
+  warehouseReference?: string | null;
 }
 
 interface PlannerTemplate {
@@ -992,6 +996,10 @@ const NewOrder = () => {
           photoRequired: option.photoRequired ?? line.photoRequired,
           tijd: line.tijd || option.timeWindowStart || "",
           tijdTot: line.tijdTot || option.timeWindowEnd || "",
+          referentie: option.warehouseReference || line.referentie,
+          warehouseId: option.warehouseId || line.warehouseId,
+          warehouseReferenceMode: option.warehouseReferenceMode || line.warehouseReferenceMode,
+          warehouseReferencePrefix: option.warehouseReferencePrefix ?? line.warehouseReferencePrefix,
         } : line));
       }
       return;
@@ -1011,6 +1019,10 @@ const NewOrder = () => {
         photoRequired: option.photoRequired ?? line.photoRequired,
         tijd: line.tijd || option.timeWindowStart || "",
         tijdTot: line.tijdTot || option.timeWindowEnd || "",
+        referentie: option.warehouseReference || line.referentie,
+        warehouseId: option.warehouseId || line.warehouseId,
+        warehouseReferenceMode: option.warehouseReferenceMode || line.warehouseReferenceMode,
+        warehouseReferencePrefix: option.warehouseReferencePrefix ?? line.warehouseReferencePrefix,
       } : line));
     }
   }, [handleDeliveryAddrChange, handlePickupAddrChange, primaryLadenId, primaryLossenId]);
@@ -1340,6 +1352,26 @@ const NewOrder = () => {
       });
     });
 
+    warehouses
+      .filter((warehouse) => warehouse.default_stop_role === "pickup" || warehouse.warehouse_type !== "IMPORT")
+      .forEach((warehouse) => {
+        const value = bestEffortAddressValue(warehouse.address);
+        const composed = composeAddressString(value, { includeLocality: true }) || warehouse.address;
+        options.push({
+          id: `pickup-warehouse-${warehouse.id}`,
+          label: warehouse.name,
+          subtitle: composed,
+          badge: "Warehouse",
+          value,
+          addressString: composed,
+          companyName: warehouse.name,
+          warehouseId: warehouse.id,
+          warehouseReferenceMode: warehouse.warehouse_reference_mode ?? "manual",
+          warehouseReferencePrefix: warehouse.warehouse_reference_prefix ?? null,
+          warehouseReference: warehouseReferencePreview(warehouse),
+        });
+      });
+
     addressSuggestions?.pickup?.forEach((suggestion, index) => {
       options.push({
         id: `pickup-history-${index}`,
@@ -1415,7 +1447,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.pickup, clientLocations, clientName, pickupAddressBookMatches, pickupClientMatches, pickupLocationMatches, selectedClient]);
+  }, [addressSuggestions?.pickup, clientLocations, clientName, pickupAddressBookMatches, pickupClientMatches, pickupLocationMatches, selectedClient, warehouseReferencePreview, warehouses]);
 
   const deliveryQuickOptions = useMemo<PlannerLocationOption[]>(() => {
     const options: PlannerLocationOption[] = [];
@@ -1436,6 +1468,26 @@ const NewOrder = () => {
         timeWindowEnd: location.time_window_end,
       });
     });
+
+    warehouses
+      .filter((warehouse) => warehouse.default_stop_role === "delivery" || warehouse.warehouse_type !== "EXPORT")
+      .forEach((warehouse) => {
+        const value = bestEffortAddressValue(warehouse.address);
+        const composed = composeAddressString(value, { includeLocality: true }) || warehouse.address;
+        options.push({
+          id: `delivery-warehouse-${warehouse.id}`,
+          label: warehouse.name,
+          subtitle: composed,
+          badge: "Warehouse",
+          value,
+          addressString: composed,
+          companyName: warehouse.name,
+          warehouseId: warehouse.id,
+          warehouseReferenceMode: warehouse.warehouse_reference_mode ?? "manual",
+          warehouseReferencePrefix: warehouse.warehouse_reference_prefix ?? null,
+          warehouseReference: warehouseReferencePreview(warehouse),
+        });
+      });
 
     addressSuggestions?.delivery?.forEach((suggestion, index) => {
       options.push({
@@ -1512,7 +1564,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.delivery, clientLocations, clientName, deliveryAddressBookMatches, deliveryClientMatches, deliveryLocationMatches, selectedClient?.name]);
+  }, [addressSuggestions?.delivery, clientLocations, clientName, deliveryAddressBookMatches, deliveryClientMatches, deliveryLocationMatches, selectedClient?.name, warehouseReferencePreview, warehouses]);
 
   const addToFreightSummary = () => {
     const ladenLine = freightLines.find(f => f.activiteit === "Laden");
@@ -1897,8 +1949,7 @@ const NewOrder = () => {
   const contactAnswered = contactChoiceMode === "manual"
     ? manualContactName.trim().length > 0
     : Boolean(selectedContactId || contactpersoon.trim());
-  const transportFlowAnswered = Boolean(transportFlowChoice);
-  const intakeReady = clientAnswered && contactAnswered && transportFlowAnswered;
+  const intakeReady = clientAnswered && contactAnswered;
   const cargoReady = cargoTotals.totAantal > 0 && cargoTotals.totGewicht > 0;
   const missingClient = !clientAnswered;
   const missingPickupAddress = !pickupLine?.locatie;
@@ -2050,9 +2101,6 @@ const NewOrder = () => {
             ? "Controleer open punten"
             : "Klaar om aan te maken";
   const clientNeedsConfirmation = clientInputReady && !clientAnswered;
-  const intakeQuestion = missingClient
-    ? { step: "Klant", title: "Voor welke klant is deze order?", hint: "Typ minimaal 2 tekens en bevestig met Enter of Volgende stap." }
-    : { step: "Transport", title: "Welk transport hoort hierbij?", hint: "Kies import, export of direct. Daarna vult Orderflow het juiste warehouse alvast in." };
   const routeQuestion = missingPickupAddress
     ? { step: "Ophaaladres", title: "Waar wordt de lading opgehaald?", hint: "Begin met het laadadres. De loslocatie komt daarna." }
     : missingDeliveryAddress
@@ -2106,7 +2154,7 @@ const NewOrder = () => {
       if (intakeReady) return "Compleet";
       if (!clientAnswered) return "Nog invullen";
       if (!contactAnswered) return "Contact kiezen";
-      return "Transport kiezen";
+      return "Referentie";
     }
     if (key === "route") return routeReady ? "Compleet" : "Nog invullen";
     if (key === "cargo") return cargoReady ? "Compleet" : "Nog invullen";
@@ -2212,11 +2260,6 @@ const NewOrder = () => {
       return;
     }
     if (wizardStep === "intake" && intakeActiveQuestion === 2) {
-      setIntakeManualBack(false);
-      setIntakeActiveQuestion(3);
-      return;
-    }
-    if (wizardStep === "intake" && intakeActiveQuestion === 3) {
       const manualName = manualContactName.trim();
       if (contactChoiceMode === "manual") {
         if (!manualName) {
@@ -2229,14 +2272,10 @@ const NewOrder = () => {
         return;
       }
       setIntakeManualBack(false);
-      setIntakeActiveQuestion(4);
+      setIntakeActiveQuestion(3);
       return;
     }
-    if (wizardStep === "intake" && intakeActiveQuestion === 4) {
-      if (!transportFlowChoice) {
-        toast.error("Transportkeuze ontbreekt", { description: "Kies eerst import, export of direct/binnenland." });
-        return;
-      }
+    if (wizardStep === "intake" && intakeActiveQuestion === 3) {
       setWizardStep("route");
       setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
       return;
@@ -2298,7 +2337,7 @@ const NewOrder = () => {
       if (current === "financial") return "review";
       return "review";
     });
-  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, selectedContactId, transportFlowChoice, wizardStep]);
+  }, [cargoActiveQuestion, cargoSuggestedQuestion, clientAnswered, clientInputReady, contactChoiceMode, contactpersoon, intakeActiveQuestion, manualContactName, missingDeliveryAddress, missingDeliveryTimeWindow, missingPickupAddress, missingPickupTimeWindow, pickupAndDeliverySame, routeActiveQuestion, routeRuleIssues, routeSuggestedQuestion, selectedContactId, wizardStep]);
 
   const goToPreviousWizardStep = useCallback(() => {
     if (wizardStep === "intake" && intakeActiveQuestion > 1) {
@@ -2339,7 +2378,7 @@ const NewOrder = () => {
     if (wizardStep === "route") {
       setWizardStep("intake");
       setIntakeManualBack(true);
-      setIntakeActiveQuestion(1);
+      setIntakeActiveQuestion(3);
     }
   }, [cargoActiveQuestion, intakeActiveQuestion, missingPickupTimeWindow, reviewActiveQuestion, routeActiveQuestion, wizardStep]);
 
@@ -2489,9 +2528,9 @@ const NewOrder = () => {
       return;
     }
 
-    if (!transportFlowChoice) {
+    if (!contactAnswered) {
       setWizardStep("intake");
-      setIntakeActiveQuestion(4);
+      setIntakeActiveQuestion(2);
       return;
     }
 
@@ -2548,6 +2587,7 @@ const NewOrder = () => {
     afdeling,
     clientAnswered,
     clientName,
+    contactAnswered,
     draftRestored,
     missingDeliveryAddress,
     missingPickupAddress,
@@ -2559,82 +2599,8 @@ const NewOrder = () => {
     pricingPayload.cents,
     suggestedTransportType,
     suggestedVehicleType,
-    transportFlowChoice,
     transportType,
     voertuigtype,
-  ]);
-
-  useEffect(() => {
-    if (!draftRestored || intakeManualBack || wizardStep !== "intake" || !clientAnswered || !transportFlowChoice) return;
-
-    if (missingPickupAddress) {
-      setWizardStep("route");
-      setRouteActiveQuestion(1);
-      return;
-    }
-
-    if (missingDeliveryAddress) {
-      setWizardStep("route");
-      setRouteActiveQuestion(2);
-      return;
-    }
-
-    if (missingTimeWindow) {
-      setWizardStep("route");
-      setRouteActiveQuestion(missingPickupTimeWindow ? 3 : 4);
-      return;
-    }
-
-    if (missingQuantity) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(1);
-      return;
-    }
-
-    if (!cargoHasDimensions) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(2);
-      return;
-    }
-
-    if (missingWeight) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(3);
-      return;
-    }
-
-    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(4);
-      return;
-    }
-
-    if (pricingPayload.cents == null) {
-      setWizardStep("financial");
-      return;
-    }
-
-    setWizardStep("review");
-    setReviewActiveQuestion(2);
-  }, [
-    afdeling,
-    clientAnswered,
-    draftRestored,
-    intakeManualBack,
-    cargoHasDimensions,
-    missingDeliveryAddress,
-    missingPickupAddress,
-    missingPickupTimeWindow,
-    missingQuantity,
-    missingTimeWindow,
-    missingWeight,
-    pricingPayload.cents,
-    suggestedTransportType,
-    suggestedVehicleType,
-    transportFlowChoice,
-    transportType,
-    voertuigtype,
-    wizardStep,
   ]);
 
   useEffect(() => {
@@ -3963,11 +3929,11 @@ const NewOrder = () => {
         ? "Bevestig klant"
         : "Volgende stap"
       : wizardStep === "intake" && intakeActiveQuestion === 2
+        ? "Bevestig contactpersoon"
+      : wizardStep === "intake" && intakeActiveQuestion === 3
         ? klantReferentie.trim()
           ? "Gebruik referentie"
           : "Geen referentie"
-      : wizardStep === "intake" && intakeActiveQuestion === 3
-        ? "Bevestig contactpersoon"
       : wizardStep === "intake"
         ? "Plan route"
         : wizardStep === "route"
@@ -4016,43 +3982,61 @@ const NewOrder = () => {
   const renderLocationOperationalDetails = (line: FreightLine | undefined, title: string) => {
     if (!line) return null;
     return (
-      <div className="mt-5 rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white p-4 shadow-[0_18px_44px_-38px_hsl(var(--gold-deep)_/_0.55)]">
-        <div className="mb-4 flex flex-col gap-2 border-b border-[hsl(var(--gold)_/_0.12)] pb-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
-              Adresboek
+      <div className="mt-5 space-y-3">
+        <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white p-4 shadow-[0_18px_44px_-38px_hsl(var(--gold-deep)_/_0.55)]">
+          <div className="mb-4 flex flex-col gap-2 border-b border-[hsl(var(--gold)_/_0.12)] pb-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                Adresboek
+              </div>
+              <div className="mt-1 text-sm font-semibold text-foreground">{title}</div>
             </div>
-            <div className="mt-1 text-sm font-semibold text-foreground">{title}</div>
+            <div className="max-w-[16rem] text-right text-[11px] leading-5 text-muted-foreground">
+              Bedrijfsnaam en adres worden na aanmaken als adres opgeslagen.
+            </div>
           </div>
-          <div className="max-w-[16rem] text-right text-[11px] leading-5 text-muted-foreground">
-            Bij aanmaken wordt dit adres bijgewerkt in het adresboek.
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className={flowLabelClass}>Bedrijfsnaam op deze locatie</label>
+              <Input
+                value={line.companyName || ""}
+                onChange={(e) => updateFreightLine(line.id, "companyName", e.target.value)}
+                placeholder={clientName || "Bijv. warehouse, klant of terminal"}
+                className={flowInputClass}
+              />
+            </div>
+            <div>
+              <label className={flowLabelClass}>Adres zichtbaar voor planner</label>
+              <Input
+                value={line.locatie}
+                onChange={(e) => updateFreightLine(line.id, "locatie", e.target.value)}
+                placeholder="Straat, huisnummer, postcode, plaats"
+                className={flowInputClass}
+              />
+            </div>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <label className={flowLabelClass}>Bedrijfsnaam op deze locatie</label>
-            <Input
-              value={line.companyName || ""}
-              onChange={(e) => updateFreightLine(line.id, "companyName", e.target.value)}
-              placeholder={clientName || "Bijv. warehouse, klant of terminal"}
-              className={flowInputClass}
-            />
+
+        <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-[hsl(var(--gold-soft)_/_0.16)] p-4 shadow-[0_14px_36px_-34px_hsl(var(--gold-deep)_/_0.62)]">
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                Stopreferentie
+              </div>
+              <div className="mt-1 text-sm font-semibold text-foreground">
+                {line.activiteit === "Laden" ? "Laadreferentie" : "Losreferentie"}
+              </div>
+            </div>
+            <div className="text-[11px] leading-5 text-muted-foreground">
+              Hoort bij deze orderstop, niet bij het adresboek.
+            </div>
           </div>
           <div>
-            <label className={flowLabelClass}>Adres zichtbaar voor planner</label>
-            <Input
-              value={line.locatie}
-              onChange={(e) => updateFreightLine(line.id, "locatie", e.target.value)}
-              placeholder="Straat, huisnummer, postcode, plaats"
-              className={flowInputClass}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className={flowLabelClass}>{line.activiteit === "Laden" ? "Laadreferentie" : "Losreferentie"}</label>
+            <label className={flowLabelClass}>Referentie voor planner/chauffeur</label>
             <Input
               value={line.referentie || ""}
               onChange={(e) => updateFreightLine(line.id, "referentie", e.target.value)}
-              placeholder="Wordt automatisch gevuld bij warehouse, of vul handmatig"
+              placeholder="Bijv. laadnummer, losreferentie, dock-ref of warehouse-ref"
               className={flowInputClass}
             />
           </div>
@@ -4148,7 +4132,7 @@ const NewOrder = () => {
   );
 
   const renderWizardFooter = () => {
-    const showCreate = wizardStep === "review" && reviewActiveQuestion === 2;
+    const showCreate = wizardStep === "review";
     const showContinue = wizardStep !== "review";
     const inlineTransportControls = wizardStep === "cargo" && cargoActiveQuestion >= 4 && !missingQuantity && !missingWeight;
     if (inlineTransportControls) return null;
@@ -5177,52 +5161,6 @@ const NewOrder = () => {
                   <div className={conversationalCardClass(0)}>
                     {renderQuestionPrompt(
                       {
-                        step: "Referentie",
-                        title: "Welke referentie hoort bij deze order?",
-                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
-                      },
-                      Boolean(klantReferentie.trim()),
-                      true,
-                    )}
-                    <div className="max-w-xl">
-                      <label className={flowLabelClass}>Klant-referentie</label>
-                      <Input
-                        value={klantReferentie}
-                        onChange={e => setKlantReferentie(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            setIntakeActiveQuestion(3);
-                          }
-                        }}
-                        placeholder="PO-nummer of bestelreferentie"
-                        className={flowInputClass}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setIntakeActiveQuestion(3)}
-                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
-                      >
-                        {klantReferentie.trim() ? "Gebruik referentie" : "Geen referentie"}
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {intakeActiveQuestion >= 3 && renderCollapsedAnswer(
-                  "Referentie",
-                  klantReferentie.trim() || "Geen referentie",
-                  () => {
-                    setIntakeManualBack(true);
-                    setIntakeActiveQuestion(2);
-                  },
-                )}
-
-                {intakeActiveQuestion === 3 && (
-                  <div className={conversationalCardClass(0)}>
-                    {renderQuestionPrompt(
-                      {
                         step: "Contactpersoon",
                         title: "Welke contactpersoon hoort bij deze order?",
                         hint: "Kies de juiste contactpersoon van de klant, of voeg direct een nieuwe toe.",
@@ -5292,44 +5230,41 @@ const NewOrder = () => {
                   </div>
                 )}
 
-                {intakeActiveQuestion >= 4 && renderCollapsedAnswer(
+                {intakeActiveQuestion >= 3 && renderCollapsedAnswer(
                   "Contactpersoon",
                   contactpersoon.trim() || manualContactName.trim(),
                   () => {
                     setIntakeManualBack(true);
-                    setIntakeActiveQuestion(3);
+                    setIntakeActiveQuestion(2);
                   },
                 )}
 
-                {intakeActiveQuestion === 4 && (
+                {intakeActiveQuestion === 3 && (
                   <div className={conversationalCardClass(0)}>
-                    {renderQuestionPrompt(intakeQuestion, transportFlowAnswered)}
-                    <div className="grid gap-3 md:grid-cols-3">
-                      {([
-                        { value: "export", title: "Export", hint: "Laad via export-warehouse", badge: "Warehouse laadadres" },
-                        { value: "import", title: "Import", hint: "Warehouse volgens instelling", badge: "Warehouse route" },
-                        { value: "direct", title: "Binnenland / direct", hint: "Van laadadres naar losadres", badge: "Zonder warehouse" },
-                      ] as Array<{ value: TransportFlowChoice; title: string; hint: string; badge: string }>).map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => chooseTransportFlow(option.value)}
-                          className={cn(
-                            "group min-h-[126px] rounded-2xl border p-4 text-left transition hover:-translate-y-px hover:border-[hsl(var(--gold)_/_0.44)] hover:bg-[hsl(var(--gold-soft)_/_0.18)]",
-                            transportFlowChoice === option.value
-                              ? "border-[hsl(var(--gold)_/_0.58)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)_/_0.34),white_58%)] shadow-[0_20px_48px_-38px_hsl(var(--gold-deep)_/_0.70)]"
-                              : "border-[hsl(var(--gold)_/_0.16)] bg-white",
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="text-base font-semibold">{option.title}</span>
-                            <span className="rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--gold-deep))]">
-                              {option.badge}
-                            </span>
-                          </div>
-                          <p className="mt-3 text-sm text-muted-foreground">{option.hint}</p>
-                        </button>
-                      ))}
+                    {renderQuestionPrompt(
+                      {
+                        step: "Referentie",
+                        title: "Welke referentie hoort bij deze order?",
+                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
+                      },
+                      Boolean(klantReferentie.trim()),
+                      true,
+                    )}
+                    <div className="max-w-xl">
+                      <label className={flowLabelClass}>Klant-referentie</label>
+                      <Input
+                        value={klantReferentie}
+                        onChange={e => setKlantReferentie(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            setWizardStep("route");
+                            setRouteActiveQuestion(routeSuggestedQuestion as 1 | 2 | 3 | 4);
+                          }
+                        }}
+                        placeholder="PO-nummer of bestelreferentie"
+                        className={flowInputClass}
+                      />
                     </div>
                   </div>
                 )}
@@ -5390,9 +5325,11 @@ const NewOrder = () => {
               </div>
               {selectedClient && (
                 <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-                  {clientLocations.length > 0
-                    ? `${clientLocations.length} vaste locaties beschikbaar voor deze klant. Zoek op bedrijfsnaam of kies een snelle locatie bij ophaal/aflever.`
-                    : "Nog geen vaste locaties voor deze klant. Eerdere orderadressen en handmatige invoer blijven beschikbaar."}
+                  {[
+                    clientLocations.length > 0 ? `${clientLocations.length} vaste klantlocaties` : null,
+                    warehouses.length > 0 ? `${warehouses.length} warehouses uit instellingen` : null,
+                  ].filter(Boolean).join(" en ") || "Handmatige adressen en adresboek blijven beschikbaar."}
+                  {" "}Adreskeuze hoeft niet aan deze klant gekoppeld te zijn.
                 </div>
               )}
               {renderWizardFooter()}
@@ -6234,8 +6171,8 @@ const NewOrder = () => {
                   {renderQuestionPrompt(
                     {
                       step: "Transport",
-                      title: "Welk transport past hierbij?",
-                      hint: "We doen alvast een voorstel. Pas alleen aan als de planner bewust wil afwijken.",
+                      title: "Controleer uitvoering en voertuig",
+                      hint: "Orderflow doet alvast een voorstel op basis van lading en route. Pas alleen aan als de planner bewust wil afwijken.",
                     },
                     Boolean((transportType || suggestedTransportType) && (voertuigtype || suggestedVehicleType) && afdeling),
                     Boolean((transportType || suggestedTransportType) && (voertuigtype || suggestedVehicleType)),
@@ -6921,44 +6858,7 @@ const NewOrder = () => {
                   () => setReviewActiveQuestion(2),
                 )}
 
-                {reviewActiveQuestion === 1 && (
-                  <div className={cn(conversationalCardClass(0), "mb-4")}>
-                    {renderQuestionPrompt(
-                      {
-                        step: "Referentie",
-                        title: "Welke referentie hoort bij deze order?",
-                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
-                      },
-                      Boolean(klantReferentie.trim()),
-                      true,
-                    )}
-                    <label className={flowLabelClass}>Klant-referentie</label>
-                    <Input
-                      value={klantReferentie}
-                      onChange={e => setKlantReferentie(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          setReviewActiveQuestion(2);
-                        }
-                      }}
-                      placeholder="PO-nummer of bestelreferentie"
-                      className={flowInputClass}
-                    />
-                    <div className="mt-4 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setReviewActiveQuestion(2)}
-                        className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
-                      >
-                        {klantReferentie.trim() ? "Gebruik referentie" : "Geen referentie"}
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {reviewActiveQuestion === 2 && (
+                {(reviewActiveQuestion === 1 || reviewActiveQuestion === 2) && (
                   <div className={cn(conversationalCardClass(0), "mb-4")}>
                     {renderQuestionPrompt(
                       {
@@ -7233,25 +7133,33 @@ const NewOrder = () => {
         open={showUnsavedDialog}
         onOpenChange={(o) => !o && setShowUnsavedDialog(false)}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Concept afsluiten?</AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent className="max-w-[640px] overflow-hidden rounded-3xl border border-[hsl(var(--gold)_/_0.22)] bg-[linear-gradient(135deg,#fffdf8_0%,#f8f1e6_100%)] p-0 shadow-[0_30px_90px_-55px_hsl(var(--gold-deep)_/_0.72)]">
+          <AlertDialogHeader className="space-y-3 px-6 pb-3 pt-6 text-left">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+              Conceptbeheer
+            </div>
+            <AlertDialogTitle className="text-2xl font-semibold tracking-normal" style={{ fontFamily: "var(--font-display)" }}>
+              Concept afsluiten?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="max-w-[520px] text-sm leading-6 text-muted-foreground">
               Deze order wordt automatisch als concept bewaard. Kies of je het concept wilt bewaren
-              voor later, of helemaal wilt weggooien.
+              voor later, of helemaal wilt verwijderen.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Doorgaan met bewerken</AlertDialogCancel>
+          <AlertDialogFooter className="grid gap-3 border-t border-[hsl(var(--gold)_/_0.16)] bg-white/70 px-6 py-5 sm:grid-cols-3 sm:space-x-0">
+            <AlertDialogCancel className="mt-0 h-11 rounded-full border-[hsl(var(--gold)_/_0.22)] bg-white px-4 text-sm font-semibold text-foreground shadow-[0_12px_30px_-26px_hsl(var(--foreground)_/_0.45)] transition hover:bg-[hsl(var(--gold-soft)_/_0.24)]">
+              Doorgaan met bewerken
+            </AlertDialogCancel>
             <button
               type="button"
               onClick={() => void discardDraftAndLeave()}
-              className="inline-flex h-10 items-center justify-center rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
+              className="inline-flex h-11 min-w-0 items-center justify-center rounded-full border border-red-200 bg-red-50 px-4 text-center text-sm font-semibold text-red-700 shadow-[0_12px_30px_-26px_rgba(185,28,28,0.55)] transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200/70"
             >
-              Concept weggooien
+              Concept verwijderen
             </button>
             <AlertDialogAction
               onClick={keepDraftAndLeave}
+              className="h-11 rounded-full bg-[hsl(var(--gold-deep))] px-4 text-sm font-semibold text-white shadow-[0_16px_38px_-28px_hsl(var(--gold-deep)_/_0.85)] transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
             >
               Concept bewaren
             </AlertDialogAction>
