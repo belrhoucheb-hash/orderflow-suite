@@ -856,6 +856,7 @@ const NewOrder = () => {
     detectedAt: string;
   } | null>(null);
   const [forceOverwriteOpen, setForceOverwriteOpen] = useState(false);
+  const [remoteEditorProfile, setRemoteEditorProfile] = useState<{ display_name: string | null; avatar_url: string | null } | null>(null);
   const serverDraftCreateStartedRef = useRef(false);
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pickupLookup, setPickupLookup] = useState("");
@@ -3028,6 +3029,52 @@ const NewOrder = () => {
     window.location.reload();
   }, [draftStorageKey]);
 
+  useEffect(() => {
+    const editorId = remoteDraftConflict?.remoteUpdatedBy;
+    if (!editorId) {
+      setRemoteEditorProfile(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("user_id", editorId)
+        .maybeSingle();
+      if (!cancelled) setRemoteEditorProfile(data ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [remoteDraftConflict?.remoteUpdatedBy]);
+
+  const remoteEditorName = useMemo(() => {
+    if (remoteDraftConflict?.remoteUpdatedBy === user?.id) return "Jij, in een andere sessie";
+    return remoteEditorProfile?.display_name?.trim() || "Een collega";
+  }, [remoteDraftConflict?.remoteUpdatedBy, remoteEditorProfile, user?.id]);
+
+  const remoteEditorInitials = useMemo(() => {
+    const name = remoteEditorName;
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "??";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }, [remoteEditorName]);
+
+  const remoteRelativeTime = useMemo(() => {
+    if (!remoteDraftConflict) return "";
+    const diffMs = Date.now() - new Date(remoteDraftConflict.remoteUpdatedAt).getTime();
+    const minutes = Math.max(0, Math.round(diffMs / 60000));
+    if (minutes < 1) return "zojuist";
+    if (minutes === 1) return "1 minuut geleden";
+    if (minutes < 60) return `${minutes} minuten geleden`;
+    const hours = Math.round(minutes / 60);
+    if (hours === 1) return "1 uur geleden";
+    if (hours < 24) return `${hours} uur geleden`;
+    return new Date(remoteDraftConflict.remoteUpdatedAt).toLocaleString("nl-NL", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  }, [remoteDraftConflict]);
+
   const handleShowConflictDetails = useCallback(() => {
     if (!remoteDraftConflict) return;
     const when = new Date(remoteDraftConflict.remoteUpdatedAt).toLocaleString("nl-NL", {
@@ -4916,21 +4963,39 @@ const NewOrder = () => {
   return (
     <div className="-m-6 min-h-[calc(100vh-3rem)] flex flex-col bg-[#f6f4f0]">
       {remoteDraftConflict && (
-        <div className="border-b border-amber-300/70 bg-amber-50/95">
-          <div className="mx-auto flex max-w-[1120px] flex-col gap-3 px-6 py-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start gap-3">
-              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
-              <div className="text-sm text-amber-900">
-                <div className="font-semibold">Serverversie is nieuwer dan je lokale wijzigingen</div>
-                <div className="text-xs text-amber-800/85">
-                  Aangepast door {describeDraftEditor(remoteDraftConflict.remoteUpdatedBy)} op{" "}
-                  {new Date(remoteDraftConflict.remoteUpdatedAt).toLocaleString("nl-NL", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    day: "2-digit",
-                    month: "2-digit",
-                  })}
-                  . Autosave staat gepauzeerd tot je een keuze maakt.
+        <div className="relative overflow-hidden bg-[radial-gradient(circle_at_18%_-30%,hsl(28_85%_45%_/_0.22),transparent_55%),linear-gradient(145deg,#1a130f_0%,#211610_50%,#16100c_100%)] text-white">
+          <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--gold)_/_0.78)] to-transparent" />
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[hsl(var(--gold)_/_0.30)] to-transparent" />
+          <span className="pointer-events-none absolute -right-24 -bottom-24 h-56 w-56 rounded-full bg-[hsl(var(--gold)_/_0.16)] blur-3xl" />
+          <div className="relative mx-auto flex max-w-[1120px] flex-col gap-5 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="relative shrink-0">
+                {remoteEditorProfile?.avatar_url ? (
+                  <img
+                    src={remoteEditorProfile.avatar_url}
+                    alt={remoteEditorName}
+                    className="h-11 w-11 rounded-full object-cover ring-2 ring-[hsl(var(--gold)_/_0.55)] ring-offset-2 ring-offset-[#1a130f]"
+                  />
+                ) : (
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,hsl(var(--gold))_0%,hsl(var(--gold-deep))_100%)] text-sm font-semibold tracking-wide text-[#1a130a] ring-2 ring-[hsl(var(--gold)_/_0.45)] ring-offset-2 ring-offset-[#1a130f]" style={{ fontFamily: "var(--font-display)" }}>
+                    {remoteEditorInitials}
+                  </div>
+                )}
+                <span className="absolute -right-0.5 -bottom-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#1a130f]">
+                  <CircleAlert className="h-3.5 w-3.5 text-[hsl(var(--gold-light))]" aria-hidden="true" />
+                </span>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[hsl(var(--gold)_/_0.84)]">
+                  Conceptbewaking
+                </div>
+                <div className="mt-1.5 text-[15px] font-semibold leading-tight text-white" style={{ fontFamily: "var(--font-display)" }}>
+                  Serverversie is bijgewerkt door {remoteEditorName}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-white/65">
+                  <span>{remoteRelativeTime}</span>
+                  <span className="text-white/25">·</span>
+                  <span>Autosave gepauzeerd tot je kiest hoe verder</span>
                 </div>
               </div>
             </div>
@@ -4938,23 +5003,23 @@ const NewOrder = () => {
               <button
                 type="button"
                 onClick={handleShowConflictDetails}
-                className="inline-flex h-8 items-center justify-center rounded-full border border-amber-400/70 bg-white px-3 text-xs font-medium text-amber-900 transition hover:bg-amber-100"
+                className="inline-flex h-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] px-4 text-xs font-medium text-white/80 transition hover:border-white/30 hover:bg-white/10 hover:text-white"
               >
-                Verschillen tonen
+                Vergelijk wijzigingen
               </button>
               <button
                 type="button"
                 onClick={() => setForceOverwriteOpen(true)}
-                className="inline-flex h-8 items-center justify-center rounded-full border border-red-300 bg-white px-3 text-xs font-medium text-red-700 transition hover:bg-red-50"
+                className="inline-flex h-9 items-center justify-center rounded-full border border-[hsl(0_60%_50%_/_0.55)] bg-[hsl(0_45%_18%_/_0.55)] px-4 text-xs font-semibold text-[hsl(0_85%_82%)] transition hover:border-[hsl(0_70%_60%)] hover:bg-[hsl(0_55%_24%)] hover:text-white"
               >
-                Mijn versie forceren
+                Mijn versie behouden
               </button>
               <button
                 type="button"
                 onClick={handleLoadRemoteDraft}
-                className="inline-flex h-8 items-center justify-center rounded-full bg-amber-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                className="inline-flex h-9 items-center justify-center rounded-full border border-[hsl(var(--gold)_/_0.6)] bg-[linear-gradient(180deg,hsl(var(--gold)_/_0.95)_0%,hsl(var(--gold-deep))_100%)] px-5 text-xs font-semibold text-[#1a130a] shadow-[0_14px_30px_-18px_hsl(var(--gold-deep)),inset_0_1px_0_hsl(0_0%_100%_/_0.22)] transition hover:shadow-[0_18px_38px_-18px_hsl(var(--gold-deep))]"
               >
-                Hun versie laden
+                Serverversie overnemen
               </button>
             </div>
           </div>
@@ -4965,12 +5030,12 @@ const NewOrder = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Serverversie overschrijven?</AlertDialogTitle>
             <AlertDialogDescription>
-              Je lokale wijzigingen overschrijven de versie die {describeDraftEditor(remoteDraftConflict?.remoteUpdatedBy ?? null)} zojuist heeft opgeslagen. Deze actie kan niet ongedaan worden gemaakt.
+              Je lokale wijzigingen overschrijven de versie die {remoteEditorName} zojuist heeft opgeslagen. Deze actie kan niet ongedaan worden gemaakt.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuleren</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { void handleForceLocalOverwrite(); }}>Ja, overschrijven</AlertDialogAction>
+            <AlertDialogAction onClick={() => { void handleForceLocalOverwrite(); }}>Ja, mijn versie behouden</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
