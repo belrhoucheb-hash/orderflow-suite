@@ -2,7 +2,7 @@
 
 **Bestand-doel**: aan het begin van elke sessie weet Claude waar we zijn gebleven, en aan het einde van elke sessie wordt dit bestand bijgewerkt zodat de volgende sessie ook weet waar we staan. Bron van waarheid voor harde feiten blijft `git log` en het Supabase-dashboard; dit bestand vult de zachte context aan (waarom, blokkers, openstaande beslissingen).
 
-**Laatste update**: 2026-05-04 (Chauffeursportaal batch 2 gemerged via PR #23, commit `dfdf76d`)
+**Laatste update**: 2026-05-04 avond (main vooruitgeschoven naar `14355e5`: stop-vehicle-requirements, address normalization, NewOrder routeflow, order drafts en auth-hardening op origin/main na de chauffeursportaal batch)
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Laag           | Bron                          | Status                                                  |
 | -------------- | ----------------------------- | ------------------------------------------------------- |
-| `origin/main`  | github.com/belrhoucheb-hash   | Tot commit `dfdf76d` (chauffeursportaal batch 2 + warehouse-flow + secure tenant_membership). |
+| `origin/main`  | github.com/belrhoucheb-hash   | Tot commit `14355e5` (stop-vehicle-requirements + structured address normalization + NewOrder routeflow + order drafts + auth-hardening, bovenop chauffeursportaal batch 2). |
 | Frontend prod  | Vercel/Netlify (door gebruiker) | **Onbekend, gebruiker moet checken**. Vermoeden: nog op een oudere commit, want gebruiker zag connector-platform niet. |
 | Supabase prod  | Supabase Dashboard            | Onbekend, gebruiker moet checken. Migraties tot `20260429010000` staan klaar in repo, niet bevestigd of toegepast. |
 | Edge functions | Supabase Edge Functions       | Onbekend. Nieuw te deployen: `connector-snelstart`, `connector-exact_online`, `oauth-callback-exact`, `connector-dispatcher`, `eta-watcher`. |
@@ -36,15 +36,16 @@
 
 ## Openstaande deploy-acties (door gebruiker te doen)
 
-### Net na chauffeursportaal batch 2 (PR #23, urgent)
-1. **`supabase db push`** voor 6 migraties die nog wachten:
+### Net na chauffeursportaal batch 2 + NewOrder/auth-hardening (urgent)
+1. **`supabase db push`** voor de wachtende migraties (status onbekend, gebruiker moet checken na de eerdere collision-fix):
    - `20260504120030_warehouse_flow_references.sql`
    - `20260504120100_stop_incidents.sql`
    - `20260504120200_driver_planner_messages.sql`
    - `20260504130000_trip_stops_last_notified.sql`
    - `20260504141741_proof_of_delivery_cmr_pdf.sql`
+   - `20260504180500_seed_stop_vehicle_requirements.sql` (nieuw vanuit NewOrder-flow)
    - `20260505000000_secure_tenant_membership.sql`
-   `20260504120000_trip_stops_extra_field.sql` is al toegepast en wordt overgeslagen.
+   `20260504120000_trip_stops_extra_field.sql` is al toegepast.
 2. **`supabase functions deploy notify-customer-stop-status`** voor de nieuwe dedup-logica via `last_notified_status`. Zonder deze deploy blijft de klant dubbele AANGEKOMEN-broadcasts ontvangen.
 3. **Frontend redeploy** vanaf commit `dfdf76d` zodat de Uber-flow `/chauffeur` UI live komt.
 
@@ -70,16 +71,16 @@
 
 ---
 
-## Sprint 9 security-fixes (in progress, 2026-05-04)
+## Sprint 9 security-fixes (gemerged op main, 2026-05-04)
 
-Pentest in deze sessie afgerond, 12 deelchecks. Resultaat: 1 CRITICAL, 2 HIGH, 1 MEDIUM, 2 LOW (geaccepteerd). Vier subagents werken parallel aan de remediatie. NewOrder/warehouse-flow zit los, codex-PR #22 staat al op `main` (commit `3022874`).
+Pentest 2026-05-04 ochtend, 12 deelchecks. Resultaat: 1 CRITICAL, 2 HIGH, 1 MEDIUM, 2 LOW (geaccepteerd). Remediatie via 4 subagents in parallel, gebundeld in commit `6e03535` "Harden auth: signup-injection, edge-fn quota, login-lockout, RLS-feedback".
 
 | Finding | Status | Fix-doc |
 | ------- | ------ | ------- |
-| **CRITICAL-1**, signup tenant-injection via `data.tenant_id` in `/auth/v1/signup`, attacker kan zich aan elke tenant koppelen | fix-in-progress (subagent A) | [`docs/sprint-9/security-critical-1.md`](sprint-9/security-critical-1.md) |
-| **HIGH-1**, edge functions `office-login`/`google-places`/`google-places-business`/`kvk-lookup` accepteren anonieme calls zonder JWT/rate-limit | fix-in-progress (subagent B) | [`docs/sprint-9/security-high-1.md`](sprint-9/security-high-1.md) |
-| **HIGH-2**, login-lockout is client-side, te omzeilen met andere browser/device | fix-in-progress (subagent C) | [`docs/sprint-9/security-high-2.md`](sprint-9/security-high-2.md) |
-| **MEDIUM-1**, PostgREST PATCH op `user_roles`/`tenant_members` geeft `200 []` ipv `403` bij geblokkeerde UPDATE | fix-aanbeveling klaar (subagent D) | [`docs/sprint-9/security-medium-1.md`](sprint-9/security-medium-1.md) |
+| **CRITICAL-1**, signup tenant-injection via `data.tenant_id` in `/auth/v1/signup`, attacker kan zich aan elke tenant koppelen | gemerged | [`docs/sprint-9/security-critical-1.md`](sprint-9/security-critical-1.md) |
+| **HIGH-1**, edge functions `office-login`/`google-places`/`google-places-business`/`kvk-lookup` accepteren anonieme calls zonder JWT/rate-limit | gemerged | [`docs/sprint-9/security-high-1.md`](sprint-9/security-high-1.md) |
+| **HIGH-2**, login-lockout is client-side, te omzeilen met andere browser/device | gemerged | [`docs/sprint-9/security-high-2.md`](sprint-9/security-high-2.md) |
+| **MEDIUM-1**, PostgREST PATCH op `user_roles`/`tenant_members` geeft `200 []` ipv `403` bij geblokkeerde UPDATE | gemerged | [`docs/sprint-9/security-medium-1.md`](sprint-9/security-medium-1.md) |
 
 Sprint-changelog: [`docs/sprint-9/03-changelog.md`](sprint-9/03-changelog.md). Deploy-checklist met smoke-tests: [`docs/sprint-9/deploy-checklist.md`](sprint-9/deploy-checklist.md). Klant-testpunten zijn aan [`docs/klant-testplan.md`](klant-testplan.md) toegevoegd onder "Sprint 9 security en warehouse-flow".
 
@@ -88,6 +89,17 @@ LOW-bevindingen geaccepteerd zonder actie: Google Maps publishable key in client
 ---
 
 ## Recente sessies-samenvatting
+
+### 2026-05-04 avond (NewOrder routeflow + stop-vehicle-requirements + auth-hardening op main)
+
+- Tussen chauffeursportaal batch 2 (PR #23) en het volgende sessie-checkpoint heeft de codex/AI-flow op `origin/main` flink doorgeschoven met work die los staat van de chauffeurspagina:
+- **Auth-hardening** (`6e03535`): bundelt de 4 sprint-9 security-fixes in een enkele commit. Markeer in deze where-we-are als gemerged.
+- **NewOrder warehouse-flow** (`b17b0ac`, `b4e601c`, `f04e5b4`, `51e0de9`, `3f20a10`): warehouse-driven NewOrder volgorde, concept-workflow, polish op review-step.
+- **Order drafts in lijst** (`8e87fdd`): orders-overview toont concepten.
+- **Routeflow-question hersteld** (`9758722`, `a59a980`): tussenstop-question terug in de NewOrder UI.
+- **Structured address normalization** (`c1c0d56`, `76c5b4b`): order-adressen nu genormaliseerd.
+- **Stop-vehicle-requirements** (`d84226d`, `14355e5`): per-stop voertuig-eisen uit NewOrder. Nieuwe migratie `20260504180500_seed_stop_vehicle_requirements.sql`.
+- Geen impact op chauffeursportaal-code, maar de nieuwe migratie + voertuig-eisen kunnen invloed hebben op planning/dispatch eligibility-checks (sprint 7 logica).
 
 ### 2026-05-04 (chauffeursportaal batch 2 gemerged via PR #23, commit `dfdf76d`)
 
