@@ -63,6 +63,8 @@ import {
   type TripStatus,
   type TripStop,
 } from "@/types/dispatch";
+import { PlannerChatPanel } from "@/components/dispatch/PlannerChatPanel";
+import { MessageSquare, LayoutGrid } from "lucide-react";
 
 function formatTime(iso: string | null): string {
   if (!iso) return "-";
@@ -175,6 +177,7 @@ const Dispatch = () => {
   const [dragLaneMap, setDragLaneMap] = useState<Record<string, string>>({});
   const [laneOrders, setLaneOrders] = useState<Record<string, string[]>>({});
   const [loadStalled, setLoadStalled] = useState(false);
+  const [viewMode, setViewMode] = useState<"board" | "chat">("board");
 
   const { data: trips = [], isLoading, isError, refetch } = useTrips(selectedDate);
   useTripsRealtime();
@@ -709,9 +712,43 @@ const Dispatch = () => {
               Plan, schuif en verzend ritten zonder tussenlagen.
             </p>
           </div>
+          <div className="flex shrink-0 items-center gap-1 rounded-2xl border border-[hsl(var(--gold)/0.18)] bg-white/80 p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode("board")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-colors",
+                viewMode === "board"
+                  ? "bg-[hsl(var(--gold-deep))] text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Bord
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("chat")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-colors",
+                viewMode === "chat"
+                  ? "bg-[hsl(var(--gold-deep))] text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Berichten
+            </button>
+          </div>
         </div>
       </div>
 
+      {viewMode === "chat" ? (
+        <div className="h-[calc(100vh-14rem)]">
+          <PlannerChatPanel />
+        </div>
+      ) : (
+      <>
       <div className={cn(detailCardClass, "sticky top-4 z-10 p-4")}>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <div className="flex flex-wrap items-center gap-2">
@@ -1137,6 +1174,8 @@ const Dispatch = () => {
           )}
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </div>
   );
 };

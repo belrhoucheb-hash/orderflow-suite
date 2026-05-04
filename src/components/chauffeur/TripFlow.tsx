@@ -10,6 +10,9 @@ import { TripStatusBadge, StopStatusBadge, TripProgressBar } from "@/components/
 import type { Trip, TripStop } from "@/types/dispatch";
 import { toast } from "sonner";
 import { PreDepartureInfoCheck } from "./PreDepartureInfoCheck";
+import { IncidentDialog } from "./IncidentDialog";
+import { useTenant } from "@/contexts/TenantContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
   driverId: string;
@@ -19,12 +22,14 @@ interface Props {
 }
 
 export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted }: Props) {
+  const { tenant } = useTenant();
   const { data: trips = [], isLoading } = useDriverTrips(driverId);
   const updateTrip = useUpdateTripStatus();
   const updateStop = useUpdateStopStatus();
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [packagingStopId, setPackagingStopId] = useState<string | null>(null);
   const [pendingStartTripId, setPendingStartTripId] = useState<string | null>(null);
+  const [incidentStop, setIncidentStop] = useState<TripStop | null>(null);
   const plannerPhone = (import.meta as any).env?.VITE_PLANNER_PHONE ?? null;
 
   const selectedTrip = trips.find(t => t.id === selectedTripId);
@@ -145,18 +150,69 @@ export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted 
     onStartPOD(stop);
   };
 
-  const handleFailStop = async (stopId: string) => {
+  const handleFailStop = (stop: TripStop) => {
+    // Open de gestructureerde incident-dialog. De daadwerkelijke status-
+    // overgang gebeurt pas na een succesvolle incident-insert.
+    setIncidentStop(stop);
+  };
+
+  const handleIncidentSubmitted = async (result: {
+    incidentId: string;
+    reason: string;
+    newStopStatus: "MISLUKT" | "OVERGESLAGEN";
+    notes: string | null;
+  }) => {
+    if (!incidentStop) return;
+    const stopId = incidentStop.id;
+    setIncidentStop(null);
     try {
-      await updateStop.mutateAsync({ stopId, status: "MISLUKT", extra: { failure_reason: "Door chauffeur gemeld" } });
+      await updateStop.mutateAsync({
+        stopId,
+        status: result.newStopStatus,
+        extra: {
+          failure_reason: result.reason,
+          extra: {
+            incident_id: result.incidentId,
+            incident_notes: result.notes,
+          },
+        },
+      });
+
+      // Plan-board waarschuwen: planner-notificatie met severity high.
+      if (tenant?.id) {
+        try {
+          await supabase.from("notifications").insert({
+            tenant_id: tenant.id,
+            type: "warning",
+            title: "Incident bij stop",
+            message: `Chauffeur heeft een incident gemeld: ${result.reason}.`,
+            icon: "alert-triangle",
+            order_id: incidentStop.order_id ?? null,
+            metadata: {
+              severity: "high",
+              incident_id: result.incidentId,
+              trip_stop_id: stopId,
+              category: "stop_incident",
+            },
+            is_read: false,
+          });
+        } catch (notifErr) {
+          console.warn("Planner-notificatie mislukt:", notifErr);
+        }
+      }
+
       // Advance to next stop
-      const nextStop = sortedStops.find(s => s.stop_status === "GEPLAND");
-      if (nextStop) await updateStop.mutateAsync({ stopId: nextStop.id, status: "ONDERWEG" });
-      else if (selectedTrip) {
+      const nextStop = sortedStops.find((s) => s.stop_status === "GEPLAND");
+      if (nextStop) {
+        await updateStop.mutateAsync({ stopId: nextStop.id, status: "ONDERWEG" });
+      } else if (selectedTrip) {
         const completed = await checkTripCompletion(selectedTrip.id);
         if (completed) onTripCompleted?.(selectedTrip.id);
       }
       toast.info("Probleem gemeld");
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e: any) {
+      toast.error(e.message ?? "Kon stopstatus niet bijwerken");
+    }
   };
 
   const handleNavigate = (address: string) => {
@@ -174,6 +230,17 @@ export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted 
         onCancel={() => setPendingStartTripId(null)}
         onProceed={doStartTrip}
       />
+      {incidentStop && (
+        <IncidentDialog
+          open={!!incidentStop}
+          onOpenChange={(open) => { if (!open) setIncidentStop(null); }}
+          tenantId={tenant?.id ?? null}
+          tripStopId={incidentStop.id}
+          orderId={incidentStop.order_id ?? null}
+          driverId={driverId}
+          onSubmitted={handleIncidentSubmitted}
+        />
+      )}
       {/* Trip header */}
       <div className="p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between mb-2">
@@ -279,7 +346,7 @@ export function TripFlow({ driverId, onStartPOD, onTripStarted, onTripCompleted 
                         <Button className="flex-1 h-10 bg-green-600 hover:bg-green-700" onClick={() => handleCompleteStop(stop)}>
                           <Fingerprint className="h-4 w-4 mr-1" /> Aflevering voltooien
                         </Button>
-                        <Button variant="outline" className="h-10 text-red-600 border-red-200" onClick={() => handleFailStop(stop.id)}>
+                        <Button variant="outline" className="h-10 text-red-600 border-red-200" onClick={() => handleFailStop(stop)}>
                           <AlertTriangle className="h-4 w-4" />
                         </Button>
                       </div>
