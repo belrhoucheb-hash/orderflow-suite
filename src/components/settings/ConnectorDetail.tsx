@@ -5,6 +5,7 @@ import {
   Sparkles, ShieldCheck, Zap, Activity, BookOpen, Settings as SettingsIcon,
   ArrowLeftRight, ScrollText, Lock, KeyRound, Webhook, Radio, Globe2,
   ChevronRight, AlertTriangle, Filter, ChevronDown, Copy, Check,
+  ShieldAlert, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,20 +31,33 @@ import {
   type IntegrationProvider,
 } from "@/hooks/useIntegrationCredentials";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+// Marketplace fase 4 toevoegingen, additief.
+import { SyncGraphs } from "@/components/settings/connectors/SyncGraphs";
+import { ThresholdTab } from "@/components/settings/connectors/ThresholdTab";
+import { AuditTab } from "@/components/settings/connectors/AuditTab";
+import { WebhookReplayDialog } from "@/components/settings/connectors/WebhookReplayDialog";
+import { useReplaySyncEventsBulk } from "@/hooks/useReplaySyncEvent";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Props {
   slug: string;
   onBack: () => void;
 }
 
-type TabKey = "overzicht" | "configuratie" | "mapping" | "log";
+type TabKey = "overzicht" | "configuratie" | "mapping" | "log" | "thresholds" | "audit";
 
-const TABS: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
+const BASE_TABS: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
   { key: "overzicht", label: "Overzicht", icon: <BookOpen className="h-3.5 w-3.5" /> },
   { key: "configuratie", label: "Configuratie", icon: <SettingsIcon className="h-3.5 w-3.5" /> },
   { key: "mapping", label: "Mapping", icon: <ArrowLeftRight className="h-3.5 w-3.5" /> },
   { key: "log", label: "Sync-log", icon: <ScrollText className="h-3.5 w-3.5" /> },
+  { key: "thresholds", label: "Drempels", icon: <ShieldAlert className="h-3.5 w-3.5" /> },
+];
+
+const ADMIN_TABS: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
+  { key: "audit", label: "Audit", icon: <ShieldCheck className="h-3.5 w-3.5" /> },
 ];
 
 const CAPABILITY_ICON: Array<{ test: (cap: string) => boolean; icon: ReactNode }> = [
@@ -79,7 +93,12 @@ export function ConnectorDetail({ slug, onBack }: Props) {
   const log = useConnectorSyncLog(slug);
   const test = useTestConnector(slug);
   const pull = usePullConnector(slug);
+  const auth = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>("overzicht");
+
+  const tabs = useMemo(() => {
+    return auth.isAdmin ? [...BASE_TABS, ...ADMIN_TABS] : BASE_TABS;
+  }, [auth.isAdmin]);
 
   const lastSync = log.data?.[0];
   const stats = useMemo(() => {
@@ -136,7 +155,7 @@ export function ConnectorDetail({ slug, onBack }: Props) {
           <div className="space-y-4">
             {/* TABS */}
             <div className="flex flex-wrap gap-1.5 border-b border-[hsl(var(--gold)/0.18)]">
-              {TABS.map((t) => {
+              {tabs.map((t) => {
                 const active = activeTab === t.key;
                 return (
                   <button
@@ -168,6 +187,8 @@ export function ConnectorDetail({ slug, onBack }: Props) {
                 {activeTab === "configuratie" && <ConnectionTab slug={slug as IntegrationProvider} />}
                 {activeTab === "mapping" && <MappingTab slug={slug} />}
                 {activeTab === "log" && <LogTab slug={slug} />}
+                {activeTab === "thresholds" && <ThresholdTab slug={slug} />}
+                {activeTab === "audit" && auth.isAdmin && <AuditTab slug={slug} />}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -985,11 +1006,53 @@ function LogTab({ slug }: { slug: string }) {
   const log = useConnectorSyncLog(slug);
   const [statusFilter, setStatusFilter] = useState<"all" | "SUCCESS" | "FAILED" | "SKIPPED">("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Marketplace fase 4: replay-multi-select.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [replayRow, setReplayRow] = useState<SyncLogRow | null>(null);
+  const bulkReplay = useReplaySyncEventsBulk(slug);
 
   const filtered = (log.data ?? []).filter((r) => statusFilter === "all" || r.status === statusFilter);
 
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkReplay = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    try {
+      await bulkReplay.mutateAsync(ids);
+      toast.success(`${ids.length} events opnieuw verstuurd`);
+      setSelected(new Set());
+    } catch (e) {
+      toast.error("Bulk-replay mislukt", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    }
+  };
+
   return (
     <div className="card--luxe p-5 space-y-4">
+      {selected.size > 0 && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-[hsl(var(--gold)/0.3)] bg-[hsl(var(--gold-soft)/0.4)] p-2">
+          <span className="text-xs font-display font-semibold text-[hsl(var(--gold-deep))]">
+            {selected.size} {selected.size === 1 ? "event" : "events"} geselecteerd
+          </span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setSelected(new Set())}>Wis selectie</Button>
+            <Button size="sm" onClick={handleBulkReplay} disabled={bulkReplay.isPending} className="gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5" />
+              Opnieuw proberen ({selected.size})
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <Filter className="h-3.5 w-3.5 text-muted-foreground" />
         {(["all", "SUCCESS", "FAILED", "SKIPPED"] as const).map((s) => {
@@ -1025,44 +1088,96 @@ function LogTab({ slug }: { slug: string }) {
       )}
       <div className="space-y-2">
         {filtered.map((row) => (
-          <LogRow key={row.id} row={row} expanded={expanded === row.id} onToggle={() => setExpanded((prev) => prev === row.id ? null : row.id)} />
+          <LogRow
+            key={row.id}
+            row={row}
+            expanded={expanded === row.id}
+            onToggle={() => setExpanded((prev) => prev === row.id ? null : row.id)}
+            selected={selected.has(row.id)}
+            onSelectChange={() => toggleSelect(row.id)}
+            onReplay={() => setReplayRow(row)}
+          />
         ))}
       </div>
+
+      <WebhookReplayDialog row={replayRow} open={!!replayRow} onClose={() => setReplayRow(null)} />
     </div>
   );
 }
 
-function LogRow({ row, expanded, onToggle }: { row: SyncLogRow; expanded: boolean; onToggle: () => void }) {
+function LogRow({
+  row,
+  expanded,
+  onToggle,
+  selected,
+  onSelectChange,
+  onReplay,
+}: {
+  row: SyncLogRow;
+  expanded: boolean;
+  onToggle: () => void;
+  selected: boolean;
+  onSelectChange: () => void;
+  onReplay: () => void;
+}) {
   const Icon = row.status === "SUCCESS" ? CheckCircle2 : row.status === "FAILED" ? XCircle : Clock;
   const tone = row.status === "SUCCESS" ? "text-emerald-600" : row.status === "FAILED" ? "text-destructive" : "text-amber-500";
+  const isFailed = row.status === "FAILED";
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--gold)/0.16)] bg-white">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-start gap-3 p-3 text-left hover:bg-[hsl(var(--gold-soft)/0.25)] rounded-xl transition-colors"
-      >
-        <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", tone)} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-display font-bold uppercase tracking-[0.16em] text-muted-foreground">{row.direction}</span>
-            {row.event_type && <code className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))]">{row.event_type}</code>}
-            <span className="text-[11px] text-muted-foreground ml-auto tabular-nums">
-              {new Date(row.started_at).toLocaleString("nl-NL")}
-            </span>
+    <div className={cn("rounded-xl border bg-white", selected ? "border-[hsl(var(--gold)/0.5)] ring-1 ring-[hsl(var(--gold)/0.2)]" : "border-[hsl(var(--gold)/0.16)]")}>
+      <div className="flex items-start gap-2 p-3">
+        {isFailed && (
+          <div className="pt-0.5">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={onSelectChange}
+              aria-label="Selecteer voor bulk-replay"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
-          {row.error_message && (
-            <p className="text-xs text-destructive mt-1 line-clamp-1">{row.error_message}</p>
-          )}
-          <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-            {row.records_count > 0 && <span>{row.records_count} record{row.records_count === 1 ? "" : "s"}</span>}
-            {row.duration_ms != null && <span className="tabular-nums">{row.duration_ms}ms</span>}
-            {row.external_id && <span className="font-mono text-[10px]">ID {row.external_id}</span>}
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex-1 flex items-start gap-3 text-left hover:bg-[hsl(var(--gold-soft)/0.25)] -m-1 p-1 rounded-lg transition-colors"
+        >
+          <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", tone)} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-display font-bold uppercase tracking-[0.16em] text-muted-foreground">{row.direction}</span>
+              {row.event_type && <code className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[hsl(var(--gold-soft)/0.5)] text-[hsl(var(--gold-deep))]">{row.event_type}</code>}
+              <span className="text-[11px] text-muted-foreground ml-auto tabular-nums">
+                {new Date(row.started_at).toLocaleString("nl-NL")}
+              </span>
+            </div>
+            {row.error_message && (
+              <p className="text-xs text-destructive mt-1 line-clamp-1">{row.error_message}</p>
+            )}
+            <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+              {row.records_count > 0 && <span>{row.records_count} record{row.records_count === 1 ? "" : "s"}</span>}
+              {row.duration_ms != null && <span className="tabular-nums">{row.duration_ms}ms</span>}
+              {row.external_id && <span className="font-mono text-[10px]">ID {row.external_id}</span>}
+            </div>
           </div>
-        </div>
-        <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 mt-1", expanded && "rotate-180")} />
-      </button>
+          <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 mt-1", expanded && "rotate-180")} />
+        </button>
+        {isFailed && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReplay();
+            }}
+            className="h-7 px-2 gap-1 text-[10px] font-display font-semibold border-[hsl(var(--gold)/0.3)]"
+          >
+            <RotateCcw className="h-3 w-3" />
+            Opnieuw
+          </Button>
+        )}
+      </div>
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -1107,6 +1222,9 @@ function Sidebar({
 
   return (
     <aside className="space-y-4">
+      {/* Marketplace fase 4: Sync-graphs bovenaan de sidebar. */}
+      <SyncGraphs slug={slug} log={log} />
+
       <div className="card--luxe p-4 space-y-3">
         <p className="text-[11px] font-display font-semibold uppercase tracking-[0.22em] text-[hsl(var(--gold-deep))]">Stats laatste 50 events</p>
         <div className="grid grid-cols-2 gap-2">

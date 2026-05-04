@@ -13,6 +13,10 @@ import { CONNECTOR_BUNDLES, type ConnectorBundle } from "@/lib/connectors/bundle
 import { useConnectorList, type ConnectorWithStatus } from "@/hooks/useConnectors";
 import { useConnectorVotes } from "@/hooks/useConnectorVotes";
 import { cn } from "@/lib/utils";
+// Marketplace fase 4 toevoegingen, additief.
+import { BulkActionsBar } from "@/components/settings/connectors/BulkActionsBar";
+import { HealthBanner } from "@/components/settings/connectors/HealthBanner";
+import { HealthDot } from "@/components/settings/connectors/HealthDot";
 
 interface Props {
   onSelect: (slug: string) => void;
@@ -90,6 +94,9 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
   }
 
   const liveCount = all.filter((c) => c.enabled && c.hasCredentials).length;
+  const liveAvailableCount = all.filter((c) => c.enabled && c.hasCredentials && c.status !== "soon").length;
+  const allEnabledLive = all.filter((c) => c.hasCredentials && c.status !== "soon");
+  const allPaused = allEnabledLive.length > 0 && allEnabledLive.every((c) => !c.enabled);
   const availableCount = all.filter((c) => c.status !== "soon").length;
   const totalCount = all.length;
 
@@ -111,6 +118,9 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
 
   return (
     <div className="space-y-8">
+      {/* Marketplace fase 4: globale storingsbanner. */}
+      <HealthBanner onSelect={onSelect} />
+
       {/* HERO */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -158,6 +168,13 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
               /
             </kbd>
           </div>
+
+          {/* Marketplace fase 4: bulk-acties onder de zoekbar. */}
+          {liveCount > 0 && (
+            <div className="mt-4">
+              <BulkActionsBar liveCount={liveAvailableCount} paused={allPaused} />
+            </div>
+          )}
 
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <HealthCell
@@ -504,6 +521,7 @@ function ConnectorCard({
         <BrandTile connector={connector} size={52} />
         <div className="flex flex-col items-end gap-1.5">
           <StatusBadge connector={connector} live={isLive} />
+          {isLive && <HealthDot slug={connector.slug} />}
           {connector.badge && (
             <Badge
               variant="outline"
