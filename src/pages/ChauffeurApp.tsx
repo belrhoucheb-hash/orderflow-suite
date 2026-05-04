@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useGPSTracking, useTimeTracking, useGeofenceCheck, useDriveTime } from "@/hooks/useDriverTracking";
 import { usePositionReporter } from "@/hooks/usePositionReporter";
+import { useTenantOptional } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -170,6 +171,7 @@ export default function ChauffeurApp() {
   // rooster-context van de chauffeur live blijven, zonder hard refresh.
   useDriverSchedulesRealtime();
 
+  const { tenant } = useTenantOptional();
   const { data: drivers, isLoading: driversLoading } = useDrivers();
   // activeDriverId mag NIET rechtstreeks uit localStorage komen: anders kan een
   // aanvaller via DevTools een willekeurig driver-id zetten en zo ingelogd raken
@@ -517,7 +519,7 @@ export default function ChauffeurApp() {
     activeTripId,
     activeDriverId,
     activeDriverVehicleId,
-    null, // tenantId — will be set by RLS context
+    tenant?.id ?? null,
   );
   const { isClocked, isOnBreak, clockIn, clockOut, startBreak, endBreak, totalHoursToday, todayEntries } = useTimeTracking(activeDriverId);
 

@@ -12,6 +12,8 @@ import {
   useSubmitVehicleCheck,
   useUploadCheckPhoto,
 } from "@/hooks/useVehicleCheck";
+import { logger } from "@/lib/logger";
+import { useAuth } from "@/contexts/AuthContext";
 
 const SIDE_LABEL: Record<PhotoSide, string> = {
   front: "Voorkant",
@@ -72,6 +74,19 @@ export function VehicleCheckScreen({
   const start = useStartVehicleCheck();
   const upload = useUploadCheckPhoto();
   const submit = useSubmitVehicleCheck();
+  const { effectiveRole } = useAuth();
+
+  // Baseline-lock: alleen admin of planner mag een nieuwe baseline forceren
+  // boven op een bestaande. Een chauffeur mag alleen baseline-seeden als er
+  // nog géén baseline voor dit voertuig is (eerste check ooit). Dit voorkomt
+  // dat een chauffeur de referentie-staat van het voertuig overschrijft en
+  // zo eerdere schade wegpoetst.
+  const canManageBaseline = effectiveRole === "admin" || effectiveRole === "planner";
+  const hasExistingBaseline = !!baselineQ.data?.checkId;
+  const baselineSeedAllowed = !asBaselineSeed
+    || canManageBaseline
+    || (!hasExistingBaseline && !baselineQ.isLoading);
+  const effectiveAsBaselineSeed = asBaselineSeed && baselineSeedAllowed;
 
   const [checkId, setCheckId] = useState<string | null>(null);
   const [photos, setPhotos] = useState<Partial<Record<PhotoSide, VehicleCheckPhoto>>>({});
@@ -85,16 +100,25 @@ export function VehicleCheckScreen({
 
   useEffect(() => {
     if (startedRef.current) return;
+    // Wacht met starten tot we weten of er een baseline is, want dat bepaalt
+    // mede of asBaselineSeed gehonoreerd wordt voor een chauffeur.
+    if (asBaselineSeed && baselineQ.isLoading) return;
+    if (asBaselineSeed && !baselineSeedAllowed) {
+      toast.error(
+        "Alleen een planner of admin mag een bestaande baseline overschrijven.",
+      );
+      return;
+    }
     startedRef.current = true;
     start.mutate(
-      { tenantId, driverId, vehicleId, asBaselineSeed },
+      { tenantId, driverId, vehicleId, asBaselineSeed: effectiveAsBaselineSeed },
       {
         onSuccess: (id) => setCheckId(id),
         onError: (e: any) => toast.error("Kon check niet starten: " + e.message),
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [asBaselineSeed, baselineQ.isLoading, baselineSeedAllowed, effectiveAsBaselineSeed]);
 
   const baselinePhotoBySide = useMemo(() => {
     const map = new Map<PhotoSide, VehicleCheckPhoto>();
@@ -108,7 +132,7 @@ export function VehicleCheckScreen({
     setErrorBySide((prev) => ({ ...prev, [side]: undefined }));
     try {
       const baseline = baselinePhotoBySide.get(side);
-      console.log("[VehicleCheck] uploading", side, { checkId, tenantId, baseline });
+      logger.debug("VehicleCheck", "uploading", side, { checkId, tenantId, baseline });
       const result = await upload.mutateAsync({
         checkId,
         tenantId,
@@ -117,7 +141,7 @@ export function VehicleCheckScreen({
         baselinePhotoPath: baseline?.storage_path ?? null,
         baselineDescription: baseline?.ai_description ?? null,
       });
-      console.log("[VehicleCheck] result", side, result);
+      logger.debug("VehicleCheck", "result", side, result);
       setPhotos((prev) => ({ ...prev, [side]: result }));
       setDriverNotes((prev) => ({ ...prev, [side]: result.ai_description ?? "" }));
       if (result.severity === "blocking") {
@@ -129,7 +153,7 @@ export function VehicleCheckScreen({
       }
     } catch (e: any) {
       const msg = e?.message ?? String(e);
-      console.error("[VehicleCheck] upload failed", side, e);
+      logger.error("VehicleCheck", "upload failed", side, e);
       setErrorBySide((prev) => ({ ...prev, [side]: msg }));
       toast.error("Upload/analyse mislukt: " + msg);
     } finally {
@@ -164,9 +188,9 @@ export function VehicleCheckScreen({
         photos: photoList,
         driverNotes,
         baselineCheckId: baselineQ.data?.checkId ?? null,
-        asBaselineSeed,
+        asBaselineSeed: effectiveAsBaselineSeed,
       });
-      if (asBaselineSeed) {
+      if (effectiveAsBaselineSeed) {
         toast.success("Baseline vastgelegd. Deze check is nu de referentie.");
         onCompleted();
         return;
@@ -184,6 +208,32 @@ export function VehicleCheckScreen({
       toast.error("Submit mislukt: " + (e?.message ?? e));
     }
   };
+
+  if (asBaselineSeed && !baselineQ.isLoading && !baselineSeedAllowed) {
+    return (
+      <div className="min-h-screen bg-background p-6 flex items-center justify-center">
+        <div className="card--luxe max-w-md w-full p-6 text-center space-y-3">
+          <ShieldAlert className="h-8 w-8 mx-auto text-[hsl(var(--gold-deep))]" />
+          <h1
+            className="text-xl font-semibold tracking-tight text-foreground"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Baseline overschrijven niet toegestaan
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Er bestaat al een baseline voor dit voertuig. Alleen een planner
+            of admin mag deze opnieuw vastleggen, anders kan eerder
+            vastgelegde schade ongezien overschreven worden.
+          </p>
+          {onCancel && (
+            <button type="button" className="btn-luxe mt-2" onClick={onCancel}>
+              Terug
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
