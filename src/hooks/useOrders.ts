@@ -22,6 +22,25 @@ import type { OrderStatus } from "@/lib/statusTransitions";
 
 import { normalizeStatus } from "@/lib/orderDisplay";
 
+function addressToDisplay(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.display === "string" && record.display.trim()) {
+    return record.display.trim();
+  }
+
+  return [
+    [record.street, record.house_number, record.house_number_suffix].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    [record.zipcode, record.city].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    typeof record.country === "string" ? record.country : "",
+  ]
+    .filter((part) => part.trim())
+    .join(", ")
+    .trim();
+}
+
 export type OrderListSortField = "customer" | "totalWeight" | "status" | "createdAt";
 export type OrderListSortDirection = "asc" | "desc";
 
@@ -78,6 +97,16 @@ export interface OrdersListMeta {
   priorityCount: number;
   totalWeightKg: number;
 }
+
+type OrderDraftRow = {
+  id: string;
+  status: string;
+  payload: any;
+  validation_result: any;
+  created_at: string;
+  updated_at: string;
+  last_activity_at?: string | null;
+};
 
 // UI-veldnaam → DB-kolom. Beperkt tot wat de orderlijst kan tonen en
 // waar een index op staat of te verwachten is; andere velden vallen
@@ -148,6 +177,56 @@ function applyOrderListFilters(query: any, options: {
   }
 
   return query;
+}
+
+function draftPayloadValue(draft: OrderDraftRow, key: string): any {
+  return draft.payload?.form?.[key] ?? draft.payload?.orderDraft?.[key] ?? null;
+}
+
+function draftStopValue(draft: OrderDraftRow, activity: "Laden" | "Lossen", key: string): any {
+  const line = Array.isArray(draft.payload?.form?.freightLines)
+    ? draft.payload.form.freightLines.find((item: any) => item?.activiteit === activity)
+    : null;
+  if (line && key in line) return line[key];
+  const stop = Array.isArray(draft.payload?.orderDraft?.stops)
+    ? draft.payload.orderDraft.stops.find((item: any) => item?.type === (activity === "Laden" ? "pickup" : "delivery"))
+    : null;
+  return stop?.[key] ?? null;
+}
+
+function orderFromDraft(draft: OrderDraftRow): Order {
+  const clientName = draftPayloadValue(draft, "clientName") || draft.payload?.orderDraft?.client?.name || "Concept zonder klant";
+  const pickupAddress = addressToDisplay(draftStopValue(draft, "Laden", "locatie") || draftStopValue(draft, "Laden", "address"));
+  const deliveryAddress = addressToDisplay(draftStopValue(draft, "Lossen", "locatie") || draftStopValue(draft, "Lossen", "address"));
+  const cargoRows = Array.isArray(draft.payload?.form?.cargoRows) ? draft.payload.form.cargoRows : [];
+  const totalWeight = cargoRows.reduce((sum: number, row: any) => sum + (Number(row?.gewicht) || 0), 0)
+    || Number(draftPayloadValue(draft, "weightKg"))
+    || Number(draft.payload?.orderDraft?.cargoTotals?.totalWeightKg)
+    || 0;
+  const blockers = Array.isArray(draft.validation_result?.blockers) ? draft.validation_result.blockers : [];
+
+  return {
+    id: `draft:${draft.id}`,
+    sourceKind: "draft",
+    draftId: draft.id,
+    orderNumber: `CONCEPT-${draft.id.slice(0, 8).toUpperCase()}`,
+    customer: clientName,
+    clientId: draftPayloadValue(draft, "clientId"),
+    email: "",
+    phone: "",
+    pickupAddress,
+    deliveryAddress,
+    status: "DRAFT",
+    priority: "normaal",
+    items: [],
+    totalWeight,
+    createdAt: draft.last_activity_at || draft.updated_at || draft.created_at,
+    estimatedDelivery: draft.last_activity_at || draft.updated_at || draft.created_at,
+    notes: blockers.length > 0 ? `${blockers.length} open punt${blockers.length === 1 ? "" : "en"}` : "Conceptorder",
+    orderType: "ZENDING",
+    infoStatus: blockers.length > 0 ? "AWAITING_INFO" : "COMPLETE",
+    missingFields: blockers.map((blocker: any) => blocker?.key || blocker?.label).filter(Boolean),
+  };
 }
 
 export function useOrders(options: UseOrdersOptions = {}) {
@@ -297,12 +376,30 @@ export function useOrders(options: UseOrdersOptions = {}) {
       if (error) throw error;
       if (countError) throw countError;
 
+      const shouldIncludeDrafts =
+        !orderTypeFilter &&
+        !departmentFilter &&
+        !cursor &&
+        (!statusFilter || statusFilter === "alle" || statusFilter === "DRAFT");
+      const draftSearch = search?.trim().toLowerCase();
+      const { data: draftRows, error: draftError, count: draftCount } = shouldIncludeDrafts
+        ? await (supabase as any)
+            .from("order_drafts")
+            .select("id,status,payload,validation_result,created_at,updated_at,last_activity_at", { count: "planned" })
+            .eq("status", "DRAFT")
+            .is("committed_shipment_id", null)
+            .is("archived_at", null)
+            .order("last_activity_at", { ascending: false })
+            .limit(pageSize)
+        : { data: [], error: null, count: 0 };
+      if (draftError) throw draftError;
+
       const deptCodeById: Record<string, string> = {};
       departments.forEach((d) => {
         deptCodeById[d.id] = d.code;
       });
 
-      const orders = (data ?? []).map((o): Order => {
+      const orderRows = (data ?? []).map((o): Order => {
         // Compute estimatedDelivery from available data
         let estimatedDelivery = "";
         if (o.time_window_end) {
@@ -325,8 +422,8 @@ export function useOrders(options: UseOrdersOptions = {}) {
           clientId: (o as any).client_id ?? null,
           email: o.source_email_from || "",
           phone: "",
-          pickupAddress: o.pickup_address || "",
-          deliveryAddress: o.delivery_address || "",
+          pickupAddress: addressToDisplay(o.pickup_address),
+          deliveryAddress: addressToDisplay(o.delivery_address),
           status: normalizeStatus(o.status),
           priority: (o.priority as Order["priority"]) || "normaal",
           items: [],
@@ -347,7 +444,24 @@ export function useOrders(options: UseOrdersOptions = {}) {
         };
       });
 
-      return { orders, totalCount: count ?? 0, nextCursor };
+      const draftOrders = ((draftRows ?? []) as OrderDraftRow[])
+        .map(orderFromDraft)
+        .filter((draft) => {
+          if (createdBefore && draft.createdAt >= createdBefore) return false;
+          if (!draftSearch) return true;
+          return [
+            draft.orderNumber,
+            draft.customer,
+            draft.pickupAddress,
+            draft.deliveryAddress,
+          ].some((value) => value.toLowerCase().includes(draftSearch));
+        });
+
+      const orders = [...draftOrders, ...orderRows]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, pageSize);
+
+      return { orders, totalCount: (count ?? 0) + (draftCount ?? 0), nextCursor };
     },
   });
 }
@@ -383,24 +497,52 @@ export function useOrdersListMeta(options: {
           ? Number(numericFromFormatted)
           : null;
       const fallbackCutoff = new Date(Date.now() - staleThresholdHours * 60 * 60 * 1000).toISOString();
+      const includeDraftMeta = !orderTypeFilter && !departmentFilter && (!statusFilter || statusFilter === "alle" || statusFilter === "DRAFT");
+      const draftCountQuery = includeDraftMeta
+        ? (supabase as any)
+            .from("order_drafts")
+            .select("id", { count: "planned", head: true })
+            .eq("status", "DRAFT")
+            .is("committed_shipment_id", null)
+            .is("archived_at", null)
+        : Promise.resolve({ count: 0, error: null });
+      const staleDraftQuery = includeDraftMeta
+        ? (supabase as any)
+            .from("order_drafts")
+            .select("id", { count: "planned", head: true })
+            .eq("status", "DRAFT")
+            .is("committed_shipment_id", null)
+            .is("archived_at", null)
+            .lt("last_activity_at", fallbackCutoff)
+        : Promise.resolve({ count: 0, error: null });
 
-      const { data, error } = await (supabase.rpc as any)("orders_list_meta_v1", {
-        p_status_filter: statusFilter && statusFilter !== "alle" ? statusFilter : null,
-        p_order_type_filter: orderTypeFilter ?? null,
-        p_department_filter: departmentFilter && UUID_RE.test(departmentFilter) ? departmentFilter : null,
-        p_search: search ?? null,
-        p_search_order_number: Number.isSafeInteger(searchOrderNumber) ? searchOrderNumber : null,
-        p_created_before: createdBefore ?? null,
-        p_stale_threshold_hours: staleThresholdHours,
-      });
+      const [{ data, error }, draftCountResult, staleDraftResult] = await Promise.all([
+        (supabase.rpc as any)("orders_list_meta_v1", {
+          p_status_filter: statusFilter && statusFilter !== "alle" ? statusFilter : null,
+          p_order_type_filter: orderTypeFilter ?? null,
+          p_department_filter: departmentFilter && UUID_RE.test(departmentFilter) ? departmentFilter : null,
+          p_search: search ?? null,
+          p_search_order_number: Number.isSafeInteger(searchOrderNumber) ? searchOrderNumber : null,
+          p_created_before: createdBefore ?? null,
+          p_stale_threshold_hours: staleThresholdHours,
+        }),
+        draftCountQuery,
+        staleDraftQuery,
+      ]);
+      if (draftCountResult.error) throw draftCountResult.error;
+      if (staleDraftResult.error) throw staleDraftResult.error;
+      const activeDraftCount = Number(draftCountResult.count ?? 0);
+      const activeStaleDraftCount = Number(staleDraftResult.count ?? 0);
 
       if (!error) {
         const raw = data ?? {};
+        const byStatus = { ...((raw.by_status ?? {}) as Record<string, number>) };
+        byStatus.DRAFT = Number(byStatus.DRAFT ?? 0) + activeDraftCount;
         return {
-          totalCount: Number(raw.total_count ?? 0),
-          staleDraftCount: Number(raw.stale_draft_count ?? 0),
+          totalCount: Number(raw.total_count ?? 0) + activeDraftCount,
+          staleDraftCount: Number(raw.stale_draft_count ?? 0) + activeStaleDraftCount,
           staleDraftCutoffIso: String(raw.stale_draft_cutoff_iso ?? fallbackCutoff),
-          byStatus: (raw.by_status ?? {}) as Record<string, number>,
+          byStatus,
           awaitingInfoCount: Number(raw.awaiting_info_count ?? 0),
           overdueInfoCount: Number(raw.overdue_info_count ?? 0),
           priorityCount: Number(raw.priority_count ?? 0),
@@ -424,10 +566,10 @@ export function useOrdersListMeta(options: {
       if (staleError) throw staleError;
 
       return {
-        totalCount: totalCount ?? 0,
-        staleDraftCount: staleDraftCount ?? 0,
+        totalCount: (totalCount ?? 0) + activeDraftCount,
+        staleDraftCount: (staleDraftCount ?? 0) + activeStaleDraftCount,
         staleDraftCutoffIso: fallbackCutoff,
-        byStatus: {},
+        byStatus: activeDraftCount > 0 ? { DRAFT: activeDraftCount } : {},
         awaitingInfoCount: 0,
         overdueInfoCount: 0,
         priorityCount: 0,
@@ -582,8 +724,8 @@ export function useOrder(id: string) {
         clientId: (data as any).client_id ?? null,
         email: data.source_email_from || "",
         phone: "",
-        pickupAddress: data.pickup_address || "",
-        deliveryAddress: data.delivery_address || "",
+        pickupAddress: addressToDisplay(data.pickup_address),
+        deliveryAddress: addressToDisplay(data.delivery_address),
         status: normalizeStatus(data.status),
         priority: (data.priority as Order["priority"]) || "normaal",
         items: [],

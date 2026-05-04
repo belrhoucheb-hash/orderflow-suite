@@ -131,9 +131,9 @@ export function getOrderRouteRuleIssues(lines: OrderRouteLine[]): OrderRouteRule
   for (let index = 1; index < orderedStops.length; index += 1) {
     const previous = orderedStops[index - 1];
     const current = orderedStops[index];
-    const previousStart = routeMoment(previous, "start");
-    const currentEnd = routeMoment(current, "end");
-    if (previousStart == null || currentEnd == null || currentEnd >= previousStart) continue;
+    const previousEnd = routeMoment(previous, "end");
+    const currentStart = routeMoment(current, "start");
+    if (previousEnd == null || currentStart == null || currentStart >= previousEnd) continue;
 
     const previousLabel = labelForLine(previous, deliveries);
     const currentLabel = labelForLine(current, deliveries);

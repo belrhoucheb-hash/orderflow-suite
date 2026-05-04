@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string; label: string }> = {
-  DRAFT: { bg: 'bg-blue-500/8', text: 'text-blue-700', dot: 'bg-blue-500', label: 'Nieuw' },
+  DRAFT: { bg: 'bg-blue-500/8', text: 'text-blue-700', dot: 'bg-blue-500', label: 'Concept' },
   PENDING: { bg: 'bg-amber-500/8', text: 'text-amber-700', dot: 'bg-amber-500', label: 'In behandeling' },
   CONFIRMED: { bg: 'bg-amber-500/8', text: 'text-amber-700', dot: 'bg-amber-500', label: 'In behandeling' },
   PLANNED: { bg: 'bg-violet-500/8', text: 'text-violet-700', dot: 'bg-violet-500', label: 'Ingepland' },

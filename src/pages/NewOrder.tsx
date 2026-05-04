@@ -41,6 +41,7 @@ import {
 } from "@/hooks/useClients";
 import { useClientContacts, useCreateClientContact } from "@/hooks/useClientContacts";
 import { useWarehouses, type Warehouse } from "@/hooks/useWarehouses";
+import { useVehicleTypes } from "@/hooks/useVehicleTypes";
 import { commitOrderDraftWithLegs, createShipmentWithLegs, inferAfdelingAsync, type BookingInput } from "@/lib/trajectRouter";
 import { previewLegs, type TrajectPreview } from "@/lib/trajectPreview";
 import { supabase } from "@/integrations/supabase/client";
@@ -111,6 +112,8 @@ interface FreightLine {
   requiresTailLift?: boolean;
   temperatureControlled?: boolean;
   photoRequired?: boolean;
+  vehicleTypeId?: string | null;
+  vehicleTypeLabel?: string | null;
   warehouseId?: string;
   warehouseReferenceMode?: "manual" | "order_number";
   warehouseReferencePrefix?: string | null;
@@ -178,6 +181,10 @@ interface PlannerLocationOption {
   photoRequired?: boolean;
   timeWindowStart?: string | null;
   timeWindowEnd?: string | null;
+  warehouseId?: string;
+  warehouseReferenceMode?: "manual" | "order_number";
+  warehouseReferencePrefix?: string | null;
+  warehouseReference?: string | null;
 }
 
 interface PlannerTemplate {
@@ -622,9 +629,28 @@ function shouldLearnAlias(alias: string, resolvedAddress: string): boolean {
   return normalizedAlias !== normalizeLookup(resolvedAddress);
 }
 
-function bestEffortAddressValue(address: string | null | undefined, fallbackCountry = "NL"): AddressValue {
-  if (!address) return { ...EMPTY_ADDRESS, country: fallbackCountry };
-  const trimmed = address.trim();
+function addressTextFromUnknown(address: unknown): string {
+  if (typeof address === "string") return address.trim();
+  if (!address || typeof address !== "object") return "";
+
+  const record = address as Record<string, unknown>;
+  if (typeof record.display === "string" && record.display.trim()) {
+    return record.display.trim();
+  }
+
+  return [
+    [record.street, record.house_number, record.house_number_suffix].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    [record.zipcode, record.city].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    typeof record.country === "string" ? record.country : "",
+  ]
+    .filter((part) => part.trim())
+    .join(", ")
+    .trim();
+}
+
+function bestEffortAddressValue(address: unknown, fallbackCountry = "NL"): AddressValue {
+  const trimmed = addressTextFromUnknown(address);
+  if (!trimmed) return { ...EMPTY_ADDRESS, country: fallbackCountry };
   const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
   const streetPart = parts[0] ?? trimmed;
   const streetMatch = streetPart.match(/^(.*?)(?:\s+(\d+[A-Za-z]?))(?:\s+([A-Za-z0-9-]+))?$/);
@@ -642,6 +668,17 @@ function bestEffortAddressValue(address: string | null | undefined, fallbackCoun
     lat: null,
     lng: null,
     coords_manual: false,
+  };
+}
+
+function sanitizeFreightLine(line: FreightLine): FreightLine {
+  const vehicleTypeLabel = typeof line.vehicleTypeLabel === "string" ? line.vehicleTypeLabel : null;
+  const vehicleTypeId = typeof line.vehicleTypeId === "string" ? line.vehicleTypeId : null;
+  return {
+    ...line,
+    locatie: addressTextFromUnknown(line.locatie),
+    vehicleTypeId,
+    vehicleTypeLabel,
   };
 }
 
@@ -739,6 +776,7 @@ const NewOrder = () => {
   const [searchParams] = useSearchParams();
   const initialClientId = searchParams.get("client_id");
   const fromOrderId = searchParams.get("from_order_id");
+  const draftIdParam = searchParams.get("draft_id");
   const [saving, setSaving] = useState(false);
   const [trajectPreview, setTrajectPreview] = useState<TrajectPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -783,6 +821,7 @@ const NewOrder = () => {
   const { data: clientContacts = [] } = useClientContacts(clientId);
   const createClientContact = useCreateClientContact();
   const { data: warehouses = [] } = useWarehouses();
+  const { data: vehicleTypes = [] } = useVehicleTypes();
   const activeClientContacts = useMemo(() => clientContacts.filter((contact) => contact.is_active), [clientContacts]);
   const [contactpersoon, setContactpersoon] = useState("");
   const [contactChoiceMode, setContactChoiceMode] = useState<ContactChoiceMode>("existing");
@@ -890,14 +929,32 @@ const NewOrder = () => {
   const { data: pickupAddressBookMatches = [] } = useAddressBookSearch(pickupLookup);
   const { data: deliveryAddressBookMatches = [] } = useAddressBookSearch(deliveryLookup);
   const upsertAddressBookEntry = useUpsertAddressBookEntry();
+  const vehicleTypeOptions = useMemo(
+    () => vehicleTypes
+      .filter((type) => type.is_active !== false)
+      .map((type) => ({
+        id: type.id,
+        label: type.name,
+        code: type.code,
+        hasCooling: type.has_cooling,
+        adrCapable: type.adr_capable,
+        hasTailgate: type.has_tailgate,
+      })),
+    [vehicleTypes],
+  );
+  const stopVehicleTypeLabels = useMemo(
+    () => Array.from(new Set(freightLines.map((line) => line.vehicleTypeLabel).filter(Boolean) as string[])),
+    [freightLines],
+  );
+  const primaryStopVehicleType = stopVehicleTypeLabels[0] ?? null;
   const draftStorageKey = useMemo(() => {
-    if (!tenant?.id || initialClientId || fromOrderId) return null;
+    if (!tenant?.id || initialClientId || fromOrderId || draftIdParam) return null;
     return `new-order-draft:${tenant.id}`;
-  }, [tenant?.id, initialClientId, fromOrderId]);
+  }, [tenant?.id, initialClientId, fromOrderId, draftIdParam]);
   const serverDraftStorageKey = useMemo(() => {
-    if (!tenant?.id || initialClientId || fromOrderId) return null;
+    if (!tenant?.id || initialClientId || fromOrderId || draftIdParam) return null;
     return `new-order-draft-id:${tenant.id}`;
-  }, [tenant?.id, initialClientId, fromOrderId]);
+  }, [tenant?.id, initialClientId, fromOrderId, draftIdParam]);
 
   // Prefill vanuit ?client_id=, geïnitieerd vanuit de klantenlijst of
   // klant-detail ("Nieuwe order voor deze klant"). We fetchen de klant en
@@ -919,9 +976,21 @@ const NewOrder = () => {
   const addFreightLine = () => {
     setFreightLines(prev => [...prev, {
       id: crypto.randomUUID(), activiteit: "Lossen", locatie: "", datum: "", tijd: "", tijdTot: "", referentie: "", contactLocatie: "", opmerkingen: "",
-      lat: null, lng: null, coords_manual: false,
+      vehicleTypeId: null, vehicleTypeLabel: null, lat: null, lng: null, coords_manual: false,
     }]);
   };
+
+  const updateFreightLineVehicleType = useCallback((lineId: string, value: string) => {
+    const selected = vehicleTypeOptions.find((option) => option.id === value);
+    setFreightLines(prev => prev.map(line => line.id === lineId
+      ? {
+          ...line,
+          vehicleTypeId: selected?.id ?? null,
+          vehicleTypeLabel: selected?.label ?? null,
+        }
+      : line,
+    ));
+  }, [vehicleTypeOptions]);
 
   const removeFreightLine = (id: string) => {
     if (freightLines.length <= 1) return;
@@ -992,6 +1061,10 @@ const NewOrder = () => {
           photoRequired: option.photoRequired ?? line.photoRequired,
           tijd: line.tijd || option.timeWindowStart || "",
           tijdTot: line.tijdTot || option.timeWindowEnd || "",
+          referentie: option.warehouseReference || line.referentie,
+          warehouseId: option.warehouseId || line.warehouseId,
+          warehouseReferenceMode: option.warehouseReferenceMode || line.warehouseReferenceMode,
+          warehouseReferencePrefix: option.warehouseReferencePrefix ?? line.warehouseReferencePrefix,
         } : line));
       }
       return;
@@ -1011,6 +1084,10 @@ const NewOrder = () => {
         photoRequired: option.photoRequired ?? line.photoRequired,
         tijd: line.tijd || option.timeWindowStart || "",
         tijdTot: line.tijdTot || option.timeWindowEnd || "",
+        referentie: option.warehouseReference || line.referentie,
+        warehouseId: option.warehouseId || line.warehouseId,
+        warehouseReferenceMode: option.warehouseReferenceMode || line.warehouseReferenceMode,
+        warehouseReferencePrefix: option.warehouseReferencePrefix ?? line.warehouseReferencePrefix,
       } : line));
     }
   }, [handleDeliveryAddrChange, handlePickupAddrChange, primaryLadenId, primaryLossenId]);
@@ -1147,6 +1224,7 @@ const NewOrder = () => {
     setTransportFlowChoice(flow);
     setAfdeling(flow === "export" ? "EXPORT" : flow === "import" ? "IMPORT" : "OPS");
     setAfdelingManual(true);
+    clearError("afdeling");
     const warehouse = findWarehouseForFlow(flow);
     if (warehouse) {
       applyWarehouseToRoute(warehouse, flow);
@@ -1154,7 +1232,7 @@ const NewOrder = () => {
         description: `${warehouse.name} is als ${flow === "export" ? "laadadres" : warehouse.default_stop_role === "pickup" ? "laadadres" : "losadres"} toegepast.`,
       });
     }
-  }, [applyWarehouseToRoute, findWarehouseForFlow]);
+  }, [applyWarehouseToRoute, clearError, findWarehouseForFlow]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -1340,6 +1418,26 @@ const NewOrder = () => {
       });
     });
 
+    warehouses
+      .filter((warehouse) => warehouse.default_stop_role === "pickup" || warehouse.warehouse_type !== "IMPORT")
+      .forEach((warehouse) => {
+        const value = bestEffortAddressValue(warehouse.address);
+        const composed = composeAddressString(value, { includeLocality: true }) || warehouse.address;
+        options.push({
+          id: `pickup-warehouse-${warehouse.id}`,
+          label: warehouse.name,
+          subtitle: composed,
+          badge: "Warehouse",
+          value,
+          addressString: composed,
+          companyName: warehouse.name,
+          warehouseId: warehouse.id,
+          warehouseReferenceMode: warehouse.warehouse_reference_mode ?? "manual",
+          warehouseReferencePrefix: warehouse.warehouse_reference_prefix ?? null,
+          warehouseReference: warehouseReferencePreview(warehouse),
+        });
+      });
+
     addressSuggestions?.pickup?.forEach((suggestion, index) => {
       options.push({
         id: `pickup-history-${index}`,
@@ -1415,7 +1513,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.pickup, clientLocations, clientName, pickupAddressBookMatches, pickupClientMatches, pickupLocationMatches, selectedClient]);
+  }, [addressSuggestions?.pickup, clientLocations, clientName, pickupAddressBookMatches, pickupClientMatches, pickupLocationMatches, selectedClient, warehouseReferencePreview, warehouses]);
 
   const deliveryQuickOptions = useMemo<PlannerLocationOption[]>(() => {
     const options: PlannerLocationOption[] = [];
@@ -1436,6 +1534,26 @@ const NewOrder = () => {
         timeWindowEnd: location.time_window_end,
       });
     });
+
+    warehouses
+      .filter((warehouse) => warehouse.default_stop_role === "delivery" || warehouse.warehouse_type !== "EXPORT")
+      .forEach((warehouse) => {
+        const value = bestEffortAddressValue(warehouse.address);
+        const composed = composeAddressString(value, { includeLocality: true }) || warehouse.address;
+        options.push({
+          id: `delivery-warehouse-${warehouse.id}`,
+          label: warehouse.name,
+          subtitle: composed,
+          badge: "Warehouse",
+          value,
+          addressString: composed,
+          companyName: warehouse.name,
+          warehouseId: warehouse.id,
+          warehouseReferenceMode: warehouse.warehouse_reference_mode ?? "manual",
+          warehouseReferencePrefix: warehouse.warehouse_reference_prefix ?? null,
+          warehouseReference: warehouseReferencePreview(warehouse),
+        });
+      });
 
     addressSuggestions?.delivery?.forEach((suggestion, index) => {
       options.push({
@@ -1512,7 +1630,7 @@ const NewOrder = () => {
       seen.add(key);
       return true;
     });
-  }, [addressSuggestions?.delivery, clientLocations, clientName, deliveryAddressBookMatches, deliveryClientMatches, deliveryLocationMatches, selectedClient?.name]);
+  }, [addressSuggestions?.delivery, clientLocations, clientName, deliveryAddressBookMatches, deliveryClientMatches, deliveryLocationMatches, selectedClient?.name, warehouseReferencePreview, warehouses]);
 
   const addToFreightSummary = () => {
     const ladenLine = freightLines.find(f => f.activiteit === "Laden");
@@ -1699,6 +1817,8 @@ const NewOrder = () => {
           date: line.datum || null,
           timeFrom: line.tijd || null,
           timeTo: line.tijdTot || null,
+          vehicleTypeId: line.vehicleTypeId ?? null,
+          vehicleTypeLabel: line.vehicleTypeLabel ?? null,
         };
       })
       .sort((a, b) => a.sequence - b.sequence);
@@ -1724,7 +1844,7 @@ const NewOrder = () => {
       transport: {
         type: transportType || null,
         department: afdeling || null,
-        vehicleType: voertuigtype || null,
+        vehicleType: voertuigtype || primaryStopVehicleType || null,
         secure: shipmentSecure,
         pmtMethod: pmtMethode || null,
         manualOverrides: {
@@ -1744,6 +1864,7 @@ const NewOrder = () => {
     contactpersoon,
     freightLines,
     pmtMethode,
+    primaryStopVehicleType,
     pricingPayload.cents,
     shipmentSecure,
     transportType,
@@ -1796,11 +1917,12 @@ const NewOrder = () => {
       { label: "Klant", value: clientName || "Nog niet gekozen" },
       { label: "Route", value: [pickupLine?.locatie, deliveryLine?.locatie].filter(Boolean).join(" → ") || "Nog geen route" },
       { label: "Lading", value: cargoTotals.totAantal > 0 || cargoTotals.totGewicht > 0 ? `${cargoTotals.totAantal || 0} ${transportEenheid || "eenheden"} · ${cargoTotals.totGewicht || 0} kg` : "Nog leeg" },
-      { label: "Transport", value: [transportType || suggestedTransportType, voertuigtype || suggestedVehicleType].filter(Boolean).join(" · ") || "Wordt voorgesteld" },
+      { label: "Transport", value: [transportType || suggestedTransportType, voertuigtype || primaryStopVehicleType || suggestedVehicleType].filter(Boolean).join(" · ") || "Wordt voorgesteld" },
+      { label: "Stop-eisen", value: stopVehicleTypeLabels.length ? stopVehicleTypeLabels.join(" · ") : "Geen voorkeur" },
       { label: "Afdeling", value: afdeling || inferredAfdeling || "Nog onbekend" },
       { label: "Prijs", value: pricingPayload.cents != null ? `€ ${(pricingPayload.cents / 100).toFixed(2)}` : "Nog geen prijs" },
     ];
-  }, [afdeling, clientName, cargoTotals.totAantal, cargoTotals.totGewicht, freightLines, inferredAfdeling, pricingPayload.cents, suggestedTransportType, suggestedVehicleType, transportEenheid, transportType, voertuigtype]);
+  }, [afdeling, clientName, cargoTotals.totAantal, cargoTotals.totGewicht, freightLines, inferredAfdeling, primaryStopVehicleType, pricingPayload.cents, stopVehicleTypeLabels, suggestedTransportType, suggestedVehicleType, transportEenheid, transportType, voertuigtype]);
 
   // ─── Unsaved-changes-bewaking ────────────────────────────────────────
   // Baseline wordt gezet zodra prefill klaar is (of meteen als er geen
@@ -1818,11 +1940,12 @@ const NewOrder = () => {
   );
 
   const vehicleMatchScore = useMemo(() => {
-    if (!suggestedVehicleType && !voertuigtype) return 0;
-    if (voertuigtype && suggestedVehicleType && voertuigtype === suggestedVehicleType) return 92;
-    if (voertuigtype && suggestedVehicleType && voertuigtype !== suggestedVehicleType) return 76;
+    const selectedVehicleType = voertuigtype || primaryStopVehicleType;
+    if (!suggestedVehicleType && !selectedVehicleType) return 0;
+    if (selectedVehicleType && suggestedVehicleType && selectedVehicleType === suggestedVehicleType) return 92;
+    if (selectedVehicleType && suggestedVehicleType && selectedVehicleType !== suggestedVehicleType) return 76;
     return suggestedVehicleType ? 88 : 0;
-  }, [suggestedVehicleType, voertuigtype]);
+  }, [primaryStopVehicleType, suggestedVehicleType, voertuigtype]);
 
   const wizardStepIndex = WIZARD_STEPS.findIndex((step) => step.key === wizardStep);
   const wizardProgress = Math.round(((wizardStepIndex + 1) / WIZARD_STEPS.length) * 100);
@@ -1897,8 +2020,8 @@ const NewOrder = () => {
   const contactAnswered = contactChoiceMode === "manual"
     ? manualContactName.trim().length > 0
     : Boolean(selectedContactId || contactpersoon.trim());
-  const transportFlowAnswered = Boolean(transportFlowChoice);
-  const intakeReady = clientAnswered && contactAnswered && transportFlowAnswered;
+  const flowAnswered = Boolean(transportFlowChoice);
+  const intakeReady = clientAnswered && contactAnswered && flowAnswered;
   const cargoReady = cargoTotals.totAantal > 0 && cargoTotals.totGewicht > 0;
   const missingClient = !clientAnswered;
   const missingPickupAddress = !pickupLine?.locatie;
@@ -1952,7 +2075,7 @@ const NewOrder = () => {
     : routeMapMissingGpsCount > 0
       ? `${routeMapPlottedCount}/${routeMapStops.length} GPS-punten`
       : "Kaart op GPS-punten";
-  const routeLegInsights = buildRouteLegInsights(routeMapStops, voertuigtype || suggestedVehicleType || "");
+  const routeLegInsights = buildRouteLegInsights(routeMapStops, voertuigtype || primaryStopVehicleType || suggestedVehicleType || "");
   useEffect(() => {
     if (!supabase.functions?.invoke) return;
     const missingGpsStops = routeMapStops.filter((stop) => {
@@ -2050,9 +2173,6 @@ const NewOrder = () => {
             ? "Controleer open punten"
             : "Klaar om aan te maken";
   const clientNeedsConfirmation = clientInputReady && !clientAnswered;
-  const intakeQuestion = missingClient
-    ? { step: "Klant", title: "Voor welke klant is deze order?", hint: "Typ minimaal 2 tekens en bevestig met Enter of Volgende stap." }
-    : { step: "Transport", title: "Welk transport hoort hierbij?", hint: "Kies import, export of direct. Daarna vult Orderflow het juiste warehouse alvast in." };
   const routeQuestion = missingPickupAddress
     ? { step: "Ophaaladres", title: "Waar wordt de lading opgehaald?", hint: "Begin met het laadadres. De loslocatie komt daarna." }
     : missingDeliveryAddress
@@ -2064,7 +2184,7 @@ const NewOrder = () => {
     ? { step: "Aantal", title: "Hoeveel eenheden vervoer je?", hint: "Start met het aantal pallets, colli of boxen." }
     : missingWeight
       ? { step: "Gewicht", title: "Wat is het totale gewicht?", hint: "Daarmee kunnen voertuig en planning meteen worden ingeschat." }
-      : { step: "Klaar", title: "Lading staat goed genoeg voor planning", hint: "Je kunt nu details zoals afmetingen, ADR of voertuig aanvullen." };
+      : { step: "Klaar", title: "Lading staat goed genoeg voor planning", hint: "Je kunt nu door naar financieel." };
   const routeSuggestedQuestion = missingPickupAddress
     ? 1
     : missingDeliveryAddress
@@ -2077,7 +2197,7 @@ const NewOrder = () => {
   const cargoHasDimensions = cargoSameDimensions
     ? Boolean(cargoRows[0]?.lengte && cargoRows[0]?.breedte && cargoRows[0]?.hoogte)
     : cargoRows.length > 0 && cargoRows.every((row) => row.lengte && row.breedte && row.hoogte);
-  const cargoSuggestedQuestion = missingQuantity ? 1 : !cargoHasDimensions ? 2 : missingWeight ? 3 : 4;
+  const cargoSuggestedQuestion = missingQuantity ? 1 : !cargoHasDimensions ? 2 : 3;
 
   useEffect(() => {
     if (!clientAnswered) {
@@ -2106,13 +2226,14 @@ const NewOrder = () => {
       if (intakeReady) return "Compleet";
       if (!clientAnswered) return "Nog invullen";
       if (!contactAnswered) return "Contact kiezen";
-      return "Transport kiezen";
+      if (!flowAnswered) return "Routekeuze";
+      return "Referentie";
     }
     if (key === "route") return routeReady ? "Compleet" : "Nog invullen";
     if (key === "cargo") return cargoReady ? "Compleet" : "Nog invullen";
     if (key === "financial") return pricingPayload.cents != null ? "Tarief klaar" : "Controleren";
     return wizardMissing.length === 0 ? "Klaar voor aanmaken" : `${wizardMissing.length} open`;
-  }, [cargoReady, clientAnswered, contactAnswered, intakeReady, pricingPayload.cents, routeReady, wizardMissing.length]);
+  }, [cargoReady, clientAnswered, contactAnswered, flowAnswered, intakeReady, pricingPayload.cents, routeReady, wizardMissing.length]);
 
   const applySmartDraft = useCallback(() => {
     if (!smartInput.trim()) {
@@ -2212,11 +2333,6 @@ const NewOrder = () => {
       return;
     }
     if (wizardStep === "intake" && intakeActiveQuestion === 2) {
-      setIntakeManualBack(false);
-      setIntakeActiveQuestion(3);
-      return;
-    }
-    if (wizardStep === "intake" && intakeActiveQuestion === 3) {
       const manualName = manualContactName.trim();
       if (contactChoiceMode === "manual") {
         if (!manualName) {
@@ -2229,12 +2345,17 @@ const NewOrder = () => {
         return;
       }
       setIntakeManualBack(false);
+      setIntakeActiveQuestion(3);
+      return;
+    }
+    if (wizardStep === "intake" && intakeActiveQuestion === 3) {
+      setIntakeManualBack(false);
       setIntakeActiveQuestion(4);
       return;
     }
     if (wizardStep === "intake" && intakeActiveQuestion === 4) {
       if (!transportFlowChoice) {
-        toast.error("Transportkeuze ontbreekt", { description: "Kies eerst import, export of direct/binnenland." });
+        toast.error("Kies eerst de routeflow", { description: "Selecteer Export, Import of Direct A-B voordat je adressen invult." });
         return;
       }
       setWizardStep("route");
@@ -2327,7 +2448,7 @@ const NewOrder = () => {
     if (wizardStep === "financial") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(4);
+      setCargoActiveQuestion(3);
       return;
     }
     if (wizardStep === "cargo") {
@@ -2339,11 +2460,11 @@ const NewOrder = () => {
     if (wizardStep === "route") {
       setWizardStep("intake");
       setIntakeManualBack(true);
-      setIntakeActiveQuestion(1);
+      setIntakeActiveQuestion(4);
     }
   }, [cargoActiveQuestion, intakeActiveQuestion, missingPickupTimeWindow, reviewActiveQuestion, routeActiveQuestion, wizardStep]);
 
-  const [prefillReady, setPrefillReady] = useState(!initialClientId && !fromOrderId);
+  const [prefillReady, setPrefillReady] = useState(!initialClientId && !fromOrderId && !draftIdParam);
   const [dirty, setDirty] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const baselineSignatureRef = useRef<string | null>(null);
@@ -2429,6 +2550,95 @@ const NewOrder = () => {
   ]);
 
   useEffect(() => {
+    if (!draftIdParam || !tenant?.id || draftRestored) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        setDraftSaveStatus("creating");
+        const { data, error } = await (supabase as any)
+          .from("order_drafts")
+          .select("id,status,payload,updated_at,updated_by")
+          .eq("id", draftIdParam)
+          .eq("tenant_id", tenant.id)
+          .is("committed_shipment_id", null)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) throw error;
+        if (!data?.id) {
+          toast.error("Concept niet gevonden", { description: "Dit concept is mogelijk al gereedgemeld of verwijderd." });
+          setPrefillReady(true);
+          setDraftRestored(true);
+          setServerDraftReady(true);
+          return;
+        }
+
+        const payload = (data.payload ?? {}) as any;
+        const parsed = (payload.form ?? {}) as Partial<typeof draftPayload>;
+        if (parsed.clientName) {
+          setClientName(parsed.clientName);
+          if (parsed.clientName.trim().length >= 2) setClientQuestionConfirmed(true);
+        }
+        if (parsed.clientId) setClientId(parsed.clientId);
+        if (parsed.contactpersoon) setContactpersoon(parsed.contactpersoon);
+        if (parsed.contactChoiceMode) setContactChoiceMode(parsed.contactChoiceMode);
+        if (parsed.selectedContactId) setSelectedContactId(parsed.selectedContactId);
+        if (parsed.manualContactName) setManualContactName(parsed.manualContactName);
+        if (parsed.manualContactEmail) setManualContactEmail(parsed.manualContactEmail);
+        if (parsed.manualContactPhone) setManualContactPhone(parsed.manualContactPhone);
+        if (parsed.prioriteit) setPrioriteit(parsed.prioriteit);
+        if (parsed.klantReferentie) setKlantReferentie(parsed.klantReferentie);
+        if (parsed.transportFlowChoice) setTransportFlowChoice(parsed.transportFlowChoice);
+        if (parsed.transportType) setTransportType(parsed.transportType);
+        if (typeof parsed.transportTypeManual === "boolean") setTransportTypeManual(parsed.transportTypeManual);
+        if (parsed.afdeling) setAfdeling(parsed.afdeling);
+        if (typeof parsed.afdelingManual === "boolean") setAfdelingManual(parsed.afdelingManual);
+        if (parsed.voertuigtype) setVoertuigtype(parsed.voertuigtype);
+        if (typeof parsed.voertuigtypeManual === "boolean") setVoertuigtypeManual(parsed.voertuigtypeManual);
+        if (parsed.referentie) setReferentie(parsed.referentie);
+        if (parsed.transportEenheid) setTransportEenheid(parsed.transportEenheid);
+        if (parsed.quantity) setQuantity(parsed.quantity);
+        if (parsed.weightKg) setWeightKg(parsed.weightKg);
+        if (Array.isArray(parsed.cargoRows) && parsed.cargoRows.length > 0) setCargoRows(parsed.cargoRows);
+        if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines.map(sanitizeFreightLine));
+        if (parsed.pickupAddr) setPickupAddr({ ...EMPTY_ADDRESS, ...parsed.pickupAddr });
+        if (parsed.deliveryAddr) setDeliveryAddr({ ...EMPTY_ADDRESS, ...parsed.deliveryAddr });
+        if (typeof parsed.klepNodig === "boolean") setKlepNodig(parsed.klepNodig);
+        if (typeof parsed.shipmentSecure === "boolean") setShipmentSecure(parsed.shipmentSecure);
+        if (payload.pricingPayload) setPricingPayload(payload.pricingPayload);
+        if (payload.wizard?.step) setWizardStep(payload.wizard.step);
+        if (payload.wizard?.intakeActiveQuestion) setIntakeActiveQuestion(payload.wizard.intakeActiveQuestion);
+        if (payload.wizard?.routeActiveQuestion) setRouteActiveQuestion(payload.wizard.routeActiveQuestion);
+        if (payload.wizard?.cargoActiveQuestion) setCargoActiveQuestion(payload.wizard.cargoActiveQuestion);
+        if (payload.wizard?.reviewActiveQuestion) setReviewActiveQuestion(payload.wizard.reviewActiveQuestion);
+
+        setServerDraftId(data.id);
+        setServerDraftUpdatedAt(data.updated_at ?? null);
+        setServerDraftUpdatedBy(data.updated_by ?? null);
+        setLastDraftSavedAt(data.updated_at ?? null);
+        setDraftSaveStatus("saved");
+        setDraftRestored(true);
+        setPrefillReady(true);
+        setServerDraftReady(true);
+        toast.success("Concept geopend", { description: "Je kunt verder werken aan dit orderconcept." });
+      } catch (error) {
+        if (cancelled) return;
+        console.warn("[NewOrder] concept kon niet worden geopend:", error);
+        setDraftSaveStatus("error");
+        setDraftSaveError("Concept kon niet worden geopend.");
+        setDraftRestored(true);
+        setPrefillReady(true);
+        setServerDraftReady(true);
+        toast.error("Concept kon niet worden geopend");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draftIdParam, draftPayload, draftRestored, tenant?.id]);
+
+  useEffect(() => {
     if (!draftStorageKey || !prefillReady || draftRestored) return;
     const raw = window.localStorage.getItem(draftStorageKey);
     if (!raw) {
@@ -2462,7 +2672,7 @@ const NewOrder = () => {
       if (parsed.quantity) setQuantity(parsed.quantity);
       if (parsed.weightKg) setWeightKg(parsed.weightKg);
       if (Array.isArray(parsed.cargoRows) && parsed.cargoRows.length > 0) setCargoRows(parsed.cargoRows);
-      if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines);
+      if (Array.isArray(parsed.freightLines) && parsed.freightLines.length > 0) setFreightLines(parsed.freightLines.map(sanitizeFreightLine));
       if (parsed.pickupAddr) setPickupAddr({ ...EMPTY_ADDRESS, ...parsed.pickupAddr });
       if (parsed.deliveryAddr) setDeliveryAddr({ ...EMPTY_ADDRESS, ...parsed.deliveryAddr });
       if (typeof parsed.klepNodig === "boolean") setKlepNodig(parsed.klepNodig);
@@ -2486,6 +2696,12 @@ const NewOrder = () => {
     if (!restoredClientAnswered) {
       setWizardStep("intake");
       setIntakeActiveQuestion(1);
+      return;
+    }
+
+    if (!contactAnswered) {
+      setWizardStep("intake");
+      setIntakeActiveQuestion(2);
       return;
     }
 
@@ -2531,12 +2747,6 @@ const NewOrder = () => {
       return;
     }
 
-    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(4);
-      return;
-    }
-
     if (pricingPayload.cents == null) {
       setWizardStep("financial");
       return;
@@ -2548,6 +2758,7 @@ const NewOrder = () => {
     afdeling,
     clientAnswered,
     clientName,
+    contactAnswered,
     draftRestored,
     missingDeliveryAddress,
     missingPickupAddress,
@@ -2562,79 +2773,6 @@ const NewOrder = () => {
     transportFlowChoice,
     transportType,
     voertuigtype,
-  ]);
-
-  useEffect(() => {
-    if (!draftRestored || intakeManualBack || wizardStep !== "intake" || !clientAnswered || !transportFlowChoice) return;
-
-    if (missingPickupAddress) {
-      setWizardStep("route");
-      setRouteActiveQuestion(1);
-      return;
-    }
-
-    if (missingDeliveryAddress) {
-      setWizardStep("route");
-      setRouteActiveQuestion(2);
-      return;
-    }
-
-    if (missingTimeWindow) {
-      setWizardStep("route");
-      setRouteActiveQuestion(missingPickupTimeWindow ? 3 : 4);
-      return;
-    }
-
-    if (missingQuantity) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(1);
-      return;
-    }
-
-    if (!cargoHasDimensions) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(2);
-      return;
-    }
-
-    if (missingWeight) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(3);
-      return;
-    }
-
-    if (!(transportType || suggestedTransportType) || !(voertuigtype || suggestedVehicleType) || !afdeling) {
-      setWizardStep("cargo");
-      setCargoActiveQuestion(4);
-      return;
-    }
-
-    if (pricingPayload.cents == null) {
-      setWizardStep("financial");
-      return;
-    }
-
-    setWizardStep("review");
-    setReviewActiveQuestion(2);
-  }, [
-    afdeling,
-    clientAnswered,
-    draftRestored,
-    intakeManualBack,
-    cargoHasDimensions,
-    missingDeliveryAddress,
-    missingPickupAddress,
-    missingPickupTimeWindow,
-    missingQuantity,
-    missingTimeWindow,
-    missingWeight,
-    pricingPayload.cents,
-    suggestedTransportType,
-    suggestedVehicleType,
-    transportFlowChoice,
-    transportType,
-    voertuigtype,
-    wizardStep,
   ]);
 
   useEffect(() => {
@@ -2757,7 +2895,7 @@ const NewOrder = () => {
     if (target === "transport" || target === "security") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(4);
+      setCargoActiveQuestion(3);
     }
     if (target === "pricing") {
       setWizardStep("financial");
@@ -2991,7 +3129,7 @@ const NewOrder = () => {
   ]);
 
   useEffect(() => {
-    if (!tenant?.id || initialClientId || fromOrderId || !serverDraftStorageKey || serverDraftReady || serverDraftCreateStartedRef.current) return;
+    if (!tenant?.id || initialClientId || fromOrderId || draftIdParam || !serverDraftStorageKey || serverDraftReady || serverDraftCreateStartedRef.current) return;
     serverDraftCreateStartedRef.current = true;
     const existingDraftId = window.localStorage.getItem(serverDraftStorageKey);
     if (existingDraftId) {
@@ -3092,6 +3230,7 @@ const NewOrder = () => {
     })();
   }, [
     fromOrderId,
+    draftIdParam,
     initialClientId,
     manualOverridesSnapshot,
     serverDraftReady,
@@ -3357,12 +3496,15 @@ const NewOrder = () => {
       const routeRequiresTailLift = freightLines.some((line) => line.requiresTailLift);
       const routeRequiresTemperature = freightLines.some((line) => line.temperatureControlled);
       const routeRequiresPhotos = freightLines.some((line) => line.photoRequired);
+      const stopRequiresTemperature = stopVehicleTypeLabels.some((label) => /koel|graden/.test(label.toLowerCase()));
+      const stopRequiresAdr = stopVehicleTypeLabels.some((label) => label.toLowerCase().includes("adr"));
       if (klepNodig || routeRequiresTailLift) reqs.push("laadklep");
-      if (routeRequiresTemperature) reqs.push("temperatuur");
+      if (routeRequiresTemperature || stopRequiresTemperature) reqs.push("temperatuur");
+      if (stopRequiresAdr) reqs.push("adr");
       if (routeRequiresPhotos) reqs.push("fotos_verplicht");
       const distanceKm = totalRouteDistanceKm(routeMapStops);
       const resolvedTransportType = transportType || suggestedTransportType || null;
-      const resolvedVehicleType = voertuigtype || suggestedVehicleType || null;
+      const resolvedVehicleType = voertuigtype || primaryStopVehicleType || suggestedVehicleType || null;
       const contactSnapshot = contactpersoon
         ? {
             id: selectedContactId,
@@ -3381,6 +3523,8 @@ const NewOrder = () => {
           company_name: line.companyName || null,
           address: line.locatie || null,
           reference: line.referentie || null,
+          vehicle_type_id: line.vehicleTypeId || null,
+          vehicle_type_label: line.vehicleTypeLabel || null,
           warehouse_id: line.warehouseId || null,
           reference_mode: line.warehouseReferenceMode || null,
         }));
@@ -3762,19 +3906,21 @@ const NewOrder = () => {
       setKlepNodig(true);
     }
     if (last.pickup_address || last.delivery_address) {
+      const pickupAddress = addressTextFromUnknown(last.pickup_address);
+      const deliveryAddress = addressTextFromUnknown(last.delivery_address);
       if (last.pickup_address) {
-        setPickupAddr(bestEffortAddressValue(last.pickup_address, prefillClient.country || "NL"));
+        setPickupAddr(bestEffortAddressValue(pickupAddress, prefillClient.country || "NL"));
       }
       if (last.delivery_address) {
-        setDeliveryAddr(bestEffortAddressValue(last.delivery_address, prefillClient.country || "NL"));
+        setDeliveryAddr(bestEffortAddressValue(deliveryAddress, prefillClient.country || "NL"));
       }
       setFreightLines((prev) =>
         prev.map((l) => {
-          if (l.activiteit === "Laden" && last.pickup_address) {
-            return { ...l, locatie: last.pickup_address };
+          if (l.activiteit === "Laden" && pickupAddress) {
+            return { ...l, locatie: pickupAddress };
           }
-          if (l.activiteit === "Lossen" && last.delivery_address) {
-            return { ...l, locatie: last.delivery_address };
+          if (l.activiteit === "Lossen" && deliveryAddress) {
+            return { ...l, locatie: deliveryAddress };
           }
           return l;
         }),
@@ -3802,7 +3948,7 @@ const NewOrder = () => {
   useEffect(() => {
     if (!clientId || !selectedClient) return;
     if (clientDefaultsAppliedRef.current === clientId) return;
-    if (initialClientId || fromOrderId) return;
+    if (initialClientId || fromOrderId || draftIdParam) return;
 
     clientDefaultsAppliedRef.current = clientId;
     if (!pickupAddr.street) {
@@ -3827,7 +3973,7 @@ const NewOrder = () => {
         timeWindowEnd: clientLocations[0].time_window_end,
       });
     }
-  }, [applyPlannerLocation, clientId, clientLocations, deliveryAddr.street, fromOrderId, handlePickupAddrChange, initialClientId, pickupAddr.street, selectedClient]);
+  }, [applyPlannerLocation, clientId, clientLocations, deliveryAddr.street, draftIdParam, fromOrderId, handlePickupAddrChange, initialClientId, pickupAddr.street, selectedClient]);
 
   // Prefill vanuit ?from_order_id=: kopieer pickup, delivery, requirements,
   // afdeling, vehicle_type, order_type en klant-identificatie van een
@@ -3863,19 +4009,21 @@ const NewOrder = () => {
         setKlepNodig(true);
       }
       if (src.pickup_address || src.delivery_address) {
+        const pickupAddress = addressTextFromUnknown(src.pickup_address);
+        const deliveryAddress = addressTextFromUnknown(src.delivery_address);
         if (src.pickup_address) {
-          setPickupAddr(bestEffortAddressValue(src.pickup_address));
+          setPickupAddr(bestEffortAddressValue(pickupAddress));
         }
         if (src.delivery_address) {
-          setDeliveryAddr(bestEffortAddressValue(src.delivery_address));
+          setDeliveryAddr(bestEffortAddressValue(deliveryAddress));
         }
         setFreightLines((prev) =>
           prev.map((l) => {
-            if (l.activiteit === "Laden" && src.pickup_address) {
-              return { ...l, locatie: src.pickup_address };
+            if (l.activiteit === "Laden" && pickupAddress) {
+              return { ...l, locatie: pickupAddress };
             }
-            if (l.activiteit === "Lossen" && src.delivery_address) {
-              return { ...l, locatie: src.delivery_address };
+            if (l.activiteit === "Lossen" && deliveryAddress) {
+              return { ...l, locatie: deliveryAddress };
             }
             return l;
           }),
@@ -3963,11 +4111,13 @@ const NewOrder = () => {
         ? "Bevestig klant"
         : "Volgende stap"
       : wizardStep === "intake" && intakeActiveQuestion === 2
+        ? "Bevestig contactpersoon"
+      : wizardStep === "intake" && intakeActiveQuestion === 3
         ? klantReferentie.trim()
           ? "Gebruik referentie"
           : "Geen referentie"
-      : wizardStep === "intake" && intakeActiveQuestion === 3
-        ? "Bevestig contactpersoon"
+      : wizardStep === "intake" && intakeActiveQuestion === 4
+        ? "Plan route"
       : wizardStep === "intake"
         ? "Plan route"
         : wizardStep === "route"
@@ -3983,9 +4133,7 @@ const NewOrder = () => {
                 ? "Bevestig aantal"
               : cargoActiveQuestion === 2
                 ? "Bevestig afmetingen"
-                : cargoActiveQuestion === 3
-                  ? "Bevestig gewicht"
-                  : "Bereken tarief"
+                : "Bereken tarief"
             : wizardStep === "financial"
               ? "Ga naar controle"
             : "Controleer order";
@@ -4016,45 +4164,87 @@ const NewOrder = () => {
   const renderLocationOperationalDetails = (line: FreightLine | undefined, title: string) => {
     if (!line) return null;
     return (
-      <div className="mt-5 rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white p-4 shadow-[0_18px_44px_-38px_hsl(var(--gold-deep)_/_0.55)]">
-        <div className="mb-4 flex flex-col gap-2 border-b border-[hsl(var(--gold)_/_0.12)] pb-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
-              Adresboek
+      <div className="mt-5 space-y-3">
+        <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-white p-4 shadow-[0_18px_44px_-38px_hsl(var(--gold-deep)_/_0.55)]">
+          <div className="mb-4 flex flex-col gap-2 border-b border-[hsl(var(--gold)_/_0.12)] pb-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                Adresboek
+              </div>
+              <div className="mt-1 text-sm font-semibold text-foreground">{title}</div>
             </div>
-            <div className="mt-1 text-sm font-semibold text-foreground">{title}</div>
+            <div className="max-w-[16rem] text-right text-[11px] leading-5 text-muted-foreground">
+              Bedrijfsnaam en adres worden na aanmaken als adres opgeslagen.
+            </div>
           </div>
-          <div className="max-w-[16rem] text-right text-[11px] leading-5 text-muted-foreground">
-            Bij aanmaken wordt dit adres bijgewerkt in het adresboek.
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className={flowLabelClass}>Bedrijfsnaam op deze locatie</label>
+              <Input
+                value={line.companyName || ""}
+                onChange={(e) => updateFreightLine(line.id, "companyName", e.target.value)}
+                placeholder={clientName || "Bijv. warehouse, klant of terminal"}
+                className={flowInputClass}
+              />
+            </div>
+            <div>
+              <label className={flowLabelClass}>Adres zichtbaar voor planner</label>
+              <Input
+                value={line.locatie}
+                onChange={(e) => updateFreightLine(line.id, "locatie", e.target.value)}
+                placeholder="Straat, huisnummer, postcode, plaats"
+                className={flowInputClass}
+              />
+            </div>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <label className={flowLabelClass}>Bedrijfsnaam op deze locatie</label>
-            <Input
-              value={line.companyName || ""}
-              onChange={(e) => updateFreightLine(line.id, "companyName", e.target.value)}
-              placeholder={clientName || "Bijv. warehouse, klant of terminal"}
-              className={flowInputClass}
-            />
+
+        <div className="rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-[hsl(var(--gold-soft)_/_0.16)] p-4 shadow-[0_14px_36px_-34px_hsl(var(--gold-deep)_/_0.62)]">
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+                Stopreferentie
+              </div>
+              <div className="mt-1 text-sm font-semibold text-foreground">
+                {line.activiteit === "Laden" ? "Laadreferentie" : "Losreferentie"}
+              </div>
+            </div>
+            <div className="text-[11px] leading-5 text-muted-foreground">
+              Hoort bij deze orderstop, niet bij het adresboek.
+            </div>
           </div>
-          <div>
-            <label className={flowLabelClass}>Adres zichtbaar voor planner</label>
-            <Input
-              value={line.locatie}
-              onChange={(e) => updateFreightLine(line.id, "locatie", e.target.value)}
-              placeholder="Straat, huisnummer, postcode, plaats"
-              className={flowInputClass}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className={flowLabelClass}>{line.activiteit === "Laden" ? "Laadreferentie" : "Losreferentie"}</label>
-            <Input
-              value={line.referentie || ""}
-              onChange={(e) => updateFreightLine(line.id, "referentie", e.target.value)}
-              placeholder="Wordt automatisch gevuld bij warehouse, of vul handmatig"
-              className={flowInputClass}
-            />
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.74fr)]">
+            <div>
+              <label className={flowLabelClass}>Referentie voor planner/chauffeur</label>
+              <Input
+                value={line.referentie || ""}
+                onChange={(e) => updateFreightLine(line.id, "referentie", e.target.value)}
+                placeholder="Bijv. laadnummer, losreferentie, dock-ref of warehouse-ref"
+                className={flowInputClass}
+              />
+            </div>
+            <div>
+              <label className={flowLabelClass}>Voertuigtype / toegangseis</label>
+              <Select
+                value={line.vehicleTypeId || "none"}
+                onValueChange={(value) => updateFreightLineVehicleType(line.id, value === "none" ? "" : value)}
+              >
+                <SelectTrigger className={flowInputClass}>
+                  <SelectValue placeholder="Geen voorkeur" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Geen voorkeur</SelectItem>
+                  {vehicleTypeOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="mt-1 block text-[10px] leading-4 tracking-wide text-muted-foreground">
+                Per stop opgeslagen; planning kan dit later overschrijven.
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -4148,10 +4338,8 @@ const NewOrder = () => {
   );
 
   const renderWizardFooter = () => {
-    const showCreate = wizardStep === "review" && reviewActiveQuestion === 2;
+    const showCreate = wizardStep === "review";
     const showContinue = wizardStep !== "review";
-    const inlineTransportControls = wizardStep === "cargo" && cargoActiveQuestion >= 4 && !missingQuantity && !missingWeight;
-    if (inlineTransportControls) return null;
     if (!canGoBackInUberflow && !showCreate && !showContinue) return null;
 
     return (
@@ -4259,7 +4447,7 @@ const NewOrder = () => {
     if (target === "security") {
       setWizardStep("cargo");
       setCargoManualBack(true);
-      setCargoActiveQuestion(4);
+      setCargoActiveQuestion(3);
     }
     if (target === "pricing") {
       setWizardStep("financial");
@@ -4562,6 +4750,9 @@ const NewOrder = () => {
                     <div className="mt-1 text-xs font-medium text-red-600">{stop.issue.message}</div>
                   )}
                   <div className={cn("mt-1 text-xs", stop.missingDate ? "text-muted-foreground" : "text-foreground")}>{[stop.line?.datum, stop.line?.tijd, stop.line?.tijdTot].filter(Boolean).join(" · ") || "Tijdvenster volgt"}</div>
+                  {stop.line?.vehicleTypeLabel && (
+                    <div className="mt-1 text-xs font-medium text-[hsl(var(--gold-deep))]">{stop.line.vehicleTypeLabel}</div>
+                  )}
                 </button>
               ))}
             </div>
@@ -4575,7 +4766,7 @@ const NewOrder = () => {
             </div>
             <div className="rounded-xl border border-[hsl(var(--gold)_/_0.14)] bg-[hsl(var(--gold-soft)_/_0.20)] p-3">
               <div className="text-[11px] font-medium text-muted-foreground">Voertuig</div>
-              <div className="mt-1 text-sm font-semibold">{voertuigtype || suggestedVehicleType || "Volgt"}</div>
+              <div className="mt-1 text-sm font-semibold">{voertuigtype || primaryStopVehicleType || suggestedVehicleType || "Volgt"}</div>
               <div className="text-xs text-muted-foreground">{vehicleMatchScore ? `${vehicleMatchScore}% match` : "Nog geen match"}</div>
             </div>
           </div>
@@ -4919,7 +5110,7 @@ const NewOrder = () => {
                     <Truck className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
                     Voertuigmatch
                   </div>
-                  <div className="mt-3 text-2xl font-semibold">{voertuigtype || suggestedVehicleType || "Nog geen voorstel"}</div>
+                  <div className="mt-3 text-2xl font-semibold">{voertuigtype || primaryStopVehicleType || suggestedVehicleType || "Nog geen voorstel"}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {vehicleMatchScore > 0 ? `${vehicleMatchScore}% match op basis van gewicht, lengte, laadklep en prioriteit.` : "Vul route of lading in voor een voertuigsuggestie."}
                   </div>
@@ -5177,52 +5368,6 @@ const NewOrder = () => {
                   <div className={conversationalCardClass(0)}>
                     {renderQuestionPrompt(
                       {
-                        step: "Referentie",
-                        title: "Welke referentie hoort bij deze order?",
-                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
-                      },
-                      Boolean(klantReferentie.trim()),
-                      true,
-                    )}
-                    <div className="max-w-xl">
-                      <label className={flowLabelClass}>Klant-referentie</label>
-                      <Input
-                        value={klantReferentie}
-                        onChange={e => setKlantReferentie(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            setIntakeActiveQuestion(3);
-                          }
-                        }}
-                        placeholder="PO-nummer of bestelreferentie"
-                        className={flowInputClass}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setIntakeActiveQuestion(3)}
-                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
-                      >
-                        {klantReferentie.trim() ? "Gebruik referentie" : "Geen referentie"}
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {intakeActiveQuestion >= 3 && renderCollapsedAnswer(
-                  "Referentie",
-                  klantReferentie.trim() || "Geen referentie",
-                  () => {
-                    setIntakeManualBack(true);
-                    setIntakeActiveQuestion(2);
-                  },
-                )}
-
-                {intakeActiveQuestion === 3 && (
-                  <div className={conversationalCardClass(0)}>
-                    {renderQuestionPrompt(
-                      {
                         step: "Contactpersoon",
                         title: "Welke contactpersoon hoort bij deze order?",
                         hint: "Kies de juiste contactpersoon van de klant, of voeg direct een nieuwe toe.",
@@ -5292,9 +5437,48 @@ const NewOrder = () => {
                   </div>
                 )}
 
-                {intakeActiveQuestion >= 4 && renderCollapsedAnswer(
+                {intakeActiveQuestion >= 3 && renderCollapsedAnswer(
                   "Contactpersoon",
                   contactpersoon.trim() || manualContactName.trim(),
+                  () => {
+                    setIntakeManualBack(true);
+                    setIntakeActiveQuestion(2);
+                  },
+                )}
+
+                {intakeActiveQuestion === 3 && (
+                  <div className={conversationalCardClass(0)}>
+                    {renderQuestionPrompt(
+                      {
+                        step: "Referentie",
+                        title: "Welke referentie hoort bij deze order?",
+                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
+                      },
+                      Boolean(klantReferentie.trim()),
+                      true,
+                    )}
+                    <div className="max-w-xl">
+                      <label className={flowLabelClass}>Klant-referentie</label>
+                      <Input
+                        value={klantReferentie}
+                        onChange={e => setKlantReferentie(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            setIntakeManualBack(false);
+                            setIntakeActiveQuestion(4);
+                          }
+                        }}
+                        placeholder="PO-nummer of bestelreferentie"
+                        className={flowInputClass}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {intakeActiveQuestion >= 4 && renderCollapsedAnswer(
+                  "Referentie",
+                  klantReferentie.trim() || "Geen referentie",
                   () => {
                     setIntakeManualBack(true);
                     setIntakeActiveQuestion(3);
@@ -5303,34 +5487,66 @@ const NewOrder = () => {
 
                 {intakeActiveQuestion === 4 && (
                   <div className={conversationalCardClass(0)}>
-                    {renderQuestionPrompt(intakeQuestion, transportFlowAnswered)}
+                    {renderQuestionPrompt(
+                      {
+                        step: "Routeflow",
+                        title: "Is dit export, import of direct A-B?",
+                        hint: "Deze keuze vult alvast de afdeling en, waar ingesteld, het juiste warehouse als laad- of losadres.",
+                      },
+                      Boolean(transportFlowChoice),
+                      true,
+                    )}
                     <div className="grid gap-3 md:grid-cols-3">
                       {([
-                        { value: "export", title: "Export", hint: "Laad via export-warehouse", badge: "Warehouse laadadres" },
-                        { value: "import", title: "Import", hint: "Warehouse volgens instelling", badge: "Warehouse route" },
-                        { value: "direct", title: "Binnenland / direct", hint: "Van laadadres naar losadres", badge: "Zonder warehouse" },
-                      ] as Array<{ value: TransportFlowChoice; title: string; hint: string; badge: string }>).map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => chooseTransportFlow(option.value)}
-                          className={cn(
-                            "group min-h-[126px] rounded-2xl border p-4 text-left transition hover:-translate-y-px hover:border-[hsl(var(--gold)_/_0.44)] hover:bg-[hsl(var(--gold-soft)_/_0.18)]",
-                            transportFlowChoice === option.value
-                              ? "border-[hsl(var(--gold)_/_0.58)] bg-[linear-gradient(135deg,hsl(var(--gold-soft)_/_0.34),white_58%)] shadow-[0_20px_48px_-38px_hsl(var(--gold-deep)_/_0.70)]"
-                              : "border-[hsl(var(--gold)_/_0.16)] bg-white",
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <span className="text-base font-semibold">{option.title}</span>
-                            <span className="rounded-full border border-[hsl(var(--gold)_/_0.22)] bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--gold-deep))]">
-                              {option.badge}
+                        {
+                          value: "export" as const,
+                          title: "Export",
+                          label: "Warehouse als laadadres",
+                          description: "Gebruik het exportwarehouse uit instellingen en zet de afdeling op Export.",
+                        },
+                        {
+                          value: "import" as const,
+                          title: "Import",
+                          label: "Warehouse als losadres",
+                          description: "Gebruik het importwarehouse uit instellingen en zet de afdeling op Import.",
+                        },
+                        {
+                          value: "direct" as const,
+                          title: "Direct A-B",
+                          label: "Geen warehouse ertussen",
+                          description: "Plan rechtstreeks van ophaaladres naar eindbestemming via Operations.",
+                        },
+                      ]).map((option) => {
+                        const active = transportFlowChoice === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => chooseTransportFlow(option.value)}
+                            className={cn(
+                              "min-h-[150px] rounded-2xl border bg-white p-4 text-left shadow-[0_14px_34px_-30px_hsl(var(--gold-deep)_/_0.65)] transition hover:border-[hsl(var(--gold)_/_0.46)] hover:bg-[hsl(var(--gold-soft)_/_0.20)]",
+                              active
+                                ? "border-[hsl(var(--gold)_/_0.68)] bg-[hsl(var(--gold-soft)_/_0.26)] shadow-[inset_0_0_0_1px_hsl(var(--gold)_/_0.20)]"
+                                : "border-[hsl(var(--gold)_/_0.16)]",
+                            )}
+                          >
+                            <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[hsl(var(--gold-soft))] px-3 text-xs font-semibold uppercase tracking-[0.14em] text-[hsl(var(--gold-deep))]">
+                              {option.title}
                             </span>
-                          </div>
-                          <p className="mt-3 text-sm text-muted-foreground">{option.hint}</p>
-                        </button>
-                      ))}
+                            <span className="mt-4 block text-base font-semibold text-foreground">{option.label}</span>
+                            <span className="mt-2 block text-sm leading-6 text-muted-foreground">{option.description}</span>
+                          </button>
+                        );
+                      })}
                     </div>
+                    {transportFlowChoice && (
+                      <div className="mt-4 rounded-2xl border border-[hsl(var(--gold)_/_0.16)] bg-[hsl(var(--gold-soft)_/_0.18)] px-4 py-3 text-sm text-muted-foreground">
+                        Afdeling staat op <span className="font-semibold text-foreground">{afdeling || "Operations"}</span>.
+                        {transportFlowChoice === "direct"
+                          ? " Je vult laad- en losadres zelf in."
+                          : " Het passende warehouse is alvast toegepast wanneer het in instellingen beschikbaar is."}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -5390,9 +5606,11 @@ const NewOrder = () => {
               </div>
               {selectedClient && (
                 <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-                  {clientLocations.length > 0
-                    ? `${clientLocations.length} vaste locaties beschikbaar voor deze klant. Zoek op bedrijfsnaam of kies een snelle locatie bij ophaal/aflever.`
-                    : "Nog geen vaste locaties voor deze klant. Eerdere orderadressen en handmatige invoer blijven beschikbaar."}
+                  {[
+                    clientLocations.length > 0 ? `${clientLocations.length} vaste klantlocaties` : null,
+                    warehouses.length > 0 ? `${warehouses.length} warehouses uit instellingen` : null,
+                  ].filter(Boolean).join(" en ") || "Handmatige adressen en adresboek blijven beschikbaar."}
+                  {" "}Adreskeuze hoeft niet aan deze klant gekoppeld te zijn.
                 </div>
               )}
               {renderWizardFooter()}
@@ -5533,7 +5751,10 @@ const NewOrder = () => {
                 {routeActiveQuestion > 1 && renderCollapsedAnswer(
                   "Ophalen",
                   pickupLine?.locatie
-                    ? `${locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").company}\n${locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").address}`
+                    ? `${locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").company}\n${[
+                        locationDisplay(pickupLine, "Ophalen", "Ophaaladres ingevuld").address,
+                        pickupLine.vehicleTypeLabel,
+                      ].filter(Boolean).join(" · ")}`
                     : "",
                   () => {
                     setRouteManualBack(true);
@@ -5591,7 +5812,10 @@ const NewOrder = () => {
                   {routeActiveQuestion > 2 && renderCollapsedAnswer(
                     getDeliveryStopLabel(0),
                     deliveryLine?.locatie
-                      ? `${locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").company}\n${locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").address}`
+                      ? `${locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").company}\n${[
+                          locationDisplay(deliveryLine, getDeliveryStopLabel(0), "Afleveradres ingevuld").address,
+                          deliveryLine.vehicleTypeLabel,
+                        ].filter(Boolean).join(" · ")}`
                       : "",
                     () => {
                       setRouteManualBack(true);
@@ -6208,7 +6432,7 @@ const NewOrder = () => {
                   missingWeight ? "border-red-200 bg-red-50/40" : "border-border/60 bg-white",
                 )}>
                   {renderQuestionPrompt(
-                    { step: "Gewicht", title: "Wat is het totale gewicht?", hint: "Na een geldig gewicht verschijnen de detailvelden en voertuigkeuzes." },
+                    { step: "Gewicht", title: "Wat is het totale gewicht?", hint: "Na een geldig gewicht ga je door naar financieel." },
                     !missingWeight,
                   )}
                   <label className={cn(flowLabelClass, requiredTextClass(missingWeight))}>Gewicht totaal in kg</label>
@@ -6220,7 +6444,7 @@ const NewOrder = () => {
                       if (e.key === "Enter" && Number(row.gewicht) > 0) {
                         e.preventDefault();
                         setCargoManualBack(false);
-                        setCargoActiveQuestion(4);
+                        setWizardStep("financial");
                       }
                     }}
                     placeholder="Bijv. 850"
@@ -6229,13 +6453,13 @@ const NewOrder = () => {
                 </div>
               ))}
 
-              {cargoActiveQuestion >= 4 && !missingQuantity && !missingWeight && (
+              {false && !missingQuantity && !missingWeight && (
                 <div className={cn(conversationalCardClass(0), "mb-4")}>
                   {renderQuestionPrompt(
                     {
                       step: "Transport",
-                      title: "Welk transport past hierbij?",
-                      hint: "We doen alvast een voorstel. Pas alleen aan als de planner bewust wil afwijken.",
+                      title: "Transportdetails",
+                      hint: "Orderflow doet alvast een voorstel op basis van lading en route. Pas alleen aan als de planner bewust wil afwijken.",
                     },
                     Boolean((transportType || suggestedTransportType) && (voertuigtype || suggestedVehicleType) && afdeling),
                     Boolean((transportType || suggestedTransportType) && (voertuigtype || suggestedVehicleType)),
@@ -6834,12 +7058,12 @@ const NewOrder = () => {
                   {renderCollapsedAnswer("Transport", `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || "eenheden"} · ${cargoTotals.totGewicht || 0} kg · ${transportType || suggestedTransportType || "transport volgt"}`, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(4);
+                    setCargoActiveQuestion(3);
                   })}
                   {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(4);
+                    setCargoActiveQuestion(3);
                   })}
                 </div>
 
@@ -6904,7 +7128,7 @@ const NewOrder = () => {
                   {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
                     setWizardStep("cargo");
                     setCargoManualBack(true);
-                    setCargoActiveQuestion(4);
+                    setCargoActiveQuestion(3);
                   })}
                   {renderCollapsedAnswer("Financieel", pricingLabel, () => setWizardStep("financial"))}
                 </div>
@@ -6921,44 +7145,7 @@ const NewOrder = () => {
                   () => setReviewActiveQuestion(2),
                 )}
 
-                {reviewActiveQuestion === 1 && (
-                  <div className={cn(conversationalCardClass(0), "mb-4")}>
-                    {renderQuestionPrompt(
-                      {
-                        step: "Referentie",
-                        title: "Welke referentie hoort bij deze order?",
-                        hint: "Optioneel. Vul een PO-nummer in en druk Enter, of sla deze vraag over.",
-                      },
-                      Boolean(klantReferentie.trim()),
-                      true,
-                    )}
-                    <label className={flowLabelClass}>Klant-referentie</label>
-                    <Input
-                      value={klantReferentie}
-                      onChange={e => setKlantReferentie(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          setReviewActiveQuestion(2);
-                        }
-                      }}
-                      placeholder="PO-nummer of bestelreferentie"
-                      className={flowInputClass}
-                    />
-                    <div className="mt-4 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setReviewActiveQuestion(2)}
-                        className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--gold-deep))] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
-                      >
-                        {klantReferentie.trim() ? "Gebruik referentie" : "Geen referentie"}
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {reviewActiveQuestion === 2 && (
+                {(reviewActiveQuestion === 1 || reviewActiveQuestion === 2) && (
                   <div className={cn(conversationalCardClass(0), "mb-4")}>
                     {renderQuestionPrompt(
                       {
@@ -7043,7 +7230,7 @@ const NewOrder = () => {
                         <div>
                           <div className="text-sm font-semibold">Lading & planning</div>
                           <div className="mt-1 text-xs text-muted-foreground">
-                            {cargoTotals.totAantal || 0} {cargoTotals.primaryUnit || "eenheden"} · {cargoTotals.totGewicht || 0} kg · {voertuigtype || suggestedVehicleType || "voertuig volgt"}
+                            {cargoTotals.totAantal || 0} {cargoTotals.primaryUnit || "eenheden"} · {cargoTotals.totGewicht || 0} kg · {voertuigtype || primaryStopVehicleType || suggestedVehicleType || "voertuig volgt"}
                           </div>
                         </div>
                         <button
@@ -7233,25 +7420,33 @@ const NewOrder = () => {
         open={showUnsavedDialog}
         onOpenChange={(o) => !o && setShowUnsavedDialog(false)}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Concept afsluiten?</AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent className="max-w-[640px] overflow-hidden rounded-3xl border border-[hsl(var(--gold)_/_0.22)] bg-[linear-gradient(135deg,#fffdf8_0%,#f8f1e6_100%)] p-0 shadow-[0_30px_90px_-55px_hsl(var(--gold-deep)_/_0.72)]">
+          <AlertDialogHeader className="space-y-3 px-6 pb-3 pt-6 text-left">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[hsl(var(--gold-deep))]" style={{ fontFamily: "var(--font-display)" }}>
+              Conceptbeheer
+            </div>
+            <AlertDialogTitle className="text-2xl font-semibold tracking-normal" style={{ fontFamily: "var(--font-display)" }}>
+              Concept afsluiten?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="max-w-[520px] text-sm leading-6 text-muted-foreground">
               Deze order wordt automatisch als concept bewaard. Kies of je het concept wilt bewaren
-              voor later, of helemaal wilt weggooien.
+              voor later, of helemaal wilt verwijderen.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Doorgaan met bewerken</AlertDialogCancel>
+          <AlertDialogFooter className="grid gap-3 border-t border-[hsl(var(--gold)_/_0.16)] bg-white/70 px-6 py-5 sm:grid-cols-3 sm:space-x-0">
+            <AlertDialogCancel className="mt-0 h-11 rounded-full border-[hsl(var(--gold)_/_0.22)] bg-white px-4 text-sm font-semibold text-foreground shadow-[0_12px_30px_-26px_hsl(var(--foreground)_/_0.45)] transition hover:bg-[hsl(var(--gold-soft)_/_0.24)]">
+              Doorgaan met bewerken
+            </AlertDialogCancel>
             <button
               type="button"
               onClick={() => void discardDraftAndLeave()}
-              className="inline-flex h-10 items-center justify-center rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
+              className="inline-flex h-11 min-w-0 items-center justify-center rounded-full border border-red-200 bg-red-50 px-4 text-center text-sm font-semibold text-red-700 shadow-[0_12px_30px_-26px_rgba(185,28,28,0.55)] transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200/70"
             >
-              Concept weggooien
+              Concept verwijderen
             </button>
             <AlertDialogAction
               onClick={keepDraftAndLeave}
+              className="h-11 rounded-full bg-[hsl(var(--gold-deep))] px-4 text-sm font-semibold text-white shadow-[0_16px_38px_-28px_hsl(var(--gold-deep)_/_0.85)] transition hover:bg-[hsl(var(--gold))] hover:text-[#17130b]"
             >
               Concept bewaren
             </AlertDialogAction>

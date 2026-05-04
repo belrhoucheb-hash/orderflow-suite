@@ -91,6 +91,23 @@ function mapsPointFromCoords(lat?: number | null, lng?: number | null, fallbackA
   return fallbackAddress?.trim() || "";
 }
 
+function addressToDisplay(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.display === "string" && record.display.trim()) return record.display.trim();
+
+  return [
+    [record.street, record.house_number, record.house_number_suffix].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    [record.zipcode, record.city].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    typeof record.country === "string" ? record.country : "",
+  ]
+    .filter((part) => part.trim())
+    .join(", ")
+    .trim();
+}
+
 const OrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -217,7 +234,11 @@ const OrderDetail = () => {
         .eq("id", id!)
         .single();
       if (error) throw error;
-      return data as any;
+      return {
+        ...(data as any),
+        pickup_address: addressToDisplay((data as any).pickup_address),
+        delivery_address: addressToDisplay((data as any).delivery_address),
+      };
     },
     enabled: !!id,
   });

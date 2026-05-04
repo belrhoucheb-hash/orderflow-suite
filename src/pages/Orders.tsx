@@ -185,9 +185,12 @@ const Orders = () => {
     staleThresholdHours: 2,
   });
   const rawOrders = useMemo(() => data?.orders ?? [], [data?.orders]);
-  const visibleOrderIds = useMemo(() => rawOrders.map((order) => order.id), [rawOrders]);
+  const visibleOrderIds = useMemo(() => rawOrders.filter((order) => order.sourceKind !== "draft").map((order) => order.id), [rawOrders]);
   const { unreadOrderIds } = useUnreadNoteOrderIds(visibleOrderIds);
   const totalCount = meta?.totalCount ?? 0;
+  const openOrderPath = (order: any) => order.sourceKind === "draft" && order.draftId
+    ? `/orders/nieuw?draft_id=${order.draftId}`
+    : `/orders/${order.id}`;
 
   const filteredByInfo = useMemo(() => {
     let list = rawOrders;
@@ -408,8 +411,8 @@ const Orders = () => {
         {/* Ticker, statussen als snelfilter */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-[hsl(var(--gold)/0.12)]">
           {([
-            { label: "Nieuw",          value: stats.byStatus["DRAFT"] || 0,    note: "Te plannen",    filter: "DRAFT" as const,    kind: "status" as const },
-            { label: "Oud concept",    value: stats.staleDraftCount,           note: "DRAFT > 2 uur", filter: "stale" as const,    kind: "stale" as const },
+            { label: "Concept",        value: stats.byStatus["DRAFT"] || 0,    note: "Nog niet compleet", filter: "DRAFT" as const, kind: "status" as const },
+            { label: "Oud concept",    value: stats.staleDraftCount,           note: "Concept > 2 uur", filter: "stale" as const,    kind: "stale" as const },
             { label: "In behandeling", value: stats.byStatus["PENDING"] || 0,  note: "Open dossier",  filter: "PENDING" as const,  kind: "status" as const },
             { label: "Wacht op info",  value: stats.awaitingInfoCount,         note: "Dossier incompleet", filter: "open" as const, kind: "info" as const },
             { label: "Afgeleverd",     value: stats.byStatus["DELIVERED"] || 0, note: "POD ontvangen", filter: "DELIVERED" as const, kind: "status" as const },
@@ -707,7 +710,7 @@ const Orders = () => {
                     />
                     <button
                       type="button"
-                      onClick={() => navigate(`/orders/${order.id}`)}
+                      onClick={() => navigate(openOrderPath(order))}
                       className="min-w-0 flex-1 text-left"
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -737,23 +740,36 @@ const Orders = () => {
                       </div>
                     </button>
                     <div className="flex shrink-0 flex-col gap-1">
-                      <button
-                        onClick={() => navigate(`/orders/nieuw?from_order_id=${order.id}`)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground"
-                        title="Dupliceer order"
-                        aria-label={`Dupliceer order ${order.orderNumber}`}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleQuickPrint(order.id)}
-                        disabled={printLoading === order.id}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground disabled:opacity-50"
-                        title="Print label"
-                        aria-label={`Print label voor order ${order.orderNumber}`}
-                      >
-                        {printLoading === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-                      </button>
+                      {order.sourceKind === "draft" ? (
+                        <button
+                          onClick={() => navigate(openOrderPath(order))}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground"
+                          title="Concept openen"
+                          aria-label={`Open concept ${order.orderNumber}`}
+                        >
+                          <Clock className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => navigate(`/orders/nieuw?from_order_id=${order.id}`)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground"
+                            title="Dupliceer order"
+                            aria-label={`Dupliceer order ${order.orderNumber}`}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleQuickPrint(order.id)}
+                            disabled={printLoading === order.id}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground disabled:opacity-50"
+                            title="Print label"
+                            aria-label={`Print label voor order ${order.orderNumber}`}
+                          >
+                            {printLoading === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -834,7 +850,7 @@ const Orders = () => {
                       "table-row group cursor-pointer",
                       unreadOrderIds.has(order.id) && "shadow-[inset_2px_0_0_0_#3b82f6]",
                     )}
-                    onClick={() => navigate(`/orders/${order.id}`)}
+                    onClick={() => navigate(openOrderPath(order))}
                   >
                     <td
                       className="table-cell w-10 pl-4"
@@ -859,7 +875,7 @@ const Orders = () => {
                       <div className="flex items-center gap-2">
                         <IncompleteBadge order={order} size="dot" />
                         <Link
-                          to={`/orders/${order.id}`}
+                          to={openOrderPath(order)}
                           className="text-[14px] font-semibold text-foreground hover:text-[hsl(var(--gold-deep))] transition-colors tabular-nums tracking-[0.02em] whitespace-nowrap"
                           style={{ fontFamily: "var(--font-display)" }}
                           title={order.notes?.trim() || undefined}
@@ -871,7 +887,7 @@ const Orders = () => {
                     <td className="table-cell text-foreground/90 font-medium" style={{ fontFamily: "var(--font-display)" }}>
                       <div className="flex items-center gap-2">
                         <span>{order.customer}</span>
-                        {order.clientId && (
+                        {order.sourceKind !== "draft" && order.clientId && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -929,27 +945,40 @@ const Orders = () => {
                     </td>
                     <td className="table-cell text-center">
                       <div className="inline-flex items-center gap-0.5">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/orders/nieuw?from_order_id=${order.id}`); }}
-                          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                          title="Dupliceer order"
-                          aria-label={`Dupliceer order ${order.orderNumber}`}
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleQuickPrint(order.id); }}
-                          disabled={printLoading === order.id}
-                          className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
-                          title="Print label"
-                          aria-label={`Print label voor order ${order.orderNumber}`}
-                        >
-                          {printLoading === order.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Printer className="h-3.5 w-3.5" />
-                          )}
-                        </button>
+                        {order.sourceKind === "draft" ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(openOrderPath(order)); }}
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                            title="Concept openen"
+                            aria-label={`Open concept ${order.orderNumber}`}
+                          >
+                            <Clock className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/orders/nieuw?from_order_id=${order.id}`); }}
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                              title="Dupliceer order"
+                              aria-label={`Dupliceer order ${order.orderNumber}`}
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleQuickPrint(order.id); }}
+                              disabled={printLoading === order.id}
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+                              title="Print label"
+                              aria-label={`Print label voor order ${order.orderNumber}`}
+                            >
+                              {printLoading === order.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Printer className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </motion.tr>

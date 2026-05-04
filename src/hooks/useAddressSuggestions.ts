@@ -8,6 +8,25 @@ export interface AddressSuggestion {
   field: "pickup" | "delivery";
 }
 
+function addressToDisplay(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.display === "string" && record.display.trim()) {
+    return record.display.trim();
+  }
+
+  return [
+    [record.street, record.house_number, record.house_number_suffix].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    [record.zipcode, record.city].filter((part) => typeof part === "string" && part.trim()).join(" "),
+    typeof record.country === "string" ? record.country : "",
+  ]
+    .filter((part) => part.trim())
+    .join(", ")
+    .trim();
+}
+
 /**
  * Queries historical orders for a given client to suggest addresses.
  * Returns the most frequently used pickup and delivery addresses.
@@ -38,8 +57,11 @@ export function useAddressSuggestions(clientName: string | null, clientId?: stri
       const deliveryCounts = new Map<string, { count: number; lastUsed: string }>();
 
       for (const row of data) {
-        if (row.pickup_address && row.pickup_address.trim().length > 3) {
-          const key = row.pickup_address.trim();
+        const pickupAddress = addressToDisplay(row.pickup_address);
+        const deliveryAddress = addressToDisplay(row.delivery_address);
+
+        if (pickupAddress.length > 3) {
+          const key = pickupAddress;
           const existing = pickupCounts.get(key);
           if (existing) {
             existing.count++;
@@ -47,8 +69,8 @@ export function useAddressSuggestions(clientName: string | null, clientId?: stri
             pickupCounts.set(key, { count: 1, lastUsed: row.created_at });
           }
         }
-        if (row.delivery_address && row.delivery_address.trim().length > 3) {
-          const key = row.delivery_address.trim();
+        if (deliveryAddress.length > 3) {
+          const key = deliveryAddress;
           const existing = deliveryCounts.get(key);
           if (existing) {
             existing.count++;
