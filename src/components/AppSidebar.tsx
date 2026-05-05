@@ -182,14 +182,14 @@ export function AppSidebar() {
                         : "text-white/68 hover:text-white"
                     )}
                     style={active ? {
-                      background: "linear-gradient(90deg, hsl(220 23% 18%) 0%, hsl(222 24% 13%) 100%)",
-                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.18), 0 16px 32px -26px hsl(var(--gold) / 0.72)",
+                      background: "linear-gradient(90deg, hsl(var(--gold-deep) / 0.22) 0%, hsl(220 24% 13%) 65%)",
+                      boxShadow: "inset 0 0 0 1px hsl(var(--gold) / 0.28), 0 16px 32px -22px hsl(var(--gold) / 0.55)",
                     } : {
                       background: "transparent",
                     }}
                     onMouseEnter={(event) => {
                       if (!active) {
-                        event.currentTarget.style.background = "linear-gradient(90deg, hsl(220 21% 14%), hsl(220 20% 12%))";
+                        event.currentTarget.style.background = "linear-gradient(90deg, hsl(var(--gold) / 0.06), hsl(220 20% 12%) 70%)";
                       }
                     }}
                     onMouseLeave={(event) => {

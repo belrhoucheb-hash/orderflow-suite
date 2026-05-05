@@ -136,11 +136,10 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, query]);
 
-  // Autostart tour voor first-time users (als er items zijn).
+  const [tourHintVisible, setTourHintVisible] = useState(false);
   useEffect(() => {
     if (!list.isLoading && all.length > 0 && shouldAutoStartTour()) {
-      const t = window.setTimeout(() => setTourOpen(true), 600);
-      return () => window.clearTimeout(t);
+      setTourHintVisible(true);
     }
   }, [list.isLoading, all.length]);
 
@@ -266,12 +265,20 @@ export function ConnectorCatalog({ onSelect, onSelectBundle }: Props) {
             </span>
             <button
               type="button"
-              onClick={() => setTourOpen(true)}
+              onClick={() => {
+                setTourHintVisible(false);
+                setTourOpen(true);
+              }}
               aria-label="Start marketplace-rondleiding"
-              className="inline-flex h-7 items-center gap-1 rounded-full border border-[hsl(var(--gold)/0.3)] bg-white/70 backdrop-blur-sm px-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] hover:bg-white hover:border-[hsl(var(--gold)/0.5)] transition-colors"
+              className={cn(
+                "relative inline-flex h-7 items-center gap-1 rounded-full border bg-white/70 backdrop-blur-sm px-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[hsl(var(--gold-deep))] transition-colors hover:bg-white hover:border-[hsl(var(--gold)/0.5)]",
+                tourHintVisible
+                  ? "border-[hsl(var(--gold)/0.6)] shadow-[0_0_0_4px_hsl(var(--gold)/0.18)]"
+                  : "border-[hsl(var(--gold)/0.3)]",
+              )}
             >
               <Info className="h-3 w-3" />
-              Tour
+              {tourHintVisible ? "Nieuw? Start tour" : "Tour"}
             </button>
           </div>
 

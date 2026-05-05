@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { formatRelativeNl } from "@/lib/relativeTime";
 import { useQueryClient } from "@tanstack/react-query";
 import type { OrderDraft, FormState } from "./types";
 import { FollowUpPanel } from "./InboxFollowUpPanel";
@@ -171,9 +172,7 @@ export function SourcePanel({
   const threadType = selected.thread_type || "new";
   const isThreadFollow = threadType !== "new";
 
-  const receivedAgo = selected.received_at
-    ? Math.floor((Date.now() - new Date(selected.received_at).getTime()) / 3600000)
-    : 0;
+  const receivedAgoLabel = formatRelativeNl(selected.received_at);
 
   const handleParseWithAI = async () => {
     setIsParsing(true);
@@ -418,7 +417,7 @@ export function SourcePanel({
                 background: "hsl(var(--muted) / 0.5)",
               }}
             >
-              {receivedAgo > 0 ? `${receivedAgo}u geleden` : "zojuist"}
+              {receivedAgoLabel || "zojuist"}
             </span>
           </div>
         </div>

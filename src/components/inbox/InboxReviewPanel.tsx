@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { formatRelativeNl } from "@/lib/relativeTime";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -173,9 +174,7 @@ export function InboxReviewPanel({
     setCargoEdit(false);
   }, [selected.id]);
 
-  const receivedAgo = selected.received_at
-    ? Math.floor((Date.now() - new Date(selected.received_at).getTime()) / 3600000)
-    : 0;
+  const receivedAgoLabel = formatRelativeNl(selected.received_at);
 
   const pickupLinkage = useFieldHoverLinkage("pickup");
   const deliveryLinkage = useFieldHoverLinkage("delivery");
@@ -469,7 +468,7 @@ export function InboxReviewPanel({
                 className="mb-0 rounded-full px-2 py-[2px] text-[10px] tabular-nums text-muted-foreground md:mb-2"
                 style={{ background: "hsl(var(--muted) / 0.5)" }}
               >
-                {receivedAgo > 0 ? `${receivedAgo}u geleden` : "zojuist"}
+                {receivedAgoLabel || "zojuist"}
               </span>
               {/* Confidence ring */}
               <div

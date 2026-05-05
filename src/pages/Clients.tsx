@@ -13,6 +13,7 @@ import {
   Maximize2,
   Download,
   UserX,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -301,50 +303,95 @@ export default function Clients() {
               </SelectContent>
             </Select>
 
-            <Select value={countryFilter} onValueChange={setCountryFilter}>
-              <SelectTrigger
-                aria-label="Land"
-                className="h-10 w-[150px] rounded-xl border-[hsl(var(--gold)/0.2)] bg-background/60 text-sm"
-                style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
-              >
-                <SelectValue placeholder="Land" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="alle">Alle landen</SelectItem>
-                {countries.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {(() => {
+              const extraActiveCount =
+                (countryFilter !== "alle" ? 1 : 0) +
+                (openOrdersFilter !== "alle" ? 1 : 0) +
+                (activityFilter !== "alle" ? 1 : 0);
+              return (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl border-[hsl(var(--gold)/0.2)] bg-background/60 text-sm gap-2"
+                      style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
+                    >
+                      <SlidersHorizontal className="h-4 w-4 text-[hsl(var(--gold-deep))]" />
+                      Meer filters
+                      {extraActiveCount > 0 && (
+                        <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(var(--gold-deep))] px-1.5 text-[10px] font-semibold text-white tabular-nums">
+                          {extraActiveCount}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-72 space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 font-semibold">
+                        Land
+                      </label>
+                      <Select value={countryFilter} onValueChange={setCountryFilter}>
+                        <SelectTrigger aria-label="Land" className="h-9">
+                          <SelectValue placeholder="Land" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="alle">Alle landen</SelectItem>
+                          {countries.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-            <Select value={openOrdersFilter} onValueChange={(v) => setOpenOrdersFilter(v as typeof openOrdersFilter)}>
-              <SelectTrigger
-                aria-label="Open orders"
-                className="h-10 w-[185px] rounded-xl border-[hsl(var(--gold)/0.2)] bg-background/60 text-sm"
-                style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
-              >
-                <SelectValue placeholder="Open orders" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="alle">Alle open orders</SelectItem>
-                <SelectItem value="met">Met open orders</SelectItem>
-                <SelectItem value="zonder">Zonder open orders</SelectItem>
-              </SelectContent>
-            </Select>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 font-semibold">
+                        Open orders
+                      </label>
+                      <Select value={openOrdersFilter} onValueChange={(v) => setOpenOrdersFilter(v as typeof openOrdersFilter)}>
+                        <SelectTrigger aria-label="Open orders" className="h-9">
+                          <SelectValue placeholder="Open orders" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="alle">Alle open orders</SelectItem>
+                          <SelectItem value="met">Met open orders</SelectItem>
+                          <SelectItem value="zonder">Zonder open orders</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-            <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
-              <SelectTrigger
-                aria-label="Activiteit"
-                className="h-10 w-[205px] rounded-xl border-[hsl(var(--gold)/0.2)] bg-background/60 text-sm"
-                style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-small)" }}
-              >
-                <SelectValue placeholder="Activiteit" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="alle">Alle klanten</SelectItem>
-                <SelectItem value="slapend">Alleen slapende klanten</SelectItem>
-              </SelectContent>
-            </Select>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 font-semibold">
+                        Activiteit
+                      </label>
+                      <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as typeof activityFilter)}>
+                        <SelectTrigger aria-label="Activiteit" className="h-9">
+                          <SelectValue placeholder="Activiteit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="alle">Alle klanten</SelectItem>
+                          <SelectItem value="slapend">Alleen slapende klanten</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {extraActiveCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCountryFilter("alle");
+                          setOpenOrdersFilter("alle");
+                          setActivityFilter("alle");
+                        }}
+                        className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors pt-1"
+                      >
+                        Filters wissen
+                      </button>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              );
+            })()}
           </div>
 
           {selectedIds.size > 0 && (

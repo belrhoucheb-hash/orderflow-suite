@@ -19,9 +19,18 @@ export function FinancialKPIWidget({ vehicles }: Props) {
   const totalWeight = stats?.totalWeightKg ?? 0;
   const totalCapacity = vehicles.reduce((s, v) => s + v.capacityKg, 0);
   const loadPercentage = totalCapacity > 0 ? Math.round((totalWeight / totalCapacity) * 100) : 0;
-  const freePercentage = 100 - loadPercentage;
+  const freePercentage = Math.max(100 - loadPercentage, 0);
 
   const radius = 15.9155;
+
+  const loadStatus =
+    loadPercentage > 100 ? "over" : loadPercentage >= 90 ? "warn" : "ok";
+  const ringColor =
+    loadStatus === "over"
+      ? "hsl(0 70% 50%)"
+      : loadStatus === "warn"
+      ? "hsl(35 90% 50%)"
+      : "hsl(var(--gold-deep))";
 
   return (
     <motion.div
@@ -65,11 +74,16 @@ export function FinancialKPIWidget({ vehicles }: Props) {
           <div className="relative h-14 w-14">
             <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
               <circle cx="18" cy="18" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="3.5" />
-              <circle cx="18" cy="18" r={radius} fill="none" stroke="hsl(var(--gold-deep))" strokeWidth="3.5"
-                strokeDasharray={`${Math.min(loadPercentage, 100)}, ${Math.max(freePercentage, 0)}`} strokeLinecap="round" />
+              <circle cx="18" cy="18" r={radius} fill="none" stroke={ringColor} strokeWidth="3.5"
+                strokeDasharray={`${Math.min(loadPercentage, 100)}, ${freePercentage}`} strokeLinecap="round" />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-sm font-bold font-display tabular-nums">{loadPercentage}%</span>
+              <span
+                className="text-sm font-bold font-display tabular-nums"
+                style={{ color: loadStatus === "ok" ? undefined : ringColor }}
+              >
+                {loadPercentage}%
+              </span>
             </div>
           </div>
         </div>

@@ -473,11 +473,9 @@ const Orders = () => {
           </div>
         </button>
 
-        {/* Ticker, statussen als snelfilter */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-[hsl(var(--gold)/0.12)]">
+        {/* Ticker, operationele statussen als snelfilter */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-[hsl(var(--gold)/0.12)]">
           {([
-            { label: "Concept",        value: stats.byStatus["DRAFT"] || 0,    note: "Nog niet compleet", filter: "DRAFT" as const, kind: "status" as const },
-            { label: "Oud concept",    value: stats.staleDraftCount,           note: "Concept > 2 uur", filter: "stale" as const,    kind: "stale" as const },
             { label: "In behandeling", value: stats.byStatus["PENDING"] || 0,  note: "Open dossier",  filter: "PENDING" as const,  kind: "status" as const },
             { label: "Wacht op info",  value: stats.awaitingInfoCount,         note: "Dossier incompleet", filter: "open" as const, kind: "info" as const },
             { label: "Afgeleverd",     value: stats.byStatus["DELIVERED"] || 0, note: "POD ontvangen", filter: "DELIVERED" as const, kind: "status" as const },
@@ -554,6 +552,58 @@ const Orders = () => {
             );
           })}
         </div>
+
+        {/* Concepten — visueel lichter, dataschoonmaak ipv operatie-KPI */}
+        {((stats.byStatus["DRAFT"] || 0) > 0 || stats.staleDraftCount > 0) && (
+          <div className="border-t border-[hsl(var(--gold)/0.18)] bg-[hsl(var(--muted)/0.4)] px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="text-[9px] uppercase tracking-[0.24em] text-muted-foreground/70 font-semibold">
+              Concepten
+            </div>
+            {([
+              { label: "Nog niet compleet", value: stats.byStatus["DRAFT"] || 0, filter: "DRAFT" as const, kind: "status" as const },
+              { label: "Ouder dan 2 uur",   value: stats.staleDraftCount,        filter: "stale" as const, kind: "stale" as const },
+            ] as const).map((s) => {
+              const active =
+                s.kind === "stale"
+                  ? staleDraftOnly
+                  : statusFilter === s.filter && !staleDraftOnly;
+              const onClickFilter = () => {
+                if (s.kind === "stale") {
+                  const next = !active;
+                  setStaleDraftOnly(next);
+                  if (next) {
+                    setStatusFilter("DRAFT");
+                    setOrderTypeFilter("alle");
+                    setInfoFilter("alle");
+                  }
+                  setPage(0);
+                  clearSelection();
+                } else {
+                  setStaleDraftOnly(false);
+                  handleStatusFilterChange(active ? "alle" : (s.filter as string));
+                }
+              };
+              return (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={onClickFilter}
+                  aria-pressed={active}
+                  disabled={isLoading}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] transition-colors",
+                    "hover:bg-[hsl(var(--gold-soft)/0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--gold)/0.4)]",
+                    active && "bg-[hsl(var(--gold-soft)/0.6)]",
+                    "disabled:cursor-wait disabled:opacity-60",
+                  )}
+                >
+                  <span className="tabular-nums font-semibold text-foreground">{s.value}</span>
+                  <span className="text-muted-foreground">{s.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Search & Filters — clean, minimalist */}
