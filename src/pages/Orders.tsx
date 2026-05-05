@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
-import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy } from "lucide-react";
+import { Package, Plus, Circle, Clock, Truck, Loader2, HelpCircle, Printer, ChevronLeft, ChevronRight, Upload, SlidersHorizontal, Download, X, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getStatusColor } from "@/lib/statusColors";
 import { INFO_STATUS_LABEL, priorityDotColors } from "@/lib/orderDisplay";
-import { useOrders, useOrdersListMeta, type OrderListCursor } from "@/hooks/useOrders";
+import { useOrders, useOrdersListMeta, useDeleteOrder, useDeleteOrderDraft, type OrderListCursor } from "@/hooks/useOrders";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUnreadNoteOrderIds } from "@/hooks/useOrderNotesRead";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +33,16 @@ import { IncompleteBadge } from "@/components/orders/IncompleteBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { OrderStatus } from "@/components/ui/StatusBadge";
 import { BulkImportDialog } from "@/components/orders/BulkImportDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ORDER_TYPE_LABELS, type OrderType } from "@/types/packaging";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { formatDistanceToNow, format, differenceInDays, isValid } from "date-fns";
@@ -50,6 +60,16 @@ function formatOrderDate(value: string | null | undefined): { label: string; too
 }
 
 const filterOptions = ["alle", "DRAFT", "PENDING", "PLANNED", "IN_TRANSIT", "DELIVERED"] as const;
+
+const isDraftOrder = (order: any) => order.sourceKind === "draft" || order.status === "DRAFT";
+
+const getOrderNumberLabel = (order: any) => {
+  if (!isDraftOrder(order)) return order.orderNumber;
+  const draftReference = String(order.orderNumber || order.draftId || "")
+    .replace(/^concept[-\s#]*/i, "")
+    .trim();
+  return draftReference ? `Concept #${draftReference}` : "Concept";
+};
 
 function exportOrders(orders: Array<any>, baseName: string): number {
   if (orders.length === 0) return 0;
@@ -99,6 +119,9 @@ const Orders = () => {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteSelectionOpen, setDeleteSelectionOpen] = useState(false);
+  const deleteOrderMutation = useDeleteOrder();
+  const deleteDraftMutation = useDeleteOrderDraft();
 
   const { attachRef: attachColWidthRef } = useColumnWidths("orderflow:orders:col-widths:v1");
 
@@ -185,10 +208,10 @@ const Orders = () => {
     staleThresholdHours: 2,
   });
   const rawOrders = useMemo(() => data?.orders ?? [], [data?.orders]);
-  const visibleOrderIds = useMemo(() => rawOrders.filter((order) => order.sourceKind !== "draft").map((order) => order.id), [rawOrders]);
+  const visibleOrderIds = useMemo(() => rawOrders.filter((order) => !isDraftOrder(order)).map((order) => order.id), [rawOrders]);
   const { unreadOrderIds } = useUnreadNoteOrderIds(visibleOrderIds);
   const totalCount = meta?.totalCount ?? 0;
-  const openOrderPath = (order: any) => order.sourceKind === "draft" && order.draftId
+  const openOrderPath = (order: any) => isDraftOrder(order) && order.draftId
     ? `/orders/nieuw?draft_id=${order.draftId}`
     : `/orders/${order.id}`;
 
@@ -208,6 +231,48 @@ const Orders = () => {
   // info- en stale-filter toe te passen. Client-side resort was vroeger
   // misleidend omdat het alleen binnen de huidige 25-pagina werkte.
   const orders = filteredByInfo;
+  const selectedOrders = useMemo(() => orders.filter((order) => selectedIds.has(order.id)), [orders, selectedIds]);
+  const selectedRegularOrders = useMemo(
+    () => selectedOrders.filter((order) => !isDraftOrder(order)),
+    [selectedOrders],
+  );
+  const selectedDraftOrders = useMemo(
+    () => selectedOrders.filter((order) => isDraftOrder(order) && order.draftId),
+    [selectedOrders],
+  );
+  const selectedDeleteCount = selectedRegularOrders.length + selectedDraftOrders.length;
+  const deleteSelectionPending = deleteOrderMutation.isPending || deleteDraftMutation.isPending;
+
+  const handleDeleteSelectedOrders = async () => {
+    if (selectedDeleteCount === 0) {
+      toast.info("Geen verwijderbare selectie", {
+        description: "Selecteer een order of concept om te verwijderen.",
+      });
+      setDeleteSelectionOpen(false);
+      return;
+    }
+
+    try {
+      for (const order of selectedRegularOrders) {
+        await deleteOrderMutation.mutateAsync(order.id);
+      }
+      for (const order of selectedDraftOrders) {
+        await deleteDraftMutation.mutateAsync(order.draftId);
+      }
+      toast.success("Selectie verwijderd", {
+        description: [
+          selectedRegularOrders.length > 0 ? `${selectedRegularOrders.length} ${selectedRegularOrders.length === 1 ? "order" : "orders"}` : null,
+          selectedDraftOrders.length > 0 ? `${selectedDraftOrders.length} ${selectedDraftOrders.length === 1 ? "concept" : "concepten"}` : null,
+        ].filter(Boolean).join(" en ") + " verwijderd.",
+      });
+      clearSelection();
+      setDeleteSelectionOpen(false);
+    } catch (error) {
+      toast.error("Verwijderen mislukt", {
+        description: error instanceof Error ? error.message : "Probeer opnieuw.",
+      });
+    }
+  };
 
   const handleQuickPrint = async (orderId: string) => {
     setPrintLoading(orderId);
@@ -659,6 +724,15 @@ const Orders = () => {
               <Download className="h-4 w-4" /> Exporteer selectie
             </button>
             <button
+              className="btn-luxe text-destructive hover:text-destructive"
+              onClick={() => setDeleteSelectionOpen(true)}
+              disabled={deleteSelectionPending}
+              title="Geselecteerde orders verwijderen"
+            >
+              {deleteSelectionPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Verwijder selectie
+            </button>
+            <button
               onClick={clearSelection}
               className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70 hover:text-[hsl(var(--gold-deep))] transition-colors px-2"
               title="Selectie wissen"
@@ -690,6 +764,7 @@ const Orders = () => {
                   transition={{ duration: 0.15 }}
                   className={cn(
                     "px-4 py-3.5",
+                    isDraftOrder(order) && "bg-[hsl(var(--gold-soft)/0.36)]",
                     unreadOrderIds.has(order.id) && "shadow-[inset_2px_0_0_0_#3b82f6]",
                   )}
                 >
@@ -717,8 +792,11 @@ const Orders = () => {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <IncompleteBadge order={order} size="dot" />
-                            <span className="truncate text-sm font-semibold tabular-nums text-foreground">
-                              {order.orderNumber}
+                            <span className={cn(
+                              "truncate text-sm font-semibold tabular-nums",
+                              isDraftOrder(order) ? "text-[hsl(var(--gold-deep))]" : "text-foreground",
+                            )}>
+                              {getOrderNumberLabel(order)}
                             </span>
                           </div>
                           <p className="mt-1 truncate text-xs font-medium text-foreground/82">{order.customer}</p>
@@ -740,7 +818,7 @@ const Orders = () => {
                       </div>
                     </button>
                     <div className="flex shrink-0 flex-col gap-1">
-                      {order.sourceKind === "draft" ? (
+                      {isDraftOrder(order) ? (
                         <button
                           onClick={() => navigate(openOrderPath(order))}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(var(--gold)/0.14)] text-muted-foreground"
@@ -848,6 +926,7 @@ const Orders = () => {
                     transition={{ duration: 0.15 }}
                     className={cn(
                       "table-row group cursor-pointer",
+                      isDraftOrder(order) && "bg-[hsl(var(--gold-soft)/0.38)] hover:bg-[hsl(var(--gold-soft)/0.58)]",
                       unreadOrderIds.has(order.id) && "shadow-[inset_2px_0_0_0_#3b82f6]",
                     )}
                     onClick={() => navigate(openOrderPath(order))}
@@ -876,18 +955,21 @@ const Orders = () => {
                         <IncompleteBadge order={order} size="dot" />
                         <Link
                           to={openOrderPath(order)}
-                          className="text-[14px] font-semibold text-foreground hover:text-[hsl(var(--gold-deep))] transition-colors tabular-nums tracking-[0.02em] whitespace-nowrap"
+                          className={cn(
+                            "text-[14px] font-semibold hover:text-[hsl(var(--gold-deep))] transition-colors tabular-nums tracking-[0.02em] whitespace-nowrap",
+                            isDraftOrder(order) ? "text-[hsl(var(--gold-deep))]" : "text-foreground",
+                          )}
                           style={{ fontFamily: "var(--font-display)" }}
                           title={order.notes?.trim() || undefined}
                         >
-                          {order.orderNumber}
+                          {getOrderNumberLabel(order)}
                         </Link>
                       </div>
                     </td>
                     <td className="table-cell text-foreground/90 font-medium" style={{ fontFamily: "var(--font-display)" }}>
                       <div className="flex items-center gap-2">
                         <span>{order.customer}</span>
-                        {order.sourceKind !== "draft" && order.clientId && (
+                        {!isDraftOrder(order) && order.clientId && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -945,7 +1027,7 @@ const Orders = () => {
                     </td>
                     <td className="table-cell text-center">
                       <div className="inline-flex items-center gap-0.5">
-                        {order.sourceKind === "draft" ? (
+                        {isDraftOrder(order) ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); navigate(openOrderPath(order)); }}
                             className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
@@ -1071,6 +1153,38 @@ const Orders = () => {
 
       {/* Bulk Import Dialog */}
       <BulkImportDialog open={importOpen} onOpenChange={setImportOpen} />
+
+      <AlertDialog open={deleteSelectionOpen} onOpenChange={setDeleteSelectionOpen}>
+        <AlertDialogContent className="border-[hsl(var(--gold)/0.22)] bg-[hsl(var(--card))]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {selectedDeleteCount === 1 ? "Geselecteerde regel verwijderen?" : "Geselecteerde regels verwijderen?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedDeleteCount > 0
+                ? [
+                    selectedRegularOrders.length > 0 ? `${selectedRegularOrders.length} ${selectedRegularOrders.length === 1 ? "order" : "orders"}` : null,
+                    selectedDraftOrders.length > 0 ? `${selectedDraftOrders.length} ${selectedDraftOrders.length === 1 ? "concept" : "concepten"}` : null,
+                  ].filter(Boolean).join(" en ") + " worden uit de orderlijst verwijderd."
+                : "Er is geen verwijderbare selectie."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSelectionPending}>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteSelectionPending || selectedDeleteCount === 0}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteSelectedOrders();
+              }}
+            >
+              {deleteSelectionPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Verwijderen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

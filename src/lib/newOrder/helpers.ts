@@ -178,6 +178,33 @@ export function normalizeLookup(value: string | null | undefined): string {
     .trim();
 }
 
+export function parseLocalizedNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+  const raw = String(value ?? "").trim();
+  if (!raw) return NaN;
+  const normalized = raw
+    .replace(/\s/g, "")
+    .replace(/\.(?=\d{3}(\D|$))/g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+export function parsePositiveNumber(value: unknown): number {
+  const parsed = parseLocalizedNumber(value);
+  return parsed > 0 ? parsed : 0;
+}
+
+export function parsePositiveInteger(value: unknown): number {
+  const parsed = parseLocalizedNumber(value);
+  return parsed > 0 ? Math.trunc(parsed) : 0;
+}
+
+export function parseNullablePositiveNumber(value: unknown): number | null {
+  const parsed = parseLocalizedNumber(value);
+  return parsed > 0 ? parsed : null;
+}
+
 export function addressLooksIncompleteWarning(address: AddressValue, composed: string | null | undefined): string | null {
   if (!composed?.trim()) return null;
   if (!address.street || (!address.zipcode && !address.city)) {
@@ -194,8 +221,8 @@ export function cargoRowIssue(row: CargoRow, index: number): string | null {
   if (!hasAnyValue) return null;
   const label = `Ladingregel ${index + 1}`;
   if (!row.eenheid) return `${label}: eenheid is verplicht.`;
-  if ((parseInt(row.aantal, 10) || 0) <= 0) return `${label}: aantal moet groter zijn dan 0.`;
-  if ((parseFloat(row.gewicht) || 0) <= 0) return `${label}: gewicht moet groter zijn dan 0.`;
+  if (parsePositiveInteger(row.aantal) <= 0) return `${label}: aantal moet groter zijn dan 0.`;
+  if (parsePositiveNumber(row.gewicht) <= 0) return `${label}: gewicht moet groter zijn dan 0.`;
   return null;
 }
 

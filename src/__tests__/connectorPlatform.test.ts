@@ -6,6 +6,8 @@ import {
   CATEGORY_LABELS,
   type ConnectorDefinition,
 } from "@/lib/connectors/catalog";
+import { getSourceFields, findSourceField } from "@/lib/connectors/sourceFields";
+import { getMappingTemplates } from "@/lib/connectors/mappingTemplates";
 import {
   withRetry,
   mappingValue,
@@ -219,5 +221,59 @@ describe("SnelstartConnector.push event-validatie", () => {
     );
     expect(result.ok).toBe(false);
     expect(result.error).toContain("entity_id");
+  });
+});
+
+// ─── Source fields ──────────────────────────────────────────────────
+
+describe("connector source fields", () => {
+  it("levert order-velden voor boekhouding-connectors", () => {
+    const fields = getSourceFields("snelstart");
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields.find((f) => f.key === "orderNumber")).toBeDefined();
+    expect(fields.find((f) => f.key === "vatAmount")).toBeDefined();
+  });
+
+  it("levert chauffeur-velden voor nostradamus", () => {
+    const fields = getSourceFields("nostradamus");
+    expect(fields.find((f) => f.key === "personnelNumber")).toBeDefined();
+    expect(fields.find((f) => f.key === "hoursWorked")).toBeDefined();
+  });
+
+  it("returnt lege lijst voor onbekende provider", () => {
+    expect(getSourceFields("does_not_exist")).toEqual([]);
+  });
+
+  it("findSourceField vindt veld op key", () => {
+    expect(findSourceField("snelstart", "totalAmount")?.label).toBe("Totaalbedrag");
+    expect(findSourceField("snelstart", "nope")).toBeUndefined();
+  });
+});
+
+// ─── Mapping templates ──────────────────────────────────────────────
+
+describe("connector mapping templates", () => {
+  it("Snelstart heeft NL en EU template", () => {
+    const tpls = getMappingTemplates("snelstart");
+    const ids = tpls.map((t) => t.id);
+    expect(ids).toContain("standaard_nl");
+    expect(ids).toContain("eu_compliance");
+  });
+
+  it("template-keys matchen connector mappingKeys", () => {
+    for (const slug of ["snelstart", "exact_online", "nostradamus"]) {
+      const connector = findConnector(slug)!;
+      const mappingKeys = new Set(connector.mappingKeys.map((m) => m.key));
+      const templates = getMappingTemplates(slug);
+      for (const tpl of templates) {
+        for (const key of Object.keys(tpl.values)) {
+          expect(mappingKeys.has(key), `${slug} template ${tpl.id} bevat onbekende key ${key}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("returnt lege lijst voor connector zonder templates", () => {
+    expect(getMappingTemplates("twinfield")).toEqual([]);
   });
 });

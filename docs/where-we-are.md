@@ -2,7 +2,7 @@
 
 **Bestand-doel**: aan het begin van elke sessie weet Claude waar we zijn gebleven, en aan het einde van elke sessie wordt dit bestand bijgewerkt zodat de volgende sessie ook weet waar we staan. Bron van waarheid voor harde feiten blijft `git log` en het Supabase-dashboard; dit bestand vult de zachte context aan (waarom, blokkers, openstaande beslissingen).
 
-**Laatste update**: 2026-05-04 (Chauffeursportaal batch 2 gemerged via PR #23, commit `dfdf76d`)
+**Laatste update**: 2026-05-04 nacht (mega-merge `d7630d7` op main: marketplace fase 2/3/4 + connector-platform diepte + chauffeursportaal echte data + backend hygiene)
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Laag           | Bron                          | Status                                                  |
 | -------------- | ----------------------------- | ------------------------------------------------------- |
-| `origin/main`  | github.com/belrhoucheb-hash   | Tot commit `dfdf76d` (chauffeursportaal batch 2 + warehouse-flow + secure tenant_membership). |
+| `origin/main`  | github.com/belrhoucheb-hash   | Tot commit `d7630d7` (marketplace fase 2/3/4, connector diepte, chauffeursportaal real data, backend hygiene). PR #20-34 gemerged. |
 | Frontend prod  | Vercel/Netlify (door gebruiker) | **Onbekend, gebruiker moet checken**. Vermoeden: nog op een oudere commit, want gebruiker zag connector-platform niet. |
 | Supabase prod  | Supabase Dashboard            | Onbekend, gebruiker moet checken. Migraties tot `20260429010000` staan klaar in repo, niet bevestigd of toegepast. |
 | Edge functions | Supabase Edge Functions       | Onbekend. Nieuw te deployen: `connector-snelstart`, `connector-exact_online`, `oauth-callback-exact`, `connector-dispatcher`, `eta-watcher`. |
@@ -19,7 +19,9 @@
 
 ## Wat is af in code (gemerged op origin/main)
 
-- **Chauffeursportaal Uber-flow productie** (PR #20, #21, #23): `/chauffeur` heeft full-bleed Leaflet map, glass header, draggable bottom-sheet met SwipeToConfirm, hamburger drawer met voertuigcheck-gate, rooster (week+maand), beschikbaarheid, chat, documenten, cijfers, bonnetjes, tachograaf-import stub, instellingen (taal/nav-app/dark-mode/GPS-spaarmodus/haptics/notificaties), SOS. Bottom-sheet met NextStopHero + km/ETA + Navigeer/Bel. Geofence-toast met stop-naam + 5s undo. CMR on-the-spot signing met email-copy + on-device PDF via jspdf, gepatcht naar `proof_of_delivery.cmr_pdf_url`. Klant-broadcast Edge Function `notify-customer-stop-status` met `last_notified_status` dedup. `messages`-tabel + realtime voor driver↔planner chat. `IncidentDialog` met 4 categorieen + verplichte foto + planner-notificatie. Offline POD queue in IndexedDB met parallel foto-upload + partial-success-semantiek. PIN-flow met PBKDF2/100k + DB-side lockout. `IconBubble` premium icon-treatment. `/chauffeur-demo` blijft als auth-loze visuele showcase.
+- **Connector-marketplace fase 1-4** (PR #26, #28, #29, #31, #32, #33, #34): `/settings/integraties` is een complete marketplace. Hero met fuzzy-search + autocomplete + URL-deeplinks (`?cat=&q=&cap=`), 3 health-cells, marketplace-stats top-strip. Aanbevolen-rij (curated featured-flag), Bundels-rij met onboarding-wizard op `/settings/integraties/bundel/<id>` (sequentiele stappen + Sla over-pad + voortgangsbalk). Roadmap-grid sorteert op stem-aantal (DB-backed votes met seed-fallback). 20 connectors met originele branded SVG-marks. Detailpagina per connector op `/settings/integraties/<slug>` met hero (brand-strip, 88px logo, status-pulse, success-rate), 6 tabs (Overzicht, Configuratie, Mapping, Sync-log, Drempels, Audit admin-only). Configuratie heeft EnvironmentToggle test/live, Snelstart/Nostradamus/Exact in luxe-stijl, OAuth-modal met BroadcastChannel + polling-fallback, redirect-URI auto-vullen. Mapping is drag-and-drop met bron-velden + templates. Sync-log met filter-chips, expandable rows, per-event "Opnieuw"-knop + bulk-multi-replay. Sidebar met SyncGraphs (bar-chart + donut + sparkline + week-vs-week), stats, snelle acties, activity-feed. Marketplace-shell heeft BulkActionsBar (pauzeer alle / test alle / re-run failed 24u), HealthBanner globaal + HealthDot per kaart, capability-pills doorklikbaar, MarketplaceTour 4-staps overlay voor first-time, EmptyStateIllustration per categorie. Drempels-tab met failures/window/latency-config. Audit-tab met CSV-export. TokenExpiryBanner voor OAuth bij <7d expiry. SyncPoliciesPanel per event-type aan/uit.
+- **Chauffeursportaal Uber-flow productie** (PR #20, #21, #23, #34): `/chauffeur` heeft full-bleed Leaflet map, glass header, draggable bottom-sheet met SwipeToConfirm, hamburger drawer met voertuigcheck-gate, rooster (week+maand), beschikbaarheid (echte `driver_availability`-tabel), chat, documenten, cijfers (echte `useDriverStats`), bonnetjes (echte `driver_receipts`-tabel + scan-flow), tachograaf-import (echte `tachograph-import` Edge Function + storage bucket), instellingen, SOS. Bottom-sheet met NextStopHero + km/ETA + Navigeer/Bel. Geofence-toast met stop-naam + 5s undo. CMR on-the-spot signing met email-copy + on-device PDF via jspdf, gepatcht naar `proof_of_delivery.cmr_pdf_url`. Klant-broadcast Edge Function `notify-customer-stop-status` met `last_notified_status` dedup. `messages`-tabel + realtime voor driver↔planner chat. `IncidentDialog` met 4 categorieen + verplichte foto + planner-notificatie. Offline POD queue in IndexedDB met parallel foto-upload + partial-success-semantiek. PIN-flow met PBKDF2/100k + DB-side lockout. `IconBubble` premium icon-treatment. `/chauffeur-demo` is verwijderd in hygiene-pass PR #33, /chauffeur draait hetzelfde frame.
+- **Repo-guards** (PR #33, #34): `no-conflict-markers.test.ts` walks src + supabase folders en faalt op `<<<<<<<`/`=======`/`>>>>>>>` markers. `no-migration-collisions.test.ts` + `scripts/check-migration-collisions.mjs` voorkomt dubbele DATETIME-prefixen voor `db push`. Beide groen op CI.
 - **Sprint 5**, outbound webhooks (HMAC, retry, replay, delivery-log), tab onder Settings > Webhooks.
 - **Sprint 6**, publieke REST API v1 (bearer-tokens, scopes, rate-limit), tab onder Settings > API-tokens, ook in klantportaal.
 - **Sprint 7**, rooster-module met dag/week-view, dag-acties, filters, plus later patroon-detectie, learned defaults, capaciteit-banner en eligibility-checks voor voertuig/chauffeur.
@@ -36,17 +38,45 @@
 
 ## Openstaande deploy-acties (door gebruiker te doen)
 
-### Net na chauffeursportaal batch 2 (PR #23, urgent)
-1. **`supabase db push`** voor 6 migraties die nog wachten:
+### Mega-bundel sinds laatste deploy (urgent)
+
+Run eerst `node scripts/check-migration-collisions.mjs` om collisions te detecteren voor `db push`.
+
+1. **`supabase db push`** voor wachtende migraties (chronologisch):
    - `20260504120030_warehouse_flow_references.sql`
    - `20260504120100_stop_incidents.sql`
    - `20260504120200_driver_planner_messages.sql`
    - `20260504130000_trip_stops_last_notified.sql`
    - `20260504141741_proof_of_delivery_cmr_pdf.sql`
+   - `20260504180500_seed_stop_vehicle_requirements.sql`
+   - `20260504200000_connector_thresholds.sql` (mega-merge)
+   - `20260504200100_connector_audit_log.sql` (mega-merge)
+   - `20260504210000_driver_availability_self_service.sql` (mega-merge)
+   - `20260504210100_tachograph_imports.sql` (mega-merge)
+   - `20260504210200_driver_receipts.sql` (mega-merge)
+   - `20260504220000_connector_platform_depth.sql` (mega-merge, env+expires_at+event_policies)
+   - `20260504230000_connector_votes.sql` (mega-merge)
+   - `20260504230100_integration_credentials_encrypt.sql` (mega-merge, pgsodium-conditional)
    - `20260505000000_secure_tenant_membership.sql`
-   `20260504120000_trip_stops_extra_field.sql` is al toegepast en wordt overgeslagen.
-2. **`supabase functions deploy notify-customer-stop-status`** voor de nieuwe dedup-logica via `last_notified_status`. Zonder deze deploy blijft de klant dubbele AANGEKOMEN-broadcasts ontvangen.
-3. **Frontend redeploy** vanaf commit `dfdf76d` zodat de Uber-flow `/chauffeur` UI live komt.
+   `20260504120000_trip_stops_extra_field.sql` is al toegepast.
+
+2. **`supabase functions deploy`** voor:
+   - `notify-customer-stop-status` (AANGEKOMEN-dedup via `last_notified_status`)
+   - `tachograph-import` (chauffeur .DDD upload → storage + RECEIVED-row)
+   - `connectors-bulk-replay` (placeholder body, fase 4)
+   - `connector-replay-event` (placeholder body, fase 4)
+   - `connector-health-check` (placeholder body + cron-trigger nodig in Supabase Dashboard)
+   - `oauth-callback-exact` (BroadcastChannel-success-pagina toegevoegd)
+
+3. **Storage buckets** aanmaken in Supabase Dashboard:
+   - `tachograph-files` (private, RLS via tenant_id-prefix)
+   - `receipts` (private, RLS via tenant_id-prefix)
+
+4. **Frontend redeploy** vanaf `d7630d7` zodat marketplace fase 4 + chauffeur real-data UI live komen.
+
+5. **Verifieer AANGEKOMEN dedup** na deploy: zie `docs/deploy-verify-aangekomen.md` voor SQL-snippets en drop-criterium voor de oude `trg_notify_driver_arrived` DB-trigger.
+
+6. **pgsodium-extension** aanzetten op Supabase project als je de `credentials_encrypted`-laag wilt activeren. Anders blijft de migratie no-op (de bestaande Vault-laag uit `secret_hardening.sql` doet de echte secret-bescherming al).
 
 ### Sprint 8 connector-platform (nog steeds pending)
 4. **Connector-platform migraties + functions**: `supabase functions deploy connector-snelstart connector-exact_online oauth-callback-exact connector-dispatcher eta-watcher`.
@@ -70,16 +100,16 @@
 
 ---
 
-## Sprint 9 security-fixes (in progress, 2026-05-04)
+## Sprint 9 security-fixes (gemerged op main, 2026-05-04)
 
-Pentest in deze sessie afgerond, 12 deelchecks. Resultaat: 1 CRITICAL, 2 HIGH, 1 MEDIUM, 2 LOW (geaccepteerd). Vier subagents werken parallel aan de remediatie. NewOrder/warehouse-flow zit los, codex-PR #22 staat al op `main` (commit `3022874`).
+Pentest 2026-05-04 ochtend, 12 deelchecks. Resultaat: 1 CRITICAL, 2 HIGH, 1 MEDIUM, 2 LOW (geaccepteerd). Remediatie via 4 subagents in parallel, gebundeld in commit `6e03535` "Harden auth: signup-injection, edge-fn quota, login-lockout, RLS-feedback".
 
 | Finding | Status | Fix-doc |
 | ------- | ------ | ------- |
-| **CRITICAL-1**, signup tenant-injection via `data.tenant_id` in `/auth/v1/signup`, attacker kan zich aan elke tenant koppelen | fix-in-progress (subagent A) | [`docs/sprint-9/security-critical-1.md`](sprint-9/security-critical-1.md) |
-| **HIGH-1**, edge functions `office-login`/`google-places`/`google-places-business`/`kvk-lookup` accepteren anonieme calls zonder JWT/rate-limit | fix-in-progress (subagent B) | [`docs/sprint-9/security-high-1.md`](sprint-9/security-high-1.md) |
-| **HIGH-2**, login-lockout is client-side, te omzeilen met andere browser/device | fix-in-progress (subagent C) | [`docs/sprint-9/security-high-2.md`](sprint-9/security-high-2.md) |
-| **MEDIUM-1**, PostgREST PATCH op `user_roles`/`tenant_members` geeft `200 []` ipv `403` bij geblokkeerde UPDATE | fix-aanbeveling klaar (subagent D) | [`docs/sprint-9/security-medium-1.md`](sprint-9/security-medium-1.md) |
+| **CRITICAL-1**, signup tenant-injection via `data.tenant_id` in `/auth/v1/signup`, attacker kan zich aan elke tenant koppelen | gemerged | [`docs/sprint-9/security-critical-1.md`](sprint-9/security-critical-1.md) |
+| **HIGH-1**, edge functions `office-login`/`google-places`/`google-places-business`/`kvk-lookup` accepteren anonieme calls zonder JWT/rate-limit | gemerged | [`docs/sprint-9/security-high-1.md`](sprint-9/security-high-1.md) |
+| **HIGH-2**, login-lockout is client-side, te omzeilen met andere browser/device | gemerged | [`docs/sprint-9/security-high-2.md`](sprint-9/security-high-2.md) |
+| **MEDIUM-1**, PostgREST PATCH op `user_roles`/`tenant_members` geeft `200 []` ipv `403` bij geblokkeerde UPDATE | gemerged | [`docs/sprint-9/security-medium-1.md`](sprint-9/security-medium-1.md) |
 
 Sprint-changelog: [`docs/sprint-9/03-changelog.md`](sprint-9/03-changelog.md). Deploy-checklist met smoke-tests: [`docs/sprint-9/deploy-checklist.md`](sprint-9/deploy-checklist.md). Klant-testpunten zijn aan [`docs/klant-testplan.md`](klant-testplan.md) toegevoegd onder "Sprint 9 security en warehouse-flow".
 
@@ -88,6 +118,42 @@ LOW-bevindingen geaccepteerd zonder actie: Google Maps publishable key in client
 ---
 
 ## Recente sessies-samenvatting
+
+### 2026-05-04 nacht (mega-merge `d7630d7` op main, marketplace + chauffeur + backend)
+
+Zes parallelle subagents in worktrees, gebundeld in PR #34. Alle 6 schoon doorgelopen, conflicten in `ConnectorCatalog.tsx` + `ConnectorDetail.tsx` opgelost (imports samengevoegd, EnvironmentToggle behouden + Snelstart krijgt setupHint binnen D's wrapper). Build slaagt, repo-guards groen.
+
+- **Agent A (marketplace fase 4)**: SyncGraphs in detail-sidebar (bar-chart, donut, sparkline, week-vs-week), BulkActionsBar (pauzeer alle / test alle / re-run failed 24u), WebhookReplayDialog per failed event + bulk-multi, HealthBanner globaal + HealthDot per kaart, Drempels-tab + Audit-tab admin-only met CSV-export. Migraties `connector_thresholds` + `connector_audit_log`. Edge Function placeholders `connectors-bulk-replay`, `connector-replay-event`, `connector-health-check`.
+- **Agent B (chauffeursportaal vervolg)**: TachograafImport koppelt aan echte `tachograph-import` Edge Function, `useDriverSelfAvailability`, `useDriverStats` met echte aggregaties, `useDriverReceipts` + scan-flow. Migraties voor `tachograph_imports`, `driver_receipts`, `driver_availability_self_service`. `docs/deploy-verify-aangekomen.md` met SQL-snippet voor `trg_notify_driver_arrived` drop-criterium.
+- **Agent C (stubs voltooien)**: OAuth-callback met BroadcastChannel + polling-fallback, capability-pills doorklikbaar als filter, Snelstart/Nostradamus tabs in luxe-stijl, OAuth-redirect-URI auto-vullen vanuit `VITE_SUPABASE_URL`, BundleDetail Sla over-pad met localStorage + restore.
+- **Agent D (connector-platform diepte)**: Mapping drag-and-drop met `sourceFields.ts` + live preview, `mappingTemplates.ts` per connector, `SyncPoliciesPanel` per event, multi-environment (test/live), `TokenExpiryBanner` voor OAuth bij <7d expiry. Migratie `connector_platform_depth.sql` (env + expires_at + event_policies).
+- **Agent E (marketplace polish)**: Eigen `fuzzy.ts` + autocomplete-dropdown met arrow-keys + ESC + click-buiten, URL-deeplinks via `useSearchParams`, `EmptyStateIllustration` per categorie, `MarketplaceTour` 4-staps overlay voor first-time, `marketplaceStats.ts` strip met 3 mock-pills.
+- **Agent F (backend hygiene)**: `useConnectorVotes` naar tenant-DB met aggregate-view, `integration_credentials.credentials_encrypted` via pgsodium-conditional (defense-in-depth boven Vault), generated supabase types regenereerd, `as any`-casts opgeruimd, `scripts/check-migration-collisions.mjs` + npm script + vitest-test (`no-migration-collisions.test.ts`).
+- **Conflict-resolutie**: imports in catalog/detail samengevoegd (E's URL-state + C's capability-filter + A's bulk + D's multi-env), Snelstart-form krijgt setupHint van C door D's EnvironmentToggle wrapper heen.
+
+### 2026-05-04 avond (hygiene-pass PR #33 op `c758bdc`)
+
+- `/chauffeur-demo` route en `ChauffeurDemo.tsx` (1133 regels) verwijderd, `/chauffeur` is hetzelfde frame sinds fase 2.
+- `dashboard-chauffeur-settings.test.tsx`: 9 incorrecte `orders`-prop calls weggehaald, typecheck-errors van 728 naar 368.
+- `src/__tests__/repo/no-conflict-markers.test.ts`: walks src + supabase, faalt op `<<<<<<<`/`=======`/`>>>>>>>`. PR #21 en #30 zouden hierdoor zijn gevangen.
+
+### 2026-05-04 middag (marketplace fase 1-3 op `742d16e`)
+
+- **PR #26 (fase 1)**: 21 originele branded SVG-marks in `public/integrations/`, catalog uitgebreid van 7 naar 20 connectors, hero met search + chips + 3 health-cells, premium tile-design, Aanbevolen-rij met curated `featured`-flag. **PR #28**: hand-curatie + werkende mailto.
+- **PR #29 + #30 (premium pass + conflict-fix)**: hero met dot-pattern + glow-blob + 4xl headline, Bundels-rij (Boekhouding NL / Klantcommunicatie / Fleet pro), capability-pills met mini-icons, gold-sweep hover, brand-strip cards, framer-motion stagger, skeleton-loader. PR #30 fixte conflict-markers die door squash-merge in main belandden.
+- **PR #31 (fase 2 detailpagina)**: `/settings/integraties/<slug>` met hero (brand-strip, 88px logo, status-pulse), 4 tabs (Overzicht / Configuratie / Mapping / Sync-log), OAuth-modal met 3-stappen Stepper, sidebar met stats + activity-feed, expandable LogRow.
+- **PR #32 (fase 3 bundle + votes)**: BundleDetail-pagina op `/settings/integraties/bundel/<id>` met onboarding-wizard (genummerde stappen + voortgangsbalk + tip-card). Roadmap-cards met upvote-knop + tabular vote-count, sortering op stem-aantal.
+
+### 2026-05-04 avond (NewOrder routeflow + stop-vehicle-requirements + auth-hardening op main)
+
+- Tussen chauffeursportaal batch 2 (PR #23) en het volgende sessie-checkpoint heeft de codex/AI-flow op `origin/main` flink doorgeschoven met work die los staat van de chauffeurspagina:
+- **Auth-hardening** (`6e03535`): bundelt de 4 sprint-9 security-fixes in een enkele commit. Markeer in deze where-we-are als gemerged.
+- **NewOrder warehouse-flow** (`b17b0ac`, `b4e601c`, `f04e5b4`, `51e0de9`, `3f20a10`): warehouse-driven NewOrder volgorde, concept-workflow, polish op review-step.
+- **Order drafts in lijst** (`8e87fdd`): orders-overview toont concepten.
+- **Routeflow-question hersteld** (`9758722`, `a59a980`): tussenstop-question terug in de NewOrder UI.
+- **Structured address normalization** (`c1c0d56`, `76c5b4b`): order-adressen nu genormaliseerd.
+- **Stop-vehicle-requirements** (`d84226d`, `14355e5`): per-stop voertuig-eisen uit NewOrder. Nieuwe migratie `20260504180500_seed_stop_vehicle_requirements.sql`.
+- Geen impact op chauffeursportaal-code, maar de nieuwe migratie + voertuig-eisen kunnen invloed hebben op planning/dispatch eligibility-checks (sprint 7 logica).
 
 ### 2026-05-04 (chauffeursportaal batch 2 gemerged via PR #23, commit `dfdf76d`)
 

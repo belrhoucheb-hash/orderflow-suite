@@ -7,6 +7,7 @@ import {
   findConnector,
   type ConnectorDefinition,
 } from "@/lib/connectors/catalog";
+import { logConnectorAuditEvent } from "@/hooks/useConnectorAuditLog";
 
 // ─── Catalog merged with live status ────────────────────────────────
 
@@ -24,20 +25,17 @@ export function useConnectorList(options?: { enabled?: boolean }) {
     staleTime: 30_000,
     queryFn: async (): Promise<ConnectorWithStatus[]> => {
       const { data, error } = await supabase
-        .from("integration_credentials" as any)
+        .from("integration_credentials")
         .select("provider, enabled, credentials")
         .eq("tenant_id", tenant!.id);
       if (error) throw error;
 
       const byProvider = new Map<string, { enabled: boolean; hasCreds: boolean }>();
-      for (const row of (data ?? []) as Array<{
-        provider: string;
-        enabled: boolean;
-        credentials: Record<string, unknown>;
-      }>) {
+      for (const row of data ?? []) {
+        const creds = (row.credentials ?? {}) as Record<string, unknown>;
         byProvider.set(row.provider, {
           enabled: row.enabled,
-          hasCreds: Object.keys(row.credentials ?? {}).length > 0,
+          hasCreds: Object.keys(creds).length > 0,
         });
       }
 
@@ -76,13 +74,13 @@ export function useConnectorMapping(provider: string) {
     staleTime: 30_000,
     queryFn: async (): Promise<Record<string, string>> => {
       const { data, error } = await supabase
-        .from("integration_mapping" as any)
+        .from("integration_mapping")
         .select("key, value")
         .eq("tenant_id", tenant!.id)
         .eq("provider", provider);
       if (error) throw error;
       const out: Record<string, string> = {};
-      for (const row of (data ?? []) as MappingRow[]) out[row.key] = row.value;
+      for (const row of data ?? []) out[row.key] = row.value;
       return out;
     },
   });
@@ -104,12 +102,20 @@ export function useSaveConnectorMapping(provider: string) {
         }));
       if (rows.length === 0) return;
       const { error } = await supabase
-        .from("integration_mapping" as any)
+        .from("integration_mapping")
         .upsert(rows, { onConflict: "tenant_id,provider,key" });
       if (error) throw error;
+
+      void logConnectorAuditEvent({
+        tenantId: tenant.id,
+        provider,
+        action: "mapping_save",
+        details: { keys: rows.map((r) => r.key) },
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["connector_mapping"] });
+      qc.invalidateQueries({ queryKey: ["connector_audit_log"] });
       toast.success("Mapping opgeslagen");
     },
     onError: (err) => {
@@ -145,14 +151,14 @@ export function useConnectorSyncLog(provider: string) {
     staleTime: 10_000,
     queryFn: async (): Promise<SyncLogRow[]> => {
       const { data, error } = await supabase
-        .from("integration_sync_log" as any)
+        .from("integration_sync_log")
         .select("*")
         .eq("tenant_id", tenant!.id)
         .eq("provider", provider)
         .order("started_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []) as unknown as SyncLogRow[];
+      return ((data ?? []) as unknown) as SyncLogRow[];
     },
   });
 }
@@ -197,12 +203,26 @@ export function usePullConnector(provider: string) {
         },
       });
       if (error) throw error;
+
+      void logConnectorAuditEvent({
+        tenantId: tenant.id,
+        provider,
+        action: "manual_sync",
+        details: {
+          since: params?.since ?? null,
+          until: params?.until ?? null,
+          ok: (data as { ok?: boolean })?.ok ?? null,
+          imported: (data as { imported?: number })?.imported ?? null,
+        },
+      });
+
       return data as { ok: boolean; recordsCount?: number; imported?: number; skipped?: number; message?: string; error?: string };
     },
     onSuccess: (res) => {
       if (res.ok) {
         toast.success(res.message ?? "Gegevens opgehaald");
         qc.invalidateQueries({ queryKey: ["connector_sync_log"] });
+        qc.invalidateQueries({ queryKey: ["connector_audit_log"] });
         qc.invalidateQueries({ queryKey: ["drivers"] });
         qc.invalidateQueries({ queryKey: ["driver_actual_hours_per_week"] });
         qc.invalidateQueries({ queryKey: ["driver_availability_range"] });
@@ -216,6 +236,69 @@ export function usePullConnector(provider: string) {
     },
     onError: (err) => {
       toast.error("Pull mislukt", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    },
+  });
+}
+
+// ─── Event policies ─────────────────────────────────────────────────
+// Per-tenant aan/uit-vlag per (provider, event_type). Default = aan zodra
+// connector enabled is. Ontbrekende rij wordt door de runtime ook als 'aan'
+// behandeld zodat een nieuwe tenant niet handmatig elk event hoeft aan te
+// vinken.
+
+export interface ConnectorEventPolicy {
+  event_type: string;
+  enabled: boolean;
+}
+
+export function useEventPolicies(provider: string) {
+  const { tenant } = useTenant();
+  return useQuery({
+    queryKey: ["connector_event_policies", tenant?.id, provider],
+    enabled: !!tenant?.id,
+    staleTime: 30_000,
+    queryFn: async (): Promise<Record<string, boolean>> => {
+      const { data, error } = await supabase
+        .from("connector_event_policies" as any)
+        .select("event_type, enabled")
+        .eq("tenant_id", tenant!.id)
+        .eq("provider", provider);
+      if (error) throw error;
+      const out: Record<string, boolean> = {};
+      for (const row of ((data ?? []) as unknown) as ConnectorEventPolicy[]) {
+        out[row.event_type] = row.enabled;
+      }
+      return out;
+    },
+  });
+}
+
+export function useSaveEventPolicy(provider: string) {
+  const { tenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { eventType: string; enabled: boolean }) => {
+      if (!tenant?.id) throw new Error("Geen tenant");
+      const { error } = await supabase
+        .from("connector_event_policies" as any)
+        .upsert(
+          {
+            tenant_id: tenant.id,
+            provider,
+            event_type: input.eventType,
+            enabled: input.enabled,
+          },
+          { onConflict: "tenant_id,provider,event_type" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["connector_event_policies"] });
+    },
+    onError: (err) => {
+      toast.error("Kon event-policy niet opslaan", {
         description: err instanceof Error ? err.message : String(err),
       });
     },

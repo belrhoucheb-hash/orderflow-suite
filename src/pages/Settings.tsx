@@ -51,6 +51,7 @@ import { WebhookSettings } from "@/components/settings/WebhookSettings";
 import { ApiTokenSettings } from "@/components/settings/ApiTokenSettings";
 import { ConnectorCatalog } from "@/components/settings/ConnectorCatalog";
 import { ConnectorDetail } from "@/components/settings/ConnectorDetail";
+import { BundleDetail } from "@/components/settings/BundleDetail";
 import { ExceptionRulesSettings } from "@/components/settings/ExceptionRulesSettings";
 import { DeferredMount } from "@/components/performance/DeferredMount";
 import { useTranslation } from "react-i18next";
@@ -2305,9 +2306,20 @@ const Settings = () => {
             onChange={handleConnectionSectionChange}
           />
           {(() => {
-            const m = location.pathname.match(/\/integraties\/([\w-]+)/);
-            const slug = m?.[1];
-            if (slug) {
+            const bundleMatch = location.pathname.match(/\/integraties\/bundel\/([\w-]+)/);
+            const bundleId = bundleMatch?.[1];
+            if (bundleId) {
+              return (
+                <BundleDetail
+                  bundleId={bundleId}
+                  onBack={() => navigate("/settings/integraties")}
+                  onSelectConnector={(s) => navigate(`/settings/integraties/${s}`)}
+                />
+              );
+            }
+            const slugMatch = location.pathname.match(/\/integraties\/([\w-]+)/);
+            const slug = slugMatch?.[1];
+            if (slug && slug !== "bundel") {
               return (
                 <ConnectorDetail
                   slug={slug}
@@ -2318,6 +2330,7 @@ const Settings = () => {
             return (
               <ConnectorCatalog
                 onSelect={(s) => navigate(`/settings/integraties/${s}`)}
+                onSelectBundle={(id) => navigate(`/settings/integraties/bundel/${id}`)}
               />
             );
           })()}
