@@ -13,9 +13,11 @@ type TableState = {
   singleRow?: any;
 };
 
-const { tables, insertedByTable, mockFrom } = vi.hoisted(() => {
+const { tables, insertedByTable, mockFrom, mockRpc, rpcCalls, rpcResponses } = vi.hoisted(() => {
   const tables = new Map<string, TableState>();
   const insertedByTable = new Map<string, any[]>();
+  const rpcCalls: { name: string; args: any }[] = [];
+  const rpcResponses = new Map<string, { data?: any; error?: any }>();
 
   function buildBuilder(tableName: string) {
     // terminal-state holders voor deze query
@@ -69,11 +71,15 @@ const { tables, insertedByTable, mockFrom } = vi.hoisted(() => {
   }
 
   const mockFrom = vi.fn((tableName: string) => buildBuilder(tableName));
-  return { tables, insertedByTable, mockFrom };
+  const mockRpc = vi.fn(async (name: string, args: any) => {
+    rpcCalls.push({ name, args });
+    return rpcResponses.get(name) ?? { data: null, error: null };
+  });
+  return { tables, insertedByTable, mockFrom, mockRpc, rpcCalls, rpcResponses };
 });
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: mockFrom },
+  supabase: { from: mockFrom, rpc: mockRpc },
 }));
 
 function setTable(name: string, state: TableState) {
@@ -88,6 +94,7 @@ import {
   matchTrajectRule,
   resolveHubAddress,
   createShipmentWithLegs,
+  commitOrderDraftWithLegs,
   evaluateMatch,
   inferAfdeling,
   type TrajectRule,
@@ -112,7 +119,10 @@ function makeRule(overrides: Partial<TrajectRule>): TrajectRule {
 beforeEach(() => {
   tables.clear();
   insertedByTable.clear();
+  rpcCalls.length = 0;
+  rpcResponses.clear();
   mockFrom.mockClear();
+  mockRpc.mockClear();
 });
 
 // ─── evaluateMatch (pure helper) ─────────────────────────────────────────
@@ -704,5 +714,55 @@ describe("createShipmentWithLegs", () => {
     const leg2 = result.legs[1];
     expect(leg2.pickup_address).toBe("RCS Export");
     expect(leg2.delivery_address).toBe("Dubai, UAE");
+  });
+});
+
+describe("commitOrderDraftWithLegs", () => {
+  it("stuurt decimale weight_kg (1247,5 kg luchtvracht) ongewijzigd door naar de RPC", async () => {
+    rpcResponses.set("commit_order_draft_v1", {
+      data: { shipment: { id: "ship-1" }, legs: [{ id: "order-1", weight_kg: 1247.5 }], idempotent: false },
+      error: null,
+    });
+
+    const result = await commitOrderDraftWithLegs({
+      draftId: "draft-1",
+      tenantId: TENANT,
+      expectedUpdatedAt: "2026-05-05T10:00:00Z",
+      booking: {
+        pickup_address: "Schiphol",
+        delivery_address: "Dubai",
+        weight_kg: 1247.5,
+        quantity: 3,
+        unit: "Pallet",
+      } as BookingInput,
+      payload: {},
+      validationResult: { blockers: [] },
+      manualOverrides: {},
+    });
+
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].name).toBe("commit_order_draft_v1");
+    // Bug-regressie: zonder de numeric-migratie zou 1247.5 hier 1247 worden (RPC ::integer cast).
+    expect(rpcCalls[0].args.p_booking.weight_kg).toBe(1247.5);
+    expect(result.shipment.id).toBe("ship-1");
+    expect(result.idempotent).toBe(false);
+  });
+
+  it("gooit een Error met de RPC-melding bij DRAFT_CONFLICT zodat de UI op 'conflict' kan zetten", async () => {
+    rpcResponses.set("commit_order_draft_v1", {
+      data: null,
+      error: { message: "DRAFT_CONFLICT: Deze order is zojuist aangepast door een andere sessie." },
+    });
+
+    await expect(
+      commitOrderDraftWithLegs({
+        draftId: "draft-1",
+        tenantId: TENANT,
+        booking: { pickup_address: "A", delivery_address: "B" } as BookingInput,
+        payload: {},
+        validationResult: { blockers: [] },
+        manualOverrides: {},
+      }),
+    ).rejects.toThrow(/DRAFT_CONFLICT/);
   });
 });
