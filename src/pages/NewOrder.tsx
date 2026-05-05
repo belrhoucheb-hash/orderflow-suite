@@ -125,6 +125,7 @@ import {
   type WizardFocusTarget,
 } from "@/lib/newOrder/wizardFocus";
 import { CargoSection } from "@/pages/newOrder/sections/CargoSection";
+import { FinancialReviewSection } from "@/pages/newOrder/sections/FinancialReviewSection";
 import { IntakeSection } from "@/pages/newOrder/sections/IntakeSection";
 import { RouteSection } from "@/pages/newOrder/sections/RouteSection";
 
@@ -4766,106 +4767,45 @@ const NewOrder = () => {
               />
             )}
 
-            {wizardStep === "financial" && (
-              <section className={uberFlowShellClass}>
-                {renderUberStepHeader("04 · Financieel", "Controleer het tarief", "Dezelfde tariefmotor als productie, direct na transport.")}
-
-                <div className="mb-5 space-y-3">
-                  {renderCollapsedAnswer("Klant", clientName || "Nog geen klant", () => {
-                    setWizardStep("intake");
-                    setIntakeManualBack(true);
-                    setIntakeActiveQuestion(1);
-                  })}
-                  {renderCollapsedAnswer("Route", routeLocationSummary || `${pickupLine?.locatie || "Ophaaladres"} -> ${deliveryLine?.locatie || "Afleveradres"}`, () => {
-                    setWizardStep("route");
-                    setRouteManualBack(true);
-                    setRouteActiveQuestion(missingPickupAddress ? 1 : missingDeliveryAddress ? 2 : missingPickupTimeWindow ? 3 : 4);
-                  })}
-                  {renderCollapsedAnswer("Transport", `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || "eenheden"} · ${cargoTotals.totGewicht || 0} kg · ${transportType || suggestedTransportType || "transport volgt"}`, () => {
-                    setWizardStep("cargo");
-                    setCargoManualBack(true);
-                    setCargoActiveQuestion(3);
-                  })}
-                  {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
-                    setWizardStep("cargo");
-                    setCargoManualBack(true);
-                    setCargoActiveQuestion(3);
-                  })}
-                </div>
-
-                <div className={cn(conversationalCardClass(0), "mb-4 overflow-hidden")}>
-                  {renderQuestionPrompt(
-                    {
-                      step: "Tarief",
-                      title: "Klopt het financiele voorstel?",
-                      hint: "Controleer tarief, toeslagen en eventuele afwijking voordat je naar de eindcontrole gaat.",
-                    },
-                    pricingPayload.cents != null,
-                    true,
-                  )}
-                  <div className="-mx-6 -mb-6 md:-mx-9 md:-mb-9">
-                    {renderProductionFinancialTab()}
-                  </div>
-                </div>
-
-                {renderWizardFooter()}
-              </section>
-            )}
-
-            {wizardStep === "review" && (
-              <section className={uberFlowShellClass}>
-                {renderUberStepHeader("05 · Controle", "Klaar om te plannen?", "Laatste check op opdrachtgever, route, lading en plannerregels.")}
-
-                <div className="mb-5 space-y-3">
-                  {renderCollapsedAnswer("Klant", clientName || "Nog geen klant", () => {
-                    setWizardStep("intake");
-                    setIntakeManualBack(true);
-                    setIntakeActiveQuestion(1);
-                  })}
-                  {renderCollapsedAnswer("Route", routeLocationSummary || `${pickupLine?.locatie || "Ophaaladres"} -> ${deliveryLine?.locatie || "Afleveradres"}`, () => {
-                    setWizardStep("route");
-                    setRouteManualBack(true);
-                    setRouteActiveQuestion(missingPickupAddress ? 1 : missingDeliveryAddress ? 2 : missingPickupTimeWindow ? 3 : 4);
-                  })}
-                  {renderCollapsedAnswer("Lading", `${cargoTotals.totAantal || 0} ${cargoTotals.primaryUnit || "eenheden"} · ${cargoTotals.totGewicht || 0} kg`, () => {
-                    setWizardStep("cargo");
-                    setCargoManualBack(true);
-                    setCargoActiveQuestion(missingQuantity ? 1 : !cargoHasDimensions ? 2 : missingWeight ? 3 : 4);
-                  })}
-                  {showPmt && renderCollapsedAnswer("Security", pmtLabel, () => {
-                    setWizardStep("cargo");
-                    setCargoManualBack(true);
-                    setCargoActiveQuestion(3);
-                  })}
-                  {renderCollapsedAnswer("Financieel", pricingLabel, () => setWizardStep("financial"))}
-                </div>
-
-
-                {(reviewActiveQuestion === 1 || reviewActiveQuestion === 2) && (
-                  <div className={cn(conversationalCardClass(0), "mb-4")}>
-                    {renderQuestionPrompt(
-                      {
-                        step: "Planner",
-                        title: "Moet de planner nog iets weten?",
-                        hint: "Optioneel. Laat leeg als de rit direct ingepland kan worden.",
-                      },
-                      Boolean(referentie.trim()),
-                      true,
-                    )}
-                    <label className={flowLabelClass}>Opmerking voor planner</label>
-                    <Textarea
-                      value={referentie}
-                      onChange={e => setReferentie(e.target.value)}
-                      rows={3}
-                      placeholder="Bijzonderheden, instructies..."
-                      className="min-h-28 resize-none rounded-2xl border-border/70 bg-white px-4 py-3 text-base shadow-[inset_0_1px_0_hsl(var(--foreground)_/_0.04)] transition focus-visible:border-[hsl(var(--gold)_/_0.45)] focus-visible:ring-4 focus-visible:ring-[hsl(var(--gold)_/_0.14)]"
-                    />
-                  </div>
-                )}
-
-
-                {renderWizardFooter()}
-              </section>
+            {(wizardStep === "financial" || wizardStep === "review") && (
+              <FinancialReviewSection
+                wizardStep={wizardStep}
+                setWizardStep={setWizardStep}
+                setIntakeManualBack={setIntakeManualBack}
+                setIntakeActiveQuestion={setIntakeActiveQuestion}
+                setRouteManualBack={setRouteManualBack}
+                setRouteActiveQuestion={setRouteActiveQuestion}
+                setCargoManualBack={setCargoManualBack}
+                setCargoActiveQuestion={setCargoActiveQuestion}
+                reviewActiveQuestion={reviewActiveQuestion}
+                clientName={clientName}
+                routeLocationSummary={routeLocationSummary}
+                pickupLine={pickupLine}
+                deliveryLine={deliveryLine}
+                cargoTotals={cargoTotals}
+                transportType={transportType}
+                suggestedTransportType={suggestedTransportType}
+                showPmt={showPmt}
+                pmtLabel={pmtLabel}
+                pricingLabel={pricingLabel}
+                pricingPayload={pricingPayload}
+                missingPickupAddress={missingPickupAddress}
+                missingDeliveryAddress={missingDeliveryAddress}
+                missingPickupTimeWindow={missingPickupTimeWindow}
+                missingQuantity={missingQuantity}
+                missingWeight={missingWeight}
+                cargoHasDimensions={cargoHasDimensions}
+                referentie={referentie}
+                setReferentie={setReferentie}
+                uberFlowShellClass={uberFlowShellClass}
+                conversationalCardClass={conversationalCardClass}
+                flowLabelClass={flowLabelClass}
+                renderUberStepHeader={renderUberStepHeader}
+                renderCollapsedAnswer={renderCollapsedAnswer}
+                renderQuestionPrompt={renderQuestionPrompt}
+                renderWizardFooter={renderWizardFooter}
+                financialTabSlot={renderProductionFinancialTab()}
+              />
             )}
 
             </div>
