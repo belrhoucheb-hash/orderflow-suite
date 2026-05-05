@@ -25,6 +25,15 @@ describe("getOrderRouteRuleIssues", () => {
     expect(getOrderRouteRuleIssues(validRoute)).toEqual([]);
   });
 
+  it("accepteert overlappende laad- en levervensters op dezelfde dag", () => {
+    const issues = getOrderRouteRuleIssues([
+      { ...validRoute[0], tijd: "09:00", tijdTot: "17:00" },
+      { ...validRoute[1], tijd: "09:00", tijdTot: "17:00" },
+    ]);
+
+    expect(issues).toEqual([]);
+  });
+
   it("blokkeert levering voor het laadmoment", () => {
     const issues = getOrderRouteRuleIssues([
       { ...validRoute[0], tijd: "10:00", tijdTot: "11:00" },

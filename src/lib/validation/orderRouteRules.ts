@@ -131,9 +131,13 @@ export function getOrderRouteRuleIssues(lines: OrderRouteLine[]): OrderRouteRule
   for (let index = 1; index < orderedStops.length; index += 1) {
     const previous = orderedStops[index - 1];
     const current = orderedStops[index];
-    const previousEnd = routeMoment(previous, "end");
-    const currentStart = routeMoment(current, "start");
-    if (previousEnd == null || currentStart == null || currentStart >= previousEnd) continue;
+    // Issue alleen als het volledige tijdvenster van de huidige stop vóór
+    // het begin van de vorige stop ligt. Overlappende tijdvensters op dezelfde
+    // dag (bv. pickup 09-17 + delivery 09-17) zijn geldig: er bestaat altijd
+    // een schedule waarin pickup eerder is dan delivery.
+    const previousStart = routeMoment(previous, "start");
+    const currentEnd = routeMoment(current, "end");
+    if (previousStart == null || currentEnd == null || currentEnd > previousStart) continue;
 
     const previousLabel = labelForLine(previous, deliveries);
     const currentLabel = labelForLine(current, deliveries);
