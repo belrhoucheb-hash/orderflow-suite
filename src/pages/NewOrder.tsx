@@ -116,6 +116,10 @@ import {
   type DraftFormSetters,
   type DraftWizardSetters,
 } from "@/lib/newOrder/draftStorage";
+import {
+  validationTargetByErrorKey,
+  type WizardFocusTarget,
+} from "@/lib/newOrder/wizardFocus";
 
 const FinancialTab = lazy(() =>
   import("@/components/orders/FinancialTab").then((module) => ({ default: module.FinancialTab })),
@@ -182,9 +186,6 @@ interface PlannerTemplate {
   klepNodig?: boolean;
   shipmentSecure?: boolean;
 }
-
-const today = new Date().toISOString().split("T")[0];
-const todayFormatted = new Date().toLocaleDateString("nl-NL", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
 const QUICK_TEMPLATES: PlannerTemplate[] = [
   {
@@ -2281,8 +2282,6 @@ const NewOrder = () => {
     navigate("/orders");
   };
 
-  type WizardFocusTarget = "client" | "pickup" | "delivery" | "quantity" | "dimensions" | "weight" | "time" | "transport" | "security" | "pricing";
-
   const openWizardFocusTarget = (target: WizardFocusTarget) => {
     setMainTab("algemeen");
 
@@ -2352,24 +2351,6 @@ const NewOrder = () => {
       element?.scrollIntoView({ behavior: "smooth", block: "center" });
       element?.focus();
     }, 150);
-  };
-
-  const validationTargetByErrorKey: Record<string, WizardFocusTarget> = {
-    client_name: "client",
-    pickup_address: "pickup",
-    pickup_structured: "pickup",
-    delivery_address: "delivery",
-    delivery_structured: "delivery",
-    quantity: "quantity",
-    unit: "quantity",
-    weight_kg: "weight",
-    afdeling: "transport",
-    pickup_time_window: "time",
-    delivery_time_window: "time",
-    route_sequence: "time",
-    route_duplicate: "delivery",
-    vehicle_capacity: "transport",
-    pmt_method: "security",
   };
 
   const readinessItems = orderReadiness.issues as Array<ReadinessIssue & { target: WizardFocusTarget; severity: ReadinessSeverity }>;
